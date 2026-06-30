@@ -12,6 +12,8 @@ export interface GameSceneData {
 
 const PLAYER_COLOR = 0x3498db
 const PLAYER_RADIUS = 16
+const ENEMY_COLOR = 0xe74c3c
+const ENEMY_RADIUS = 12
 /** Clamp du delta réel pour éviter la spirale de la mort après un gel d'onglet. */
 const MAX_FRAME_MS = 100
 
@@ -25,6 +27,7 @@ export class GameScene extends Phaser.Scene {
   private testMode = false
   private seam: GameSeam | null = null
   private readonly playerSprites = new Map<number, Phaser.GameObjects.Arc>()
+  private readonly enemySprites = new Map<number, Phaser.GameObjects.Arc>()
 
   constructor() {
     super('game')
@@ -94,6 +97,7 @@ export class GameScene extends Phaser.Scene {
   /** Synchronise les sprites avec l'état courant de la simulation. */
   private syncSprites(): void {
     const state = this.sim.getState()
+
     for (const p of state.players) {
       let sprite = this.playerSprites.get(p.id)
       if (sprite === undefined) {
@@ -102,6 +106,24 @@ export class GameScene extends Phaser.Scene {
       }
       sprite.setPosition(p.x, p.y)
       sprite.setVisible(p.alive)
+    }
+
+    const seen = new Set<number>()
+    for (const en of state.enemies) {
+      seen.add(en.id)
+      let sprite = this.enemySprites.get(en.id)
+      if (sprite === undefined) {
+        sprite = this.add.circle(en.x, en.y, ENEMY_RADIUS, ENEMY_COLOR)
+        this.enemySprites.set(en.id, sprite)
+      }
+      sprite.setPosition(en.x, en.y)
+    }
+    // Retire les sprites des ennemis disparus.
+    for (const [id, sprite] of this.enemySprites) {
+      if (!seen.has(id)) {
+        sprite.destroy()
+        this.enemySprites.delete(id)
+      }
     }
   }
 }

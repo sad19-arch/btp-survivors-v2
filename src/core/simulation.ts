@@ -1,8 +1,21 @@
 import { World } from './world'
+import { Rng } from './rng'
 import { STEP_MS } from './clock'
 import { movementSystem } from './systems/movement'
-import { MODE_PLAYER_COUNT, PLAYER_BASE, WORLD } from '@content/config'
-import type { EntityId, GameMode, GameState, PlayerInput, PlayerState, Vec2 } from './types'
+import { enemyAiSystem } from './systems/enemyAi'
+import { spawnWave } from './systems/spawn'
+import { MODE_PLAYER_COUNT, PLAYER_BASE, SPAWN, WORLD } from '@content/config'
+import { ConstructionPhaseId, PHASES } from '@content/phases'
+import type { ConstructionPhase } from '@content/phases'
+import type {
+  EnemyState,
+  EntityId,
+  GameMode,
+  GameState,
+  PlayerInput,
+  PlayerState,
+  Vec2
+} from './types'
 
 export interface SimOptions {
   seed: number
@@ -10,6 +23,15 @@ export interface SimOptions {
 }
 
 const COORD_SYSTEM = 'origin top-left, +x right, +y down'
+
+/** Phase de slice 1 (colonne vertébrale : début du cycle de chantier). */
+function resolvePhase(): ConstructionPhase {
+  const phase = PHASES[ConstructionPhaseId.TERRAIN_VIERGE]
+  if (phase === undefined) {
+    throw new Error('Contenu invalide: phase terrain_vierge manquante')
+  }
+  return phase
+}
 
 /** Normalise un vecteur (longueur 1), ou zéro si le vecteur est nul. */
 function normalize(v: Vec2): Vec2 {
@@ -32,10 +54,13 @@ export class Simulation {
 
   private readonly mode: GameMode
   private world: World
+  private rng: Rng
+  private phase: ConstructionPhase
   private currentSeed: number
   private scene: GameState['scene'] = 'game'
   private elapsedMs = 0
   private remainderMs = 0
+  private spawnAccMs = 0
   private readonly inputs = new Map<number, PlayerInput>()
   private readonly playerEntities = new Map<number, EntityId>()
 
@@ -43,6 +68,8 @@ export class Simulation {
     this.mode = opts.mode
     this.currentSeed = opts.seed
     this.world = new World()
+    this.rng = new Rng(opts.seed)
+    this.phase = resolvePhase()
     this.reset(opts.seed)
   }
 
@@ -68,30 +95,6 @@ export class Simulation {
 
   /** État complet sérialisable (contrat du seam). */
   getState(): GameState {
-    const players: PlayerState[] = []
-    for (const [id, e] of this.playerEntities) {
-      const pos = this.world.get(e, 'position')
-      const vel = this.world.get(e, 'velocity')
-      const health = this.world.get(e, 'health')
-      const player = this.world.get(e, 'player')
-      if (pos === undefined || vel === undefined || health === undefined || player === undefined) {
-        continue
-      }
-      players.push({
-        id,
-        x: pos.x,
-        y: pos.y,
-        vx: vel.x,
-        vy: vel.y,
-        hp: health.hp,
-        maxHp: health.maxHp,
-        vigilance: player.vigilance,
-        alive: health.hp > 0,
-        weapons: []
-      })
-    }
-    players.sort((a, b) => a.id - b.id)
-
     return {
       scene: this.scene,
       seed: this.currentSeed,
@@ -99,8 +102,8 @@ export class Simulation {
       wave: 0,
       score: 0,
       coordSystem: COORD_SYSTEM,
-      players,
-      enemies: [],
+      players: this.collectPlayers(),
+      enemies: this.collectEnemies(),
       projectiles: [],
       pickups: [],
       pendingLevelUp: null
@@ -125,9 +128,12 @@ export class Simulation {
   private reset(seed: number): void {
     this.currentSeed = seed
     this.world = new World()
+    this.rng = new Rng(seed)
+    this.phase = resolvePhase()
     this.scene = 'game'
     this.elapsedMs = 0
     this.remainderMs = 0
+    this.spawnAccMs = 0
     this.inputs.clear()
     this.playerEntities.clear()
     this.spawnPlayers()
@@ -154,7 +160,23 @@ export class Simulation {
   }
 
   private step(dtMs: number): void {
-    // Entrées joueur → vélocité.
+    this.runSpawns(dtMs)
+    this.applyPlayerInputs()
+    enemyAiSystem(this.world)
+    movementSystem(this.world, dtMs)
+  }
+
+  private runSpawns(dtMs: number): void {
+    this.spawnAccMs += dtMs
+    while (this.spawnAccMs >= SPAWN.intervalMs) {
+      this.spawnAccMs -= SPAWN.intervalMs
+      if (this.countEnemies() < SPAWN.maxActive) {
+        spawnWave(this.world, this.rng, this.phase, this.playersCentroid(), SPAWN.countPerWave)
+      }
+    }
+  }
+
+  private applyPlayerInputs(): void {
     for (const [playerId, e] of this.playerEntities) {
       const input = this.inputs.get(playerId)
       const player = this.world.get(e, 'player')
@@ -166,7 +188,84 @@ export class Simulation {
       vel.x = dir.x * player.speed
       vel.y = dir.y * player.speed
     }
+  }
 
-    movementSystem(this.world, dtMs)
+  private collectPlayers(): PlayerState[] {
+    const players: PlayerState[] = []
+    for (const [id, e] of this.playerEntities) {
+      const pos = this.world.get(e, 'position')
+      const vel = this.world.get(e, 'velocity')
+      const health = this.world.get(e, 'health')
+      const player = this.world.get(e, 'player')
+      if (pos === undefined || vel === undefined || health === undefined || player === undefined) {
+        continue
+      }
+      players.push({
+        id,
+        x: pos.x,
+        y: pos.y,
+        vx: vel.x,
+        vy: vel.y,
+        hp: health.hp,
+        maxHp: health.maxHp,
+        vigilance: player.vigilance,
+        alive: health.hp > 0,
+        weapons: []
+      })
+    }
+    players.sort((a, b) => a.id - b.id)
+    return players
+  }
+
+  private collectEnemies(): EnemyState[] {
+    const enemies: EnemyState[] = []
+    for (const e of this.world.query('enemy', 'position', 'health')) {
+      const pos = this.world.get(e, 'position')
+      const enemy = this.world.get(e, 'enemy')
+      const health = this.world.get(e, 'health')
+      if (pos === undefined || enemy === undefined || health === undefined) {
+        continue
+      }
+      enemies.push({
+        id: e,
+        type: enemy.type,
+        x: pos.x,
+        y: pos.y,
+        hp: health.hp,
+        isElite: enemy.isElite,
+        isBoss: enemy.isBoss
+      })
+    }
+    enemies.sort((a, b) => a.id - b.id)
+    return enemies
+  }
+
+  private countEnemies(): number {
+    let n = 0
+    for (const _e of this.world.query('enemy')) {
+      void _e
+      n += 1
+    }
+    return n
+  }
+
+  private playersCentroid(): Vec2 {
+    let sx = 0
+    let sy = 0
+    let n = 0
+    for (const [, e] of this.playerEntities) {
+      const pos = this.world.get(e, 'position')
+      const health = this.world.get(e, 'health')
+      if (pos === undefined || health === undefined || health.hp <= 0) {
+        continue
+      }
+      sx += pos.x
+      sy += pos.y
+      n += 1
+    }
+    if (n === 0) {
+      return { x: WORLD.width / 2, y: WORLD.height / 2 }
+    }
+    return { x: sx / n, y: sy / n }
   }
 }

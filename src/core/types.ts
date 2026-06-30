@@ -24,6 +24,15 @@ export interface PlayerComp {
   vigilance: number
 }
 
+/** Données propres à une entité ennemie. */
+export interface EnemyComp {
+  type: string
+  speed: number // px/seconde
+  isElite: boolean
+  isBoss: boolean
+  contactDamage: number
+}
+
 /**
  * Registre des composants ECS : nom → forme des données.
  * Ajouter un composant = ajouter une entrée ici (typage propagé partout).
@@ -33,6 +42,7 @@ export interface Components {
   velocity: Vec2
   health: Health
   player: PlayerComp
+  enemy: EnemyComp
 }
 
 export type ComponentKey = keyof Components

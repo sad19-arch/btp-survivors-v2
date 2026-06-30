@@ -26,3 +26,15 @@ export const MODE_PLAYER_COUNT: Record<GameMode, number> = {
   coop3: 3,
   coop4: 4
 }
+
+/** Paramètres de spawn (slice 1). */
+export const SPAWN = {
+  /** Intervalle entre deux vagues, en ms. */
+  intervalMs: 1000,
+  /** Nombre d'ennemis par vague. */
+  countPerWave: 2,
+  /** Rayon d'apparition autour du centre des joueurs (hors écran). */
+  ringRadius: 700,
+  /** Plafond d'ennemis simultanés (perf). */
+  maxActive: 200
+} as const
