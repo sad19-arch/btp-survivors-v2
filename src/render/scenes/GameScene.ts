@@ -1,7 +1,9 @@
 import Phaser from 'phaser'
 import type { App } from '@/app/app'
-import type { PlayerInput } from '@core/types'
 import type { GameSeam } from '@/app/seam'
+import { KeyboardInput } from '@input/keyboard'
+import { GamepadInput } from '@input/gamepad'
+import { routeInput, type FrameInput } from '@input/intents'
 import { WORLD } from '@content/config'
 
 export interface GameSceneData {
@@ -21,6 +23,10 @@ const PICKUP_RADIUS = 5
 /** Clamp du delta réel pour éviter la spirale de la mort après un gel d'onglet. */
 const MAX_FRAME_MS = 100
 
+function clamp(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v
+}
+
 /**
  * Scène de jeu : couche RENDU. Elle observe `Simulation.getState()` et dessine ;
  * elle n'abrite aucune logique de gameplay. En mode test, ni le clavier ni le
@@ -30,6 +36,8 @@ export class GameScene extends Phaser.Scene {
   private app!: App
   private testMode = false
   private seam: GameSeam | null = null
+  private keyboardInput: KeyboardInput | null = null
+  private gamepadInput: GamepadInput | null = null
   private readonly playerSprites = new Map<number, Phaser.GameObjects.Arc>()
   private readonly enemySprites = new Map<number, Phaser.GameObjects.Arc>()
   private readonly projectileSprites = new Map<number, Phaser.GameObjects.Arc>()
@@ -62,6 +70,13 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.startFollow(leader, true, 0.1, 0.1)
     }
 
+    if (this.input.keyboard !== null) {
+      this.keyboardInput = new KeyboardInput(this.input.keyboard)
+    }
+    if (this.input.gamepad !== null) {
+      this.gamepadInput = new GamepadInput(this.input.gamepad)
+    }
+
     if (this.seam !== null) {
       this.seam.ready = true
     }
@@ -69,35 +84,30 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (!this.testMode) {
-      this.app.setInput(1, this.readKeyboard())
+      routeInput(this.app, this.readInput())
       this.app.advanceTime(Math.min(delta, MAX_FRAME_MS))
     }
     this.syncSprites()
   }
 
-  /** Lit le clavier (flèches / WASD / ZQSD) en un PlayerInput. */
-  private readKeyboard(): PlayerInput {
-    const kb = this.input.keyboard
-    if (kb === null) {
-      return { move: { x: 0, y: 0 }, attack: false }
+  /** Fusionne clavier + manette en une entrée de frame. */
+  private readInput(): FrameInput {
+    const frames: FrameInput[] = []
+    if (this.keyboardInput !== null) {
+      frames.push(this.keyboardInput.readFrame())
     }
-    const down = (codes: number[]): boolean => codes.some((c) => kb.checkDown(kb.addKey(c)))
-    const K = Phaser.Input.Keyboard.KeyCodes
+    if (this.gamepadInput !== null) {
+      frames.push(this.gamepadInput.readFrame())
+    }
     let x = 0
     let y = 0
-    if (down([K.LEFT, K.A, K.Q])) {
-      x -= 1
+    const pressed: FrameInput['pressed'] = []
+    for (const f of frames) {
+      x += f.move.x
+      y += f.move.y
+      pressed.push(...f.pressed)
     }
-    if (down([K.RIGHT, K.D])) {
-      x += 1
-    }
-    if (down([K.UP, K.W, K.Z])) {
-      y -= 1
-    }
-    if (down([K.DOWN, K.S])) {
-      y += 1
-    }
-    return { move: { x, y }, attack: false }
+    return { move: { x: clamp(x, -1, 1), y: clamp(y, -1, 1) }, pressed }
   }
 
   /** Synchronise les sprites avec l'état courant de la simulation. */

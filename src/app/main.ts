@@ -35,6 +35,9 @@ const game = new Phaser.Game({
     default: 'arcade',
     arcade: { debug: false }
   },
+  input: {
+    gamepad: true // manette Xbox (PRD : 100 % jouable manette)
+  },
   scene: []
 })
 
