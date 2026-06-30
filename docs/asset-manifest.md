@@ -455,3 +455,34 @@ La premiere build reboot doit prouver la coherence avec :
 4. une arme orbitale,
 5. une UI pixel simple,
 6. une capture gameplay ou tout est lisible instantanement.
+
+## 17. Leçons du golden batch (Batch 0) — à appliquer au Batch 1
+
+Pièges rencontrés en produisant + intégrant le golden batch (2026-07-01). À relire **avant** la production de masse.
+
+### 17.1 Calibration des tailles — échelle PAR FEUILLE (piège n°1)
+L'art natif PixelLab a des **hauteurs très différentes** à l'intérieur de la cellule (l'objet est centré avec beaucoup de transparent autour). Une **échelle unique** rend donc les créatures ~2× plus petites que le joueur. Exemple mesuré (cellule 192, échelle 0.516) : joueur affiché 83px mais huissier 45px, inspecteur 40px, paperasse 30px → incohérent.
+- **Régle** : calibrer une **échelle par feuille** pour viser une **hauteur affichée cible** (bbox de l'art × échelle), pas la taille de cellule. Outil : `tools/assets/measure-sprite-size.mjs` (bbox réelle → taille affichée). Garder ses échelles synchronisées avec `CHAR_SCALE` dans `src/render/scenes/GameScene.ts`.
+- **Hiérarchie de tailles** (MVP « petit rapide / moyen / gros lent ») : rapide < base < **joueur (~83px, référence)** ≈ gros/tank < **boss (~1.6–1.8× joueur)**. Le boss DOIT être nettement plus grand que le joueur (vérifié en jeu, pas à l'œil sur la planche).
+
+### 17.2 Performance / mémoire des textures (le souci perf)
+Les feuilles 4×4 en cellules 192/256 font 768²/1024² ; rendues en **WebGL logiciel** (SwiftShader, headless), plusieurs onglets parallèles **saturent la mémoire du renderer** → Playwright `net::ERR_ABORTED / frame detached`. Corrigé en sérialisant l'e2e (`workers:1` dans `playwright.config.ts`), mais c'est un pansement.
+- **Régle** : l'art natif étant petit dans les cellules, **packer en cellules SERRÉES** (cellule ≈ taille de l'art : ~96 pour un ennemi standard, ~128–160 pour un gros) → ÷4 mémoire, et on peut restaurer le parallélisme e2e. Garder le master 192/256 comme source de vérité, mais charger une **copie runtime allégée**.
+- Ne jamais « régler » un OOM de test en retirant les sprites des tests ni en ajoutant des retries.
+
+### 17.3 Sol seamless sans damier (le souci « papier peint / grille »)
+- **Tuiles plates** : générer en `tile_view: top-down`, `tile_view_angle: 90`, `tile_depth_ratio: 0` (sinon la profondeur 3D cuite crée des bandes « briques » au tiling).
+- **Anti-damier** : même après ça, les variantes de tuiles diffèrent en luminance → un hash par cellule produit un **damier**. Remède : **normaliser toutes les tuiles de base à la MÊME luminance moyenne + aplatir le contraste interne** (`tools/assets/flatten-tiles.mjs`, K≈0.4 ; retenir les tuiles les plus uniformes). Une base quasi unie + décalques = rendu propre.
+- **Variété par décalques épars NON-tilants** (flaque, herbe, fissure, traces, cailloux), posés hors grille via PRNG seedé (`src/render/ground.ts`), PAS par de grandes zones (garde le combat lisible).
+- **Toujours juger le tiling sur un aperçu répété** (`tile-preview.mjs` = 4×4 d'une tuile, `ground-preview.mjs` = rendu « comme en jeu ») AVANT d'intégrer — c'est ça qui a attrapé le damier sur 16 tuiles au lieu de 200.
+
+### 17.4 Décalques = marquages PLATS au sol
+Par défaut PixelLab sort des props 3D avec ombre. Pour un décalque sol, prompt explicite : `flat ground marking, seen straight from directly above, no height, no 3D, no shadow, low contrast` + `shading: flat shading`. Sinon ça ressort en « tonneau » posé.
+
+### 17.5 Pipeline packaging
+- `tools/assets/pack-character.mjs` : centre chaque frame native dans une cellule, ordre des lignes **south/east/north/west** (= down/right/up/left, comme `player_j1`).
+- **Téléchargement** : les URLs **backblaze** (rotations/animations) sont **publiques → curl SANS header d'auth** (ajouter un Bearer les fait échouer). Les URLs **PixelLab MCP** (`api.pixellab.ai/mcp/...`) nécessitent **`Authorization: Bearer <clé>`**.
+- Pas d'ImageMagick fiable sur cette machine (`convert` = utilitaire disque Windows, DANGEREUX) → compositing via **Node + pngjs** (les scripts vivent dans `tools/assets/`, pas dans le scratchpad, pour résoudre `node_modules`).
+
+### 17.6 Valider le late-game / boss via un bot kiting (seam)
+Le tuning « skill récompensé » fait **mourir le jeu passif** en milieu de run → impossible d'atteindre le boss (5:00) en restant immobile. Pour capturer le boss : piloter un **bot kiting** via le seam (`setInput` fuyant l'ennemi le plus proche + biais vers le centre du monde, `chooseUpgrade(0)` à chaque montée de niveau, `advanceTime` par pas de 200ms). Le temps est **gelé** sur l'écran upgrade → toujours gérer le cas `screen==='upgrade'`.

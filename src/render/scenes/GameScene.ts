@@ -20,10 +20,22 @@ const CHAR_SHEETS: ReadonlyArray<readonly [string, string, number]> = [
   ['mudling', 'stage01/enemies/mudling_walk.png', 192],
   ['boss', 'stage01/boss/ground_keeper_walk.png', 256],
 ]
-/** Échelle des sprites : 192px natif → ~99px en jeu (calibré sur player_j1). */
-const SPRITE_SCALE = 0.516
-/** Le mini-boss est rendu nettement plus grand que les ennemis standard. */
-const BOSS_SCALE = 0.78
+/**
+ * Échelle de rendu PAR FEUILLE. Calibrée pour que la taille AFFICHÉE (bbox de l'art,
+ * pas la cellule) soit cohérente entre persos : l'art natif PixelLab a des hauteurs
+ * différentes dans les cellules 192/256 (cf. tools/assets/measure-sprite-size.mjs),
+ * donc une échelle unique rendrait les créatures ~2× plus petites que le joueur.
+ * Cibles ~hauteur affichée : joueur 83 · huissier 88 (tank, trapu) · inspecteur 70
+ * (rapide, petit) · paperasse 74 (base) · boss 144 (≫ joueur).
+ */
+const CHAR_SCALE: Record<string, number> = {
+  player: 0.516,
+  brute: 1.0,
+  imp: 0.9,
+  mudling: 1.25,
+  boss: 1.35,
+}
+const DEFAULT_CHAR_SCALE = 0.516
 
 export interface GameSceneData {
   app: App
@@ -168,7 +180,7 @@ export class GameScene extends Phaser.Scene {
       let sprite = this.playerSprites.get(p.id)
       if (sprite === undefined) {
         sprite = this.textures.exists('player')
-          ? this.add.sprite(p.x, p.y, 'player').setScale(SPRITE_SCALE)
+          ? this.add.sprite(p.x, p.y, 'player').setScale(CHAR_SCALE.player ?? DEFAULT_CHAR_SCALE)
           : this.add.circle(p.x, p.y, PLAYER_RADIUS, PLAYER_COLOR)
         this.playerSprites.set(p.id, sprite)
       }
@@ -190,7 +202,7 @@ export class GameScene extends Phaser.Scene {
         const key = enemySheetKey(en.type, en.isBoss)
         sprite =
           key !== null && this.textures.exists(key)
-            ? this.add.sprite(en.x, en.y, key).setScale(en.isBoss ? BOSS_SCALE : SPRITE_SCALE)
+            ? this.add.sprite(en.x, en.y, key).setScale(CHAR_SCALE[key] ?? DEFAULT_CHAR_SCALE)
             : this.add.circle(en.x, en.y, ENEMY_RADIUS, ENEMY_COLOR)
         this.enemySprites.set(en.id, sprite)
       }
