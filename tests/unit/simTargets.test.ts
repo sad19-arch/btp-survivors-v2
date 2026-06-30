@@ -30,5 +30,12 @@ describe('evaluateTargets', () => {
   it('FAIL si greedy survit la run pleine (trop facile)', () => {
     const rep = evaluateTargets([agg({ bot: 'greedy', survivedFullPct: 100, survivalMsMedian: 480000 })])
     expect(rep.pass).toBe(false)
+    expect(rep.failures.join(' ')).toContain('greedy')
+  })
+
+  it('FAIL si idle survit la run pleine (immobile = trop facile)', () => {
+    const rep = evaluateTargets([agg({ bot: 'idle', survivedFullPct: 100, survivalMsMedian: 480000 })])
+    expect(rep.pass).toBe(false)
+    expect(rep.failures.join(' ')).toContain('idle')
   })
 })

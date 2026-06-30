@@ -27,7 +27,7 @@ export function evaluateTargets(aggs: BotAggregate[]): TargetReport {
       failures.push(`kite: niveau @5:00 ${Math.round(kite.levelAt5minMedian)} < ${KITE_MIN_LEVEL_AT_5MIN}`)
     }
     if (kite.survivalMsMin < KITE_MIN_FIRST_DEATH_MS) {
-      failures.push(`kite: une run meurt à ${Math.round(kite.survivalMsMin / 1000)}s (< 60s, départ trop brutal)`)
+      failures.push(`kite: une run meurt à ${Math.round(kite.survivalMsMin / 1000)}s (< ${KITE_MIN_FIRST_DEATH_MS / 1000}s, départ trop brutal)`)
     }
   }
 
@@ -41,8 +41,10 @@ export function evaluateTargets(aggs: BotAggregate[]): TargetReport {
   }
 
   const idle = byBot.get('idle')
-  if (idle !== undefined && idle.survivedFullPct === 0) {
-    if (idle.survivalMsMedian < IDLE_DEATH_LO_MS || idle.survivalMsMedian > IDLE_DEATH_HI_MS) {
+  if (idle !== undefined) {
+    if (idle.survivedFullPct > 0) {
+      failures.push(`idle: ${Math.round(idle.survivedFullPct)}% survivent la run pleine (immobile, trop facile)`)
+    } else if (idle.survivalMsMedian < IDLE_DEATH_LO_MS || idle.survivalMsMedian > IDLE_DEATH_HI_MS) {
       failures.push(`idle: mort médiane ${Math.round(idle.survivalMsMedian / 1000)}s hors [90s, 240s]`)
     }
   }
