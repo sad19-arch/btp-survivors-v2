@@ -42,8 +42,11 @@ function parseArgs(argv: string[]): Args {
   let seeds: number[]
   if (single !== undefined) {
     seeds = [Number.parseInt(single, 10)]
-  } else if (list !== undefined && /^[0-9,\s]+$/.test(list)) {
-    seeds = list.split(',').map((s) => Number.parseInt(s.trim(), 10))
+  } else if (list !== undefined && list.includes(',')) {
+    seeds = list
+      .split(',')
+      .map((s) => Number.parseInt(s.trim(), 10))
+      .filter((n) => Number.isFinite(n))
   } else {
     const n = list !== undefined ? Number.parseInt(list, 10) : 10
     seeds = Array.from({ length: n }, (_, i) => i + 1)
