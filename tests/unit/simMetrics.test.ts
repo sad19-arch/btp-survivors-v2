@@ -33,5 +33,17 @@ describe('aggregate', () => {
     expect(a.peakEnemiesMedian).toBe(50)
     expect(a.hpPctCurve).toEqual([100, 70]) // médiane par bucket
     expect(a.enemiesCurve).toEqual([0, 7])
+    expect(a.bucketSec).toBe(10)
+    expect(a.survivalMsMin).toBe(240000)
+    expect(a.survivalMsMax).toBe(480000)
+  })
+
+  it('agrège une liste vide sans planter (valeurs neutres)', () => {
+    const a = aggregate([])
+    expect(a.runs).toBe(0)
+    expect(a.survivedFullPct).toBe(0)
+    expect(a.survivalMsMin).toBe(0)
+    expect(a.survivalMsMax).toBe(0)
+    expect(a.survivalMsMedian).toBe(0)
   })
 })

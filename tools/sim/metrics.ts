@@ -50,7 +50,7 @@ export function median(xs: number[]): number {
   return ((s[mid - 1] ?? 0) + (s[mid] ?? 0)) / 2
 }
 
-/** Médiane, colonne par colonne, d'une matrice de courbes (lignes = runs). */
+/** Médiane, colonne par colonne, d'une matrice de courbes (lignes = runs). Suppose des courbes alignées (même longueur) ; les colonnes manquantes d'une courbe plus courte sont comptées comme 0. */
 function medianCurve(curves: number[][]): number[] {
   const len = curves.reduce((m, c) => Math.max(m, c.length), 0)
   const out: number[] = []
