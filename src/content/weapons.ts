@@ -39,7 +39,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     name: 'Cloueur',
     kind: 'projectile',
     cooldownMs: 500,
-    damage: 6,
+    damage: 4,
     range: 600,
     projectileSpeed: 520,
     projectileLifeMs: 1500
@@ -49,7 +49,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     name: 'Scie orbitale',
     kind: 'orbital',
     cooldownMs: 250, // cadence des dégâts
-    damage: 5,
+    damage: 4,
     range: 0,
     orbitCount: 2,
     orbitRadius: 72,
@@ -61,7 +61,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     name: 'Marteau de zone',
     kind: 'aura',
     cooldownMs: 900,
-    damage: 14,
+    damage: 10,
     range: 120 // rayon de l'onde
   }
 }

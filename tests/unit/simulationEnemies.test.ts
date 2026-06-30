@@ -5,24 +5,34 @@ describe('Simulation — ennemis & spawn', () => {
   it('ne contient aucun ennemi au démarrage puis en fait apparaître', () => {
     const sim = new Simulation({ seed: 1, mode: 'solo' })
     expect(sim.getState().enemies).toHaveLength(0)
-    sim.advanceTime(3000)
+    // Avance jusqu'à la 1re vague (intervalle de départ data-driven → robuste à la rampe).
+    for (let t = 0; t < 8000 && sim.getState().enemies.length === 0; t += 200) {
+      sim.advanceTime(200)
+    }
     expect(sim.getState().enemies.length).toBeGreaterThan(0)
   })
 
   it('les ennemis se rapprochent du joueur avec le temps', () => {
     const sim = new Simulation({ seed: 2, mode: 'solo' })
-    sim.advanceTime(1500) // ~1 vague (intervalle 1400 ms)
-    const before = sim.getState()
+    // Avance jusqu'à la 1re vague (robuste à la rampe de spawn : l'intervalle
+    // de départ est data-driven). L'ennemi apparaît sur l'anneau (hors portée
+    // des armes), donc il ne peut pas être tué dans la courte fenêtre suivante.
+    let before = sim.getState()
+    for (let t = 0; t < 8000 && before.enemies.length === 0; t += 200) {
+      sim.advanceTime(200)
+      before = sim.getState()
+    }
     const p0 = before.players[0]
     const e0 = before.enemies[0]
     expect(p0).toBeDefined()
     expect(e0).toBeDefined()
     const d0 = Math.hypot((e0?.x ?? 0) - (p0?.x ?? 0), (e0?.y ?? 0) - (p0?.y ?? 0))
 
-    sim.advanceTime(1000)
+    sim.advanceTime(300) // fenêtre courte : l'ennemi traqué survit et se rapproche
     const after = sim.getState()
     const e1 = after.enemies.find((en) => en.id === e0?.id)
     const p1 = after.players[0]
+    expect(e1).toBeDefined()
     const d1 = Math.hypot((e1?.x ?? 0) - (p1?.x ?? 0), (e1?.y ?? 0) - (p1?.y ?? 0))
     expect(d1).toBeLessThan(d0)
   })
