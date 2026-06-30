@@ -9,6 +9,8 @@ export default defineConfig({
   reporter: 'html',
   use: {
     baseURL: 'http://localhost:3000',
+    // Tests E2E toujours en headless (CI-friendly, rapide, reproductible).
+    headless: true,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure'
   },

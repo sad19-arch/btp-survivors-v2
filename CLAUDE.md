@@ -70,7 +70,7 @@ Stratégie à 2 étages :
 | Étage | Outil | Teste | Vitesse |
 |---|---|---|---|
 | 1. Logique pure | Vitest (`happy-dom`) + harness `npm run sim` | formules, systèmes, FSM sur le vrai code | ms, headless |
-| 2. Jeu réel | Playwright **via le seam JSON** | boucle réelle : `getState()` → `setInput()` → `advanceTime()` → réobserver ; assertions sur l'**état**, pas les pixels | secondes |
+| 2. Jeu réel | Playwright **via le seam JSON**, **toujours en headless** | boucle réelle : `getState()` → `setInput()` → `advanceTime()` → réobserver ; assertions sur l'**état**, pas les pixels | secondes |
 
 Screenshots/vision : réservés à la **régression visuelle** (le HUD est là, le menu s'affiche), pas à la vérification de gameplay.
 
