@@ -12,6 +12,7 @@ import { projectileLifetimeSystem } from './systems/projectile'
 import { consumeLevelUp, initialProgress } from './systems/leveling'
 import { allPlayersDead } from './systems/gameRules'
 import { MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
+import { SPAWN_RAMP, spawnParamsAt } from '@content/spawnRamp'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
 import { ENEMIES, MINI_BOSS_ID } from '@content/enemies'
 import { UPGRADES, rollUpgradeChoices } from '@content/upgrades'
@@ -299,10 +300,11 @@ export class Simulation {
   private runSpawns(dtMs: number): void {
     this.maybeSpawnMiniBoss()
     this.spawnAccMs += dtMs
-    while (this.spawnAccMs >= SPAWN.intervalMs) {
-      this.spawnAccMs -= SPAWN.intervalMs
+    const { intervalMs, countPerWave } = spawnParamsAt(SPAWN_RAMP, this.elapsedMs)
+    while (this.spawnAccMs >= intervalMs) {
+      this.spawnAccMs -= intervalMs
       if (this.countEnemies() < SPAWN.maxActive) {
-        spawnWave(this.world, this.rng, this.phase, this.playersCentroid(), SPAWN.countPerWave)
+        spawnWave(this.world, this.rng, this.phase, this.playersCentroid(), countPerWave)
       }
     }
   }
