@@ -1,19 +1,30 @@
-import type { Simulation } from '@core/simulation'
-import type { GameState, PlayerInput } from '@core/types'
+import type { App } from './app'
+import type { AppViewState, NavDir } from './appState'
+import type { GameMode, PlayerInput } from '@core/types'
 
 /**
  * Contrat du « seam » de test exposé sur `window.__GAME__`.
- * Permet à une IA / Playwright de piloter le vrai jeu sans regarder les pixels.
+ * Permet à une IA / Playwright de piloter le vrai jeu (jusqu'à traverser tous
+ * les écrans) sans regarder les pixels ni brancher de manette physique.
  */
 export interface GameSeam {
-  /** true quand une partie est jouable. */
+  /** true quand l'app est prête (scène montée). */
   ready: boolean
-  getState(): GameState
+  getState(): AppViewState
   renderToText(): string
   /** Avance le temps logique de façon déterministe (pas de sleep réel). */
   advanceTime(ms: number): void
   setInput(playerId: number, input: PlayerInput): void
   setSeed(seed: number): void
+  // --- navigation des écrans (manette/clavier simulés) ---
+  nav(dir: NavDir): void
+  confirm(): void
+  back(): void
+  start(mode?: GameMode): void
+  pause(): void
+  resume(): void
+  restart(): void
+  chooseUpgrade(index: number): void
   events: EventTarget
 }
 
@@ -23,22 +34,46 @@ declare global {
   }
 }
 
-/** Construit l'objet seam délégant à la simulation (ready piloté par la scène). */
-export function createSeam(sim: Simulation): GameSeam {
+/** Construit l'objet seam délégant à l'App (ready piloté par la scène). */
+export function createSeam(app: App): GameSeam {
   return {
     ready: false,
-    getState: () => sim.getState(),
-    renderToText: () => sim.renderToText(),
+    getState: () => app.getState(),
+    renderToText: () => app.renderToText(),
     advanceTime: (ms: number) => {
-      sim.advanceTime(ms)
+      app.advanceTime(ms)
     },
     setInput: (playerId: number, input: PlayerInput) => {
-      sim.setInput(playerId, input)
+      app.setInput(playerId, input)
     },
     setSeed: (seed: number) => {
-      sim.setSeed(seed)
+      app.setSeed(seed)
     },
-    events: sim.events
+    nav: (dir: NavDir) => {
+      app.nav(dir)
+    },
+    confirm: () => {
+      app.confirm()
+    },
+    back: () => {
+      app.back()
+    },
+    start: (mode?: GameMode) => {
+      app.start(mode)
+    },
+    pause: () => {
+      app.pause()
+    },
+    resume: () => {
+      app.resume()
+    },
+    restart: () => {
+      app.restart()
+    },
+    chooseUpgrade: (index: number) => {
+      app.chooseUpgrade(index)
+    },
+    events: app.events
   }
 }
 

@@ -62,3 +62,72 @@ test('déterminisme: même seed + mêmes inputs ⇒ même état final', async ({
   const b = await run()
   expect(a).toEqual(b)
 })
+
+test('le titre se navigue à la manette/clavier (via le seam) et lance la partie', async ({ page }) => {
+  // Sans autostart → on arrive sur l'écran titre.
+  await page.goto('/?seed=1&test=1')
+  await page.waitForFunction(() => window.__GAME__?.ready === true)
+
+  const title = await page.evaluate(() => window.__GAME__?.getState())
+  expect(title?.screen).toBe('title')
+  expect(title?.menu?.items.length).toBeGreaterThanOrEqual(1)
+
+  // Navigue puis valide « Jouer ».
+  await page.evaluate(() => {
+    window.__GAME__?.nav('down')
+    window.__GAME__?.nav('up')
+    window.__GAME__?.confirm()
+  })
+  const game = await page.evaluate(() => window.__GAME__?.getState())
+  expect(game?.screen).toBe('game')
+  expect(game?.players.length).toBe(1)
+})
+
+test('pause / reprise via le seam', async ({ page }) => {
+  await page.goto('/?autostart=solo&seed=1&test=1')
+  await page.waitForFunction(() => window.__GAME__?.ready === true)
+  await page.evaluate(() => window.__GAME__?.pause())
+  expect((await page.evaluate(() => window.__GAME__?.getState()))?.screen).toBe('paused')
+  await page.evaluate(() => window.__GAME__?.resume())
+  expect((await page.evaluate(() => window.__GAME__?.getState()))?.screen).toBe('game')
+})
+
+test('montée de niveau → écran upgrade, le choix relance la partie', async ({ page }) => {
+  await page.goto('/?autostart=solo&seed=123&test=1')
+  await page.waitForFunction(() => window.__GAME__?.ready === true)
+
+  // Aspire les gemmes jusqu'à un level-up (le temps est gelé sur le choix).
+  await page.evaluate(() => {
+    const g = window.__GAME__
+    if (g === undefined) {
+      return
+    }
+    for (let t = 0; t < 120_000 && g.getState().screen !== 'upgrade'; t += 100) {
+      const s = g.getState()
+      const p = s.players[0]
+      if (p !== undefined) {
+        const targets = s.pickups.length > 0 ? s.pickups : s.enemies
+        let tx = p.x
+        let ty = p.y
+        let bd = Infinity
+        for (const it of targets) {
+          const d = (it.x - p.x) ** 2 + (it.y - p.y) ** 2
+          if (d < bd) {
+            bd = d
+            tx = it.x
+            ty = it.y
+          }
+        }
+        g.setInput(1, { move: { x: tx - p.x, y: ty - p.y }, attack: false })
+      }
+      g.advanceTime(100)
+    }
+  })
+
+  const up = await page.evaluate(() => window.__GAME__?.getState())
+  expect(up?.screen).toBe('upgrade')
+  expect(up?.menu?.items.length).toBe(3)
+
+  await page.evaluate(() => window.__GAME__?.confirm())
+  expect((await page.evaluate(() => window.__GAME__?.getState()))?.screen).toBe('game')
+})

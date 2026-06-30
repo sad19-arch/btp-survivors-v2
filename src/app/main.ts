@@ -1,26 +1,25 @@
 import Phaser from 'phaser'
-import { Simulation } from '@core/simulation'
+import { App } from './app'
 import { GameScene, type GameSceneData } from '@render/scenes/GameScene'
 import { parseBootOptions } from './bootOptions'
 import { createSeam, installSeam } from './seam'
 
 /**
- * Point d'entrée (couche rendu). Lit les options de boot, instancie la
- * simulation (le cœur), publie le seam en dev/test, puis démarre la scène.
- *
- * Le cœur (`src/core`) ignore tout de ce fichier : Phaser n'observe que l'état.
+ * Point d'entrée (couche rendu). Lit les options de boot, instancie l'App (qui
+ * orchestre la simulation et les écrans), publie le seam en dev/test, puis
+ * démarre la scène. Le cœur (`src/core`) ignore tout de ce fichier.
  */
 const opts = parseBootOptions(window.location.search)
 const mode = opts.autostart ?? 'solo'
-const sim = new Simulation({ seed: opts.seed, mode })
-const seam = createSeam(sim)
+const app = new App({ seed: opts.seed, mode, autostart: opts.autostart !== null })
+const seam = createSeam(app)
 
 // Gating: jamais en prod (sauf ?test=1). Pas de process.env (undefined sous Vite).
 if (import.meta.env.DEV || opts.test) {
   installSeam(seam)
 }
 
-const data: GameSceneData = { sim, testMode: opts.test, seam }
+const data: GameSceneData = { app, testMode: opts.test, seam }
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,

@@ -1,11 +1,11 @@
 import Phaser from 'phaser'
-import type { Simulation } from '@core/simulation'
+import type { App } from '@/app/app'
 import type { PlayerInput } from '@core/types'
 import type { GameSeam } from '@/app/seam'
 import { WORLD } from '@content/config'
 
 export interface GameSceneData {
-  sim: Simulation
+  app: App
   testMode: boolean
   seam: GameSeam | null
 }
@@ -27,7 +27,7 @@ const MAX_FRAME_MS = 100
  * temps réel ne pilotent la sim — seul le seam le fait (déterminisme).
  */
 export class GameScene extends Phaser.Scene {
-  private sim!: Simulation
+  private app!: App
   private testMode = false
   private seam: GameSeam | null = null
   private readonly playerSprites = new Map<number, Phaser.GameObjects.Arc>()
@@ -40,7 +40,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   init(data: GameSceneData): void {
-    this.sim = data.sim
+    this.app = data.app
     this.testMode = data.testMode
     this.seam = data.seam
   }
@@ -69,8 +69,8 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (!this.testMode) {
-      this.sim.setInput(1, this.readKeyboard())
-      this.sim.advanceTime(Math.min(delta, MAX_FRAME_MS))
+      this.app.setInput(1, this.readKeyboard())
+      this.app.advanceTime(Math.min(delta, MAX_FRAME_MS))
     }
     this.syncSprites()
   }
@@ -102,7 +102,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Synchronise les sprites avec l'état courant de la simulation. */
   private syncSprites(): void {
-    const state = this.sim.getState()
+    const state = this.app.getState()
 
     for (const p of state.players) {
       let sprite = this.playerSprites.get(p.id)
