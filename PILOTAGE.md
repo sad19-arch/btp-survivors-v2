@@ -107,7 +107,7 @@ Prompts utiles :
 ## 7. Backlog / prochaines étapes (coche au fur et à mesure)
 
 - [ ] **Production visuelle — Golden Batch** → « Lance le golden batch, un sprite test d'abord. »
-- [ ] **Tuning d'équilibrage** (la run doit être survivable et fun 6-8 min) → « Équilibre la difficulté avec le harness sim, montre-moi les courbes avant/après. »
+- [x] **Tuning d'équilibrage** (run ~10 min, « skill récompensé ») → fait : voir Journal 2026-06-30 (cibles `sim:check` vertes).
 - [ ] **Coop locale 2-4** (revive, HUD multi, manettes) → « Ajoute la coop 2 joueurs. Plan d'abord. »
 - [ ] **Mode Stage complet** (10 phases = 10 missions) → « Implémente le mode Stage avec objectifs/médailles. Plan d'abord. »
 - [ ] **Méta-progression** (cartes/passifs complets, monnaie, arbre) → « Plan pour la méta-progression. »
@@ -146,7 +146,8 @@ Détails complets : **`CLAUDE.md`**.
   - Décisions : PC/manette d'abord ; DA 16-bit appliquée dès maintenant (assets plus tard) ; production visuelle repoussée ; PR #1 ouverte.
   - Prochaine étape : au choix — golden batch visuel, tuning d'équilibrage, ou une feature du backlog (§7).
 
-- **(prochaine session) — …**
-  - Fait :
-  - Décisions :
-  - Prochaine étape :
+- **2026-06-30 (suite) — Tuning d'équilibrage « skill récompensé ».** (branche `feat/tuning-equilibrage`)
+  - Fait : instrument de mesure étendu (`tools/sim/` — séries temporelles, balayage multi-seed/bot, sparklines, baseline/diff, cibles PASS/FAIL, `npm run sim:check`). Puis tuning data-driven (rampe de spawn `src/content/spawnRamp.ts`, ennemis, armes, mini-boss) prouvé sur 12 seeds × 600 s.
+  - **Avant → Après** (mesuré) : **kite** (habile) survie 100 %→**83 %**, HP plancher 93 %→**plonge <50 % au finale** (vrai climax) ; **greedy** (imprudent) 0 % survie, mort 65 s→**75 s** ; **idle** (passif) **17 %→0 %** de survie pleine, mort ≥1:00. Cibles **VERTES**.
+  - Décisions : durée de run **~10 min (600 s)** (sweet-spot pour 3 armes/6 upgrades sans traîne plate ; cf. recherche genre). Feel **« tendu mais gagnable »** (kite pressurisé mais gagne). Cibles unskilled **relâchées** (« 0 % survie pleine + mort ≥1:00 » — les fenêtres précises se sont révélées incompatibles avec la mécanique : un joueur rapide/fort n'est menaçable que par la densité + un boss plus rapide que lui). **Mini-boss = vrai climax** (vitesse > joueur, tenace). Armes modérées (~30 %) pour que la nuée pressurise.
+  - Prochaine étape : au choix — golden batch visuel (DA), coop 2-4, ou autre feature du backlog (§7). La PR #1 (MVP) reste à fusionner ; cette branche est empilée dessus.
