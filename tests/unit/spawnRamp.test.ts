@@ -18,4 +18,7 @@ describe('spawnParamsAt', () => {
     expect(spawnParamsAt([{ fromSec: 10, intervalMs: 800, countPerWave: 1 }], 0))
       .toEqual({ intervalMs: 800, countPerWave: 1 })
   })
+  it('lève une erreur sur une rampe vide (pas de défaut silencieux)', () => {
+    expect(() => spawnParamsAt([], 0)).toThrow()
+  })
 })

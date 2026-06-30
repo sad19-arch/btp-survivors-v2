@@ -24,15 +24,16 @@ export function spawnParamsAt(
   ramp: readonly SpawnRampStep[],
   elapsedMs: number
 ): { intervalMs: number; countPerWave: number } {
+  const first = ramp[0]
+  if (first === undefined) {
+    throw new Error('spawnParamsAt: rampe de spawn vide')
+  }
   const elapsedSec = elapsedMs / 1000
-  let chosen = ramp[0]
+  let chosen = first
   for (const step of ramp) {
     if (step.fromSec <= elapsedSec) {
       chosen = step
     }
   }
-  return {
-    intervalMs: chosen?.intervalMs ?? 1400,
-    countPerWave: chosen?.countPerWave ?? 1
-  }
+  return { intervalMs: chosen.intervalMs, countPerWave: chosen.countPerWave }
 }
