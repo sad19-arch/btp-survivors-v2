@@ -30,7 +30,8 @@ test('des ennemis apparaissent au fil du temps (via le seam)', async ({ page }) 
   await page.goto('/?autostart=solo&seed=3&test=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
   await page.evaluate(() => {
-    window.__GAME__?.advanceTime(3000)
+    // Assez pour couvrir la 1re vague quelle que soit la rampe de spawn (intervalle de départ data-driven).
+    window.__GAME__?.advanceTime(5000)
   })
   const s = await page.evaluate(() => window.__GAME__?.getState())
   expect(s?.enemies.length ?? 0).toBeGreaterThan(0)
