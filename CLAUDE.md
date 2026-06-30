@@ -6,7 +6,7 @@ Guide pour Claude Code (claude.ai/code) sur ce dépôt. **Ces instructions prime
 
 **BTP Survivors** est un jeu web type *Vampire Survivors* dans un monde de **chantier/BTP** : on survit à des vagues d'ennemis bureaucratiques (administration, inspections, non-conformités) à travers le **cycle de vie d'un chantier**. Reconstruction propre d'un prototype précédent : le *design* était bon, le *code* mauvais.
 
-- **Cibles** : web grand public **mobile** (lien partagé) + **borne/salon** (plein écran, manettes, multi local 2-4).
+- **Cibles** : **PC navigateur + manette Xbox / clavier en priorité** (PRD) ; **borne/salon** (plein écran, manettes, multi local 2-4) ensuite ; web mobile/tactile en backlog (le modèle d'input ne doit pas l'empêcher).
 - **Pas de marque Once For All** : la couche marketing/pédago (CTA conformité, QR, quiz contextualisé) est **hors périmètre**. Le thème chantier, lui, reste l'identité du jeu.
 - **Colonne vertébrale = le cycle de chantier** : 10 phases ordonnées (`terrain_vierge → terrassement → fondations → réseaux enterrés → gros œuvre → échafaudages → charpente → second œuvre → finitions → livraison/audit`). C'est le squelette commun au mode Stage (1 phase = 1 mission) **et** au mode survie (le chantier « progresse » dans le temps).
 
@@ -18,10 +18,12 @@ Guide pour Claude Code (claude.ai/code) sur ce dépôt. **Ces instructions prime
 4. **Prêt-N-joueurs.** Les entités portent un `playerId`/`ownerId`. **Jamais** de `player1`/`player2` codés en dur, même en solo.
 5. **Data-driven.** Armes, ennemis, upgrades, phases = données typées validées au boot (`src/content`). Pas de logique par-entité copiée-collée.
 6. **Typage strict.** `tsconfig` strict + ESLint strict (`no-explicit-any` = erreur). **Zéro `any` dans `src/core`.**
-7. **UI componentisée.** Pas de `innerHTML` interpolé. L'overlay DOM (HUD, menus) passe par la couche `src/ui`.
+7. **UI componentisée.** Pas de `innerHTML` interpolé (helper `h()` dans `src/ui/h.ts`). L'overlay DOM (HUD, menus) passe par la couche `src/ui`.
+8. **Contrôle total (PRD, bloquant).** 100 % des écrans/menus jouables **manette Xbox One ET clavier**, **focus visible** partout, **aucune fonction n'exige la souris**. Toute UI navigable passe par la couche `src/input` (router pur `routeInput`) + le `FocusModel` (`src/ui/focusModel.ts`) ; **jamais** d'écouteur clavier ad hoc dans un écran.
+9. **DA 16-bit stricte (PRD).** Palette imposée = source unique `src/ui/palette.ts` ; style **panneaux pixel** (coins carrés, bordures noires, ombre portée décalée). **Interdits UI** : glassmorphism, gradients modernes, glow excessif, coins arrondis, **emojis dans l'UI**, `innerHTML` interpolé. (Assets pixel-art = passe DA ultérieure, hybride Kenney/PixelLab.)
 
 Flux de dépendances (jamais l'inverse) :
-`input → core (sim) → render (Phaser) / ui (overlay DOM)`
+`input → core (sim) ← app (écrans/focus) → render (Phaser) / ui (overlay DOM)`
 
 ## ⚠️ Méthodo « Claude joue pour valider » (obligatoire)
 
@@ -46,17 +48,24 @@ Contrat exposé sur `window` (activé en dev/test, **strippé en prod**) :
 
 ```ts
 window.__GAME__ = {
-  ready: boolean,                  // true quand une partie est jouable
-  getState(): GameState,           // état COMPLET en JSON (décider sans regarder l'écran)
+  ready: boolean,                  // true quand l'app est prête (scène montée)
+  getState(): AppViewState,        // état COMPLET en JSON (décider sans regarder l'écran)
   renderToText(): string,          // vue texte pour "jouer à l'aveugle"
   advanceTime(ms): void,           // avance N frames de façon déterministe (pas de sleep réel)
   setInput(playerId, input): void, // injecte les commandes (move/attack) sans toucher au clavier
   setSeed(seed): void,             // fixe le RNG
-  events: EventTarget              // 'sceneChanged' | 'levelUp' | 'gameOver' | 'bossSpawned' | …
+  // navigation des écrans (manette/clavier simulés, sans pixels) :
+  nav(dir): void,                  // 'up' | 'down' | 'left' | 'right' → déplace le focus
+  confirm(): void, back(): void,   // valider / annuler l'item focalisé
+  start(mode?): void,              // lancer une partie depuis le titre
+  pause(): void, resume(): void, restart(): void,
+  chooseUpgrade(index): void,      // choisir une carte de niveau (gel levé)
+  events: EventTarget
 }
 ```
 
-`getState()` renvoie tout le nécessaire : `scene`, `seed`, `elapsedMs`, `wave`, `score`, `coordSystem` (documenté : `origin top-left, +x right, +y down`), `players[]` (id, x, y, vx, vy, hp, maxHp, vigilance, alive, weapons), `enemies[]` (id, type, x, y, hp, isElite, isBoss), `projectiles[]`, `pickups[]`, `pendingLevelUp`.
+`getState()` renvoie un `AppViewState` : tout l'état du jeu **plus** la couche écrans —
+`scene`, `seed`, `elapsedMs`, `wave`, `score`, `coordSystem` (documenté : `origin top-left, +x right, +y down`), `players[]` (id, x, y, vx, vy, hp, maxHp, vigilance, **level, xp, nextThreshold**, alive, weapons), `enemies[]` (id, type, x, y, hp, isElite, isBoss), `projectiles[]` (les lames de scie y figurent), `pickups[]` (id, x, y, type, value), `pendingLevelUp` ({ playerId, choices[] }), **`screen`** (`title|game|paused|upgrade|gameover`) et **`menu`** (`{ screen, items[{id,label,hint}], index }` ou `null` en jeu). Le temps est **gelé** tant que `pendingLevelUp` est non nul (le seam choisit la carte) ou hors écran de jeu.
 
 Règles non négociables liées au seam :
 - **Boot direct par URL** : `?autostart=solo&level=1&seed=123` saute les menus, démarre la partie, émet `ready`. (`?test=1` active aussi le seam.)
@@ -103,6 +112,10 @@ npm run sim          # harness de simulation headless déterministe
 - Temps : **ms** partout sauf le temps écoulé exposé en secondes.
 - Pas de commit/push sans demande explicite ; brancher avant de committer sur `main`.
 
+## Périmètre MVP (PRD)
+
+1 perso · 1 niveau (terrain vierge) · **3 ennemis** (petit rapide / moyen standard / gros lent) · **3 armes** (cloueur projectile, scie orbitale, marteau de zone) · **6 upgrades** · **mini-boss à 5:00** · run 6-8 min · écrans **Titre / Pause / Upgrade / Game Over** · 100 % manette + clavier. Hors MVP : coop 4 joueurs, mobile complet, méta-progression, succès, 10 stages, boss final.
+
 ## État du projet
 
-Reconstruction en cours — **slice 1** (boucle solo minimale end-to-end). Voir le plan de reconstruction et le backlog de ré-intégration des features (coop, méta-progression, mode Stage complet, etc.).
+Reconstruction en cours — **tranche « MVP jouable » faite** : boucle complète Titre→Game Over (progression XP/niveaux/upgrades, 3 armes, mini-boss, navigation manette/clavier, écrans DOM 16-bit). Tests : ~99 Vitest + ~11 Playwright (headless), harness `npm run sim`. Backlog : tuning d'équilibrage, assets pixel-art (passe DA), coop 2-4, méta-progression, mode Stage complet, autres phases/armes/ennemis.
