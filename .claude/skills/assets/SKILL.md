@@ -38,7 +38,7 @@ no photorealism, no 3D render, no smooth digital painting, no soft gradients, no
 | UI (panneau, bouton, carte, barre) | `create_ui_asset` | selon table |
 | Icône d'upgrade | `create_ui_asset` | 32×32 / 64×64 |
 
-> Le manifest cible Gamelabs Studio pour les spritesheets ; ici l'outil de génération disponible est **PixelLab (MCP)** → l'utiliser comme moteur principal, en gardant les mêmes règles (calibration `player_j1`, prompt global, QA).
+> **Moteur de génération UNIQUE = PixelLab (MCP)** (A/B tranché sur le golden batch ; Gamelabs écarté car illustration peinte hors-DA). PixelLab couvre tout le pipeline (`create_character` + `animate_character`, `create_topdown_tileset`, `create_map_object`, `create_ui_asset`). Mêmes règles : calibration `player_j1`, prompt global, QA. Aseprite (computer-use) pour le nettoyage.
 
 ## Process "asset factory"
 

@@ -10,3 +10,8 @@ test-results/
 .DS_Store
 *.log
 .vite/
+# Artefacts de capture / revue d'assets (transitoires, hors source)
+.playwright-mcp/
+golden-batch-review/
+/ground-ingame.png
+/ingame-*.png

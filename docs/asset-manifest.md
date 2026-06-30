@@ -65,8 +65,8 @@ Objectif : ne pas gerer les assets un par un. Le bon systeme n'est pas un outil 
 
 | Outil | Role principal | Quand l'utiliser | Pourquoi |
 |---|---|---|---|
-| Gamelabs Studio | Production principale des spritesheets | Personnages, monstres, PNJ, animations 4 directions, boss | Plus adapte aux exports jeu, spritesheets, transparence et logique d'animation. |
-| PixelLab | Support DA et assets statiques | Props, tilesets, variantes, inpainting, corrections de style | Bon pour decliner un style, produire des decors et ajuster des assets autour d'une reference. |
+| PixelLab (MCP) | **Moteur unique de génération** (validé sur le golden batch) | Personnages, ennemis, PNJ, boss (`create_character` + `animate_character`), tilesets, props, UI | Pixel art 16-bit natif calibré sur `player_j1` ; couvre tout le pipeline. |
+| ~~Gamelabs Studio~~ | **Abandonné** (A/B golden batch) | — | Produit une illustration peinte haute déf hors-DA → mélange interdit. Écarté. |
 | Aseprite | Nettoyage et verification | Alignement, transparence, grille, export propre, petites corrections | Indispensable pour eviter les spritesheets sales ou mal calees. |
 | Pixel artist freelance | Validation DA ponctuelle | Golden batch, review de stage, assets heros/boss/UI critiques | Sert a eviter le patchwork et a valider la coherence sans tout produire a la main. |
 | Claude Code / scripts | QA automatique | Nommage, dimensions, transparence, planches de preview | Permet de valider par batch au lieu de regarder 200 fichiers un par un. |
@@ -98,24 +98,23 @@ Objectif : ne pas gerer les assets un par un. Le bon systeme n'est pas un outil 
 
 | Phase | Configuration |
 |---|---|
-| Prototype visuel | PixelLab ou Gamelabs + Aseprite, petit quota suffisant. |
-| Golden batch | Gamelabs pour spritesheets, PixelLab pour props/tiles, review freelance courte. |
-| Production MVP | Gamelabs principal, PixelLab secondaire, scripts de QA obligatoires. |
-| Production complete 10 stages | Forfait eleve sur l'outil principal, production stage par stage, review artistique toutes les 2 ou 3 phases. |
+| Prototype visuel | PixelLab + Aseprite, petit quota (essai) suffisant. |
+| Golden batch | PixelLab pour tout (persos, tiles, UI), Aseprite nettoyage, review freelance courte. |
+| Production MVP | PixelLab (moteur unique), scripts de QA obligatoires. |
+| Production complete 10 stages | Forfait PixelLab eleve, production stage par stage, review artistique toutes les 2 ou 3 phases. |
 | Apres 30-50 assets valides | Envisager Scenario/Layer uniquement si besoin d'un modele entraine pour industrialiser encore plus. |
 
-### Verdict outil
+### Verdict outil (décision)
 
-Pour ce projet, ne pas dependre d'un seul outil.
+**A/B tranché sur le golden batch : PixelLab (MCP) est le moteur de génération UNIQUE.** Il produit du pixel art 16-bit natif cohérent avec `player_j1` et couvre tout le pipeline (persos/ennemis/boss + `animate_character`, tilesets, props, UI). Gamelabs a été écarté (illustration peinte hors-DA).
 
-Recommandation pratique :
+Pile retenue :
+1. **PixelLab** — toute la génération (persos, ennemis, PNJ, boss, tilesets, props, UI).
+2. **Aseprite** — contrôle, nettoyage, recadrage/export propre.
+3. **Claude Code / scripts** — QA automatique (`npm run assets:qa`), planches récap.
+4. (Optionnel) un pixel artist pour valider le golden batch et les assets critiques.
 
-1. Gamelabs Studio pour spritesheets, ennemis, PNJ, boss.
-2. PixelLab pour decors, tiles, props, retouches et style matching.
-3. Aseprite pour controle et export propre.
-4. Un pixel artist pour valider le golden batch et les assets critiques.
-
-Si un seul outil doit etre choisi au depart : tester Gamelabs Studio et PixelLab sur le meme golden batch, puis garder celui qui produit les meilleurs spritesheets coherents avec `player_j1`.
+> Bémol pratique : l'essai PixelLab = 40 générations ; un **forfait payant** sera nécessaire pour la production complète (10 stages).
 
 ## 6. Conventions de nommage
 
