@@ -28,6 +28,7 @@ describe('renderSummaryTable', () => {
     const out = renderSummaryTable([agg({ bot: 'kite' })])
     expect(out).toContain('kite')
     expect(out).toContain('survie')
+    expect(out).toContain('480s')
   })
 })
 
@@ -35,6 +36,6 @@ describe('renderDiff', () => {
   it('montre le delta de survie médiane', () => {
     const out = renderDiff([agg({ survivalMsMedian: 480000 })], [agg({ survivalMsMedian: 300000 })])
     expect(out).toContain('kite')
-    expect(out).toMatch(/\+|180/) // +180s ou un delta visible
+    expect(out).toContain('+180s')
   })
 })
