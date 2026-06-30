@@ -33,6 +33,27 @@ export interface EnemyComp {
   contactDamage: number
 }
 
+/** Un projectile en vol. */
+export interface ProjectileComp {
+  type: string
+  damage: number
+  ownerId: number
+  /** Durée de vie restante, en ms. */
+  lifeMs: number
+  radius: number
+}
+
+/** Une arme équipée et son cooldown courant. */
+export interface WeaponSlot {
+  id: string
+  cooldownLeftMs: number
+}
+
+/** L'arsenal d'une entité (joueur). */
+export interface WeaponLoadout {
+  slots: WeaponSlot[]
+}
+
 /**
  * Registre des composants ECS : nom → forme des données.
  * Ajouter un composant = ajouter une entrée ici (typage propagé partout).
@@ -43,6 +64,8 @@ export interface Components {
   health: Health
   player: PlayerComp
   enemy: EnemyComp
+  projectile: ProjectileComp
+  weapons: WeaponLoadout
 }
 
 export type ComponentKey = keyof Components
@@ -86,6 +109,7 @@ export interface EnemyState {
 }
 
 export interface ProjectileState {
+  id: number
   x: number
   y: number
   vx: number

@@ -4,7 +4,11 @@ import { STEP_MS } from './clock'
 import { movementSystem } from './systems/movement'
 import { enemyAiSystem } from './systems/enemyAi'
 import { spawnWave } from './systems/spawn'
-import { MODE_PLAYER_COUNT, PLAYER_BASE, SPAWN, WORLD } from '@content/config'
+import { weaponSystem } from './systems/weapon'
+import { collisionSystem } from './systems/collision'
+import { projectileLifetimeSystem } from './systems/projectile'
+import { allPlayersDead } from './systems/gameRules'
+import { MODE_PLAYER_COUNT, PLAYER_BASE, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
 import type { ConstructionPhase } from '@content/phases'
 import type {
@@ -14,6 +18,7 @@ import type {
   GameState,
   PlayerInput,
   PlayerState,
+  ProjectileState,
   Vec2
 } from './types'
 
@@ -61,6 +66,7 @@ export class Simulation {
   private elapsedMs = 0
   private remainderMs = 0
   private spawnAccMs = 0
+  private score = 0
   private readonly inputs = new Map<number, PlayerInput>()
   private readonly playerEntities = new Map<number, EntityId>()
 
@@ -100,11 +106,11 @@ export class Simulation {
       seed: this.currentSeed,
       elapsedMs: this.elapsedMs,
       wave: 0,
-      score: 0,
+      score: this.score,
       coordSystem: COORD_SYSTEM,
       players: this.collectPlayers(),
       enemies: this.collectEnemies(),
-      projectiles: [],
+      projectiles: this.collectProjectiles(),
       pickups: [],
       pendingLevelUp: null
     }
@@ -113,10 +119,10 @@ export class Simulation {
   /** Vue texte lisible pour « jouer à l'aveugle ». */
   renderToText(): string {
     const s = this.getState()
-    const lines = [`scene=${s.scene} t=${Math.round(s.elapsedMs)}ms seed=${s.seed}`]
+    const lines = [`scene=${s.scene} t=${Math.round(s.elapsedMs)}ms seed=${s.seed} score=${s.score}`]
     for (const p of s.players) {
       lines.push(
-        `P${p.id} (${p.x.toFixed(0)},${p.y.toFixed(0)}) hp=${p.hp}/${p.maxHp} ${p.alive ? 'vivant' : 'mort'}`
+        `P${p.id} (${p.x.toFixed(0)},${p.y.toFixed(0)}) hp=${Math.round(p.hp)}/${p.maxHp} ${p.alive ? 'vivant' : 'mort'}`
       )
     }
     lines.push(`ennemis=${s.enemies.length} projectiles=${s.projectiles.length}`)
@@ -134,6 +140,7 @@ export class Simulation {
     this.elapsedMs = 0
     this.remainderMs = 0
     this.spawnAccMs = 0
+    this.score = 0
     this.inputs.clear()
     this.playerEntities.clear()
     this.spawnPlayers()
@@ -154,16 +161,33 @@ export class Simulation {
         speed: PLAYER_BASE.speed,
         vigilance: PLAYER_BASE.vigilance
       })
+      this.world.add(e, 'weapons', {
+        slots: STARTING_WEAPONS.map((wid) => ({ id: wid, cooldownLeftMs: 0 }))
+      })
       this.playerEntities.set(id, e)
       this.inputs.set(id, { move: { x: 0, y: 0 }, attack: false })
     }
   }
 
   private step(dtMs: number): void {
+    if (this.scene === 'gameover') {
+      return
+    }
     this.runSpawns(dtMs)
     this.applyPlayerInputs()
+    weaponSystem(this.world, dtMs)
     enemyAiSystem(this.world)
     movementSystem(this.world, dtMs)
+    this.score += collisionSystem(this.world, dtMs)
+    projectileLifetimeSystem(this.world, dtMs)
+    this.updateGameOver()
+  }
+
+  private updateGameOver(): void {
+    if (allPlayersDead(this.world)) {
+      this.scene = 'gameover'
+      this.events.dispatchEvent(new Event('gameOver'))
+    }
   }
 
   private runSpawns(dtMs: number): void {
@@ -181,7 +205,13 @@ export class Simulation {
       const input = this.inputs.get(playerId)
       const player = this.world.get(e, 'player')
       const vel = this.world.get(e, 'velocity')
-      if (input === undefined || player === undefined || vel === undefined) {
+      const health = this.world.get(e, 'health')
+      if (input === undefined || player === undefined || vel === undefined || health === undefined) {
+        continue
+      }
+      if (health.hp <= 0) {
+        vel.x = 0
+        vel.y = 0
         continue
       }
       const dir = normalize(input.move)
@@ -200,6 +230,7 @@ export class Simulation {
       if (pos === undefined || vel === undefined || health === undefined || player === undefined) {
         continue
       }
+      const loadout = this.world.get(e, 'weapons')
       players.push({
         id,
         x: pos.x,
@@ -210,7 +241,7 @@ export class Simulation {
         maxHp: health.maxHp,
         vigilance: player.vigilance,
         alive: health.hp > 0,
-        weapons: []
+        weapons: loadout === undefined ? [] : loadout.slots.map((s) => s.id)
       })
     }
     players.sort((a, b) => a.id - b.id)
@@ -238,6 +269,20 @@ export class Simulation {
     }
     enemies.sort((a, b) => a.id - b.id)
     return enemies
+  }
+
+  private collectProjectiles(): ProjectileState[] {
+    const projectiles: ProjectileState[] = []
+    for (const e of this.world.query('projectile', 'position', 'velocity')) {
+      const pos = this.world.get(e, 'position')
+      const vel = this.world.get(e, 'velocity')
+      const proj = this.world.get(e, 'projectile')
+      if (pos === undefined || vel === undefined || proj === undefined) {
+        continue
+      }
+      projectiles.push({ id: e, x: pos.x, y: pos.y, vx: vel.x, vy: vel.y, type: proj.type })
+    }
+    return projectiles
   }
 
   private countEnemies(): number {

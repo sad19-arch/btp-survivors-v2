@@ -27,6 +27,16 @@ export const MODE_PLAYER_COUNT: Record<GameMode, number> = {
   coop4: 4
 }
 
+/** Rayons de collision (px), par catégorie d'entité. */
+export const HITBOX = {
+  player: 16,
+  enemy: 12,
+  projectile: 6
+} as const
+
+/** Armes de départ du joueur (slice 1). */
+export const STARTING_WEAPONS: readonly string[] = ['cloueur']
+
 /** Paramètres de spawn (slice 1). */
 export const SPAWN = {
   /** Intervalle entre deux vagues, en ms. */

@@ -14,6 +14,8 @@ const PLAYER_COLOR = 0x3498db
 const PLAYER_RADIUS = 16
 const ENEMY_COLOR = 0xe74c3c
 const ENEMY_RADIUS = 12
+const PROJECTILE_COLOR = 0xf5c542
+const PROJECTILE_RADIUS = 5
 /** Clamp du delta réel pour éviter la spirale de la mort après un gel d'onglet. */
 const MAX_FRAME_MS = 100
 
@@ -28,6 +30,7 @@ export class GameScene extends Phaser.Scene {
   private seam: GameSeam | null = null
   private readonly playerSprites = new Map<number, Phaser.GameObjects.Arc>()
   private readonly enemySprites = new Map<number, Phaser.GameObjects.Arc>()
+  private readonly projectileSprites = new Map<number, Phaser.GameObjects.Arc>()
 
   constructor() {
     super('game')
@@ -123,6 +126,23 @@ export class GameScene extends Phaser.Scene {
       if (!seen.has(id)) {
         sprite.destroy()
         this.enemySprites.delete(id)
+      }
+    }
+
+    const seenProj = new Set<number>()
+    for (const pr of state.projectiles) {
+      seenProj.add(pr.id)
+      let sprite = this.projectileSprites.get(pr.id)
+      if (sprite === undefined) {
+        sprite = this.add.circle(pr.x, pr.y, PROJECTILE_RADIUS, PROJECTILE_COLOR)
+        this.projectileSprites.set(pr.id, sprite)
+      }
+      sprite.setPosition(pr.x, pr.y)
+    }
+    for (const [id, sprite] of this.projectileSprites) {
+      if (!seenProj.has(id)) {
+        sprite.destroy()
+        this.projectileSprites.delete(id)
       }
     }
   }

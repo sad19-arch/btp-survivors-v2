@@ -36,6 +36,16 @@ test('des ennemis apparaissent au fil du temps (via le seam)', async ({ page }) 
   expect(s?.enemies.length ?? 0).toBeGreaterThan(0)
 })
 
+test('le joueur tue des ennemis via le seam (le score monte)', async ({ page }) => {
+  await page.goto('/?autostart=solo&seed=1&test=1')
+  await page.waitForFunction(() => window.__GAME__?.ready === true)
+  await page.evaluate(() => {
+    window.__GAME__?.advanceTime(8000)
+  })
+  const s = await page.evaluate(() => window.__GAME__?.getState())
+  expect(s?.score ?? 0).toBeGreaterThan(0)
+})
+
 test('déterminisme: même seed + mêmes inputs ⇒ même état final', async ({ page }) => {
   const run = async (): Promise<unknown> => {
     await page.goto('/?autostart=solo&seed=7&test=1')
