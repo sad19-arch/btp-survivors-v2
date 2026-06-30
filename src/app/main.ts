@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { App } from './app'
 import { GameScene, type GameSceneData } from '@render/scenes/GameScene'
+import { Overlay } from '@ui/overlay'
 import { parseBootOptions } from './bootOptions'
 import { createSeam, installSeam } from './seam'
 
@@ -42,3 +43,14 @@ const game = new Phaser.Game({
 })
 
 game.scene.add('game', GameScene, true, data)
+
+// Overlay DOM des écrans (HUD, menus) — observe l'état de l'App à chaque frame.
+const uiRoot = document.getElementById('ui-root')
+if (uiRoot !== null) {
+  const overlay = new Overlay(uiRoot)
+  const tick = (): void => {
+    overlay.sync(app.getState())
+    window.requestAnimationFrame(tick)
+  }
+  window.requestAnimationFrame(tick)
+}

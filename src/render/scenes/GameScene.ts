@@ -38,6 +38,7 @@ export class GameScene extends Phaser.Scene {
   private seam: GameSeam | null = null
   private keyboardInput: KeyboardInput | null = null
   private gamepadInput: GamepadInput | null = null
+  private following = false
   private readonly playerSprites = new Map<number, Phaser.GameObjects.Arc>()
   private readonly enemySprites = new Map<number, Phaser.GameObjects.Arc>()
   private readonly projectileSprites = new Map<number, Phaser.GameObjects.Arc>()
@@ -64,11 +65,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setZoom(1.2)
 
     this.syncSprites()
-
-    const leader = this.playerSprites.get(1)
-    if (leader !== undefined) {
-      this.cameras.main.startFollow(leader, true, 0.1, 0.1)
-    }
+    this.followLeader()
 
     if (this.input.keyboard !== null) {
       this.keyboardInput = new KeyboardInput(this.input.keyboard)
@@ -88,6 +85,19 @@ export class GameScene extends Phaser.Scene {
       this.app.advanceTime(Math.min(delta, MAX_FRAME_MS))
     }
     this.syncSprites()
+    this.followLeader()
+  }
+
+  /** Démarre le suivi caméra dès que le sprite du joueur 1 existe. */
+  private followLeader(): void {
+    if (this.following) {
+      return
+    }
+    const leader = this.playerSprites.get(1)
+    if (leader !== undefined) {
+      this.cameras.main.startFollow(leader, true, 0.1, 0.1)
+      this.following = true
+    }
   }
 
   /** Fusionne clavier + manette en une entrée de frame. */
