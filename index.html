@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#1a1a1a" />
+    <title>BTP Survivors</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #1a1a1a;
+        overflow: hidden;
+        font-family: system-ui, sans-serif;
+      }
+      #game-root {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+      }
+      /* L'overlay UI (HUD, menus) vit ici, au-dessus du canvas Phaser. */
+      #ui-root {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-root">
+      <div id="ui-root"></div>
+    </div>
+    <script type="module" src="/src/app/main.ts"></script>
+  </body>
+</html>
