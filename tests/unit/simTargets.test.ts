@@ -49,4 +49,26 @@ describe('evaluateTargets', () => {
     expect(rep.pass).toBe(false)
     expect(rep.failures.join(' ')).toContain('kite')
   })
+
+  it('FAIL si greedy meurt avant 1:00 (punitif au démarrage)', () => {
+    const rep = evaluateTargets([agg({ bot: 'greedy', survivedFullPct: 0, survivalMsMedian: 40000 })])
+    expect(rep.pass).toBe(false)
+    expect(rep.failures.join(' ')).toContain('greedy')
+  })
+
+  it('PASS si greedy meurt en milieu de run, même hors ancienne fenêtre', () => {
+    const rep = evaluateTargets([agg({ bot: 'greedy', survivedFullPct: 0, survivalMsMedian: 90000 })])
+    expect(rep.pass).toBe(true)
+  })
+
+  it('FAIL si idle meurt avant 1:00 (punitif au démarrage)', () => {
+    const rep = evaluateTargets([agg({ bot: 'idle', survivedFullPct: 0, survivalMsMedian: 40000 })])
+    expect(rep.pass).toBe(false)
+    expect(rep.failures.join(' ')).toContain('idle')
+  })
+
+  it('PASS si idle meurt en milieu de run, même hors ancienne fenêtre', () => {
+    const rep = evaluateTargets([agg({ bot: 'idle', survivedFullPct: 0, survivalMsMedian: 90000 })])
+    expect(rep.pass).toBe(true)
+  })
 })

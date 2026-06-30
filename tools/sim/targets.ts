@@ -10,10 +10,8 @@ const KITE_MIN_SURVIVE_FULL_PCT = 80
 const KITE_MIN_LEVEL_AT_5MIN = 8
 const KITE_MIN_FIRST_DEATH_MS = 60000 // ne doit jamais mourir avant 1:00
 const KITE_MAX_HP_DIP_PCT = 50 // HP médian doit plonger sous ce seuil (tendu mais gagnable)
-const GREEDY_DEATH_LO_MS = 180000 // 3:00
-const GREEDY_DEATH_HI_MS = 330000 // 5:30
-const IDLE_DEATH_LO_MS = 90000 // 1:30
-const IDLE_DEATH_HI_MS = 240000 // 4:00
+/** Un bot non-skillé ne doit pas mourir avant 1:00 (PRD : début non punitif). Au-delà, peu importe quand — tant qu'il ne survit pas la run pleine. */
+const UNSKILLED_MIN_DEATH_MS = 60000
 
 export function evaluateTargets(aggs: BotAggregate[]): TargetReport {
   const byBot = new Map(aggs.map((a) => [a.bot, a]))
@@ -43,9 +41,9 @@ export function evaluateTargets(aggs: BotAggregate[]): TargetReport {
   const greedy = byBot.get('greedy')
   if (greedy !== undefined) {
     if (greedy.survivedFullPct > 0) {
-      failures.push(`greedy: ${Math.round(greedy.survivedFullPct)}% survivent la run pleine (trop facile)`)
-    } else if (greedy.survivalMsMedian < GREEDY_DEATH_LO_MS || greedy.survivalMsMedian > GREEDY_DEATH_HI_MS) {
-      failures.push(`greedy: mort médiane ${Math.round(greedy.survivalMsMedian / 1000)}s hors [180s, 330s]`)
+      failures.push(`greedy: ${Math.round(greedy.survivedFullPct)}% survivent la run pleine (trop facile pour l'imprudent)`)
+    } else if (greedy.survivalMsMedian < UNSKILLED_MIN_DEATH_MS) {
+      failures.push(`greedy: mort médiane ${Math.round(greedy.survivalMsMedian / 1000)}s < ${UNSKILLED_MIN_DEATH_MS / 1000}s (punitif au démarrage)`)
     }
   }
 
@@ -53,8 +51,8 @@ export function evaluateTargets(aggs: BotAggregate[]): TargetReport {
   if (idle !== undefined) {
     if (idle.survivedFullPct > 0) {
       failures.push(`idle: ${Math.round(idle.survivedFullPct)}% survivent la run pleine (immobile, trop facile)`)
-    } else if (idle.survivalMsMedian < IDLE_DEATH_LO_MS || idle.survivalMsMedian > IDLE_DEATH_HI_MS) {
-      failures.push(`idle: mort médiane ${Math.round(idle.survivalMsMedian / 1000)}s hors [90s, 240s]`)
+    } else if (idle.survivalMsMedian < UNSKILLED_MIN_DEATH_MS) {
+      failures.push(`idle: mort médiane ${Math.round(idle.survivalMsMedian / 1000)}s < ${UNSKILLED_MIN_DEATH_MS / 1000}s (punitif au démarrage)`)
     }
   }
 
