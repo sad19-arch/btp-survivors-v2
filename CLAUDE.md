@@ -36,8 +36,43 @@ Une tâche n'est **pas terminée** tant que tu ne l'as pas **validée en te mett
 
 - **Déterminisme** : pour reproduire un bug, relance la **même seed**. Deux runs même seed/inputs ⇒ états identiques.
 - **Invariants** : le harness vérifie des assertions de cohérence (HP jamais négatif silencieux, pas de NaN, survie minimale attendue, plafond d'entités…). Un invariant rouge = tâche non validée.
-- **Hooks debug** (dev only, `window.__btp`) pour mettre le vrai jeu dans un état précis en E2E : `spawn`, `giveWeapon`, `setTime`, `seed`, `godMode`, `fastForward`.
 - Suis le skill **`play-to-validate`** (`.claude/skills/play-to-validate/`) pour la procédure détaillée.
+
+### Le « seam » de test (`window.__GAME__`) — construit en premier, pas en dernier
+
+Playwright voit le DOM, **pas l'intérieur du `<canvas>`**. Tester par screenshots = fragile/lent/cher. Ce qui rend un jeu canvas testable par une IA, c'est un **seam** : le jeu **expose son état en JSON** et **accepte des commandes déterministes**. On le construit dès le premier prototype jouable.
+
+Contrat exposé sur `window` (activé en dev/test, **strippé en prod**) :
+
+```ts
+window.__GAME__ = {
+  ready: boolean,                  // true quand une partie est jouable
+  getState(): GameState,           // état COMPLET en JSON (décider sans regarder l'écran)
+  renderToText(): string,          // vue texte pour "jouer à l'aveugle"
+  advanceTime(ms): void,           // avance N frames de façon déterministe (pas de sleep réel)
+  setInput(playerId, input): void, // injecte les commandes (move/attack) sans toucher au clavier
+  setSeed(seed): void,             // fixe le RNG
+  events: EventTarget              // 'sceneChanged' | 'levelUp' | 'gameOver' | 'bossSpawned' | …
+}
+```
+
+`getState()` renvoie tout le nécessaire : `scene`, `seed`, `elapsedMs`, `wave`, `score`, `coordSystem` (documenté : `origin top-left, +x right, +y down`), `players[]` (id, x, y, vx, vy, hp, maxHp, vigilance, alive, weapons), `enemies[]` (id, type, x, y, hp, isElite, isBoss), `projectiles[]`, `pickups[]`, `pendingLevelUp`.
+
+Règles non négociables liées au seam :
+- **Boot direct par URL** : `?autostart=solo&level=1&seed=123` saute les menus, démarre la partie, émet `ready`. (`?test=1` active aussi le seam.)
+- **Gating** : activer le seam via `import.meta.env.DEV` ou `?test=1`. **Jamais** `process.env.NODE_ENV` (undefined dans un bundle Vite → hooks morts).
+- **Input par API**, pas par coordonnées/synthèse de touches : `setInput(1, { move:{x:0,y:-1}, attack:true })`.
+- **État renvoyé, pas seulement loggé** : `getState()` retourne un objet ; pas de `console.log` comme seule vérité.
+- **Logique pure** (spawn math, formules de dégâts, courbe d'XP, loot, conditions d'évolution) = fonctions pures sans Phaser, testées en Vitest sur **le vrai code de prod** (pas de recalcul des formules dans le test → fausse confiance).
+
+Stratégie à 2 étages :
+
+| Étage | Outil | Teste | Vitesse |
+|---|---|---|---|
+| 1. Logique pure | Vitest (`happy-dom`) + harness `npm run sim` | formules, systèmes, FSM sur le vrai code | ms, headless |
+| 2. Jeu réel | Playwright **via le seam JSON** | boucle réelle : `getState()` → `setInput()` → `advanceTime()` → réobserver ; assertions sur l'**état**, pas les pixels | secondes |
+
+Screenshots/vision : réservés à la **régression visuelle** (le HUD est là, le menu s'affiche), pas à la vérification de gameplay.
 
 Ne déclare jamais « ça marche » sans avoir lancé l'une de ces commandes et constaté le résultat.
 
