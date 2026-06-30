@@ -58,16 +58,11 @@ export const HITBOX = {
 export const STARTING_WEAPONS: readonly string[] = ['cloueur']
 
 /**
- * Paramètres de spawn (baseline MVP).
- *
- * Courbe PRD : 0-1 min = apprentissage, peu d'ennemis. La montée en difficulté
- * temporelle (et le mini-boss à 5:00) est ajoutée par le directeur de spawn.
+ * Paramètres de spawn (géométrie & perf). La cadence et la quantité d'ennemis
+ * dans le temps vivent dans `spawnRamp.ts` (rampe data-driven) ; le mini-boss
+ * à 5:00 est géré par le directeur de spawn (`simulation.ts`).
  */
 export const SPAWN = {
-  /** Intervalle entre deux vagues, en ms. */
-  intervalMs: 1400,
-  /** Nombre d'ennemis par vague. */
-  countPerWave: 1,
   /** Rayon d'apparition autour du centre des joueurs (hors écran). */
   ringRadius: 700,
   /** Plafond d'ennemis simultanés (perf). */
