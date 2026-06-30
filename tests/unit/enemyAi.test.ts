@@ -8,7 +8,7 @@ function addPlayer(w: World, x: number, y: number): EntityId {
   w.add(e, 'position', { x, y })
   w.add(e, 'velocity', { x: 0, y: 0 })
   w.add(e, 'health', { hp: 100, maxHp: 100 })
-  w.add(e, 'player', { playerId: 1, speed: 200, vigilance: 100 })
+  w.add(e, 'player', { playerId: 1, speed: 200, vigilance: 100, damageMult: 1, cooldownMult: 1, pickupRadius: 90 })
   return e
 }
 
@@ -17,7 +17,7 @@ function addEnemy(w: World, x: number, y: number, speed: number): EntityId {
   w.add(e, 'position', { x, y })
   w.add(e, 'velocity', { x: 0, y: 0 })
   w.add(e, 'health', { hp: 10, maxHp: 10 })
-  w.add(e, 'enemy', { type: 'paperasse', speed, isElite: false, isBoss: false, contactDamage: 5 })
+  w.add(e, 'enemy', { type: 'paperasse', speed, isElite: false, isBoss: false, contactDamage: 5, xpValue: 5 })
   return e
 }
 

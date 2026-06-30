@@ -42,7 +42,7 @@ describe('allPlayersDead', () => {
   it('faux si au moins un joueur est vivant, vrai si tous morts', () => {
     const w = new World()
     const p = w.spawn()
-    w.add(p, 'player', { playerId: 1, speed: 200, vigilance: 100 })
+    w.add(p, 'player', { playerId: 1, speed: 200, vigilance: 100, damageMult: 1, cooldownMult: 1, pickupRadius: 90 })
     w.add(p, 'health', { hp: 10, maxHp: 10 })
     expect(allPlayersDead(w)).toBe(false)
     const h = w.get(p, 'health')

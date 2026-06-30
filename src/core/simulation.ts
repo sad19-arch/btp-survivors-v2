@@ -6,16 +6,21 @@ import { enemyAiSystem } from './systems/enemyAi'
 import { spawnWave } from './systems/spawn'
 import { weaponSystem } from './systems/weapon'
 import { collisionSystem } from './systems/collision'
+import { pickupSystem } from './systems/pickup'
 import { projectileLifetimeSystem } from './systems/projectile'
+import { consumeLevelUp, initialProgress } from './systems/leveling'
 import { allPlayersDead } from './systems/gameRules'
-import { MODE_PLAYER_COUNT, PLAYER_BASE, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
+import { MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
+import { UPGRADES, rollUpgradeChoices } from '@content/upgrades'
 import type { ConstructionPhase } from '@content/phases'
 import type {
   EnemyState,
   EntityId,
   GameMode,
   GameState,
+  PendingLevelUp,
+  PickupState,
   PlayerInput,
   PlayerState,
   ProjectileState,
@@ -67,6 +72,7 @@ export class Simulation {
   private remainderMs = 0
   private spawnAccMs = 0
   private score = 0
+  private pendingLevelUp: PendingLevelUp | null = null
   private readonly inputs = new Map<number, PlayerInput>()
   private readonly playerEntities = new Map<number, EntityId>()
 
@@ -89,14 +95,71 @@ export class Simulation {
     this.inputs.set(playerId, input)
   }
 
-  /** Avance la simulation de `ms` millisecondes logiques, par pas fixes. */
+  /**
+   * Avance la simulation de `ms` millisecondes logiques, par pas fixes.
+   * Le temps est gelé tant que la partie n'est pas en cours (pause, game over)
+   * ou qu'un choix de carte est en attente → déterministe via le seam.
+   */
   advanceTime(ms: number): void {
+    if (this.isFrozen()) {
+      return
+    }
     this.remainderMs += ms
     while (this.remainderMs >= STEP_MS) {
       this.remainderMs -= STEP_MS
       this.step(STEP_MS)
       this.elapsedMs += STEP_MS
+      if (this.isFrozen()) {
+        // Un level-up (ou game over) est survenu en cours d'avance : on gèle.
+        this.remainderMs = 0
+        break
+      }
     }
+  }
+
+  /** Vrai si le temps de jeu ne doit pas s'écouler. */
+  private isFrozen(): boolean {
+    return this.scene !== 'game' || this.pendingLevelUp !== null
+  }
+
+  /** Met la partie en pause (depuis l'état en jeu). */
+  pause(): void {
+    if (this.scene === 'game') {
+      this.scene = 'paused'
+    }
+  }
+
+  /** Reprend la partie (depuis la pause). */
+  resume(): void {
+    if (this.scene === 'paused') {
+      this.scene = 'game'
+    }
+  }
+
+  /** Relance une partie neuve avec la seed courante. */
+  restart(): void {
+    this.reset(this.currentSeed)
+  }
+
+  /**
+   * Applique la carte d'upgrade choisie au joueur concerné, lève le gel, puis
+   * vérifie si un palier supplémentaire a été atteint (XP banque).
+   */
+  chooseUpgrade(index: number): void {
+    const pending = this.pendingLevelUp
+    if (pending === null) {
+      return
+    }
+    const choice = pending.choices[index]
+    if (choice !== undefined) {
+      const e = this.playerEntities.get(pending.playerId)
+      const def = UPGRADES[choice.id]
+      if (e !== undefined && def !== undefined) {
+        def.apply(this.world, e)
+      }
+    }
+    this.pendingLevelUp = null
+    this.checkLevelUp()
   }
 
   /** État complet sérialisable (contrat du seam). */
@@ -111,8 +174,8 @@ export class Simulation {
       players: this.collectPlayers(),
       enemies: this.collectEnemies(),
       projectiles: this.collectProjectiles(),
-      pickups: [],
-      pendingLevelUp: null
+      pickups: this.collectPickups(),
+      pendingLevelUp: this.pendingLevelUp
     }
   }
 
@@ -122,10 +185,15 @@ export class Simulation {
     const lines = [`scene=${s.scene} t=${Math.round(s.elapsedMs)}ms seed=${s.seed} score=${s.score}`]
     for (const p of s.players) {
       lines.push(
-        `P${p.id} (${p.x.toFixed(0)},${p.y.toFixed(0)}) hp=${Math.round(p.hp)}/${p.maxHp} ${p.alive ? 'vivant' : 'mort'}`
+        `P${p.id} (${p.x.toFixed(0)},${p.y.toFixed(0)}) hp=${Math.round(p.hp)}/${Math.round(p.maxHp)} ` +
+          `niv.${p.level} xp=${Math.round(p.xp)}/${p.nextThreshold} ${p.alive ? 'vivant' : 'mort'}`
       )
     }
-    lines.push(`ennemis=${s.enemies.length} projectiles=${s.projectiles.length}`)
+    lines.push(`ennemis=${s.enemies.length} projectiles=${s.projectiles.length} gemmes=${s.pickups.length}`)
+    if (s.pendingLevelUp !== null) {
+      const cards = s.pendingLevelUp.choices.map((c, i) => `[${i}] ${c.name}`).join('  ')
+      lines.push(`CHOIX P${s.pendingLevelUp.playerId}: ${cards}`)
+    }
     return lines.join('\n')
   }
 
@@ -141,6 +209,7 @@ export class Simulation {
     this.remainderMs = 0
     this.spawnAccMs = 0
     this.score = 0
+    this.pendingLevelUp = null
     this.inputs.clear()
     this.playerEntities.clear()
     this.spawnPlayers()
@@ -159,8 +228,12 @@ export class Simulation {
       this.world.add(e, 'player', {
         playerId: id,
         speed: PLAYER_BASE.speed,
-        vigilance: PLAYER_BASE.vigilance
+        vigilance: PLAYER_BASE.vigilance,
+        damageMult: 1,
+        cooldownMult: 1,
+        pickupRadius: PLAYER_BASE.pickupRadius
       })
+      this.world.add(e, 'progress', initialProgress())
       this.world.add(e, 'weapons', {
         slots: STARTING_WEAPONS.map((wid) => ({ id: wid, cooldownLeftMs: 0 }))
       })
@@ -170,7 +243,7 @@ export class Simulation {
   }
 
   private step(dtMs: number): void {
-    if (this.scene === 'gameover') {
+    if (this.scene !== 'game') {
       return
     }
     this.runSpawns(dtMs)
@@ -179,8 +252,36 @@ export class Simulation {
     enemyAiSystem(this.world)
     movementSystem(this.world, dtMs)
     this.score += collisionSystem(this.world, dtMs)
+    pickupSystem(this.world, dtMs)
     projectileLifetimeSystem(this.world, dtMs)
     this.updateGameOver()
+    if (this.scene === 'game') {
+      this.checkLevelUp()
+    }
+  }
+
+  /**
+   * Vérifie si un joueur a atteint un palier d'XP. Le cas échéant, prépare la
+   * carte d'upgrade en attente (1 joueur à la fois → gel jusqu'au choix).
+   */
+  private checkLevelUp(): void {
+    if (this.pendingLevelUp !== null) {
+      return
+    }
+    for (const [playerId, e] of this.playerEntities) {
+      const progress = this.world.get(e, 'progress')
+      const health = this.world.get(e, 'health')
+      if (progress === undefined || health === undefined || health.hp <= 0) {
+        continue
+      }
+      if (consumeLevelUp(progress)) {
+        this.pendingLevelUp = {
+          playerId,
+          choices: rollUpgradeChoices(this.rng, PROGRESSION.choices)
+        }
+        return
+      }
+    }
   }
 
   private updateGameOver(): void {
@@ -231,6 +332,7 @@ export class Simulation {
         continue
       }
       const loadout = this.world.get(e, 'weapons')
+      const progress = this.world.get(e, 'progress')
       players.push({
         id,
         x: pos.x,
@@ -240,6 +342,9 @@ export class Simulation {
         hp: health.hp,
         maxHp: health.maxHp,
         vigilance: player.vigilance,
+        level: progress?.level ?? 1,
+        xp: progress?.xp ?? 0,
+        nextThreshold: progress?.nextThreshold ?? PROGRESSION.firstThreshold,
         alive: health.hp > 0,
         weapons: loadout === undefined ? [] : loadout.slots.map((s) => s.id)
       })
@@ -283,6 +388,19 @@ export class Simulation {
       projectiles.push({ id: e, x: pos.x, y: pos.y, vx: vel.x, vy: vel.y, type: proj.type })
     }
     return projectiles
+  }
+
+  private collectPickups(): PickupState[] {
+    const pickups: PickupState[] = []
+    for (const e of this.world.query('pickup', 'position')) {
+      const pos = this.world.get(e, 'position')
+      const pickup = this.world.get(e, 'pickup')
+      if (pos === undefined || pickup === undefined) {
+        continue
+      }
+      pickups.push({ id: e, x: pos.x, y: pos.y, type: pickup.type, value: pickup.value })
+    }
+    return pickups
   }
 
   private countEnemies(): number {

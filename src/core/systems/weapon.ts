@@ -36,8 +36,8 @@ export function weaponSystem(world: World, dtMs: number): void {
         slot.cooldownLeftMs = 0 // prêt à tirer dès qu'une cible entre en portée
         continue
       }
-      fireProjectile(world, pos, target, def, player.playerId)
-      slot.cooldownLeftMs = def.cooldownMs
+      fireProjectile(world, pos, target, def, player.playerId, player.damageMult)
+      slot.cooldownLeftMs = def.cooldownMs * player.cooldownMult
     }
   }
 }
@@ -60,7 +60,14 @@ function findNearestEnemy(world: World, from: Vec2, range: number): Vec2 | null 
   return best
 }
 
-function fireProjectile(world: World, from: Vec2, target: Vec2, def: WeaponDef, ownerId: number): void {
+function fireProjectile(
+  world: World,
+  from: Vec2,
+  target: Vec2,
+  def: WeaponDef,
+  ownerId: number,
+  damageMult: number
+): void {
   const dx = target.x - from.x
   const dy = target.y - from.y
   const len = Math.hypot(dx, dy)
@@ -72,7 +79,7 @@ function fireProjectile(world: World, from: Vec2, target: Vec2, def: WeaponDef, 
   world.add(e, 'velocity', { x: dirX * def.projectileSpeed, y: dirY * def.projectileSpeed })
   world.add(e, 'projectile', {
     type: def.id,
-    damage: def.damage,
+    damage: def.damage * damageMult,
     ownerId,
     lifeMs: def.projectileLifeMs,
     radius: HITBOX.projectile

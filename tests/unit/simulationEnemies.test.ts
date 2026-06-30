@@ -11,7 +11,7 @@ describe('Simulation — ennemis & spawn', () => {
 
   it('les ennemis se rapprochent du joueur avec le temps', () => {
     const sim = new Simulation({ seed: 2, mode: 'solo' })
-    sim.advanceTime(1100) // ~1 vague
+    sim.advanceTime(1500) // ~1 vague (intervalle 1400 ms)
     const before = sim.getState()
     const p0 = before.players[0]
     const e0 = before.enemies[0]

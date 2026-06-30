@@ -16,6 +16,8 @@ const ENEMY_COLOR = 0xe74c3c
 const ENEMY_RADIUS = 12
 const PROJECTILE_COLOR = 0xf5c542
 const PROJECTILE_RADIUS = 5
+const PICKUP_COLOR = 0x3ddc84
+const PICKUP_RADIUS = 5
 /** Clamp du delta réel pour éviter la spirale de la mort après un gel d'onglet. */
 const MAX_FRAME_MS = 100
 
@@ -31,6 +33,7 @@ export class GameScene extends Phaser.Scene {
   private readonly playerSprites = new Map<number, Phaser.GameObjects.Arc>()
   private readonly enemySprites = new Map<number, Phaser.GameObjects.Arc>()
   private readonly projectileSprites = new Map<number, Phaser.GameObjects.Arc>()
+  private readonly pickupSprites = new Map<number, Phaser.GameObjects.Arc>()
 
   constructor() {
     super('game')
@@ -143,6 +146,23 @@ export class GameScene extends Phaser.Scene {
       if (!seenProj.has(id)) {
         sprite.destroy()
         this.projectileSprites.delete(id)
+      }
+    }
+
+    const seenPickup = new Set<number>()
+    for (const pk of state.pickups) {
+      seenPickup.add(pk.id)
+      let sprite = this.pickupSprites.get(pk.id)
+      if (sprite === undefined) {
+        sprite = this.add.circle(pk.x, pk.y, PICKUP_RADIUS, PICKUP_COLOR)
+        this.pickupSprites.set(pk.id, sprite)
+      }
+      sprite.setPosition(pk.x, pk.y)
+    }
+    for (const [id, sprite] of this.pickupSprites) {
+      if (!seenPickup.has(id)) {
+        sprite.destroy()
+        this.pickupSprites.delete(id)
       }
     }
   }

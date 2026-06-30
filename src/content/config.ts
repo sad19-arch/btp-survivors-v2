@@ -16,7 +16,27 @@ export const WORLD = {
 export const PLAYER_BASE = {
   hp: 240,
   speed: 200, // px/seconde
-  vigilance: 100
+  vigilance: 100,
+  /** Rayon d'aimantation des gemmes d'XP, en px. */
+  pickupRadius: 90
+} as const
+
+/** Progression XP → niveaux (porté de l'ancien jeu). */
+export const PROGRESSION = {
+  /** XP requise pour le 1er niveau. */
+  firstThreshold: 25,
+  /** Facteur multiplicatif du seuil à chaque niveau. */
+  growth: 1.15,
+  /** Nombre de cartes proposées à chaque montée de niveau. */
+  choices: 3
+} as const
+
+/** Paramètres des pickups. */
+export const PICKUP = {
+  /** Vitesse d'aimantation vers le joueur, en px/seconde. */
+  magnetSpeed: 420,
+  /** Rayon de collecte (en plus du rayon joueur), en px. */
+  collectRadius: 10
 } as const
 
 /** Nombre de joueurs selon le mode. */
@@ -37,12 +57,17 @@ export const HITBOX = {
 /** Armes de départ du joueur (slice 1). */
 export const STARTING_WEAPONS: readonly string[] = ['cloueur']
 
-/** Paramètres de spawn (slice 1). */
+/**
+ * Paramètres de spawn (baseline MVP).
+ *
+ * Courbe PRD : 0-1 min = apprentissage, peu d'ennemis. La montée en difficulté
+ * temporelle (et le mini-boss à 5:00) est ajoutée par le directeur de spawn.
+ */
 export const SPAWN = {
   /** Intervalle entre deux vagues, en ms. */
-  intervalMs: 1000,
+  intervalMs: 1400,
   /** Nombre d'ennemis par vague. */
-  countPerWave: 2,
+  countPerWave: 1,
   /** Rayon d'apparition autour du centre des joueurs (hors écran). */
   ringRadius: 700,
   /** Plafond d'ennemis simultanés (perf). */

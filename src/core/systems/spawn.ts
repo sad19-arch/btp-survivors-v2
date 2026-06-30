@@ -42,7 +42,8 @@ export function spawnWave(
       speed: def.speed,
       isElite: false,
       isBoss: false,
-      contactDamage: def.contactDamage
+      contactDamage: def.contactDamage,
+      xpValue: def.xpValue
     })
   }
 }

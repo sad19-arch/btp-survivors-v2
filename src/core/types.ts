@@ -22,6 +22,21 @@ export interface PlayerComp {
   playerId: number
   speed: number // px/seconde
   vigilance: number
+  /** Multiplicateur de dégâts des armes (modifié par les upgrades). */
+  damageMult: number
+  /** Multiplicateur de cooldown des armes (<1 = tire plus vite). */
+  cooldownMult: number
+  /** Rayon d'aimantation des pickups, en px. */
+  pickupRadius: number
+}
+
+/** Progression d'un joueur (XP / niveau). Par joueur → prêt-N-joueurs. */
+export interface ProgressComp {
+  /** XP accumulée vers le prochain niveau. */
+  xp: number
+  level: number
+  /** XP requise pour le prochain niveau. */
+  nextThreshold: number
 }
 
 /** Données propres à une entité ennemie. */
@@ -31,6 +46,14 @@ export interface EnemyComp {
   isElite: boolean
   isBoss: boolean
   contactDamage: number
+  /** XP lâchée à la mort. */
+  xpValue: number
+}
+
+/** Un pickup ramassable au sol (gemme d'XP, etc.). */
+export interface PickupComp {
+  type: string
+  value: number
 }
 
 /** Un projectile en vol. */
@@ -63,8 +86,10 @@ export interface Components {
   velocity: Vec2
   health: Health
   player: PlayerComp
+  progress: ProgressComp
   enemy: EnemyComp
   projectile: ProjectileComp
+  pickup: PickupComp
   weapons: WeaponLoadout
 }
 
@@ -73,7 +98,7 @@ export type ComponentKey = keyof Components
 // --- Modes & scènes -------------------------------------------------------
 
 export type GameMode = 'solo' | 'coop' | 'coop3' | 'coop4'
-export type SceneName = 'title' | 'game' | 'gameover'
+export type SceneName = 'title' | 'game' | 'paused' | 'gameover'
 
 // --- Entrées joueur (injectées via le seam) -------------------------------
 
@@ -94,6 +119,9 @@ export interface PlayerState {
   hp: number
   maxHp: number
   vigilance: number
+  level: number
+  xp: number
+  nextThreshold: number
   alive: boolean
   weapons: string[]
 }
@@ -118,13 +146,23 @@ export interface ProjectileState {
 }
 
 export interface PickupState {
+  id: number
   x: number
   y: number
   type: string
+  value: number
+}
+
+/** Une carte d'upgrade proposée (résolue depuis le contenu pour l'affichage). */
+export interface UpgradeChoice {
+  id: string
+  name: string
+  description: string
 }
 
 export interface PendingLevelUp {
-  choices: string[]
+  playerId: number
+  choices: UpgradeChoice[]
 }
 
 export interface GameState {

@@ -45,6 +45,7 @@ export function collisionSystem(world: World, dtMs: number): number {
     world.despawn(p)
   }
   for (const en of deadEnemies) {
+    dropXpGem(world, en)
     world.despawn(en)
   }
 
@@ -73,4 +74,16 @@ export function collisionSystem(world: World, dtMs: number): number {
   }
 
   return deadEnemies.size
+}
+
+/** Lâche une gemme d'XP à la position d'un ennemi mort. */
+function dropXpGem(world: World, enemy: number): void {
+  const epos = world.get(enemy, 'position')
+  const ecomp = world.get(enemy, 'enemy')
+  if (epos === undefined || ecomp === undefined) {
+    return
+  }
+  const gem = world.spawn()
+  world.add(gem, 'position', { x: epos.x, y: epos.y })
+  world.add(gem, 'pickup', { type: 'xp', value: ecomp.xpValue })
 }
