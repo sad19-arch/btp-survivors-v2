@@ -10,12 +10,12 @@
  *   bots: greedy (ramasse/engage) | kite (esquive) | idle (immobile)
  */
 import { Simulation } from '@core/simulation'
-import type { GameState } from '@core/types'
+import { botMove, isBotName, type BotName } from './bots'
 
 interface SimArgs {
   seed: number
   durationSec: number
-  bot: string
+  bot: BotName
 }
 
 function parseArgs(argv: string[]): SimArgs {
@@ -23,53 +23,13 @@ function parseArgs(argv: string[]): SimArgs {
     const i = argv.indexOf(flag)
     return i >= 0 && i + 1 < argv.length ? (argv[i + 1] ?? fallback) : fallback
   }
+  const botStr = get('--bot', 'kite')
+  const bot: BotName = isBotName(botStr) ? botStr : 'kite'
   return {
     seed: Number.parseInt(get('--seed', '42'), 10),
     durationSec: Number.parseInt(get('--duration', '120'), 10),
-    bot: get('--bot', 'kite')
+    bot
   }
-}
-
-/** Calcule le vecteur de déplacement du bot pour la frame courante. */
-function botMove(bot: string, s: GameState): { x: number; y: number } {
-  const p = s.players[0]
-  if (p === undefined) {
-    return { x: 0, y: 0 }
-  }
-  if (bot === 'idle') {
-    return { x: 0, y: 0 }
-  }
-  if (bot === 'greedy') {
-    const targets = s.pickups.length > 0 ? s.pickups : s.enemies
-    let tx = p.x
-    let ty = p.y
-    let bd = Infinity
-    for (const t of targets) {
-      const d = (t.x - p.x) ** 2 + (t.y - p.y) ** 2
-      if (d < bd) {
-        bd = d
-        tx = t.x
-        ty = t.y
-      }
-    }
-    return { x: tx - p.x, y: ty - p.y }
-  }
-  // kite : fuit l'ennemi le plus proche, se recentre près des bords.
-  let nx = 0
-  let ny = 0
-  let bd = Infinity
-  for (const e of s.enemies) {
-    const d = (e.x - p.x) ** 2 + (e.y - p.y) ** 2
-    if (d < bd) {
-      bd = d
-      nx = p.x - e.x
-      ny = p.y - e.y
-    }
-  }
-  const cx = 800 - p.x
-  const cy = 600 - p.y
-  const edge = Math.hypot(cx, cy) > 500 ? 2 : 0
-  return { x: nx + cx * edge, y: ny + cy * edge }
 }
 
 function main(): void {
