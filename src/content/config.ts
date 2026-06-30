@@ -73,3 +73,9 @@ export const SPAWN = {
   /** Plafond d'ennemis simultanés (perf). */
   maxActive: 200
 } as const
+
+/** Mini-boss (PRD : apparition à 5:00). */
+export const MINI_BOSS = {
+  /** Instant d'apparition, en ms de temps de jeu. */
+  atMs: 5 * 60_000
+} as const

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { World } from '@core/world'
 import { collisionSystem } from '@core/systems/collision'
+import { reapDeadEnemies } from '@core/systems/reap'
 import { projectileLifetimeSystem } from '@core/systems/projectile'
 import type { EntityId } from '@core/types'
 
@@ -40,12 +41,18 @@ describe('collisionSystem', () => {
     expect(w.alive(proj)).toBe(false)
   })
 
-  it('un ennemi tombé à 0 HP est supprimé', () => {
+  it('un ennemi tombé à 0 HP est récolté (mort + gemme)', () => {
     const w = new World()
     const enemy = addEnemy(w, 0, 0, 5)
     addProjectile(w, 0, 0, 6)
     collisionSystem(w, 16)
+    expect(w.get(enemy, 'health')?.hp).toBeLessThanOrEqual(0)
+    const kills = reapDeadEnemies(w)
+    expect(kills).toBe(1)
     expect(w.alive(enemy)).toBe(false)
+    // Une gemme d'XP a été lâchée.
+    const gems = [...w.query('pickup')]
+    expect(gems.length).toBe(1)
   })
 
   it('n\'affecte pas un ennemi hors de portée du projectile', () => {

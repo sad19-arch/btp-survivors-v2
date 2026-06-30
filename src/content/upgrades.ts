@@ -74,20 +74,21 @@ export const UPGRADES: Record<string, UpgradeDef> = {
       }
     }
   },
-  marteau: {
-    id: 'marteau',
-    name: 'Marteau de zone',
-    description: 'Ajoute (ou renforce) une onde de choc autour de vous.',
+  arme: {
+    id: 'arme',
+    name: 'Nouvel outil',
+    description: 'Débloque une nouvelle arme de chantier (scie, puis marteau).',
     apply(world, player) {
       const loadout = world.get(player, 'weapons')
       if (loadout === undefined) {
         return
       }
-      const owned = loadout.slots.find((s) => s.id === 'marteau')
-      if (owned === undefined) {
-        loadout.slots.push({ id: 'marteau', cooldownLeftMs: 0 })
+      const owned = new Set(loadout.slots.map((s) => s.id))
+      const next = WEAPON_UNLOCK_ORDER.find((id) => !owned.has(id))
+      if (next !== undefined) {
+        loadout.slots.push({ id: next, cooldownLeftMs: 0 })
       } else {
-        // Déjà équipé : renforce via le multiplicateur de dégâts du joueur.
+        // Toutes les armes débloquées : renforce les dégâts à la place.
         const p = world.get(player, 'player')
         if (p !== undefined) {
           p.damageMult *= 1.15
@@ -96,6 +97,9 @@ export const UPGRADES: Record<string, UpgradeDef> = {
     }
   }
 }
+
+/** Ordre de déblocage des armes via la carte « Nouvel outil ». */
+const WEAPON_UNLOCK_ORDER: readonly string[] = ['scie', 'marteau']
 
 /** Ids des upgrades connus. */
 export const UPGRADE_IDS: readonly string[] = Object.keys(UPGRADES)

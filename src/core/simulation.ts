@@ -3,15 +3,17 @@ import { Rng } from './rng'
 import { STEP_MS } from './clock'
 import { movementSystem } from './systems/movement'
 import { enemyAiSystem } from './systems/enemyAi'
-import { spawnWave } from './systems/spawn'
+import { spawnBoss, spawnWave } from './systems/spawn'
 import { weaponSystem } from './systems/weapon'
 import { collisionSystem } from './systems/collision'
+import { reapDeadEnemies } from './systems/reap'
 import { pickupSystem } from './systems/pickup'
 import { projectileLifetimeSystem } from './systems/projectile'
 import { consumeLevelUp, initialProgress } from './systems/leveling'
 import { allPlayersDead } from './systems/gameRules'
-import { MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
+import { MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
+import { ENEMIES, MINI_BOSS_ID } from '@content/enemies'
 import { UPGRADES, rollUpgradeChoices } from '@content/upgrades'
 import type { ConstructionPhase } from '@content/phases'
 import type {
@@ -72,6 +74,7 @@ export class Simulation {
   private remainderMs = 0
   private spawnAccMs = 0
   private score = 0
+  private miniBossSpawned = false
   private pendingLevelUp: PendingLevelUp | null = null
   private readonly inputs = new Map<number, PlayerInput>()
   private readonly playerEntities = new Map<number, EntityId>()
@@ -209,6 +212,7 @@ export class Simulation {
     this.remainderMs = 0
     this.spawnAccMs = 0
     this.score = 0
+    this.miniBossSpawned = false
     this.pendingLevelUp = null
     this.inputs.clear()
     this.playerEntities.clear()
@@ -251,7 +255,8 @@ export class Simulation {
     weaponSystem(this.world, dtMs)
     enemyAiSystem(this.world)
     movementSystem(this.world, dtMs)
-    this.score += collisionSystem(this.world, dtMs)
+    collisionSystem(this.world, dtMs)
+    this.score += reapDeadEnemies(this.world)
     pickupSystem(this.world, dtMs)
     projectileLifetimeSystem(this.world, dtMs)
     this.updateGameOver()
@@ -292,6 +297,7 @@ export class Simulation {
   }
 
   private runSpawns(dtMs: number): void {
+    this.maybeSpawnMiniBoss()
     this.spawnAccMs += dtMs
     while (this.spawnAccMs >= SPAWN.intervalMs) {
       this.spawnAccMs -= SPAWN.intervalMs
@@ -299,6 +305,18 @@ export class Simulation {
         spawnWave(this.world, this.rng, this.phase, this.playersCentroid(), SPAWN.countPerWave)
       }
     }
+  }
+
+  /** Invoque le mini-boss une seule fois, au seuil temporel (PRD : 5:00). */
+  private maybeSpawnMiniBoss(): void {
+    if (this.miniBossSpawned || this.elapsedMs < MINI_BOSS.atMs) {
+      return
+    }
+    const def = ENEMIES[MINI_BOSS_ID]
+    if (def !== undefined) {
+      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2))
+    }
+    this.miniBossSpawned = true
   }
 
   private applyPlayerInputs(): void {
@@ -386,6 +404,15 @@ export class Simulation {
         continue
       }
       projectiles.push({ id: e, x: pos.x, y: pos.y, vx: vel.x, vy: vel.y, type: proj.type })
+    }
+    // Les lames de scie sont rendues comme des projectiles (type 'scie').
+    for (const e of this.world.query('orbiter', 'position')) {
+      const pos = this.world.get(e, 'position')
+      const orb = this.world.get(e, 'orbiter')
+      if (pos === undefined || orb === undefined) {
+        continue
+      }
+      projectiles.push({ id: e, x: pos.x, y: pos.y, vx: 0, vy: 0, type: orb.weaponId })
     }
     return projectiles
   }

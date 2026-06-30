@@ -66,6 +66,16 @@ export interface ProjectileComp {
   radius: number
 }
 
+/** Une lame en orbite autour d'un joueur (arme « scie »). */
+export interface OrbiterComp {
+  ownerId: number
+  weaponId: string
+  /** Angle courant autour du propriétaire, en radians. */
+  angle: number
+  radius: number
+  hitRadius: number
+}
+
 /** Une arme équipée et son cooldown courant. */
 export interface WeaponSlot {
   id: string
@@ -90,6 +100,7 @@ export interface Components {
   enemy: EnemyComp
   projectile: ProjectileComp
   pickup: PickupComp
+  orbiter: OrbiterComp
   weapons: WeaponLoadout
 }
 

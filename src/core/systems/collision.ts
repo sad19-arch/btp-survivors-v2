@@ -2,17 +2,12 @@ import type { World } from '../world'
 import { HITBOX } from '@content/config'
 
 /**
- * Collisions du combat :
- *  - projectile ↔ ennemi : inflige les dégâts, consomme le projectile, tue
- *    l'ennemi à 0 HP.
+ * Collisions du combat (dégâts uniquement — la mort est récoltée par `reapDeadEnemies`) :
+ *  - projectile ↔ ennemi : inflige les dégâts puis consomme le projectile.
  *  - ennemi ↔ joueur : dégâts de contact continus (proportionnels au temps).
- *
- * Les suppressions sont collectées puis appliquées hors itération.
- * Retourne le nombre d'ennemis tués (pour le score).
  */
-export function collisionSystem(world: World, dtMs: number): number {
+export function collisionSystem(world: World, dtMs: number): void {
   const deadProjectiles = new Set<number>()
-  const deadEnemies = new Set<number>()
 
   for (const p of world.query('projectile', 'position')) {
     const ppos = world.get(p, 'position')
@@ -21,9 +16,6 @@ export function collisionSystem(world: World, dtMs: number): number {
       continue
     }
     for (const en of world.query('enemy', 'position', 'health')) {
-      if (deadEnemies.has(en)) {
-        continue
-      }
       const epos = world.get(en, 'position')
       const eh = world.get(en, 'health')
       if (epos === undefined || eh === undefined || eh.hp <= 0) {
@@ -33,9 +25,6 @@ export function collisionSystem(world: World, dtMs: number): number {
       if ((epos.x - ppos.x) ** 2 + (epos.y - ppos.y) ** 2 <= reach * reach) {
         eh.hp -= proj.damage
         deadProjectiles.add(p)
-        if (eh.hp <= 0) {
-          deadEnemies.add(en)
-        }
         break // projectile consommé (pas de perforation en slice 1)
       }
     }
@@ -43,10 +32,6 @@ export function collisionSystem(world: World, dtMs: number): number {
 
   for (const p of deadProjectiles) {
     world.despawn(p)
-  }
-  for (const en of deadEnemies) {
-    dropXpGem(world, en)
-    world.despawn(en)
   }
 
   // Contact ennemi → joueur (dégâts continus).
@@ -72,18 +57,4 @@ export function collisionSystem(world: World, dtMs: number): number {
       }
     }
   }
-
-  return deadEnemies.size
-}
-
-/** Lâche une gemme d'XP à la position d'un ennemi mort. */
-function dropXpGem(world: World, enemy: number): void {
-  const epos = world.get(enemy, 'position')
-  const ecomp = world.get(enemy, 'enemy')
-  if (epos === undefined || ecomp === undefined) {
-    return
-  }
-  const gem = world.spawn()
-  world.add(gem, 'position', { x: epos.x, y: epos.y })
-  world.add(gem, 'pickup', { type: 'xp', value: ecomp.xpValue })
 }

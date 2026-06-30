@@ -54,12 +54,12 @@ describe('UPGRADES (contenu)', () => {
     expect(after?.hp ?? 0).toBeGreaterThan(50)
   })
 
-  it('le marteau ajoute une arme au loadout si absente', () => {
+  it('la carte « arme » débloque une nouvelle arme (scie en premier)', () => {
     const world = new World()
     const p = makePlayer(world)
-    UPGRADES['marteau']?.apply(world, p)
+    UPGRADES['arme']?.apply(world, p)
     const ids = world.get(p, 'weapons')?.slots.map((s) => s.id) ?? []
-    expect(ids).toContain('marteau')
+    expect(ids).toContain('scie')
   })
 })
 
