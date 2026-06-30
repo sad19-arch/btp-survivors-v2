@@ -85,13 +85,17 @@ Screenshots/vision : réservés à la **régression visuelle** (le HUD est là, 
 
 Ne déclare jamais « ça marche » sans avoir lancé l'une de ces commandes et constaté le résultat.
 
-## Workflow assets
+## Workflow assets (DA = pilier produit)
 
-Assets = hybride **CC0 (packs Kenney)** + **génération pixel-art via MCP PixelLab**.
+Process complet : **`docs/asset-manifest.md`** + **skill `assets`** (`.claude/skills/assets/`). Le suivre **avant toute création/génération/intégration d'asset visuel**.
 
-> **Règle : à CHAQUE besoin d'asset, demander à l'utilisateur la source** (réutiliser un CC0 existant / générer via PixelLab / fournir lui-même). **Jamais** de génération silencieuse.
-
-Les assets vivent dans `public/`. Conserver l'attribution CC0. Conventions de nommage à définir avec le contenu.
+Points clés (le skill détaille) :
+- **Source de vérité visuelle** = `public/player_j1.png` (planche 768×768 = 4×4 de frames 192×192, `down/right/up/left`, ~99 px en jeu). Tout perso/ennemi se calibre dessus (silhouette compacte, lisible en 2 s, contour sombre, 16-bit arcade).
+- **À CHAQUE besoin d'asset, demander la source** : CC0 (Kenney) / génération **PixelLab (MCP)** / fourni par l'utilisateur. **Jamais de génération silencieuse** (quota).
+- **Golden batch d'abord**, puis **stage par stage** ; jamais tout d'un coup. Préfixer le **prompt global PixelLab** (manifest §3) à chaque génération.
+- **QA automatisée** : `npm run assets:qa` (dimensions, transparence, nommage) ; valider par **planche récap**, pas fichier par fichier.
+- **Pas de mélange DA** : ne pas mêler nouveaux assets PixelLab et anciens LPC/Kenney dans une build de validation DA (ancien = placeholder technique).
+- Nommage : `enemy_stageXX_nom_walk_192.png`, `tile_stageXX_nom_32.png`, `ui_nom.png`, etc. (manifest §6). Les assets vivent dans `public/`. Conserver l'attribution CC0.
 
 ## Commandes
 
@@ -103,6 +107,7 @@ npm run lint         # ESLint strict (0 warning toléré)
 npm run test         # Vitest (cœur, sans navigateur)
 npm run test:e2e     # Playwright (vrai jeu)
 npm run sim          # harness de simulation headless déterministe
+npm run assets:qa    # QA des assets (dimensions/transparence/nommage)
 ```
 
 ## Conventions
