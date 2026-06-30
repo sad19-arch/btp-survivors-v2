@@ -38,4 +38,15 @@ describe('evaluateTargets', () => {
     expect(rep.pass).toBe(false)
     expect(rep.failures.join(' ')).toContain('idle')
   })
+
+  it('PASS quand le HP de kite plonge sous 50% (jeu tendu mais gagnable)', () => {
+    const rep = evaluateTargets([agg({ bot: 'kite', hpPctCurve: [100, 80, 45, 60] })])
+    expect(rep.pass).toBe(true)
+  })
+
+  it('FAIL quand le HP de kite ne descend jamais sous 50% (trop sûr, pas de climax)', () => {
+    const rep = evaluateTargets([agg({ bot: 'kite', hpPctCurve: [100, 95, 90, 100] })])
+    expect(rep.pass).toBe(false)
+    expect(rep.failures.join(' ')).toContain('kite')
+  })
 })

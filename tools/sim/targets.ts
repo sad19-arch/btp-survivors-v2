@@ -9,6 +9,7 @@ export interface TargetReport {
 const KITE_MIN_SURVIVE_FULL_PCT = 80
 const KITE_MIN_LEVEL_AT_5MIN = 8
 const KITE_MIN_FIRST_DEATH_MS = 60000 // ne doit jamais mourir avant 1:00
+const KITE_MAX_HP_DIP_PCT = 50 // HP médian doit plonger sous ce seuil (tendu mais gagnable)
 const GREEDY_DEATH_LO_MS = 180000 // 3:00
 const GREEDY_DEATH_HI_MS = 330000 // 5:30
 const IDLE_DEATH_LO_MS = 90000 // 1:30
@@ -28,6 +29,14 @@ export function evaluateTargets(aggs: BotAggregate[]): TargetReport {
     }
     if (kite.survivalMsMin < KITE_MIN_FIRST_DEATH_MS) {
       failures.push(`kite: une run meurt à ${Math.round(kite.survivalMsMin / 1000)}s (< ${KITE_MIN_FIRST_DEATH_MS / 1000}s, départ trop brutal)`)
+    }
+    if (kite.hpPctCurve.length > 0) {
+      const minHpPct = Math.min(...kite.hpPctCurve)
+      if (minHpPct >= KITE_MAX_HP_DIP_PCT) {
+        failures.push(
+          `kite: HP médian jamais sous ${KITE_MAX_HP_DIP_PCT}% (creux ${Math.round(minHpPct)}%) — jeu trop sûr, pas de climax`
+        )
+      }
     }
   }
 

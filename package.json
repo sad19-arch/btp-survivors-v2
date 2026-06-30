@@ -18,6 +18,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "sim": "tsx tools/sim/run.ts",
+    "sim:check": "tsx tools/sim/run.ts --enforce",
     "assets:qa": "tsx tools/assets/qa.ts"
   },
   "dependencies": {
