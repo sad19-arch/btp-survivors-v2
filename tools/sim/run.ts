@@ -1,107 +1,135 @@
 /**
- * Harness de simulation headless — « Claude joue pour valider ».
+ * Harness « Claude joue pour valider » — instrument de mesure d'équilibrage.
  *
- * Fait tourner le VRAI cœur de jeu (Simulation) SANS Phaser ni navigateur, de
- * façon déterministe (seed). Un bot joue, on imprime des métriques et on vérifie
- * des invariants. Sort en code 1 si un invariant casse.
+ * Balaye plusieurs seeds × bots, échantillonne des séries temporelles, imprime
+ * un tableau récap + sparklines + PASS/FAIL vs cibles, et gère une baseline
+ * (avant/après). Déterministe : seeds énumérées.
  *
  * Usage:
- *   npm run sim -- --seed 42 --duration 300 --bot kite
- *   bots: greedy (ramasse/engage) | kite (esquive) | idle (immobile)
+ *   npm run sim                                  # défauts (10 seeds, 3 bots, 480s)
+ *   npm run sim -- --seeds 10 --bots kite,greedy,idle --duration 480
+ *   npm run sim -- --seed 42 --bot kite --duration 120   # compat run unique
+ *   npm run sim -- --baseline save               # écrit tools/sim/baseline.json
+ *   npm run sim -- --enforce                      # cibles bloquantes (exit 1)
  */
-import { Simulation } from '@core/simulation'
-import { botMove, isBotName, type BotName } from './bots'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+import { runOne } from './runOne'
+import { aggregate, type BotAggregate, type RunResult } from './metrics'
+import { renderSummaryTable, renderCurves, renderDiff } from './render'
+import { evaluateTargets } from './targets'
+import { saveBaseline, loadBaseline } from './baseline'
+import { BOT_NAMES, isBotName, type BotName } from './bots'
 
-interface SimArgs {
-  seed: number
+const BASELINE_PATH = join(dirname(fileURLToPath(import.meta.url)), 'baseline.json')
+
+interface Args {
+  seeds: number[]
+  bots: BotName[]
   durationSec: number
-  bot: BotName
+  saveBaseline: boolean
+  enforce: boolean
 }
 
-function parseArgs(argv: string[]): SimArgs {
-  const get = (flag: string, fallback: string): string => {
-    const i = argv.indexOf(flag)
-    return i >= 0 && i + 1 < argv.length ? (argv[i + 1] ?? fallback) : fallback
+function flag(argv: string[], name: string): string | undefined {
+  const i = argv.indexOf(name)
+  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : undefined
+}
+
+function parseArgs(argv: string[]): Args {
+  const single = flag(argv, '--seed')
+  const list = flag(argv, '--seeds')
+  let seeds: number[]
+  if (single !== undefined) {
+    seeds = [Number.parseInt(single, 10)]
+  } else if (list !== undefined && /^[0-9,\s]+$/.test(list)) {
+    seeds = list.split(',').map((s) => Number.parseInt(s.trim(), 10))
+  } else {
+    const n = list !== undefined ? Number.parseInt(list, 10) : 10
+    seeds = Array.from({ length: n }, (_, i) => i + 1)
   }
-  const botStr = get('--bot', 'kite')
-  const bot: BotName = isBotName(botStr) ? botStr : 'kite'
+
+  const botArg = flag(argv, '--bot') ?? flag(argv, '--bots')
+  const bots: BotName[] =
+    botArg !== undefined
+      ? botArg.split(',').map((b) => b.trim()).filter(isBotName)
+      : [...BOT_NAMES]
+
   return {
-    seed: Number.parseInt(get('--seed', '42'), 10),
-    durationSec: Number.parseInt(get('--duration', '120'), 10),
-    bot
+    seeds,
+    bots: bots.length > 0 ? bots : [...BOT_NAMES],
+    durationSec: Number.parseInt(flag(argv, '--duration') ?? '480', 10),
+    saveBaseline: flag(argv, '--baseline') === 'save',
+    enforce: argv.includes('--enforce')
   }
 }
 
 function main(): void {
   const args = parseArgs(process.argv.slice(2))
-  const sim = new Simulation({ seed: args.seed, mode: 'solo' })
-  const targetMs = args.durationSec * 1000
-  const stepMs = 100
-
-  let minHp = Infinity
-  let maxEnemies = 0
-  let levelUps = 0
-  let deathMs = -1
-  let nanSeen = false
-  let bossSeen = false
-
-  for (let t = 0; t < targetMs; t += stepMs) {
-    const s = sim.getState()
-    if (s.scene === 'gameover') {
-      deathMs = s.elapsedMs
-      break
-    }
-    if (s.pendingLevelUp !== null) {
-      levelUps += 1
-      sim.chooseUpgrade(0)
-      continue
-    }
-    const p = s.players[0]
-    if (p !== undefined) {
-      if (!Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.hp)) {
-        nanSeen = true
-      }
-      minHp = Math.min(minHp, p.hp)
-    }
-    maxEnemies = Math.max(maxEnemies, s.enemies.length)
-    if (s.enemies.some((e) => e.isBoss)) {
-      bossSeen = true
-    }
-    sim.setInput(1, { move: botMove(args.bot, s), attack: false })
-    sim.advanceTime(stepMs)
-  }
-
-  const final = sim.getState()
-  const fp = final.players[0]
-  console.log('[sim] seed=%d duration=%ds bot=%s', args.seed, args.durationSec, args.bot)
   console.log(
-    '[sim] t=%dms score=%d niveau=%d level-ups=%d ennemis_max=%d boss=%s mort=%s',
-    final.elapsedMs,
-    final.score,
-    fp?.level ?? 0,
-    levelUps,
-    maxEnemies,
-    bossSeen ? 'oui' : 'non',
-    deathMs >= 0 ? `${deathMs}ms` : 'survie'
+    '[sim] seeds=%s bots=%s duration=%ds',
+    args.seeds.join(','),
+    args.bots.join(','),
+    args.durationSec
   )
 
-  // --- invariants ---
-  const failures: string[] = []
-  if (nanSeen) {
-    failures.push('position/HP NaN détecté')
-  }
-  if (minHp < 0) {
-    failures.push(`HP négatif silencieux (min=${minHp})`)
-  }
-  if (maxEnemies > 220) {
-    failures.push(`plafond d'ennemis dépassé (${maxEnemies})`)
+  const aggregates: BotAggregate[] = []
+  let nanSeen = false
+  let minHp = Infinity
+  let maxEnemies = 0
+
+  for (const bot of args.bots) {
+    const results: RunResult[] = []
+    for (const seed of args.seeds) {
+      const r = runOne(seed, bot, { durationSec: args.durationSec })
+      results.push(r)
+      nanSeen = nanSeen || r.nanSeen
+      minHp = Math.min(minHp, r.minHp)
+      maxEnemies = Math.max(maxEnemies, r.maxEnemies)
+    }
+    aggregates.push(aggregate(results))
   }
 
-  if (failures.length > 0) {
-    console.error('[sim] INVARIANTS ROUGES:\n - ' + failures.join('\n - '))
+  console.log('\n' + renderSummaryTable(aggregates))
+  console.log('\n' + renderCurves(aggregates))
+
+  if (args.saveBaseline) {
+    saveBaseline(BASELINE_PATH, aggregates)
+    console.log('\n[sim] baseline écrite → %s', BASELINE_PATH)
+  } else {
+    const base = loadBaseline(BASELINE_PATH)
+    if (base !== null) {
+      console.log('\n' + renderDiff(aggregates, base))
+    }
+  }
+
+  const report = evaluateTargets(aggregates)
+  console.log('\n--- cibles « skill récompensé » ---')
+  if (report.pass) {
+    console.log('[sim] cibles VERTES ✓')
+  } else {
+    console.log('[sim] cibles ROUGES:\n - ' + report.failures.join('\n - '))
+  }
+
+  // --- invariants sanity (toujours bloquants) ---
+  const sanity: string[] = []
+  if (nanSeen) {
+    sanity.push('position/HP NaN détecté')
+  }
+  if (minHp < 0) {
+    sanity.push(`HP négatif silencieux (min=${minHp})`)
+  }
+  if (maxEnemies > 220) {
+    sanity.push(`plafond d'ennemis dépassé (${maxEnemies})`)
+  }
+  if (sanity.length > 0) {
+    console.error('\n[sim] INVARIANTS SANITY ROUGES:\n - ' + sanity.join('\n - '))
     process.exit(1)
   }
-  console.log('[sim] invariants verts ✓')
+
+  if (args.enforce && !report.pass) {
+    process.exit(1)
+  }
 }
 
 main()
