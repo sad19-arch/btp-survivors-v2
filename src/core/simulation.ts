@@ -1,5 +1,6 @@
 import { World } from './world'
 import { Rng } from './rng'
+import { AuraPulseEvent, type AuraPulse } from './events'
 import { STEP_MS } from './clock'
 import { movementSystem } from './systems/movement'
 import { enemyAiSystem } from './systems/enemyAi'
@@ -68,6 +69,8 @@ export class Simulation {
   private readonly mode: GameMode
   private world: World
   private rng: Rng
+  /** RNG dédié au loot (drops bonus) — séparé du RNG de spawn/upgrade (équilibrage préservé). */
+  private lootRng: Rng
   private phase: ConstructionPhase
   private currentSeed: number
   private scene: GameState['scene'] = 'game'
@@ -85,6 +88,7 @@ export class Simulation {
     this.currentSeed = opts.seed
     this.world = new World()
     this.rng = new Rng(opts.seed)
+    this.lootRng = new Rng((opts.seed ^ 0x1007) | 0)
     this.phase = resolvePhase()
     this.reset(opts.seed)
   }
@@ -207,6 +211,7 @@ export class Simulation {
     this.currentSeed = seed
     this.world = new World()
     this.rng = new Rng(seed)
+    this.lootRng = new Rng((seed ^ 0x1007) | 0)
     this.phase = resolvePhase()
     this.scene = 'game'
     this.elapsedMs = 0
@@ -251,18 +256,22 @@ export class Simulation {
     if (this.scene !== 'game') {
       return
     }
+    const pulses: AuraPulse[] = []
     this.runSpawns(dtMs)
     this.applyPlayerInputs()
-    weaponSystem(this.world, dtMs)
+    weaponSystem(this.world, dtMs, pulses)
     enemyAiSystem(this.world)
     movementSystem(this.world, dtMs)
     collisionSystem(this.world, dtMs)
-    this.score += reapDeadEnemies(this.world)
+    this.score += reapDeadEnemies(this.world, this.lootRng)
     pickupSystem(this.world, dtMs)
     projectileLifetimeSystem(this.world, dtMs)
     this.updateGameOver()
     if (this.scene === 'game') {
       this.checkLevelUp()
+    }
+    for (const p of pulses) {
+      this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius))
     }
   }
 

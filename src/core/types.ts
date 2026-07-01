@@ -50,9 +50,12 @@ export interface EnemyComp {
   xpValue: number
 }
 
-/** Un pickup ramassable au sol (gemme d'XP, etc.). */
+/** Types de pickups ramassables. */
+export type PickupKind = 'xp' | 'heal' | 'magnet' | 'chest'
+
+/** Un pickup ramassable au sol (gemme d'XP, soin, aimant, coffre). */
 export interface PickupComp {
-  type: string
+  type: PickupKind
   value: number
 }
 
@@ -160,7 +163,7 @@ export interface PickupState {
   id: number
   x: number
   y: number
-  type: string
+  type: PickupKind
   value: number
 }
 

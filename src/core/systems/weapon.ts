@@ -1,5 +1,6 @@
 import type { World } from '../world'
 import type { EntityId, PlayerComp, Vec2 } from '../types'
+import type { AuraPulse } from '../events'
 import type { WeaponDef } from '@content/weapons'
 import { WEAPONS } from '@content/weapons'
 import { HITBOX } from '@content/config'
@@ -12,7 +13,7 @@ import { HITBOX } from '@content/config'
  *
  * Déterministe (pas d'aléa). La mort des ennemis est récoltée par `reapDeadEnemies`.
  */
-export function weaponSystem(world: World, dtMs: number): void {
+export function weaponSystem(world: World, dtMs: number, pulses?: AuraPulse[]): void {
   despawnOrphanOrbiters(world)
 
   for (const e of world.query('player', 'position', 'weapons', 'health')) {
@@ -37,7 +38,7 @@ export function weaponSystem(world: World, dtMs: number): void {
           tickProjectile(world, slot, def, pos, player, dtMs)
           break
         case 'aura':
-          tickAura(world, slot, def, pos, player, dtMs)
+          tickAura(world, slot, def, pos, player, dtMs, pulses)
           break
         case 'orbital':
           tickOrbital(world, slot, def, e, pos, player, dtMs)
@@ -128,7 +129,8 @@ function tickAura(
   def: WeaponDef,
   pos: Vec2,
   player: PlayerComp,
-  dtMs: number
+  dtMs: number,
+  pulses?: AuraPulse[]
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -138,6 +140,7 @@ function tickAura(
   const damage = def.damage * player.damageMult
   const reach = def.range + HITBOX.enemy
   damageEnemiesInRadius(world, pos, reach, damage)
+  pulses?.push({ x: pos.x, y: pos.y, radius: reach })
 }
 
 // --- orbital (scie) --------------------------------------------------------

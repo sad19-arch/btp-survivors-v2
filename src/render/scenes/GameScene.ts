@@ -8,6 +8,7 @@ import { WORLD } from '@content/config'
 import { createGround } from '@render/ground'
 import { createProps } from '@render/props'
 import { dirRow, walkFrame, idleFrame, enemySheetKey } from '@render/sprites'
+import { AuraPulseEvent } from '@core/events'
 
 /** Variantes de tuiles de sol et décalques du stage 01 (chargés en preload). */
 const GROUND_TILE_KEYS = ['ground_0', 'ground_1', 'ground_2', 'ground_3', 'ground_4', 'ground_5']
@@ -46,6 +47,9 @@ const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; f
 /** Sprites de pickups par type. */
 const PICKUP_SPRITE: Record<string, { key: string; scale: number }> = {
   xp: { key: 'pickup_xp', scale: 0.5 },
+  heal: { key: 'pickup_health', scale: 0.55 },
+  magnet: { key: 'pickup_magnet', scale: 0.55 },
+  chest: { key: 'pickup_crate', scale: 0.6 },
 }
 
 /** Props décoratifs du stage 01 : [clé, fichier, échelle, nombre dispersé]. */
@@ -100,6 +104,11 @@ export class GameScene extends Phaser.Scene {
   private readonly pickupSprites = new Map<number, CharSprite>()
   /** Dernier niveau connu par joueur (détection de montée de niveau → VFX). */
   private readonly prevLevel = new Map<number, number>()
+  /** VFX d'onde de choc du marteau, déclenché par l'événement d'aura de la sim. */
+  private readonly onAuraPulse = (e: Event): void => {
+    const p = e as AuraPulseEvent
+    this.spawnVfx('vfx_shockwave', p.x, p.y, 0.4, Math.max(1.5, (p.radius * 2) / 90), 320)
+  }
 
   constructor() {
     super('game')
@@ -124,6 +133,9 @@ export class GameScene extends Phaser.Scene {
     this.load.image('proj_scie', 'stage01/weapons/proj_scie.png')
     this.load.image('proj_cloueur', 'stage01/weapons/proj_cloueur.png')
     this.load.image('pickup_xp', 'stage01/pickups/xp.png')
+    this.load.image('pickup_health', 'stage01/pickups/health.png')
+    this.load.image('pickup_magnet', 'stage01/pickups/magnet.png')
+    this.load.image('pickup_crate', 'stage01/pickups/crate.png')
     for (const p of PROPS) {
       this.load.image(p.key, p.file)
     }
@@ -176,6 +188,12 @@ export class GameScene extends Phaser.Scene {
 
     this.syncSprites()
     this.followLeader()
+
+    // Onde de choc du marteau : la sim émet, l'App relaie, on joue le VFX.
+    this.app.events.addEventListener('auraPulse', this.onAuraPulse)
+    this.events.once('shutdown', () => {
+      this.app.events.removeEventListener('auraPulse', this.onAuraPulse)
+    })
 
     if (this.input.keyboard !== null) {
       this.keyboardInput = new KeyboardInput(this.input.keyboard)

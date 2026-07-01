@@ -1,5 +1,5 @@
 import type { World } from '../world'
-import type { EntityId, Vec2 } from '../types'
+import type { EntityId, PickupComp, Vec2 } from '../types'
 import { HITBOX, PICKUP } from '@content/config'
 
 /**
@@ -29,10 +29,7 @@ export function pickupSystem(world: World, dtMs: number): void {
     const dist = Math.hypot(dx, dy)
 
     if (dist <= collectDist) {
-      const progress = world.get(target.entity, 'progress')
-      if (progress !== undefined) {
-        progress.xp += pickup.value
-      }
+      applyPickup(world, target.entity, pickup)
       world.despawn(gem)
       continue
     }
@@ -42,6 +39,51 @@ export function pickupSystem(world: World, dtMs: number): void {
       gpos.x += (dx / dist) * step
       gpos.y += (dy / dist) * step
     }
+  }
+}
+
+/** Applique l'effet d'un pickup au joueur qui le ramasse. Déterministe. */
+function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
+  switch (pickup.type) {
+    case 'xp':
+    case 'chest': {
+      const progress = world.get(player, 'progress')
+      if (progress !== undefined) {
+        progress.xp += pickup.value
+      }
+      break
+    }
+    case 'heal': {
+      const health = world.get(player, 'health')
+      if (health !== undefined) {
+        health.hp = Math.min(health.maxHp, health.hp + pickup.value)
+      }
+      break
+    }
+    case 'magnet': {
+      vacuumXpGems(world, player)
+      break
+    }
+  }
+}
+
+/** Aspire immédiatement toutes les gemmes d'XP restantes vers le joueur (crédite + despawn). */
+function vacuumXpGems(world: World, player: EntityId): void {
+  const ids: EntityId[] = []
+  let total = 0
+  for (const g of world.query('pickup')) {
+    const pk = world.get(g, 'pickup')
+    if (pk !== undefined && pk.type === 'xp') {
+      ids.push(g)
+      total += pk.value
+    }
+  }
+  const progress = world.get(player, 'progress')
+  if (progress !== undefined) {
+    progress.xp += total
+  }
+  for (const g of ids) {
+    world.despawn(g)
   }
 }
 

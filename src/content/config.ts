@@ -39,6 +39,23 @@ export const PICKUP = {
   collectRadius: 10
 } as const
 
+/**
+ * Drops bonus à la mort d'un ennemi (en plus de la gemme d'XP systématique).
+ * Tirés dans l'ordre via un Rng de loot dédié ; au plus un bonus par mort.
+ * `heal` rend des PV, `chest` donne un lot d'XP, `magnet` aspire toutes les gemmes.
+ *
+ * ⚠️ DORMANT : `chance = 0` pour l'instant. Le tuning « skill récompensé » est
+ * calibré à marge zéro ; tout drop actif perturbe la trajectoire déterministe et
+ * fait basculer les cibles (creux HP / survie). L'infra (types, rendu, effets,
+ * tests, assets) est prête ; à ACTIVER + re-tuner lors d'une passe d'équilibrage
+ * dédiée (les `value` ci-dessous sont les valeurs proposées à ce moment-là).
+ */
+export const PICKUP_DROPS = {
+  heal: { chance: 0, value: 18 },
+  magnet: { chance: 0, value: 0 },
+  chest: { chance: 0, value: 35 }
+} as const
+
 /** Nombre de joueurs selon le mode. */
 export const MODE_PLAYER_COUNT: Record<GameMode, number> = {
   solo: 1,

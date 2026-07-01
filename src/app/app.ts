@@ -1,4 +1,5 @@
 import { Simulation } from '@core/simulation'
+import { AuraPulseEvent } from '@core/events'
 import { FocusModel } from '@ui/focusModel'
 import type { GameMode, GameState, PlayerInput } from '@core/types'
 import type { AppViewState, MenuItemView, MenuView, NavDir, Screen } from './appState'
@@ -55,6 +56,11 @@ export class App {
   start(mode: GameMode = this.mode): void {
     this.mode = mode
     this.sim = new Simulation({ seed: this.seed, mode })
+    // Relaie les événements de sim (ex. onde d'aura) vers l'App → rendu.
+    this.sim.events.addEventListener('auraPulse', (e) => {
+      const p = e as AuraPulseEvent
+      this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius))
+    })
     this.started = true
     this.refreshFocus()
   }
