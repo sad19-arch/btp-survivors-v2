@@ -6,6 +6,7 @@ import { GamepadInput } from '@input/gamepad'
 import { routeInput, type FrameInput } from '@input/intents'
 import { WORLD } from '@content/config'
 import { createGround } from '@render/ground'
+import { createProps } from '@render/props'
 import { dirRow, walkFrame, idleFrame, enemySheetKey } from '@render/sprites'
 
 /** Variantes de tuiles de sol et décalques du stage 01 (chargés en preload). */
@@ -46,6 +47,16 @@ const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; f
 const PICKUP_SPRITE: Record<string, { key: string; scale: number }> = {
   xp: { key: 'pickup_xp', scale: 0.5 },
 }
+
+/** Props décoratifs du stage 01 : [clé, fichier, échelle, nombre dispersé]. */
+const PROPS: ReadonlyArray<{ key: string; file: string; scale: number; count: number }> = [
+  { key: 'prop_sign', file: 'stage01/props/site_sign.png', scale: 1.1, count: 2 },
+  { key: 'prop_stakes', file: 'stage01/props/survey_stakes.png', scale: 1.1, count: 3 },
+  { key: 'prop_tape', file: 'stage01/props/boundary_tape.png', scale: 1.0, count: 3 },
+  { key: 'prop_rocks', file: 'stage01/props/rock_cluster.png', scale: 1.0, count: 5 },
+  { key: 'prop_weeds', file: 'stage01/props/dry_weeds.png', scale: 1.0, count: 6 },
+  { key: 'prop_soft', file: 'stage01/props/soft_ground.png', scale: 1.4, count: 3 },
+]
 
 export interface GameSceneData {
   app: App
@@ -111,16 +122,28 @@ export class GameScene extends Phaser.Scene {
     this.load.image('proj_scie', 'stage01/weapons/proj_scie.png')
     this.load.image('proj_cloueur', 'stage01/weapons/proj_cloueur.png')
     this.load.image('pickup_xp', 'stage01/pickups/xp.png')
+    for (const p of PROPS) {
+      this.load.image(p.key, p.file)
+    }
   }
 
   create(): void {
     // Sol : base tuilée seedée + décalques épars (rendu pur, aucune logique).
+    const seed = this.app.getState().seed
     createGround(
       this,
       WORLD.width,
       WORLD.height,
       { tileKeys: GROUND_TILE_KEYS, decalKeys: GROUND_DECAL_KEYS },
-      this.app.getState().seed
+      seed
+    )
+    // Props décoratifs dispersés (au-dessus du sol, sous les entités).
+    createProps(
+      this,
+      WORLD.width,
+      WORLD.height,
+      PROPS.map((p) => ({ key: p.key, scale: p.scale, count: p.count })),
+      seed
     )
     this.add
       .rectangle(WORLD.width / 2, WORLD.height / 2, WORLD.width, WORLD.height)
