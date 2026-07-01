@@ -196,7 +196,9 @@ export const STAGE_RENDER: Record<string, StageRender> = {
       ['trusses', 0.85, 3],
       ['tiles', 0.7, 4]
     ],
-    ['sawdust', 'woodchips']
+    ['sawdust', 'woodchips'],
+    [0.5, 0.66, 0.78],
+    1.23
   ),
   second_oeuvre: makeStage(
     'stage08',
