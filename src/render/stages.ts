@@ -117,6 +117,7 @@ function makeStage(
   ids: readonly [string, string, string],
   propSpecs: readonly PropSpec[],
   decals: readonly string[],
+  enemyScales: readonly [number, number, number] = [0.74, 0.64, 0.8],
   bossScale = 0.7
 ): StageRender {
   return {
@@ -124,9 +125,9 @@ function makeStage(
     decals: decals.map((d) => ({ key: `decal_${prefix}_${d}`, file: `${prefix}/decals/${d}.png` })),
     props: buildProps(prefix, propSpecs),
     enemies: {
-      [ids[0]]: { key: `enemy_${prefix}_base`, file: `${prefix}/enemies/base_walk.png`, frame: 256, scale: 0.74 },
-      [ids[1]]: { key: `enemy_${prefix}_fast`, file: `${prefix}/enemies/fast_walk.png`, frame: 256, scale: 0.64 },
-      [ids[2]]: { key: `enemy_${prefix}_tank`, file: `${prefix}/enemies/tank_walk.png`, frame: 256, scale: 0.8 }
+      [ids[0]]: { key: `enemy_${prefix}_base`, file: `${prefix}/enemies/base_walk.png`, frame: 256, scale: enemyScales[0] },
+      [ids[1]]: { key: `enemy_${prefix}_fast`, file: `${prefix}/enemies/fast_walk.png`, frame: 256, scale: enemyScales[1] },
+      [ids[2]]: { key: `enemy_${prefix}_tank`, file: `${prefix}/enemies/tank_walk.png`, frame: 256, scale: enemyScales[2] }
     },
     boss: { key: `boss_${prefix}`, file: `${prefix}/boss/boss_walk.png`, frame: 256, scale: bossScale }
   }
@@ -141,10 +142,13 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     [
       ['mixer_truck', 0.85, 1],
       ['concrete_pump', 0.8, 1],
+      ['concrete_mixer', 0.6, 2],
       ['rebar', 0.7, 3],
       ['formwork', 0.8, 2]
     ],
-    ['spill', 'crack']
+    ['spill', 'crack'],
+    [1.18, 0.62, 0.94],
+    1.33
   ),
   reseaux_enterres: makeStage(
     'stage04',
