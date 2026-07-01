@@ -69,9 +69,18 @@ export const STAGE_RENDER: Record<string, StageRender> = {
       { key: 'decal_s2_tracks', file: 'stage02/decals/tracks.png' },
       { key: 'decal_s2_puddle', file: 'stage02/decals/puddle.png' }
     ],
-    props: [],
-    // Skins d'ennemis terrassement : produits en vague 3 (d'ici là → repli cercle).
-    enemies: {}
+    props: [
+      { key: 'prop_s2_excavator', file: 'stage02/props/excavator.png', scale: 0.8, count: 1 },
+      { key: 'prop_s2_truck', file: 'stage02/props/dump_truck.png', scale: 0.72, count: 1 },
+      { key: 'prop_s2_dirt', file: 'stage02/props/dirt_large.png', scale: 0.8, count: 4 }
+    ],
+    // Skins terrassement (feuilles 4×4 en cellules 256) — stats identiques au stage 01.
+    // Échelles calibrées (hauteur affichée ~ base 73 / rapide 69 / tank 86).
+    enemies: {
+      boueux: { key: 'enemy_s2_boueux', file: 'stage02/enemies/boueux_walk.png', frame: 256, scale: 0.74 },
+      foreur: { key: 'enemy_s2_foreur', file: 'stage02/enemies/foreur_walk.png', frame: 256, scale: 0.64 },
+      rocheux: { key: 'enemy_s2_rocheux', file: 'stage02/enemies/rocheux_walk.png', frame: 256, scale: 0.8 }
+    }
   }
 }
 

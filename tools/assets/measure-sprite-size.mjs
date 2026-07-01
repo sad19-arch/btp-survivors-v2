@@ -11,6 +11,9 @@ const sheets = [
   ['imp (inspecteur/rapide)', 'public/stage01/enemies/imp_walk.png', 192, 0.9],
   ['mudling (paperasse/base)', 'public/stage01/enemies/mudling_walk.png', 192, 1.25],
   ['boss (ground_keeper)', 'public/stage01/boss/ground_keeper_walk.png', 256, 1.35],
+  ['s2 boueux (base)', 'public/stage02/enemies/boueux_walk.png', 256, 0.74],
+  ['s2 foreur (fast)', 'public/stage02/enemies/foreur_walk.png', 256, 0.64],
+  ['s2 rocheux (tank)', 'public/stage02/enemies/rocheux_walk.png', 256, 0.8]
 ]
 
 for (const [name, path, cell, scale] of sheets) {
