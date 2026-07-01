@@ -208,7 +208,9 @@ export const STAGE_RENDER: Record<string, StageRender> = {
       ['drywall', 0.8, 4],
       ['insulation', 0.7, 3]
     ],
-    ['plaster_dust', 'scrap']
+    ['plaster_dust', 'scrap'],
+    [0.72, 0.63, 0.8],
+    1.37
   ),
   finitions: makeStage(
     'stage09',
