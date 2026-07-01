@@ -167,11 +167,14 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     'stage05',
     ['parpaing', 'truelle', 'banche'],
     [
-      ['tower_crane', 1.1, 1],
+      ['tower_crane', 0.8, 1],
+      ['mobile_crane', 0.9, 1],
       ['block_pallet', 0.8, 4],
       ['telehandler', 0.8, 1]
     ],
-    ['mortar', 'rubble']
+    ['mortar', 'rubble'],
+    [0.71, 0.63, 0.8],
+    1.3
   ),
   echafaudages: makeStage(
     'stage06',
