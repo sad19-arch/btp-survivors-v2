@@ -58,6 +58,70 @@ export const PHASES: Partial<Record<ConstructionPhaseId, ConstructionPhase>> = {
       fast: ['foreur'],
       tank: ['rocheux']
     }
+  },
+  [ConstructionPhaseId.FONDATIONS]: {
+    id: ConstructionPhaseId.FONDATIONS,
+    order: 3,
+    title: 'Fondations',
+    subtitle: 'Ferraillage et coulage',
+    accentColor: 0x9a9a9a,
+    enemyPools: { base: ['gachee'], fast: ['ferrailleur'], tank: ['massif'] }
+  },
+  [ConstructionPhaseId.RESEAUX_ENTERRES]: {
+    id: ConstructionPhaseId.RESEAUX_ENTERRES,
+    order: 4,
+    title: 'Réseaux enterrés',
+    subtitle: 'Tranchées et canalisations',
+    accentColor: 0x5a7a8a,
+    enemyPools: { base: ['gaine'], fast: ['fileur'], tank: ['collecteur'] }
+  },
+  [ConstructionPhaseId.GROS_OEUVRE]: {
+    id: ConstructionPhaseId.GROS_OEUVRE,
+    order: 5,
+    title: 'Gros œuvre',
+    subtitle: 'Murs et planchers',
+    accentColor: 0xc2a878,
+    enemyPools: { base: ['parpaing'], fast: ['truelle'], tank: ['banche'] }
+  },
+  [ConstructionPhaseId.ECHAFAUDAGES]: {
+    id: ConstructionPhaseId.ECHAFAUDAGES,
+    order: 6,
+    title: 'Échafaudages',
+    subtitle: 'Montage des façades',
+    accentColor: 0x8a9aa8,
+    enemyPools: { base: ['boulon'], fast: ['grimpeur'], tank: ['pylone'] }
+  },
+  [ConstructionPhaseId.CHARPENTE_TOITURE]: {
+    id: ConstructionPhaseId.CHARPENTE_TOITURE,
+    order: 7,
+    title: 'Charpente & toiture',
+    subtitle: 'Fermes et couverture',
+    accentColor: 0x8a5a34,
+    enemyPools: { base: ['copeau'], fast: ['chevron'], tank: ['poutre'] }
+  },
+  [ConstructionPhaseId.SECOND_OEUVRE]: {
+    id: ConstructionPhaseId.SECOND_OEUVRE,
+    order: 8,
+    title: 'Second œuvre',
+    subtitle: 'Cloisons et gaines',
+    accentColor: 0xd8d0c0,
+    enemyPools: { base: ['platras'], fast: ['gainard'], tank: ['cloison'] }
+  },
+  [ConstructionPhaseId.FINITIONS]: {
+    id: ConstructionPhaseId.FINITIONS,
+    order: 9,
+    title: 'Finitions',
+    subtitle: 'Peinture et carrelage',
+    accentColor: 0x4aa89a,
+    enemyPools: { base: ['goutte'], fast: ['pinceau'], tank: ['pot'] }
+  },
+  [ConstructionPhaseId.LIVRAISON_AUDIT]: {
+    id: ConstructionPhaseId.LIVRAISON_AUDIT,
+    order: 10,
+    title: 'Livraison & audit',
+    subtitle: 'Réception et conformité',
+    accentColor: 0xe0c020,
+    enemyPools: { base: ['formulaire'], fast: ['auditeur'], tank: ['commission'] }
   }
 }
 

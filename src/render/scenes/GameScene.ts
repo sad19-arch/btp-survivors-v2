@@ -11,18 +11,14 @@ import { dirRow, walkFrame, idleFrame } from '@render/sprites'
 import { stageRender, type StageRender } from '@render/stages'
 import { AuraPulseEvent } from '@core/events'
 
-/** Feuilles PARTAGÉES (tous stages) : joueur + boss. Les ennemis sont PAR STAGE (voir stages.ts). */
-const SHARED_SHEETS: ReadonlyArray<readonly [string, string, number]> = [
-  ['player', 'player_j1.png', 192],
-  ['boss', 'stage01/boss/ground_keeper_walk.png', 256]
-]
+/** Feuille PARTAGÉE (tous stages) : le joueur. Ennemis ET boss sont PAR STAGE (voir stages.ts). */
+const SHARED_SHEETS: ReadonlyArray<readonly [string, string, number]> = [['player', 'player_j1.png', 192]]
 /**
- * Échelles de rendu. Joueur et boss sont partagés ; les ennemis prennent leur échelle
+ * Échelles de rendu. Le joueur est partagé ; ennemis et boss prennent leur échelle
  * du stage (l'art natif PixelLab a des hauteurs variables, cf. measure-sprite-size.mjs).
- * Cibles ~hauteur affichée : joueur 83 · tank ~88 · rapide ~70 · base ~74 · boss 144.
+ * Cibles ~hauteur affichée : joueur 83 · tank ~88 · rapide ~70 · base ~74 · boss ~144.
  */
 const PLAYER_SCALE = 0.516
-const BOSS_SCALE = 1.35
 const DEFAULT_CHAR_SCALE = 0.516
 
 /** Sprites de projectiles par type d'arme (spin = rotation continue ; faceVel = orienté vers la vitesse). */
@@ -116,6 +112,8 @@ export class GameScene extends Phaser.Scene {
     }
     // Feuilles de personnages 4×4 (lourdes) — sautées en mode allégé (→ cercles).
     if (!this.lite) {
+      const boss = this.stage.boss
+      this.load.spritesheet(boss.key, boss.file, { frameWidth: boss.frame, frameHeight: boss.frame })
       for (const e of Object.values(this.stage.enemies)) {
         this.load.spritesheet(e.key, e.file, { frameWidth: e.frame, frameHeight: e.frame })
       }
@@ -270,9 +268,9 @@ export class GameScene extends Phaser.Scene {
       seen.add(en.id)
       let sprite = this.enemySprites.get(en.id)
       if (sprite === undefined) {
-        const skin = en.isBoss ? undefined : this.stage.enemies[en.type]
-        const key = en.isBoss ? 'boss' : skin?.key
-        const scale = en.isBoss ? BOSS_SCALE : (skin?.scale ?? DEFAULT_CHAR_SCALE)
+        const skin = en.isBoss ? this.stage.boss : this.stage.enemies[en.type]
+        const key = skin?.key
+        const scale = skin?.scale ?? DEFAULT_CHAR_SCALE
         sprite =
           key !== undefined && this.textures.exists(key)
             ? this.add.sprite(en.x, en.y, key).setScale(scale)
