@@ -9,6 +9,9 @@ export interface BootOptions {
   test: boolean
   /** Niveau/phase demandé, ou null. */
   level: string | null
+  /** Mode allégé : ne charge pas les feuilles de sprites lourdes (rendu en cercles).
+   *  Utilisé par la suite e2e pour éviter la saturation mémoire du renderer logiciel. */
+  lite: boolean
 }
 
 const VALID_MODES: ReadonlySet<string> = new Set<GameMode>(['solo', 'coop', 'coop3', 'coop4'])
@@ -29,6 +32,7 @@ export function parseBootOptions(search: string): BootOptions {
 
   const test = params.get('test') === '1'
   const level = params.get('level')
+  const lite = params.get('lite') === '1'
 
-  return { autostart, seed, test, level }
+  return { autostart, seed, test, level, lite }
 }

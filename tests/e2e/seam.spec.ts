@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test'
  */
 
 test('le seam pilote le joueur et avance le temps de façon déterministe', async ({ page }) => {
-  await page.goto('/?autostart=solo&seed=42&test=1')
+  await page.goto('/?autostart=solo&seed=42&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
 
   const s0 = await page.evaluate(() => window.__GAME__?.getState())
@@ -27,7 +27,7 @@ test('le seam pilote le joueur et avance le temps de façon déterministe', asyn
 })
 
 test('des ennemis apparaissent au fil du temps (via le seam)', async ({ page }) => {
-  await page.goto('/?autostart=solo&seed=3&test=1')
+  await page.goto('/?autostart=solo&seed=3&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
   await page.evaluate(() => {
     // Assez pour couvrir la 1re vague quelle que soit la rampe de spawn (intervalle de départ data-driven).
@@ -38,7 +38,7 @@ test('des ennemis apparaissent au fil du temps (via le seam)', async ({ page }) 
 })
 
 test('le joueur tue des ennemis via le seam (le score monte)', async ({ page }) => {
-  await page.goto('/?autostart=solo&seed=1&test=1')
+  await page.goto('/?autostart=solo&seed=1&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
   await page.evaluate(() => {
     window.__GAME__?.advanceTime(8000)
@@ -49,7 +49,7 @@ test('le joueur tue des ennemis via le seam (le score monte)', async ({ page }) 
 
 test('déterminisme: même seed + mêmes inputs ⇒ même état final', async ({ page }) => {
   const run = async (): Promise<unknown> => {
-    await page.goto('/?autostart=solo&seed=7&test=1')
+    await page.goto('/?autostart=solo&seed=7&test=1&lite=1')
     await page.waitForFunction(() => window.__GAME__?.ready === true)
     await page.evaluate(() => {
       window.__GAME__?.setInput(1, { move: { x: 1, y: 0.5 }, attack: false })
@@ -66,7 +66,7 @@ test('déterminisme: même seed + mêmes inputs ⇒ même état final', async ({
 
 test('le titre se navigue à la manette/clavier (via le seam) et lance la partie', async ({ page }) => {
   // Sans autostart → on arrive sur l'écran titre.
-  await page.goto('/?seed=1&test=1')
+  await page.goto('/?seed=1&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
 
   const title = await page.evaluate(() => window.__GAME__?.getState())
@@ -85,7 +85,7 @@ test('le titre se navigue à la manette/clavier (via le seam) et lance la partie
 })
 
 test('pause / reprise via le seam', async ({ page }) => {
-  await page.goto('/?autostart=solo&seed=1&test=1')
+  await page.goto('/?autostart=solo&seed=1&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
   await page.evaluate(() => window.__GAME__?.pause())
   expect((await page.evaluate(() => window.__GAME__?.getState()))?.screen).toBe('paused')
@@ -94,7 +94,7 @@ test('pause / reprise via le seam', async ({ page }) => {
 })
 
 test('montée de niveau → écran upgrade, le choix relance la partie', async ({ page }) => {
-  await page.goto('/?autostart=solo&seed=123&test=1')
+  await page.goto('/?autostart=solo&seed=123&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
 
   // Aspire les gemmes jusqu'à un level-up (le temps est gelé sur le choix).

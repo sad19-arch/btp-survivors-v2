@@ -4,12 +4,13 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
-  // Le jeu charge plusieurs feuilles de sprites 768² rendues en WebGL logiciel
-  // (SwiftShader) ; plusieurs onglets headless en parallèle saturent la mémoire
-  // du renderer (frame detached) — surtout le test « déterminisme » qui recharge
-  // toute la partie deux fois dans le même onglet. On sérialise l'e2e (le vrai
-  // jeu, 1 onglet, charge ces textures sans souci). À ré-évaluer si on allège les
-  // textures runtime (cellules 96px) → on pourra restaurer le parallélisme.
+  // Les tests e2e bootent en mode allégé (`&lite=1`) : pas de feuilles de sprites
+  // 768²/1024² chargées → rendu en cercles → pages légères qui se chargent vite.
+  // (Le seam teste l'ÉTAT, pas les pixels ; les captures manuelles gardent les
+  // sprites complets sans lite.) `workers:1` : cette machine ne tient pas plusieurs
+  // Chromium+SwiftShader concurrents (frame detached dès 2-3 workers) — mais grâce
+  // au mode lite, même en série l'e2e est bien plus rapide qu'avant. Sur une
+  // machine/CI plus costaude, remonter `workers` est sûr (pages déjà légères).
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

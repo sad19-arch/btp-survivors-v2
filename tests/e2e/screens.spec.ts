@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test'
  */
 
 test('l’écran titre s’affiche et se navigue', async ({ page }) => {
-  await page.goto('/?seed=1&test=1')
+  await page.goto('/?seed=1&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
 
   await expect(page.locator('.panel__title')).toHaveText('BTP Survivors')
@@ -27,7 +27,7 @@ test('l’écran titre s’affiche et se navigue', async ({ page }) => {
 })
 
 test('l’écran de pause s’affiche', async ({ page }) => {
-  await page.goto('/?autostart=solo&seed=1&test=1')
+  await page.goto('/?autostart=solo&seed=1&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
   await page.evaluate(() => window.__GAME__?.pause())
   await expect(page.locator('.panel__title')).toHaveText('Pause')

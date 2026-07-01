@@ -42,6 +42,8 @@ export interface GameSceneData {
   app: App
   testMode: boolean
   seam: GameSeam | null
+  /** Mode allégé (e2e) : ne charge pas les feuilles de sprites lourdes → cercles. */
+  lite?: boolean
 }
 
 const PLAYER_COLOR = 0x3498db
@@ -71,6 +73,7 @@ export class GameScene extends Phaser.Scene {
   private app!: App
   private testMode = false
   private seam: GameSeam | null = null
+  private lite = false
   /** Config de rendu du stage courant (sol/décalques/props/skins d'ennemis). */
   private stage!: StageRender
   private keyboardInput: KeyboardInput | null = null
@@ -96,6 +99,7 @@ export class GameScene extends Phaser.Scene {
     this.app = data.app
     this.testMode = data.testMode
     this.seam = data.seam
+    this.lite = data.lite ?? false
     this.stage = stageRender(this.app.getState().stageId)
   }
 
@@ -110,12 +114,14 @@ export class GameScene extends Phaser.Scene {
     for (const p of this.stage.props) {
       this.load.image(p.key, p.file)
     }
-    for (const e of Object.values(this.stage.enemies)) {
-      this.load.spritesheet(e.key, e.file, { frameWidth: e.frame, frameHeight: e.frame })
-    }
-    // Assets PARTAGÉS (tous stages).
-    for (const [key, file, frame] of SHARED_SHEETS) {
-      this.load.spritesheet(key, file, { frameWidth: frame, frameHeight: frame })
+    // Feuilles de personnages 4×4 (lourdes) — sautées en mode allégé (→ cercles).
+    if (!this.lite) {
+      for (const e of Object.values(this.stage.enemies)) {
+        this.load.spritesheet(e.key, e.file, { frameWidth: e.frame, frameHeight: e.frame })
+      }
+      for (const [key, file, frame] of SHARED_SHEETS) {
+        this.load.spritesheet(key, file, { frameWidth: frame, frameHeight: frame })
+      }
     }
     this.load.image('proj_scie', 'stage01/weapons/proj_scie.png')
     this.load.image('proj_cloueur', 'stage01/weapons/proj_cloueur.png')

@@ -26,7 +26,7 @@ if (import.meta.env.DEV || opts.test) {
   installSeam(seam)
 }
 
-const data: GameSceneData = { app, testMode: opts.test, seam }
+const data: GameSceneData = { app, testMode: opts.test, seam, lite: opts.lite }
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
