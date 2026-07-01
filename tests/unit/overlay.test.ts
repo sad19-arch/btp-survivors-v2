@@ -16,7 +16,7 @@ describe('Overlay (DOM)', () => {
 
     expect(root.querySelector('.panel__title')?.textContent).toBe('BTP Survivors')
     const items = root.querySelectorAll('.menu__item')
-    expect(items.length).toBe(3)
+    expect(items.length).toBe(4) // Jouer, Niveau (sélecteur), Options, Crédits
     expect(root.querySelectorAll('.menu__item--focus').length).toBe(1)
     expect(items[0]?.classList.contains('menu__item--focus')).toBe(true)
   })

@@ -1,7 +1,7 @@
 import { Simulation } from '@core/simulation'
 import { AuraPulseEvent } from '@core/events'
 import { FocusModel } from '@ui/focusModel'
-import type { ConstructionPhaseId } from '@content/phases'
+import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
 import type { GameMode, GameState, PlayerInput } from '@core/types'
 import type { AppViewState, MenuItemView, MenuView, NavDir, Screen } from './appState'
 
@@ -13,12 +13,7 @@ export interface AppOptions {
   phaseId?: ConstructionPhaseId
 }
 
-/** Items fixes des menus (hors cartes d'upgrade, dynamiques). */
-const TITLE_ITEMS: MenuItemView[] = [
-  { id: 'jouer', label: 'Jouer', hint: null },
-  { id: 'options', label: 'Options', hint: null },
-  { id: 'credits', label: 'Crédits', hint: null }
-]
+/** Items fixes des menus (hors titre — dynamique — et cartes d'upgrade). */
 const PAUSE_ITEMS: MenuItemView[] = [
   { id: 'reprendre', label: 'Reprendre', hint: null },
   { id: 'recommencer', label: 'Recommencer', hint: null },
@@ -41,7 +36,8 @@ export class App {
   private sim: Simulation | null = null
   private seed: number
   private mode: GameMode
-  private readonly phaseId: ConstructionPhaseId | undefined
+  /** Phase sélectionnée au titre (départ : URL `?level=` ou terrain vierge). */
+  private selectedPhase: ConstructionPhaseId
   private started = false
   private readonly focus = new FocusModel()
   private focusKey = ''
@@ -49,7 +45,7 @@ export class App {
   constructor(opts: AppOptions) {
     this.seed = opts.seed
     this.mode = opts.mode
-    this.phaseId = opts.phaseId
+    this.selectedPhase = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
     if (opts.autostart) {
       this.start(opts.mode)
     }
@@ -60,7 +56,7 @@ export class App {
   /** Démarre une nouvelle partie (depuis le titre). */
   start(mode: GameMode = this.mode): void {
     this.mode = mode
-    this.sim = new Simulation({ seed: this.seed, mode, phaseId: this.phaseId })
+    this.sim = new Simulation({ seed: this.seed, mode, phaseId: this.selectedPhase })
     // Relaie les événements de sim (ex. onde d'aura) vers l'App → rendu.
     this.sim.events.addEventListener('auraPulse', (e) => {
       const p = e as AuraPulseEvent
@@ -165,7 +161,7 @@ export class App {
 
   getState(): AppViewState {
     this.refreshFocus()
-    const base = this.sim?.getState() ?? emptyState(this.seed)
+    const base = this.sim?.getState() ?? emptyState(this.seed, this.selectedPhase)
     const screen = this.screen
     return { ...base, scene: base.scene, screen, menu: this.menu(screen) }
   }
@@ -205,7 +201,7 @@ export class App {
   private menuItems(): MenuItemView[] {
     switch (this.screen) {
       case 'title':
-        return TITLE_ITEMS
+        return this.titleItems()
       case 'paused':
         return PAUSE_ITEMS
       case 'gameover':
@@ -215,6 +211,24 @@ export class App {
       default:
         return []
     }
+  }
+
+  /** Items du titre : Jouer, sélecteur de niveau (cyclable), Options, Crédits. */
+  private titleItems(): MenuItemView[] {
+    const phase = ORDERED_PHASES.find((p) => p.id === this.selectedPhase)
+    return [
+      { id: 'jouer', label: 'Jouer', hint: null },
+      { id: 'stage', label: `Niveau : ${phase?.title ?? '—'}`, hint: 'Valider pour changer' },
+      { id: 'options', label: 'Options', hint: null },
+      { id: 'credits', label: 'Crédits', hint: null }
+    ]
+  }
+
+  /** Passe à la phase suivante (cycle) — pour le sélecteur de niveau du titre. */
+  private cycleStage(): void {
+    const i = ORDERED_PHASES.findIndex((p) => p.id === this.selectedPhase)
+    this.selectedPhase = ORDERED_PHASES[(i + 1) % ORDERED_PHASES.length]?.id ?? this.selectedPhase
+    this.refreshFocus()
   }
 
   private upgradeItems(): MenuItemView[] {
@@ -245,12 +259,6 @@ export class App {
 
   /** Exécute l'action d'un item de menu. */
   private activate(screen: Screen, id: string): void {
-    if (screen === 'title') {
-      if (id === 'jouer') {
-        this.start(this.mode)
-      }
-      return
-    }
     if (screen === 'paused') {
       if (id === 'reprendre') {
         this.sim?.resume()
@@ -260,6 +268,14 @@ export class App {
         this.started = false
       }
       this.refreshFocus()
+      return
+    }
+    if (screen === 'title') {
+      if (id === 'jouer') {
+        this.start(this.mode)
+      } else if (id === 'stage') {
+        this.cycleStage()
+      }
       return
     }
     if (screen === 'gameover') {
@@ -278,11 +294,11 @@ export class App {
 }
 
 /** État vide affiché à l'écran titre (aucune partie en cours). */
-function emptyState(seed: number): GameState {
+function emptyState(seed: number, stageId: ConstructionPhaseId): GameState {
   return {
     scene: 'title',
     seed,
-    stageId: 'terrain_vierge',
+    stageId,
     elapsedMs: 0,
     wave: 0,
     score: 0,

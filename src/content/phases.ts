@@ -125,6 +125,11 @@ export const PHASES: Partial<Record<ConstructionPhaseId, ConstructionPhase>> = {
   }
 }
 
+/** Phases ordonnées (par `order` croissant) — source pour l'UI de sélection. */
+export const ORDERED_PHASES: ConstructionPhase[] = Object.values(PHASES)
+  .filter((p): p is ConstructionPhase => p !== undefined)
+  .sort((a, b) => a.order - b.order)
+
 /** Mappe le param d'URL `level` (id de phase, ou numéro d'ordre) vers une phase définie. */
 export function phaseIdFromLevel(level: string | null): ConstructionPhaseId {
   if (level === null) {

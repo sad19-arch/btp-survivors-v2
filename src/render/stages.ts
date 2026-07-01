@@ -84,6 +84,8 @@ const TERRASSEMENT_RENDER: StageRender = {
   props: [
     { key: 'prop_s2_excavator', file: 'stage02/props/excavator.png', scale: 0.8, count: 1 },
     { key: 'prop_s2_truck', file: 'stage02/props/dump_truck.png', scale: 0.72, count: 1 },
+    { key: 'prop_s2_roller', file: 'stage02/props/road_roller.png', scale: 0.85, count: 1 },
+    { key: 'prop_s2_dozer', file: 'stage02/props/bulldozer.png', scale: 0.85, count: 1 },
     { key: 'prop_s2_dirt', file: 'stage02/props/dirt_large.png', scale: 0.8, count: 4 }
   ],
   enemies: {
@@ -91,7 +93,7 @@ const TERRASSEMENT_RENDER: StageRender = {
     foreur: { key: 'enemy_s2_foreur', file: 'stage02/enemies/foreur_walk.png', frame: 256, scale: 0.64 },
     rocheux: { key: 'enemy_s2_rocheux', file: 'stage02/enemies/rocheux_walk.png', frame: 256, scale: 0.8 }
   },
-  boss: GROUND_KEEPER
+  boss: { key: 'boss_s2_terrassement', file: 'stage02/boss/boss_walk.png', frame: 256, scale: 1.27 }
 }
 
 /** Spécification compacte d'un prop : [nom de fichier (sans ext), échelle, nombre]. */
@@ -220,7 +222,7 @@ export const STAGE_RENDER: Record<string, StageRender> = {
       ['paint', 0.7, 4],
       ['tile_pallet', 0.75, 3]
     ],
-    ['paint_spot', 'tile_offcut'],
+    ['paint_spot'],
     [0.68, 0.63, 0.8],
     1.09
   ),
@@ -232,7 +234,7 @@ export const STAGE_RENDER: Record<string, StageRender> = {
       ['sign_ok', 0.9, 2],
       ['cones', 0.6, 5]
     ],
-    ['clean_mark', 'tape_line'],
+    ['tape_line'],
     [0.65, 0.65, 0.88],
     1.25
   )

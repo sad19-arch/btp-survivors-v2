@@ -32,8 +32,23 @@ describe('App — écrans & navigation', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     const s = app.getState()
     expect(s.screen).toBe('title')
-    expect(s.menu?.items.map((i) => i.id)).toEqual(['jouer', 'options', 'credits'])
+    expect(s.menu?.items.map((i) => i.id)).toEqual(['jouer', 'stage', 'options', 'credits'])
     expect(s.players.length).toBe(0)
+  })
+
+  it('le sélecteur « Niveau » cycle les phases et lance le stage choisi', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    const item = () => app.getState().menu?.items[1]
+    expect(item()?.id).toBe('stage')
+    expect(item()?.label).toContain('Terrain vierge')
+    app.nav('down') // focus le sélecteur (index 1)
+    app.confirm() // cycle → phase suivante
+    expect(item()?.label).toContain('Terrassement')
+    expect(app.getState().screen).toBe('title') // toujours au titre, pas de partie lancée
+    app.nav('up') // focus « Jouer »
+    app.confirm()
+    expect(app.getState().screen).toBe('game')
+    expect(app.getState().stageId).toBe('terrassement') // le stage choisi est bien lancé
   })
 
   it('autostart démarre directement en jeu', () => {
