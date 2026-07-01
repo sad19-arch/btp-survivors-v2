@@ -220,7 +220,9 @@ export const STAGE_RENDER: Record<string, StageRender> = {
       ['paint', 0.7, 4],
       ['tile_pallet', 0.75, 3]
     ],
-    ['paint_spot', 'tile_offcut']
+    ['paint_spot', 'tile_offcut'],
+    [0.68, 0.63, 0.8],
+    1.09
   ),
   livraison_audit: makeStage(
     'stage10',
