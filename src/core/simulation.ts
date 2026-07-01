@@ -3,6 +3,7 @@ import { Rng } from './rng'
 import { AuraPulseEvent, type AuraPulse } from './events'
 import { STEP_MS } from './clock'
 import { movementSystem } from './systems/movement'
+import { worldBoundsSystem } from './systems/bounds'
 import { enemyAiSystem } from './systems/enemyAi'
 import { spawnBoss, spawnWave } from './systems/spawn'
 import { weaponSystem } from './systems/weapon'
@@ -267,6 +268,7 @@ export class Simulation {
     weaponSystem(this.world, dtMs, pulses)
     enemyAiSystem(this.world)
     movementSystem(this.world, dtMs)
+    worldBoundsSystem(this.world, WORLD)
     collisionSystem(this.world, dtMs)
     this.score += reapDeadEnemies(this.world, this.lootRng)
     pickupSystem(this.world, dtMs)
