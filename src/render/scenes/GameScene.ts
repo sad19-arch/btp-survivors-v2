@@ -98,6 +98,8 @@ export class GameScene extends Phaser.Scene {
   private readonly enemySprites = new Map<number, CharSprite>()
   private readonly projectileSprites = new Map<number, CharSprite>()
   private readonly pickupSprites = new Map<number, CharSprite>()
+  /** Dernier niveau connu par joueur (détection de montée de niveau → VFX). */
+  private readonly prevLevel = new Map<number, number>()
 
   constructor() {
     super('game')
@@ -125,6 +127,26 @@ export class GameScene extends Phaser.Scene {
     for (const p of PROPS) {
       this.load.image(p.key, p.file)
     }
+    this.load.image('vfx_impact', 'stage01/vfx/impact.png')
+    this.load.image('vfx_sparkle', 'stage01/vfx/sparkle.png')
+    this.load.image('vfx_levelup', 'stage01/vfx/levelup.png')
+    this.load.image('vfx_shockwave', 'stage01/vfx/shockwave.png')
+  }
+
+  /** Joue un effet transitoire (scale + fondu) à une position, puis se détruit. Rendu pur. */
+  private spawnVfx(key: string, x: number, y: number, from: number, to: number, durationMs: number): void {
+    if (!this.textures.exists(key)) {
+      return
+    }
+    const fx = this.add.sprite(x, y, key).setScale(from).setDepth(5)
+    this.tweens.add({
+      targets: fx,
+      scale: to,
+      alpha: 0,
+      duration: durationMs,
+      ease: 'Quad.easeOut',
+      onComplete: () => fx.destroy()
+    })
   }
 
   create(): void {
@@ -227,6 +249,11 @@ export class GameScene extends Phaser.Scene {
         const moving = p.vx !== 0 || p.vy !== 0
         sprite.setFrame(moving ? walkFrame(row, this.time.now) : idleFrame(row))
       }
+      const prev = this.prevLevel.get(p.id)
+      if (prev !== undefined && p.level > prev) {
+        this.spawnVfx('vfx_levelup', p.x, p.y, 0.4, 2, 500)
+      }
+      this.prevLevel.set(p.id, p.level)
     }
 
     const leader = state.players[0]
@@ -249,9 +276,10 @@ export class GameScene extends Phaser.Scene {
         sprite.setFrame(walkFrame(row, this.time.now))
       }
     }
-    // Retire les sprites des ennemis disparus.
+    // Retire les sprites des ennemis disparus (mort → éclat d'impact).
     for (const [id, sprite] of this.enemySprites) {
       if (!seen.has(id)) {
+        this.spawnVfx('vfx_impact', sprite.x, sprite.y, 0.5, 1.4, 350)
         sprite.destroy()
         this.enemySprites.delete(id)
       }
@@ -302,6 +330,7 @@ export class GameScene extends Phaser.Scene {
     }
     for (const [id, sprite] of this.pickupSprites) {
       if (!seenPickup.has(id)) {
+        this.spawnVfx('vfx_sparkle', sprite.x, sprite.y, 0.6, 1.6, 300)
         sprite.destroy()
         this.pickupSprites.delete(id)
       }
