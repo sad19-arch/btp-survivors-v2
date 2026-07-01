@@ -79,6 +79,12 @@ export interface OrbiterComp {
   hitRadius: number
 }
 
+/** Un ouvrier prisonnier à libérer (clin d'œil « otage » ; cosmétique + petit bonus). */
+export interface PrisonerComp {
+  /** true une fois le joueur passé à proximité (cage ouverte, remerciement). */
+  freed: boolean
+}
+
 /** Une arme équipée et son cooldown courant. */
 export interface WeaponSlot {
   id: string
@@ -105,6 +111,7 @@ export interface Components {
   pickup: PickupComp
   orbiter: OrbiterComp
   weapons: WeaponLoadout
+  prisoner: PrisonerComp
 }
 
 export type ComponentKey = keyof Components
@@ -167,6 +174,13 @@ export interface PickupState {
   value: number
 }
 
+export interface PrisonerState {
+  id: number
+  x: number
+  y: number
+  freed: boolean
+}
+
 /** Une carte d'upgrade proposée (résolue depuis le contenu pour l'affichage). */
 export interface UpgradeChoice {
   id: string
@@ -193,5 +207,7 @@ export interface GameState {
   enemies: EnemyState[]
   projectiles: ProjectileState[]
   pickups: PickupState[]
+  /** Ouvriers prisonniers présents (cage + sosie à libérer). */
+  prisoners: PrisonerState[]
   pendingLevelUp: PendingLevelUp | null
 }

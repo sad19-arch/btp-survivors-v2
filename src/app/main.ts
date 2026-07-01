@@ -17,7 +17,9 @@ const app = new App({
   seed: opts.seed,
   mode,
   autostart: opts.autostart !== null,
-  phaseId: phaseIdFromLevel(opts.level)
+  phaseId: phaseIdFromLevel(opts.level),
+  // Intro cosmétique pour le vrai joueur ; jamais en test/e2e/capture (seam).
+  intro: !opts.test
 })
 const seam = createSeam(app)
 

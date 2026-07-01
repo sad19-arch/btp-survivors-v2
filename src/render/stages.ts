@@ -161,7 +161,7 @@ export const STAGE_RENDER: Record<string, StageRender> = {
       ['pipes', 0.8, 3],
       ['cable_reel', 0.7, 3]
     ],
-    ['trench', 'mud'],
+    ['trench', 'mud', 'dig_tunnels'],
     [0.75, 0.65, 0.77],
     1.22
   ),

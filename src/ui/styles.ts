@@ -106,6 +106,43 @@ const CSS = `
 #ui-root .card__hint { color: ${PALETTE.blanc}; font-size: 13px; text-transform: none; letter-spacing: 0; }
 #ui-root .stats { display: flex; flex-direction: column; gap: 4px; font-size: 16px; }
 #ui-root .hint-line { color: ${PALETTE.solSable}; font-size: 12px; }
+#ui-root .unlock-line { color: ${PALETTE.jauneSecurite}; font-size: 12px; font-weight: bold; }
+#ui-root .banner {
+  position: absolute;
+  top: 42%;
+  right: 28px;
+  background: ${PALETTE.orangeDanger};
+  color: ${PALETTE.contour};
+  border: 4px solid ${PALETTE.contour};
+  box-shadow: 6px 6px 0 ${PALETTE.contour};
+  padding: 10px 18px;
+  font-size: 22px;
+  font-weight: bold;
+  animation: banner-blink 0.5s steps(1, end) infinite;
+}
+@keyframes banner-blink { 50% { opacity: 0.2; } }
+#ui-root .hud__stage { font-size: 14px; }
+#ui-root .hud__stagenum { color: ${PALETTE.jauneSecurite}; }
+#ui-root .hud__stagename { color: ${PALETTE.blanc}; }
+#ui-root .stagecard {
+  position: absolute;
+  top: 34%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: ${PALETTE.brunSombre};
+  border: 4px solid ${PALETTE.contour};
+  box-shadow: 6px 6px 0 ${PALETTE.contour};
+  padding: 18px 34px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: stagecard-in 0.35s ease-out;
+}
+#ui-root .stagecard__num { color: ${PALETTE.jauneSecurite}; font-size: 15px; font-weight: bold; }
+#ui-root .stagecard__title { color: ${PALETTE.blanc}; font-size: 30px; font-weight: bold; text-shadow: 3px 3px 0 ${PALETTE.contour}; }
+#ui-root .stagecard__sub { color: ${PALETTE.solSable}; font-size: 13px; text-transform: none; letter-spacing: 0; }
+@keyframes stagecard-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 `
 
 let injected = false

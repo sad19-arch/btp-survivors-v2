@@ -26,4 +26,14 @@ export interface MenuView {
 export interface AppViewState extends GameState {
   screen: Screen
   menu: MenuView | null
+  /** Skin doré débloqué (code Konami au titre) — cosmétique, session. */
+  goldSkin: boolean
+  /** Intro de run en cours (sim gelée, micro-animation d'entrée). */
+  introActive: boolean
+  /** Libellé humain de la phase courante (ex. « Réseaux enterrés »). */
+  stageTitle: string
+  /** Sous-titre de la phase (ex. « Tranchées et canalisations »). */
+  stageSubtitle: string
+  /** Numéro de phase dans le cycle (1..10). */
+  stageOrder: number
 }

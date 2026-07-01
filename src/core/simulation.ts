@@ -1,6 +1,6 @@
 import { World } from './world'
 import { Rng } from './rng'
-import { AuraPulseEvent, type AuraPulse } from './events'
+import { AuraPulseEvent, PrisonerFreedEvent, type AuraPulse } from './events'
 import { STEP_MS } from './clock'
 import { movementSystem } from './systems/movement'
 import { worldBoundsSystem } from './systems/bounds'
@@ -10,10 +10,11 @@ import { weaponSystem } from './systems/weapon'
 import { collisionSystem } from './systems/collision'
 import { reapDeadEnemies } from './systems/reap'
 import { pickupSystem } from './systems/pickup'
+import { rescueSystem } from './systems/rescue'
 import { projectileLifetimeSystem } from './systems/projectile'
 import { consumeLevelUp, initialProgress } from './systems/leveling'
 import { allPlayersDead } from './systems/gameRules'
-import { MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
+import { MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
 import { SPAWN_RAMP, spawnParamsAt } from '@content/spawnRamp'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
 import { ENEMIES, MINI_BOSS_ID } from '@content/enemies'
@@ -28,6 +29,7 @@ import type {
   PickupState,
   PlayerInput,
   PlayerState,
+  PrisonerState,
   ProjectileState,
   Vec2
 } from './types'
@@ -74,6 +76,8 @@ export class Simulation {
   private rng: Rng
   /** RNG dédié au loot (drops bonus) — séparé du RNG de spawn/upgrade (équilibrage préservé). */
   private lootRng: Rng
+  /** RNG dédié au placement du prisonnier — séparé pour NE PAS décaler la séquence de spawn/upgrade. */
+  private prisonerRng: Rng
   private readonly phaseId: ConstructionPhaseId
   private phase: ConstructionPhase
   private currentSeed: number
@@ -93,6 +97,7 @@ export class Simulation {
     this.world = new World()
     this.rng = new Rng(opts.seed)
     this.lootRng = new Rng((opts.seed ^ 0x1007) | 0)
+    this.prisonerRng = new Rng((opts.seed ^ 0x2b1d) | 0)
     this.phaseId = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
     this.phase = resolvePhase(this.phaseId)
     this.reset(opts.seed)
@@ -189,6 +194,7 @@ export class Simulation {
       enemies: this.collectEnemies(),
       projectiles: this.collectProjectiles(),
       pickups: this.collectPickups(),
+      prisoners: this.collectPrisoners(),
       pendingLevelUp: this.pendingLevelUp
     }
   }
@@ -218,6 +224,7 @@ export class Simulation {
     this.world = new World()
     this.rng = new Rng(seed)
     this.lootRng = new Rng((seed ^ 0x1007) | 0)
+    this.prisonerRng = new Rng((seed ^ 0x2b1d) | 0)
     this.phase = resolvePhase(this.phaseId)
     this.scene = 'game'
     this.elapsedMs = 0
@@ -229,6 +236,21 @@ export class Simulation {
     this.inputs.clear()
     this.playerEntities.clear()
     this.spawnPlayers()
+    this.spawnPrisoner()
+  }
+
+  /** Place l'unique ouvrier prisonnier de la run (position seedée, à distance du centre). */
+  private spawnPrisoner(): void {
+    const cx = WORLD.width / 2
+    const cy = WORLD.height / 2
+    const angle = this.prisonerRng.float(0, Math.PI * 2)
+    const dist = this.prisonerRng.float(RESCUE.minDist, RESCUE.maxDist)
+    const margin = 80
+    const x = Math.min(WORLD.width - margin, Math.max(margin, cx + Math.cos(angle) * dist))
+    const y = Math.min(WORLD.height - margin, Math.max(margin, cy + Math.sin(angle) * dist))
+    const e = this.world.spawn()
+    this.world.add(e, 'position', { x, y })
+    this.world.add(e, 'prisoner', { freed: false })
   }
 
   private spawnPlayers(): void {
@@ -263,6 +285,7 @@ export class Simulation {
       return
     }
     const pulses: AuraPulse[] = []
+    const freed: Vec2[] = []
     this.runSpawns(dtMs)
     this.applyPlayerInputs()
     weaponSystem(this.world, dtMs, pulses)
@@ -272,6 +295,7 @@ export class Simulation {
     collisionSystem(this.world, dtMs)
     this.score += reapDeadEnemies(this.world, this.lootRng)
     pickupSystem(this.world, dtMs)
+    rescueSystem(this.world, freed)
     projectileLifetimeSystem(this.world, dtMs)
     this.updateGameOver()
     if (this.scene === 'game') {
@@ -279,6 +303,9 @@ export class Simulation {
     }
     for (const p of pulses) {
       this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius))
+    }
+    for (const f of freed) {
+      this.events.dispatchEvent(new PrisonerFreedEvent(f.x, f.y))
     }
   }
 
@@ -446,6 +473,19 @@ export class Simulation {
       pickups.push({ id: e, x: pos.x, y: pos.y, type: pickup.type, value: pickup.value })
     }
     return pickups
+  }
+
+  private collectPrisoners(): PrisonerState[] {
+    const prisoners: PrisonerState[] = []
+    for (const e of this.world.query('prisoner', 'position')) {
+      const pos = this.world.get(e, 'position')
+      const prisoner = this.world.get(e, 'prisoner')
+      if (pos === undefined || prisoner === undefined) {
+        continue
+      }
+      prisoners.push({ id: e, x: pos.x, y: pos.y, freed: prisoner.freed })
+    }
+    return prisoners
   }
 
   private countEnemies(): number {

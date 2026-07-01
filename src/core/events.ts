@@ -23,3 +23,13 @@ export class AuraPulseEvent extends Event {
     super('auraPulse')
   }
 }
+
+/** Émis quand un ouvrier prisonnier est libéré (pour étincelles + bulle « Merci ! »). */
+export class PrisonerFreedEvent extends Event {
+  constructor(
+    readonly x: number,
+    readonly y: number
+  ) {
+    super('prisonerFreed')
+  }
+}

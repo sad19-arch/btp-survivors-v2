@@ -1,7 +1,8 @@
 import { Simulation } from '@core/simulation'
-import { AuraPulseEvent } from '@core/events'
+import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import { FocusModel } from '@ui/focusModel'
 import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
+import { INTRO } from '@content/config'
 import type { GameMode, GameState, PlayerInput } from '@core/types'
 import type { AppViewState, MenuItemView, MenuView, NavDir, Screen } from './appState'
 
@@ -11,7 +12,26 @@ export interface AppOptions {
   autostart: boolean
   /** Phase/stage du chantier (défaut : terrain vierge). */
   phaseId?: ConstructionPhaseId
+  /** Joue l'intro de run (préambule cosmétique). Défaut : false (tests/e2e/capture). */
+  intro?: boolean
 }
+
+/** Action prise en compte par le code secret (directions + valider/annuler). */
+type ComboAction = NavDir | 'back' | 'confirm'
+
+/** Séquence Konami recontextualisée : ↑↑↓↓←→←→ B A (B=annuler, A=valider). */
+const KONAMI: readonly ComboAction[] = [
+  'up',
+  'up',
+  'down',
+  'down',
+  'left',
+  'right',
+  'left',
+  'right',
+  'back',
+  'confirm'
+]
 
 /** Items fixes des menus (hors titre — dynamique — et cartes d'upgrade). */
 const PAUSE_ITEMS: MenuItemView[] = [
@@ -41,11 +61,20 @@ export class App {
   private started = false
   private readonly focus = new FocusModel()
   private focusKey = ''
+  /** Skin doré débloqué via le code Konami (cosmétique, mémoire de session). */
+  private goldSkin = false
+  /** Historique des dernières actions au titre, pour détecter le code Konami. */
+  private comboBuffer: ComboAction[] = []
+  /** Intro activée (vrai joueur) ; désactivée en test/e2e/capture. */
+  private readonly introEnabled: boolean
+  /** Temps restant de gel pour l'intro de run, en ms (0 = pas d'intro en cours). */
+  private introMsLeft = 0
 
   constructor(opts: AppOptions) {
     this.seed = opts.seed
     this.mode = opts.mode
     this.selectedPhase = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
+    this.introEnabled = opts.intro ?? false
     if (opts.autostart) {
       this.start(opts.mode)
     }
@@ -57,11 +86,16 @@ export class App {
   start(mode: GameMode = this.mode): void {
     this.mode = mode
     this.sim = new Simulation({ seed: this.seed, mode, phaseId: this.selectedPhase })
-    // Relaie les événements de sim (ex. onde d'aura) vers l'App → rendu.
+    // Relaie les événements de sim (ex. onde d'aura, libération) vers l'App → rendu.
     this.sim.events.addEventListener('auraPulse', (e) => {
       const p = e as AuraPulseEvent
       this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius))
     })
+    this.sim.events.addEventListener('prisonerFreed', (e) => {
+      const p = e as PrisonerFreedEvent
+      this.events.dispatchEvent(new PrisonerFreedEvent(p.x, p.y))
+    })
+    this.introMsLeft = this.introEnabled ? INTRO.durationMs : 0
     this.started = true
     this.refreshFocus()
   }
@@ -81,6 +115,12 @@ export class App {
 
   /** Avance le temps logique (sans effet hors écran de jeu). */
   advanceTime(ms: number): void {
+    // Intro de run : on consomme le temps SANS faire avancer la sim (gel cosmétique).
+    if (this.introMsLeft > 0) {
+      this.introMsLeft = Math.max(0, this.introMsLeft - ms)
+      this.refreshFocus()
+      return
+    }
     this.sim?.advanceTime(ms)
     this.refreshFocus()
   }
@@ -93,6 +133,7 @@ export class App {
 
   /** Déplace le curseur dans le menu actif. */
   nav(dir: NavDir): void {
+    this.recordCombo(dir)
     this.refreshFocus()
     if (this.menuItems().length === 0) {
       return
@@ -103,6 +144,10 @@ export class App {
 
   /** Valide l'item focalisé du menu actif. */
   confirm(): void {
+    // Au titre, la touche « valider » peut compléter le code Konami : on la consomme alors.
+    if (this.recordCombo('confirm')) {
+      return
+    }
     this.refreshFocus()
     const id = this.focus.current()
     if (id === null) {
@@ -113,6 +158,7 @@ export class App {
 
   /** Retour / annulation, selon l'écran. */
   back(): void {
+    this.recordCombo('back')
     switch (this.screen) {
       case 'game':
         this.sim?.pause()
@@ -159,11 +205,43 @@ export class App {
 
   // --- état exposé ----------------------------------------------------------
 
+  /**
+   * Enregistre une action au titre pour détecter le code Konami. Renvoie true si
+   * la séquence vient d'être complétée à cet appel (le débloquage doit consommer
+   * la touche pour ne pas déclencher aussi l'item de menu focalisé).
+   */
+  private recordCombo(action: ComboAction): boolean {
+    if (this.screen !== 'title' || this.goldSkin) {
+      return false
+    }
+    this.comboBuffer.push(action)
+    if (this.comboBuffer.length > KONAMI.length) {
+      this.comboBuffer.shift()
+    }
+    if (this.comboBuffer.length === KONAMI.length && KONAMI.every((a, i) => this.comboBuffer[i] === a)) {
+      this.goldSkin = true
+      this.comboBuffer = []
+      return true
+    }
+    return false
+  }
+
   getState(): AppViewState {
     this.refreshFocus()
     const base = this.sim?.getState() ?? emptyState(this.seed, this.selectedPhase)
     const screen = this.screen
-    return { ...base, scene: base.scene, screen, menu: this.menu(screen) }
+    const phase = ORDERED_PHASES.find((p) => (p.id as string) === base.stageId)
+    return {
+      ...base,
+      scene: base.scene,
+      screen,
+      menu: this.menu(screen),
+      goldSkin: this.goldSkin,
+      introActive: this.introMsLeft > 0,
+      stageTitle: phase?.title ?? '—',
+      stageSubtitle: phase?.subtitle ?? '',
+      stageOrder: phase?.order ?? 0
+    }
   }
 
   renderToText(): string {
@@ -307,6 +385,7 @@ function emptyState(seed: number, stageId: ConstructionPhaseId): GameState {
     enemies: [],
     projectiles: [],
     pickups: [],
+    prisoners: [],
     pendingLevelUp: null
   }
 }

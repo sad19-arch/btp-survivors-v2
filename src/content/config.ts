@@ -91,3 +91,28 @@ export const MINI_BOSS = {
   /** Instant d'apparition, en ms de temps de jeu. */
   atMs: 5 * 60_000
 } as const
+
+/**
+ * Ouvrier prisonnier (clin d'œil « otage à libérer »). 1 par run, position seedée
+ * via un RNG dédié (n'altère pas la séquence de spawn/upgrade). Libéré par simple
+ * proximité → petit soin en récompense.
+ *
+ * ⚠️ ÉQUILIBRAGE : `heal > 0` viole la marge zéro du tuning « skill récompensé ».
+ * `heal` est volontairement modeste ; à re-vérifier via `npm run sim` et à réduire
+ * si une cible bascule (cf. balance-zero-margin).
+ */
+export const RESCUE = {
+  /** Rayon de proximité (px) pour déclencher la libération. */
+  radius: 64,
+  /** PV rendus au joueur libérateur (borné à maxHp). */
+  heal: 40,
+  /** Distance min/max du spawn au centre du monde (évite l'auto-libération au départ). */
+  minDist: 360,
+  maxDist: 560
+} as const
+
+/** Intro de run (micro-animation d'entrée du héros). Purement cosmétique. */
+export const INTRO = {
+  /** Durée du préambule pendant lequel la sim est gelée, en ms. */
+  durationMs: 2000
+} as const
