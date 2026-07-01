@@ -184,7 +184,9 @@ export const STAGE_RENDER: Record<string, StageRender> = {
       ['boom_lift', 0.85, 1],
       ['tubes', 0.7, 3]
     ],
-    ['bolt_scatter', 'oil']
+    ['bolt_scatter', 'oil'],
+    [0.71, 0.65, 0.77],
+    1.41
   ),
   charpente_toiture: makeStage(
     'stage07',
