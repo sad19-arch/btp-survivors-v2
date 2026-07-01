@@ -37,6 +37,16 @@ const CHAR_SCALE: Record<string, number> = {
 }
 const DEFAULT_CHAR_SCALE = 0.516
 
+/** Sprites de projectiles par type d'arme (spin = rotation continue ; faceVel = orienté vers la vitesse). */
+const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; faceVel: boolean }> = {
+  scie: { key: 'proj_scie', scale: 0.8, spin: true, faceVel: false },
+  cloueur: { key: 'proj_cloueur', scale: 0.8, spin: false, faceVel: true },
+}
+/** Sprites de pickups par type. */
+const PICKUP_SPRITE: Record<string, { key: string; scale: number }> = {
+  xp: { key: 'pickup_xp', scale: 0.5 },
+}
+
 export interface GameSceneData {
   app: App
   testMode: boolean
@@ -75,8 +85,8 @@ export class GameScene extends Phaser.Scene {
   private following = false
   private readonly playerSprites = new Map<number, CharSprite>()
   private readonly enemySprites = new Map<number, CharSprite>()
-  private readonly projectileSprites = new Map<number, Phaser.GameObjects.Arc>()
-  private readonly pickupSprites = new Map<number, Phaser.GameObjects.Arc>()
+  private readonly projectileSprites = new Map<number, CharSprite>()
+  private readonly pickupSprites = new Map<number, CharSprite>()
 
   constructor() {
     super('game')
@@ -98,6 +108,9 @@ export class GameScene extends Phaser.Scene {
     for (const [key, file, frame] of CHAR_SHEETS) {
       this.load.spritesheet(key, file, { frameWidth: frame, frameHeight: frame })
     }
+    this.load.image('proj_scie', 'stage01/weapons/proj_scie.png')
+    this.load.image('proj_cloueur', 'stage01/weapons/proj_cloueur.png')
+    this.load.image('pickup_xp', 'stage01/pickups/xp.png')
   }
 
   create(): void {
@@ -225,11 +238,23 @@ export class GameScene extends Phaser.Scene {
     for (const pr of state.projectiles) {
       seenProj.add(pr.id)
       let sprite = this.projectileSprites.get(pr.id)
+      const cfg = PROJ_SPRITE[pr.type]
       if (sprite === undefined) {
-        sprite = this.add.circle(pr.x, pr.y, PROJECTILE_RADIUS, PROJECTILE_COLOR)
+        sprite =
+          cfg !== undefined && this.textures.exists(cfg.key)
+            ? this.add.sprite(pr.x, pr.y, cfg.key).setScale(cfg.scale)
+            : this.add.circle(pr.x, pr.y, PROJECTILE_RADIUS, PROJECTILE_COLOR)
         this.projectileSprites.set(pr.id, sprite)
       }
       sprite.setPosition(pr.x, pr.y)
+      if (sprite instanceof Phaser.GameObjects.Sprite && cfg !== undefined) {
+        if (cfg.spin) {
+          sprite.setRotation(this.time.now / 120)
+        } else if (cfg.faceVel && (pr.vx !== 0 || pr.vy !== 0)) {
+          // L'art du clou pointe vers le bas (+y) → aligne la pointe sur la vitesse.
+          sprite.setRotation(Math.atan2(pr.vy, pr.vx) - Math.PI / 2)
+        }
+      }
     }
     for (const [id, sprite] of this.projectileSprites) {
       if (!seenProj.has(id)) {
@@ -242,8 +267,12 @@ export class GameScene extends Phaser.Scene {
     for (const pk of state.pickups) {
       seenPickup.add(pk.id)
       let sprite = this.pickupSprites.get(pk.id)
+      const cfg = PICKUP_SPRITE[pk.type]
       if (sprite === undefined) {
-        sprite = this.add.circle(pk.x, pk.y, PICKUP_RADIUS, PICKUP_COLOR)
+        sprite =
+          cfg !== undefined && this.textures.exists(cfg.key)
+            ? this.add.sprite(pk.x, pk.y, cfg.key).setScale(cfg.scale)
+            : this.add.circle(pk.x, pk.y, PICKUP_RADIUS, PICKUP_COLOR)
         this.pickupSprites.set(pk.id, sprite)
       }
       sprite.setPosition(pk.x, pk.y)

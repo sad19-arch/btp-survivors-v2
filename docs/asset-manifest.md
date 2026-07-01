@@ -484,5 +484,8 @@ Par défaut PixelLab sort des props 3D avec ombre. Pour un décalque sol, prompt
 - **Téléchargement** : les URLs **backblaze** (rotations/animations) sont **publiques → curl SANS header d'auth** (ajouter un Bearer les fait échouer). Les URLs **PixelLab MCP** (`api.pixellab.ai/mcp/...`) nécessitent **`Authorization: Bearer <clé>`**.
 - Pas d'ImageMagick fiable sur cette machine (`convert` = utilitaire disque Windows, DANGEREUX) → compositing via **Node + pngjs** (les scripts vivent dans `tools/assets/`, pas dans le scratchpad, pour résoudre `node_modules`).
 
+### 17.7 Icônes = create_map_object (PAS create_ui_asset)
+`create_ui_asset` génère des **panneaux** (min 192px, 20-40 générations) — inadapté aux icônes 64px. Générer les **icônes d'armes/upgrades** comme objets vue `side` via `create_map_object` (64px), puis trim (`tools/assets/trim-object.mjs`). **Projectiles/pickups** = `create_map_object` vue `high top-down`. Au rendu, distinguer les projectiles via `ProjectileState.type` (= weaponId : `cloueur`, `scie`) et les pickups via `PickupState.type` (`xp`) → mapping `PROJ_SPRITE`/`PICKUP_SPRITE` dans `GameScene`. Un objet fin/ambigu vu de dessus (ex : clou top-down) sort mal → le générer en `side` et l'orienter en jeu vers la vitesse.
+
 ### 17.6 Valider le late-game / boss via un bot kiting (seam)
 Le tuning « skill récompensé » fait **mourir le jeu passif** en milieu de run → impossible d'atteindre le boss (5:00) en restant immobile. Pour capturer le boss : piloter un **bot kiting** via le seam (`setInput` fuyant l'ennemi le plus proche + biais vers le centre du monde, `chooseUpgrade(0)` à chaque montée de niveau, `advanceTime` par pas de 200ms). Le temps est **gelé** sur l'écran upgrade → toujours gérer le cas `screen==='upgrade'`.
