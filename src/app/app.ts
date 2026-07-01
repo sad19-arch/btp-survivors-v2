@@ -1,6 +1,7 @@
 import { Simulation } from '@core/simulation'
 import { AuraPulseEvent } from '@core/events'
 import { FocusModel } from '@ui/focusModel'
+import type { ConstructionPhaseId } from '@content/phases'
 import type { GameMode, GameState, PlayerInput } from '@core/types'
 import type { AppViewState, MenuItemView, MenuView, NavDir, Screen } from './appState'
 
@@ -8,6 +9,8 @@ export interface AppOptions {
   seed: number
   mode: GameMode
   autostart: boolean
+  /** Phase/stage du chantier (défaut : terrain vierge). */
+  phaseId?: ConstructionPhaseId
 }
 
 /** Items fixes des menus (hors cartes d'upgrade, dynamiques). */
@@ -38,6 +41,7 @@ export class App {
   private sim: Simulation | null = null
   private seed: number
   private mode: GameMode
+  private readonly phaseId: ConstructionPhaseId | undefined
   private started = false
   private readonly focus = new FocusModel()
   private focusKey = ''
@@ -45,6 +49,7 @@ export class App {
   constructor(opts: AppOptions) {
     this.seed = opts.seed
     this.mode = opts.mode
+    this.phaseId = opts.phaseId
     if (opts.autostart) {
       this.start(opts.mode)
     }
@@ -55,7 +60,7 @@ export class App {
   /** Démarre une nouvelle partie (depuis le titre). */
   start(mode: GameMode = this.mode): void {
     this.mode = mode
-    this.sim = new Simulation({ seed: this.seed, mode })
+    this.sim = new Simulation({ seed: this.seed, mode, phaseId: this.phaseId })
     // Relaie les événements de sim (ex. onde d'aura) vers l'App → rendu.
     this.sim.events.addEventListener('auraPulse', (e) => {
       const p = e as AuraPulseEvent
@@ -277,6 +282,7 @@ function emptyState(seed: number): GameState {
   return {
     scene: 'title',
     seed,
+    stageId: 'terrain_vierge',
     elapsedMs: 0,
     wave: 0,
     score: 0,

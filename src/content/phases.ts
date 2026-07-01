@@ -46,7 +46,38 @@ export const PHASES: Partial<Record<ConstructionPhaseId, ConstructionPhase>> = {
       fast: ['inspecteur'],
       tank: ['huissier']
     }
+  },
+  [ConstructionPhaseId.TERRASSEMENT]: {
+    id: ConstructionPhaseId.TERRASSEMENT,
+    order: 2,
+    title: 'Terrassement',
+    subtitle: 'On remue la terre',
+    accentColor: 0x8a6a3b,
+    enemyPools: {
+      base: ['boueux'],
+      fast: ['foreur'],
+      tank: ['rocheux']
+    }
   }
+}
+
+/** Mappe le param d'URL `level` (id de phase, ou numéro d'ordre) vers une phase définie. */
+export function phaseIdFromLevel(level: string | null): ConstructionPhaseId {
+  if (level === null) {
+    return ConstructionPhaseId.TERRAIN_VIERGE
+  }
+  if ((Object.values(ConstructionPhaseId) as string[]).includes(level)) {
+    return level as ConstructionPhaseId
+  }
+  const order = Number(level)
+  if (Number.isFinite(order)) {
+    for (const phase of Object.values(PHASES)) {
+      if (phase !== undefined && phase.order === order) {
+        return phase.id
+      }
+    }
+  }
+  return ConstructionPhaseId.TERRAIN_VIERGE
 }
 
 /** Aplatit tous les ids d'ennemis d'une phase en une seule liste. */

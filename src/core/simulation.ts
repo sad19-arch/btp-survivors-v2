@@ -34,15 +34,17 @@ import type {
 export interface SimOptions {
   seed: number
   mode: GameMode
+  /** Phase/stage du chantier (défaut : terrain vierge). */
+  phaseId?: ConstructionPhaseId | undefined
 }
 
 const COORD_SYSTEM = 'origin top-left, +x right, +y down'
 
-/** Phase de slice 1 (colonne vertébrale : début du cycle de chantier). */
-function resolvePhase(): ConstructionPhase {
-  const phase = PHASES[ConstructionPhaseId.TERRAIN_VIERGE]
+/** Résout une phase du cycle de chantier (source de vérité : thème + pools d'ennemis). */
+function resolvePhase(phaseId: ConstructionPhaseId): ConstructionPhase {
+  const phase = PHASES[phaseId]
   if (phase === undefined) {
-    throw new Error('Contenu invalide: phase terrain_vierge manquante')
+    throw new Error(`Contenu invalide: phase « ${phaseId} » non définie`)
   }
   return phase
 }
@@ -71,6 +73,7 @@ export class Simulation {
   private rng: Rng
   /** RNG dédié au loot (drops bonus) — séparé du RNG de spawn/upgrade (équilibrage préservé). */
   private lootRng: Rng
+  private readonly phaseId: ConstructionPhaseId
   private phase: ConstructionPhase
   private currentSeed: number
   private scene: GameState['scene'] = 'game'
@@ -89,7 +92,8 @@ export class Simulation {
     this.world = new World()
     this.rng = new Rng(opts.seed)
     this.lootRng = new Rng((opts.seed ^ 0x1007) | 0)
-    this.phase = resolvePhase()
+    this.phaseId = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
+    this.phase = resolvePhase(this.phaseId)
     this.reset(opts.seed)
   }
 
@@ -175,6 +179,7 @@ export class Simulation {
     return {
       scene: this.scene,
       seed: this.currentSeed,
+      stageId: this.phaseId,
       elapsedMs: this.elapsedMs,
       wave: 0,
       score: this.score,
@@ -212,7 +217,7 @@ export class Simulation {
     this.world = new World()
     this.rng = new Rng(seed)
     this.lootRng = new Rng((seed ^ 0x1007) | 0)
-    this.phase = resolvePhase()
+    this.phase = resolvePhase(this.phaseId)
     this.scene = 'game'
     this.elapsedMs = 0
     this.remainderMs = 0

@@ -182,6 +182,8 @@ export interface PendingLevelUp {
 export interface GameState {
   scene: SceneName
   seed: number
+  /** Phase/stage courant (id, ex. 'terrain_vierge'). Pilote le thème + les assets. */
+  stageId: string
   elapsedMs: number
   wave: number
   score: number

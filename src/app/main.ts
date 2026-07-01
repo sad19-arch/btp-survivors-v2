@@ -3,6 +3,7 @@ import { App } from './app'
 import { GameScene, type GameSceneData } from '@render/scenes/GameScene'
 import { Overlay } from '@ui/overlay'
 import { parseBootOptions } from './bootOptions'
+import { phaseIdFromLevel } from '@content/phases'
 import { createSeam, installSeam } from './seam'
 
 /**
@@ -12,7 +13,12 @@ import { createSeam, installSeam } from './seam'
  */
 const opts = parseBootOptions(window.location.search)
 const mode = opts.autostart ?? 'solo'
-const app = new App({ seed: opts.seed, mode, autostart: opts.autostart !== null })
+const app = new App({
+  seed: opts.seed,
+  mode,
+  autostart: opts.autostart !== null,
+  phaseId: phaseIdFromLevel(opts.level)
+})
 const seam = createSeam(app)
 
 // Gating: jamais en prod (sauf ?test=1). Pas de process.env (undefined sous Vite).

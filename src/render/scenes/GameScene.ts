@@ -7,36 +7,22 @@ import { routeInput, type FrameInput } from '@input/intents'
 import { WORLD } from '@content/config'
 import { createGround } from '@render/ground'
 import { createProps } from '@render/props'
-import { dirRow, walkFrame, idleFrame, enemySheetKey } from '@render/sprites'
+import { dirRow, walkFrame, idleFrame } from '@render/sprites'
+import { stageRender, type StageRender } from '@render/stages'
 import { AuraPulseEvent } from '@core/events'
 
-/** Variantes de tuiles de sol et décalques du stage 01 (chargés en preload). */
-const GROUND_TILE_KEYS = ['ground_0', 'ground_1', 'ground_2', 'ground_3', 'ground_4', 'ground_5']
-const GROUND_DECAL_KEYS = ['decal_puddle', 'decal_weeds', 'decal_pebbles', 'decal_crack', 'decal_tracks']
-
-/** Feuilles de personnages 4×4 chargées en preload : [clé, fichier, taille de frame]. */
-const CHAR_SHEETS: ReadonlyArray<readonly [string, string, number]> = [
+/** Feuilles PARTAGÉES (tous stages) : joueur + boss. Les ennemis sont PAR STAGE (voir stages.ts). */
+const SHARED_SHEETS: ReadonlyArray<readonly [string, string, number]> = [
   ['player', 'player_j1.png', 192],
-  ['brute', 'stage01/enemies/brute_walk.png', 192],
-  ['imp', 'stage01/enemies/imp_walk.png', 192],
-  ['mudling', 'stage01/enemies/mudling_walk.png', 192],
-  ['boss', 'stage01/boss/ground_keeper_walk.png', 256],
+  ['boss', 'stage01/boss/ground_keeper_walk.png', 256]
 ]
 /**
- * Échelle de rendu PAR FEUILLE. Calibrée pour que la taille AFFICHÉE (bbox de l'art,
- * pas la cellule) soit cohérente entre persos : l'art natif PixelLab a des hauteurs
- * différentes dans les cellules 192/256 (cf. tools/assets/measure-sprite-size.mjs),
- * donc une échelle unique rendrait les créatures ~2× plus petites que le joueur.
- * Cibles ~hauteur affichée : joueur 83 · huissier 88 (tank, trapu) · inspecteur 70
- * (rapide, petit) · paperasse 74 (base) · boss 144 (≫ joueur).
+ * Échelles de rendu. Joueur et boss sont partagés ; les ennemis prennent leur échelle
+ * du stage (l'art natif PixelLab a des hauteurs variables, cf. measure-sprite-size.mjs).
+ * Cibles ~hauteur affichée : joueur 83 · tank ~88 · rapide ~70 · base ~74 · boss 144.
  */
-const CHAR_SCALE: Record<string, number> = {
-  player: 0.516,
-  brute: 1.0,
-  imp: 0.9,
-  mudling: 1.25,
-  boss: 1.35,
-}
+const PLAYER_SCALE = 0.516
+const BOSS_SCALE = 1.35
 const DEFAULT_CHAR_SCALE = 0.516
 
 /** Sprites de projectiles par type d'arme (spin = rotation continue ; faceVel = orienté vers la vitesse). */
@@ -51,16 +37,6 @@ const PICKUP_SPRITE: Record<string, { key: string; scale: number }> = {
   magnet: { key: 'pickup_magnet', scale: 0.55 },
   chest: { key: 'pickup_crate', scale: 0.6 },
 }
-
-/** Props décoratifs du stage 01 : [clé, fichier, échelle, nombre dispersé]. */
-const PROPS: ReadonlyArray<{ key: string; file: string; scale: number; count: number }> = [
-  { key: 'prop_sign', file: 'stage01/props/site_sign.png', scale: 1.1, count: 2 },
-  { key: 'prop_stakes', file: 'stage01/props/survey_stakes.png', scale: 1.1, count: 3 },
-  { key: 'prop_tape', file: 'stage01/props/boundary_tape.png', scale: 1.0, count: 3 },
-  { key: 'prop_rocks', file: 'stage01/props/rock_cluster.png', scale: 1.0, count: 5 },
-  { key: 'prop_weeds', file: 'stage01/props/dry_weeds.png', scale: 1.0, count: 6 },
-  { key: 'prop_soft', file: 'stage01/props/soft_ground.png', scale: 1.4, count: 3 },
-]
 
 export interface GameSceneData {
   app: App
@@ -95,6 +71,8 @@ export class GameScene extends Phaser.Scene {
   private app!: App
   private testMode = false
   private seam: GameSeam | null = null
+  /** Config de rendu du stage courant (sol/décalques/props/skins d'ennemis). */
+  private stage!: StageRender
   private keyboardInput: KeyboardInput | null = null
   private gamepadInput: GamepadInput | null = null
   private following = false
@@ -118,16 +96,25 @@ export class GameScene extends Phaser.Scene {
     this.app = data.app
     this.testMode = data.testMode
     this.seam = data.seam
+    this.stage = stageRender(this.app.getState().stageId)
   }
 
   preload(): void {
-    GROUND_TILE_KEYS.forEach((k, i) => this.load.image(k, `stage01/ground/tile_${i}.png`))
-    this.load.image('decal_puddle', 'stage01/decals/puddle.png')
-    this.load.image('decal_weeds', 'stage01/decals/weeds.png')
-    this.load.image('decal_pebbles', 'stage01/decals/pebbles.png')
-    this.load.image('decal_crack', 'stage01/decals/crack.png')
-    this.load.image('decal_tracks', 'stage01/decals/tracks.png')
-    for (const [key, file, frame] of CHAR_SHEETS) {
+    // Assets PROPRES AU STAGE (sol, décalques, props, skins d'ennemis).
+    for (const t of this.stage.ground) {
+      this.load.image(t.key, t.file)
+    }
+    for (const d of this.stage.decals) {
+      this.load.image(d.key, d.file)
+    }
+    for (const p of this.stage.props) {
+      this.load.image(p.key, p.file)
+    }
+    for (const e of Object.values(this.stage.enemies)) {
+      this.load.spritesheet(e.key, e.file, { frameWidth: e.frame, frameHeight: e.frame })
+    }
+    // Assets PARTAGÉS (tous stages).
+    for (const [key, file, frame] of SHARED_SHEETS) {
       this.load.spritesheet(key, file, { frameWidth: frame, frameHeight: frame })
     }
     this.load.image('proj_scie', 'stage01/weapons/proj_scie.png')
@@ -136,9 +123,6 @@ export class GameScene extends Phaser.Scene {
     this.load.image('pickup_health', 'stage01/pickups/health.png')
     this.load.image('pickup_magnet', 'stage01/pickups/magnet.png')
     this.load.image('pickup_crate', 'stage01/pickups/crate.png')
-    for (const p of PROPS) {
-      this.load.image(p.key, p.file)
-    }
     this.load.image('vfx_impact', 'stage01/vfx/impact.png')
     this.load.image('vfx_sparkle', 'stage01/vfx/sparkle.png')
     this.load.image('vfx_levelup', 'stage01/vfx/levelup.png')
@@ -168,7 +152,7 @@ export class GameScene extends Phaser.Scene {
       this,
       WORLD.width,
       WORLD.height,
-      { tileKeys: GROUND_TILE_KEYS, decalKeys: GROUND_DECAL_KEYS },
+      { tileKeys: this.stage.ground.map((g) => g.key), decalKeys: this.stage.decals.map((d) => d.key) },
       seed
     )
     // Props décoratifs dispersés (au-dessus du sol, sous les entités).
@@ -176,7 +160,7 @@ export class GameScene extends Phaser.Scene {
       this,
       WORLD.width,
       WORLD.height,
-      PROPS.map((p) => ({ key: p.key, scale: p.scale, count: p.count })),
+      this.stage.props.map((p) => ({ key: p.key, scale: p.scale, count: p.count })),
       seed
     )
     this.add
@@ -256,7 +240,7 @@ export class GameScene extends Phaser.Scene {
       let sprite = this.playerSprites.get(p.id)
       if (sprite === undefined) {
         sprite = this.textures.exists('player')
-          ? this.add.sprite(p.x, p.y, 'player').setScale(CHAR_SCALE.player ?? DEFAULT_CHAR_SCALE)
+          ? this.add.sprite(p.x, p.y, 'player').setScale(PLAYER_SCALE)
           : this.add.circle(p.x, p.y, PLAYER_RADIUS, PLAYER_COLOR)
         this.playerSprites.set(p.id, sprite)
       }
@@ -280,10 +264,12 @@ export class GameScene extends Phaser.Scene {
       seen.add(en.id)
       let sprite = this.enemySprites.get(en.id)
       if (sprite === undefined) {
-        const key = enemySheetKey(en.type, en.isBoss)
+        const skin = en.isBoss ? undefined : this.stage.enemies[en.type]
+        const key = en.isBoss ? 'boss' : skin?.key
+        const scale = en.isBoss ? BOSS_SCALE : (skin?.scale ?? DEFAULT_CHAR_SCALE)
         sprite =
-          key !== null && this.textures.exists(key)
-            ? this.add.sprite(en.x, en.y, key).setScale(CHAR_SCALE[key] ?? DEFAULT_CHAR_SCALE)
+          key !== undefined && this.textures.exists(key)
+            ? this.add.sprite(en.x, en.y, key).setScale(scale)
             : this.add.circle(en.x, en.y, ENEMY_RADIUS, ENEMY_COLOR)
         this.enemySprites.set(en.id, sprite)
       }

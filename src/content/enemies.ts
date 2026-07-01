@@ -27,6 +27,11 @@ export const ENEMIES: Record<string, EnemyDef> = {
   paperasse: { id: 'paperasse', name: 'Paperasse', hp: 12, speed: 90, contactDamage: 5, archetype: 'base', xpValue: 5 },
   inspecteur: { id: 'inspecteur', name: 'Inspecteur', hp: 9, speed: 150, contactDamage: 4, archetype: 'fast', xpValue: 4 },
   huissier: { id: 'huissier', name: 'Huissier', hp: 40, speed: 58, contactDamage: 8, archetype: 'tank', xpValue: 12 },
+  // Stage 02 (terrassement) — mêmes STATS que le stage 01 (équilibrage préservé),
+  // seul le thème/skin change. base/fast/tank ↔ paperasse/inspecteur/huissier.
+  boueux: { id: 'boueux', name: 'Boueux', hp: 12, speed: 90, contactDamage: 5, archetype: 'base', xpValue: 5 },
+  foreur: { id: 'foreur', name: 'Foreur', hp: 9, speed: 150, contactDamage: 4, archetype: 'fast', xpValue: 4 },
+  rocheux: { id: 'rocheux', name: 'Rocheux', hp: 40, speed: 58, contactDamage: 8, archetype: 'tank', xpValue: 12 },
   // Mini-boss (hors pool de vague — invoqué par le directeur temporel à 5:00).
   contremaitre: {
     id: 'contremaitre',
