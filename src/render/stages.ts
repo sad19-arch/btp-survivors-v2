@@ -232,7 +232,9 @@ export const STAGE_RENDER: Record<string, StageRender> = {
       ['sign_ok', 0.9, 2],
       ['cones', 0.6, 5]
     ],
-    ['clean_mark', 'tape_line']
+    ['clean_mark', 'tape_line'],
+    [0.65, 0.65, 0.88],
+    1.25
   )
 }
 
