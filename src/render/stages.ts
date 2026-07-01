@@ -155,10 +155,13 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     ['gaine', 'fileur', 'collecteur'],
     [
       ['mini_excavator', 0.78, 1],
+      ['trencher', 0.8, 1],
       ['pipes', 0.8, 3],
       ['cable_reel', 0.7, 3]
     ],
-    ['trench', 'mud']
+    ['trench', 'mud'],
+    [0.75, 0.65, 0.77],
+    1.22
   ),
   gros_oeuvre: makeStage(
     'stage05',
