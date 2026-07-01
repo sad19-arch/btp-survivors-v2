@@ -150,7 +150,7 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     ],
     ['spill', 'crack'],
     [1.18, 0.62, 0.94],
-    1.33
+    1.25
   ),
   reseaux_enterres: makeStage(
     'stage04',
@@ -176,7 +176,7 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     ],
     ['mortar', 'rubble'],
     [0.71, 0.63, 0.8],
-    1.3
+    1.19
   ),
   echafaudages: makeStage(
     'stage06',
@@ -200,7 +200,7 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     ],
     ['sawdust', 'woodchips'],
     [0.5, 0.66, 0.78],
-    1.23
+    1.22
   ),
   second_oeuvre: makeStage(
     'stage08',
@@ -212,7 +212,7 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     ],
     ['plaster_dust', 'scrap'],
     [0.72, 0.63, 0.8],
-    1.37
+    1.30
   ),
   finitions: makeStage(
     'stage09',
