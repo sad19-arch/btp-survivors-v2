@@ -33,17 +33,29 @@ export class Overlay {
       return
     }
     const p = state.players[0]
+    const hp = p?.hp ?? 0
+    const maxHp = p?.maxHp ?? 1
+    const xp = p?.xp ?? 0
+    const threshold = p?.nextThreshold ?? 1
     clear(this.hud)
     this.hud.append(
-      h('span', { className: 'hud__time', text: formatTime(state.elapsedMs) }),
-      h('span', { className: 'hud__sep', text: '·' }),
-      h('span', { text: `Niv. ${p?.level ?? 1}` }),
-      h('span', { className: 'hud__sep', text: '·' }),
-      h('span', { className: 'hud__hp', text: `PV ${Math.ceil(p?.hp ?? 0)}/${Math.round(p?.maxHp ?? 0)}` }),
-      h('span', { className: 'hud__sep', text: '·' }),
-      h('span', { className: 'hud__xp', text: `XP ${Math.floor(p?.xp ?? 0)}/${p?.nextThreshold ?? 0}` }),
-      h('span', { className: 'hud__sep', text: '·' }),
-      h('span', { text: `Score ${state.score}` })
+      h(
+        'div',
+        { className: 'hud__row' },
+        h('span', { className: 'hud__time', text: formatTime(state.elapsedMs) }),
+        h('span', { className: 'hud__sep', text: '·' }),
+        h('span', { text: `Niv. ${p?.level ?? 1}` }),
+        h('span', { className: 'hud__sep', text: '·' }),
+        h('span', { text: `Score ${state.score}` })
+      ),
+      h(
+        'div',
+        { className: 'hud__row' },
+        h('span', { className: 'hud__hp', text: `PV ${Math.ceil(hp)}/${Math.round(maxHp)}` }),
+        this.bar(hp / maxHp, 'hud__bar--hp'),
+        h('span', { className: 'hud__xp', text: `XP ${Math.floor(xp)}/${threshold}` }),
+        this.bar(xp / threshold, 'hud__bar--xp')
+      )
     )
   }
 
@@ -145,9 +157,20 @@ export class Overlay {
     return h(
       'div',
       { className: focused ? 'card card--focus' : 'card' },
+      h('img', {
+        className: 'card__icon',
+        attrs: { src: `${import.meta.env.BASE_URL}stage01/ui/icon_${item.id}.png`, alt: '' }
+      }),
       h('div', { className: 'card__name', text: item.label }),
       h('div', { className: 'card__hint', text: item.hint ?? '' })
     )
+  }
+
+  /** Barre de progression (remplissage proportionnel), pour le HUD. */
+  private bar(pct: number, modifier: string): HTMLElement {
+    const fill = h('div', { className: 'hud__bar-fill' })
+    fill.style.width = `${Math.round(Math.max(0, Math.min(1, pct)) * 100)}%`
+    return h('div', { className: `hud__bar ${modifier}` }, fill)
   }
 
   private menuList(state: AppViewState): HTMLElement {

@@ -6,6 +6,8 @@ export interface HProps {
   className?: string
   text?: string
   dataset?: Record<string, string>
+  /** Attributs bruts (ex. `src`, `alt` pour une img). Valeurs contrôlées, pas de données utilisateur. */
+  attrs?: Record<string, string>
   onClick?: () => void
 }
 
@@ -22,6 +24,11 @@ export function h(tag: string, props: HProps = {}, ...children: Child[]): HTMLEl
   if (props.dataset !== undefined) {
     for (const [k, v] of Object.entries(props.dataset)) {
       el.dataset[k] = v
+    }
+  }
+  if (props.attrs !== undefined) {
+    for (const [k, v] of Object.entries(props.attrs)) {
+      el.setAttribute(k, v)
     }
   }
   if (props.onClick !== undefined) {
