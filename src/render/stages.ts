@@ -228,7 +228,7 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     'stage10',
     ['formulaire', 'auditeur', 'commission'],
     [
-      ['inspection_van', 0.8, 1],
+      ['inspection_van', 1.0, 1],
       ['sign_ok', 0.9, 2],
       ['cones', 0.6, 5]
     ],
