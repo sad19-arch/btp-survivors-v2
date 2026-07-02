@@ -299,7 +299,7 @@ export class Simulation {
       })
       this.world.add(e, 'progress', initialProgress())
       this.world.add(e, 'weapons', {
-        slots: STARTING_WEAPONS.map((wid) => ({ id: wid, cooldownLeftMs: 0 }))
+        slots: STARTING_WEAPONS.map((wid) => ({ id: wid, level: 1, cooldownLeftMs: 0 }))
       })
       this.playerEntities.set(id, e)
       this.inputs.set(id, { move: { x: 0, y: 0 }, attack: false })
@@ -316,7 +316,7 @@ export class Simulation {
     const collected: PickupKind[] = []
     this.runSpawns(dtMs)
     this.applyPlayerInputs()
-    weaponSystem(this.world, dtMs, pulses, fired)
+    weaponSystem(this.world, dtMs, pulses, fired, this.rng)
     enemyAiSystem(this.world)
     movementSystem(this.world, dtMs)
     worldBoundsSystem(this.world, WORLD)

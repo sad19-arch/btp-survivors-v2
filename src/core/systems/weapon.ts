@@ -2,18 +2,33 @@ import type { World } from '../world'
 import type { EntityId, PlayerComp, Vec2 } from '../types'
 import type { AuraPulse } from '../events'
 import type { WeaponDef } from '@content/weapons'
-import { WEAPONS } from '@content/weapons'
+import type { EffectiveStats } from '@content/effectiveStats'
+import { WEAPONS, weaponStatsAtLevel } from '@content/weapons'
+import { effectiveWeaponStats } from '@content/effectiveStats'
+import { BASE_STATS } from '@content/passives'
 import { HITBOX } from '@content/config'
+import { Rng } from '../rng'
 
 /**
  * Système d'armes : chaque arme du joueur agit automatiquement selon son `kind`.
  *  - projectile : tire vers l'ennemi vivant le plus proche, à la cadence du cooldown.
  *  - aura       : impulsion de dégâts circulaire autour du joueur.
  *  - orbital    : lames qui tournent autour du joueur et frappent au contact.
+ *  - sweep      : balayage circulaire autour du joueur (pied-de-biche).
+ *  - strike     : frappe des ennemis choisis au hasard (court-circuit).
  *
- * Déterministe (pas d'aléa). La mort des ennemis est récoltée par `reapDeadEnemies`.
+ * Les stats effectives (`EffectiveStats`) résultent du niveau de l'arme combiné
+ * aux stats agrégées du joueur (`stats`, dérivées des passifs). Déterministe :
+ * le seul aléa (kind `strike`) passe par le `Rng` fourni en dernier paramètre.
+ * La mort des ennemis est récoltée par `reapDeadEnemies`.
  */
-export function weaponSystem(world: World, dtMs: number, pulses?: AuraPulse[], fired?: string[]): void {
+export function weaponSystem(
+  world: World,
+  dtMs: number,
+  pulses?: AuraPulse[],
+  fired?: string[],
+  rng?: Rng
+): void {
   despawnOrphanOrbiters(world)
 
   for (const e of world.query('player', 'position', 'weapons', 'health')) {
@@ -27,21 +42,30 @@ export function weaponSystem(world: World, dtMs: number, pulses?: AuraPulse[], f
     if (health.hp <= 0) {
       continue
     }
+    const stats = world.get(e, 'stats') ?? BASE_STATS
 
     for (const slot of loadout.slots) {
       const def = WEAPONS[slot.id]
       if (def === undefined) {
         continue
       }
+      const lvl = weaponStatsAtLevel(def, slot.level)
+      const eff = effectiveWeaponStats(lvl, stats)
       switch (def.kind) {
         case 'projectile':
-          tickProjectile(world, slot, def, pos, player, dtMs, fired)
+          tickProjectile(world, slot, def, eff, pos, player, dtMs, fired)
           break
         case 'aura':
-          tickAura(world, slot, def, pos, player, dtMs, pulses)
+          tickAura(slot, eff, pos, dtMs, world, pulses)
           break
         case 'orbital':
-          tickOrbital(world, slot, def, e, pos, player, dtMs)
+          tickOrbital(world, slot, def, eff, e, pos, player, dtMs)
+          break
+        case 'sweep':
+          tickSweep(slot, eff, pos, dtMs, world, pulses)
+          break
+        case 'strike':
+          tickStrike(slot, eff, dtMs, world, rng)
           break
       }
     }
@@ -58,6 +82,7 @@ function tickProjectile(
   world: World,
   slot: CooldownSlot,
   def: WeaponDef,
+  eff: EffectiveStats,
   pos: Vec2,
   player: PlayerComp,
   dtMs: number,
@@ -67,14 +92,14 @@ function tickProjectile(
   if (slot.cooldownLeftMs > 0) {
     return
   }
-  const target = findNearestEnemy(world, pos, def.range)
+  const target = findNearestEnemy(world, pos, Infinity)
   if (target === null) {
     slot.cooldownLeftMs = 0 // prêt à tirer dès qu'une cible entre en portée
     return
   }
-  fireProjectile(world, pos, target, def, player.playerId, player.damageMult)
+  fireProjectiles(world, pos, target, def, eff, player.playerId)
   fired?.push(def.id)
-  slot.cooldownLeftMs = def.cooldownMs * player.cooldownMult
+  slot.cooldownLeftMs = eff.cooldownMs
 }
 
 function findNearestEnemy(world: World, from: Vec2, range: number): Vec2 | null {
@@ -95,54 +120,148 @@ function findNearestEnemy(world: World, from: Vec2, range: number): Vec2 | null 
   return best
 }
 
-function fireProjectile(
+/** Tire `eff.count` projectiles en éventail vers la cible (spread lisible). */
+function fireProjectiles(
   world: World,
   from: Vec2,
   target: Vec2,
   def: WeaponDef,
-  ownerId: number,
-  damageMult: number
+  eff: EffectiveStats,
+  ownerId: number
 ): void {
   const dx = target.x - from.x
   const dy = target.y - from.y
   const len = Math.hypot(dx, dy)
-  const dirX = len === 0 ? 1 : dx / len
-  const dirY = len === 0 ? 0 : dy / len
-  const speed = def.projectileSpeed ?? 500
-  const life = def.projectileLifeMs ?? 1000
+  const baseAngle = len === 0 ? 0 : Math.atan2(dy, dx)
+  const speed = eff.projectileSpeed > 0 ? eff.projectileSpeed : 500
+  const life = eff.projectileLifeMs > 0 ? eff.projectileLifeMs : 1000
+  const count = Math.max(1, Math.round(eff.count))
 
-  const e = world.spawn()
-  world.add(e, 'position', { x: from.x, y: from.y })
-  world.add(e, 'velocity', { x: dirX * speed, y: dirY * speed })
-  world.add(e, 'projectile', {
-    type: def.id,
-    damage: def.damage * damageMult,
-    ownerId,
-    lifeMs: life,
-    radius: HITBOX.projectile
-  })
+  const spreadStep = 0.12 // rad entre projectiles adjacents de l'éventail
+  const startOffset = -((count - 1) / 2) * spreadStep
+
+  for (let i = 0; i < count; i++) {
+    const angle = baseAngle + startOffset + i * spreadStep
+    const dirX = Math.cos(angle)
+    const dirY = Math.sin(angle)
+
+    const e = world.spawn()
+    world.add(e, 'position', { x: from.x, y: from.y })
+    world.add(e, 'velocity', { x: dirX * speed, y: dirY * speed })
+    world.add(e, 'projectile', {
+      type: def.id,
+      damage: eff.damage,
+      ownerId,
+      lifeMs: life,
+      radius: HITBOX.projectile
+    })
+  }
 }
 
 // --- aura (marteau) --------------------------------------------------------
 
 function tickAura(
-  world: World,
   slot: CooldownSlot,
-  def: WeaponDef,
+  eff: EffectiveStats,
   pos: Vec2,
-  player: PlayerComp,
   dtMs: number,
+  world: World,
   pulses?: AuraPulse[]
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
     return
   }
-  slot.cooldownLeftMs = def.cooldownMs * player.cooldownMult
-  const damage = def.damage * player.damageMult
-  const reach = def.range + HITBOX.enemy
-  damageEnemiesInRadius(world, pos, reach, damage)
+  slot.cooldownLeftMs = eff.cooldownMs
+  const reach = eff.area + HITBOX.enemy
+  damageEnemiesInRadius(world, pos, reach, eff.damage)
   pulses?.push({ x: pos.x, y: pos.y, radius: reach })
+}
+
+// --- sweep (pied-de-biche) --------------------------------------------------
+
+/**
+ * Balayage circulaire lisible centré sur le joueur (la forme rectangulaire
+ * exacte devant/derrière est du polish Plan B). `count` > 1 répète la passe
+ * (impulsions rapprochées) plutôt que de varier la géométrie.
+ */
+function tickSweep(
+  slot: CooldownSlot,
+  eff: EffectiveStats,
+  pos: Vec2,
+  dtMs: number,
+  world: World,
+  pulses?: AuraPulse[]
+): void {
+  slot.cooldownLeftMs -= dtMs
+  if (slot.cooldownLeftMs > 0) {
+    return
+  }
+  slot.cooldownLeftMs = eff.cooldownMs
+  const reach = eff.area + HITBOX.enemy
+  const passes = Math.max(1, Math.round(eff.count))
+  for (let i = 0; i < passes; i++) {
+    damageEnemiesInRadius(world, pos, reach, eff.damage)
+  }
+  pulses?.push({ x: pos.x, y: pos.y, radius: reach })
+}
+
+// --- strike (court-circuit) -------------------------------------------------
+
+/**
+ * Choisit `n` ennemis vivants. Avec un `rng`, tirage uniforme sans remise
+ * (déterministe par seed). Sans `rng`, repli déterministe sur les `n` ennemis
+ * les plus proches de l'origine (0,0) — pas de crash si appelé sans rng.
+ */
+function findRandomEnemies(world: World, rng: Rng | undefined, n: number): EntityId[] {
+  const alive: EntityId[] = []
+  for (const e of world.query('enemy', 'position', 'health')) {
+    const health = world.get(e, 'health')
+    if (health !== undefined && health.hp > 0) {
+      alive.push(e)
+    }
+  }
+  if (alive.length <= n) {
+    return alive
+  }
+  if (rng === undefined) {
+    // Repli déterministe : les n premiers dans l'ordre d'itération du World.
+    return alive.slice(0, n)
+  }
+  // Tirage uniforme sans remise (Fisher-Yates partiel).
+  const pool = [...alive]
+  const picked: EntityId[] = []
+  for (let i = 0; i < n; i++) {
+    const idx = rng.int(0, pool.length - 1)
+    const item = pool[idx] as EntityId
+    picked.push(item)
+    pool[idx] = pool[pool.length - 1] as EntityId
+    pool.pop()
+  }
+  return picked
+}
+
+function tickStrike(
+  slot: CooldownSlot,
+  eff: EffectiveStats,
+  dtMs: number,
+  world: World,
+  rng?: Rng
+): void {
+  slot.cooldownLeftMs -= dtMs
+  if (slot.cooldownLeftMs > 0) {
+    return
+  }
+  slot.cooldownLeftMs = eff.cooldownMs
+  const n = Math.max(1, Math.round(eff.count))
+  const targets = findRandomEnemies(world, rng, n)
+  for (const target of targets) {
+    const tpos = world.get(target, 'position')
+    if (tpos === undefined) {
+      continue
+    }
+    damageEnemiesInRadius(world, tpos, eff.area, eff.damage)
+  }
 }
 
 // --- orbital (scie) --------------------------------------------------------
@@ -151,15 +270,16 @@ function tickOrbital(
   world: World,
   slot: CooldownSlot,
   def: WeaponDef,
+  eff: EffectiveStats,
   owner: EntityId,
   pos: Vec2,
   player: PlayerComp,
   dtMs: number
 ): void {
-  const count = def.orbitCount ?? 1
-  const radius = def.orbitRadius ?? 60
-  const hitRadius = def.orbitHitRadius ?? 16
-  const orbitSpeed = def.orbitSpeed ?? 3
+  const count = Math.max(1, Math.round(eff.count))
+  const radius = eff.orbitRadius > 0 ? eff.orbitRadius : 60
+  const hitRadius = eff.orbitHitRadius > 0 ? eff.orbitHitRadius : 16
+  const orbitSpeed = eff.orbitSpeed > 0 ? eff.orbitSpeed : 3
 
   ensureOrbiters(world, owner, player.playerId, def.id, count, radius, hitRadius)
 
@@ -183,10 +303,9 @@ function tickOrbital(
   if (slot.cooldownLeftMs > 0) {
     return
   }
-  slot.cooldownLeftMs = def.cooldownMs * player.cooldownMult
-  const damage = def.damage * player.damageMult
+  slot.cooldownLeftMs = eff.cooldownMs
   for (const b of blades) {
-    damageEnemiesInRadius(world, b, hitRadius + HITBOX.enemy, damage)
+    damageEnemiesInRadius(world, b, hitRadius + HITBOX.enemy, eff.damage)
   }
 }
 
