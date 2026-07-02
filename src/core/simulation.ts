@@ -456,6 +456,9 @@ export class Simulation {
     if (player === undefined) {
       return
     }
+    // Boucle intentionnelle : chaque coffre réévalue l'inventaire APRÈS la
+    // mutation du coffre précédent (une évolution consommée ce tour ne doit
+    // pas retenter d'évoluer la même arme deux fois dans la même frame).
     for (let i = 0; i < chestCount; i++) {
       const evolvedId = tryEvolve(this.world, player)
       if (evolvedId !== null) {

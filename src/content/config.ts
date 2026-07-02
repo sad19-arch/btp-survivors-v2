@@ -28,7 +28,7 @@ export const PROGRESSION = {
   /** Facteur multiplicatif du seuil à chaque niveau. */
   growth: 1.15,
   /** Nombre de cartes proposées à chaque montée de niveau. */
-  choices: 3
+  choices: 4
 } as const
 
 /** Paramètres des pickups. */

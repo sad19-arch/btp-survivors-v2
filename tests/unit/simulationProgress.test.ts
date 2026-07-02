@@ -45,7 +45,7 @@ describe('Simulation — progression de bout en bout', () => {
 
     expect(s.pendingLevelUp).not.toBeNull()
     expect(s.pendingLevelUp?.playerId).toBe(1)
-    expect(s.pendingLevelUp?.choices.length).toBe(3)
+    expect(s.pendingLevelUp?.choices.length).toBe(4)
     expect(s.scene).toBe('game')
     expect(s.players[0]?.level).toBeGreaterThanOrEqual(2)
   })

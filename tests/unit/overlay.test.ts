@@ -40,7 +40,7 @@ describe('Overlay (DOM)', () => {
     expect(hud?.textContent).toContain('Niv. 1')
   })
 
-  it('affiche 3 cartes sur l’écran d’upgrade', () => {
+  it('affiche 4 cartes sur l’écran d’upgrade', () => {
     const app = new App({ seed: 123, mode: 'solo', autostart: true })
     // Aspire les gemmes jusqu'au level-up.
     let t = 0
@@ -67,6 +67,6 @@ describe('Overlay (DOM)', () => {
     }
     const { root, overlay } = mount()
     overlay.sync(app.getState())
-    expect(root.querySelectorAll('.card').length).toBe(3)
+    expect(root.querySelectorAll('.card').length).toBe(4)
   })
 })

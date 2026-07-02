@@ -2,7 +2,8 @@
  * Cartes de level-up (tirage pur).
  *
  * Système de sélection d'upgrades : pour chaque niveau gagné, le joueur choisit
- * parmi 3 cartes tirées sans remise (Fisher-Yates seedé) parmi les éligibles.
+ * parmi `PROGRESSION.choices` cartes (défaut : 4) tirées sans remise (Fisher-Yates
+ * seedé) parmi les éligibles.
  *
  * Éligibilité :
  * - `weapon-up` : chaque arme possédée avec level < maxLevel

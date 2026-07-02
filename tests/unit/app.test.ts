@@ -100,12 +100,12 @@ describe('App — écrans & navigation', () => {
     expect(app.getState().screen).toBe('game')
   })
 
-  it('montée de niveau → écran upgrade avec 3 cartes ; le choix relance le jeu', () => {
+  it('montée de niveau → écran upgrade avec 4 cartes ; le choix relance le jeu', () => {
     const app = new App({ seed: 123, mode: 'solo', autostart: true })
     advanceToUpgrade(app, 120_000)
     const s = app.getState()
     expect(s.screen).toBe('upgrade')
-    expect(s.menu?.items.length).toBe(3)
+    expect(s.menu?.items.length).toBe(4)
     expect(s.menu?.items[0]?.hint).not.toBeNull() // l'effet est décrit
     app.confirm()
     expect(app.getState().screen).toBe('game')
