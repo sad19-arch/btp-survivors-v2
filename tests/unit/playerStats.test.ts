@@ -15,15 +15,21 @@ describe('recomputePlayerStats', () => {
   it('sans passif → stats de base', () => {
     const w = new World(); const e = makePlayer(w)
     recomputePlayerStats(w, e)
-    expect(w.get(e, 'player')!.speed).toBe(PLAYER_BASE.speed)
-    expect(w.get(e, 'health')!.maxHp).toBe(PLAYER_BASE.hp)
+    expect(w.get(e, 'player')?.speed).toBe(PLAYER_BASE.speed)
+    expect(w.get(e, 'health')?.maxHp).toBe(PLAYER_BASE.hp)
   })
   it('Casque niv.5 → +50 % PV max, ratio conservé', () => {
     const w = new World(); const e = makePlayer(w)
-    w.get(e, 'health')!.hp = PLAYER_BASE.hp / 2
-    w.get(e, 'passives')!.list = [{ id: 'casque_homologue', level: 5 }]
+    const health = w.get(e, 'health')
+    const passives = w.get(e, 'passives')
+    if (health !== undefined) {
+      health.hp = PLAYER_BASE.hp / 2
+    }
+    if (passives !== undefined) {
+      passives.list = [{ id: 'casque_homologue', level: 5 }]
+    }
     recomputePlayerStats(w, e)
-    expect(w.get(e, 'health')!.maxHp).toBeCloseTo(PLAYER_BASE.hp * 1.5)
-    expect(w.get(e, 'health')!.hp).toBeCloseTo(PLAYER_BASE.hp * 1.5 / 2)
+    expect(w.get(e, 'health')?.maxHp).toBeCloseTo(PLAYER_BASE.hp * 1.5)
+    expect(w.get(e, 'health')?.hp).toBeCloseTo(PLAYER_BASE.hp * 1.5 / 2)
   })
 })

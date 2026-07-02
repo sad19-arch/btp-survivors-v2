@@ -24,11 +24,12 @@ import { rescueSystem } from './systems/rescue'
 import { projectileLifetimeSystem } from './systems/projectile'
 import { consumeLevelUp, initialProgress } from './systems/leveling'
 import { allPlayersDead } from './systems/gameRules'
+import { recomputePlayerStats } from './systems/playerStats'
+import { rollCards, type Inventory } from './systems/cards'
 import { MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
 import { SPAWN_RAMP, spawnParamsAt, difficultyScaleAt } from '@content/spawnRamp'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
 import { ENEMIES, MINI_BOSS_ID } from '@content/enemies'
-import { UPGRADES, rollUpgradeChoices } from '@content/upgrades'
 import type { ConstructionPhase } from '@content/phases'
 import type {
   EnemyState,
@@ -186,13 +187,50 @@ export class Simulation {
     const choice = pending.choices[index]
     if (choice !== undefined) {
       const e = this.playerEntities.get(pending.playerId)
-      const def = UPGRADES[choice.id]
-      if (e !== undefined && def !== undefined) {
-        def.apply(this.world, e)
+      if (e !== undefined) {
+        this.applyCard(e, choice)
       }
     }
     this.pendingLevelUp = null
     this.checkLevelUp()
+  }
+
+  /** Applique l'effet d'une carte de level-up au joueur (mutation des composants). */
+  private applyCard(e: EntityId, card: PendingLevelUp['choices'][number]): void {
+    switch (card.kind) {
+      case 'weapon-new': {
+        const loadout = this.world.get(e, 'weapons')
+        if (loadout !== undefined && !loadout.slots.some((s) => s.id === card.id)) {
+          loadout.slots.push({ id: card.id, level: 1, cooldownLeftMs: 0 })
+        }
+        break
+      }
+      case 'weapon-up': {
+        const loadout = this.world.get(e, 'weapons')
+        const slot = loadout?.slots.find((s) => s.id === card.id)
+        if (slot !== undefined) {
+          slot.level += 1
+        }
+        break
+      }
+      case 'passive-new': {
+        const passives = this.world.get(e, 'passives')
+        if (passives !== undefined && !passives.list.some((p) => p.id === card.id)) {
+          passives.list.push({ id: card.id, level: 1 })
+          recomputePlayerStats(this.world, e)
+        }
+        break
+      }
+      case 'passive-up': {
+        const passives = this.world.get(e, 'passives')
+        const slot = passives?.list.find((p) => p.id === card.id)
+        if (slot !== undefined) {
+          slot.level += 1
+          recomputePlayerStats(this.world, e)
+        }
+        break
+      }
+    }
   }
 
   /** État complet sérialisable (contrat du seam). */
@@ -301,6 +339,8 @@ export class Simulation {
       this.world.add(e, 'weapons', {
         slots: STARTING_WEAPONS.map((wid) => ({ id: wid, level: 1, cooldownLeftMs: 0 }))
       })
+      this.world.add(e, 'passives', { list: [] })
+      recomputePlayerStats(this.world, e)
       this.playerEntities.set(id, e)
       this.inputs.set(id, { move: { x: 0, y: 0 }, attack: false })
     }
@@ -370,9 +410,15 @@ export class Simulation {
       }
       if (consumeLevelUp(progress)) {
         this.events.dispatchEvent(new LevelUpEvent())
+        const loadout = this.world.get(e, 'weapons')
+        const passives = this.world.get(e, 'passives')
+        const inv: Inventory = {
+          weapons: loadout?.slots.map((s) => ({ id: s.id, level: s.level })) ?? [],
+          passives: passives?.list.map((p) => ({ id: p.id, level: p.level })) ?? []
+        }
         this.pendingLevelUp = {
           playerId,
-          choices: rollUpgradeChoices(this.rng, PROGRESSION.choices)
+          choices: rollCards(this.rng, inv, PROGRESSION.choices)
         }
         return
       }
@@ -462,6 +508,7 @@ export class Simulation {
       }
       const loadout = this.world.get(e, 'weapons')
       const progress = this.world.get(e, 'progress')
+      const passives = this.world.get(e, 'passives')
       players.push({
         id,
         x: pos.x,
@@ -475,7 +522,9 @@ export class Simulation {
         xp: progress?.xp ?? 0,
         nextThreshold: progress?.nextThreshold ?? PROGRESSION.firstThreshold,
         alive: health.hp > 0,
-        weapons: loadout === undefined ? [] : loadout.slots.map((s) => s.id)
+        weapons: loadout === undefined ? [] : loadout.slots.map((s) => s.id),
+        weaponLevels: loadout === undefined ? [] : loadout.slots.map((s) => s.level),
+        passives: passives === undefined ? [] : passives.list.map((p) => ({ id: p.id, level: p.level }))
       })
     }
     players.sort((a, b) => a.id - b.id)

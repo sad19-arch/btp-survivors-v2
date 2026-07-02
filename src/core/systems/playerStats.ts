@@ -14,7 +14,7 @@ export function recomputePlayerStats(world: World, entity: EntityId): void {
   const passives = world.get(entity, 'passives')
   const player = world.get(entity, 'player')
   const health = world.get(entity, 'health')
-  if (passives === undefined || player === undefined) return
+  if (passives === undefined || player === undefined) {return}
   const s = aggregatePassives(passives.list)
   world.add(entity, 'stats', s)
   player.speed = PLAYER_BASE.speed * s.moveSpeed

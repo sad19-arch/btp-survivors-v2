@@ -47,7 +47,7 @@ export function eligibleCards(inv: Inventory): Card[] {
   // Cartes de level-up d'armes (weapon-up)
   for (const { id, level } of inv.weapons) {
     const def = WEAPONS[id]
-    if (!def) continue // ID inconnu, ignorer
+    if (!def) {continue} // ID inconnu, ignorer
     if (level < def.maxLevel) {
       cards.push({
         kind: 'weapon-up',
@@ -79,7 +79,7 @@ export function eligibleCards(inv: Inventory): Card[] {
   // Cartes de level-up de passifs (passive-up)
   for (const { id, level } of inv.passives) {
     const def = PASSIVES[id]
-    if (!def) continue // ID inconnu, ignorer
+    if (!def) {continue} // ID inconnu, ignorer
     if (level < def.maxLevel) {
       cards.push({
         kind: 'passive-up',
@@ -124,7 +124,9 @@ export function rollCards(rng: Rng, inv: Inventory, count: number): Card[] {
   const shuffled = [...all]
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = rng.int(0, i)
-    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    const tmp = shuffled[i] as Card
+    shuffled[i] = shuffled[j] as Card
+    shuffled[j] = tmp
   }
 
   // Prendre jusqu'à `count`

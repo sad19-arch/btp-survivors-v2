@@ -428,7 +428,7 @@ export class App {
     if (pending === null) {
       return []
     }
-    return pending.choices.map((c) => ({ id: c.id, label: c.name, hint: c.description }))
+    return pending.choices.map((c) => ({ id: c.id, label: c.name, hint: c.hint }))
   }
 
   private menu(screen: Screen): MenuView | null {

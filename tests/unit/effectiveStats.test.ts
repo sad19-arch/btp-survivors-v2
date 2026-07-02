@@ -4,7 +4,11 @@ import { BASE_STATS } from '@content/passives'
 import { WEAPONS, weaponStatsAtLevel } from '@content/weapons'
 
 describe('stats effectives (arme × passifs)', () => {
-  const lvl = weaponStatsAtLevel(WEAPONS['cloueur']!, 1)
+  const cloueur = WEAPONS['cloueur']
+  if (cloueur === undefined) {
+    throw new Error('contenu invalide: arme « cloueur » manquante')
+  }
+  const lvl = weaponStatsAtLevel(cloueur, 1)
   it('stats de base → dégâts inchangés', () => {
     expect(effectiveWeaponStats(lvl, BASE_STATS).damage).toBe(lvl.damage)
   })

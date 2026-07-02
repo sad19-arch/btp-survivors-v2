@@ -6,6 +6,7 @@
  */
 
 import type { PlayerStats } from '@content/passives'
+import type { Card } from '@core/systems/cards'
 
 export type EntityId = number
 
@@ -201,16 +202,9 @@ export interface PrisonerState {
   freed: boolean
 }
 
-/** Une carte d'upgrade proposée (résolue depuis le contenu pour l'affichage). */
-export interface UpgradeChoice {
-  id: string
-  name: string
-  description: string
-}
-
 export interface PendingLevelUp {
   playerId: number
-  choices: UpgradeChoice[]
+  choices: Card[]
 }
 
 export interface GameState {

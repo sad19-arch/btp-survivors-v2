@@ -23,16 +23,16 @@ describe('weaponSystem — stats effectives + kinds', () => {
   it('marteau (aura) : might 2 double les dégâts sur un ennemi proche', () => {
     const w = new World(); player(w, 'marteau', 1, { might: 2 }); const en = enemy(w, 20, 0, 100)
     weaponSystem(w, 1000)
-    expect(w.get(en, 'health')!.hp).toBeLessThan(100 - 10) // > dégâts de base
+    expect(w.get(en, 'health')?.hp).toBeLessThan(100 - 10) // > dégâts de base
   })
   it('court_circuit (strike) frappe un ennemi au hasard (déterministe par seed)', () => {
     const w = new World(); player(w, 'court_circuit', 1); const en = enemy(w, 300, 0, 100)
     weaponSystem(w, 2000, undefined, undefined, new Rng(1))
-    expect(w.get(en, 'health')!.hp).toBeLessThan(100)
+    expect(w.get(en, 'health')?.hp).toBeLessThan(100)
   })
   it('pied_de_biche (sweep) : inflige des dégâts autour du joueur à la cadence', () => {
     const w = new World(); player(w, 'pied_de_biche', 1); const en = enemy(w, 50, 0, 100)
     weaponSystem(w, 1000)
-    expect(w.get(en, 'health')!.hp).toBeLessThan(100)
+    expect(w.get(en, 'health')?.hp).toBeLessThan(100)
   })
 })
