@@ -423,7 +423,7 @@ export class Simulation {
     }
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
-      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2))
+      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), MINI_BOSS.spawnRadius)
       this.bossEverSpawned = true
       this.events.dispatchEvent(new BossSpawnedEvent())
     }
@@ -497,6 +497,7 @@ export class Simulation {
         x: pos.x,
         y: pos.y,
         hp: health.hp,
+        maxHp: health.maxHp,
         isElite: enemy.isElite,
         isBoss: enemy.isBoss
       })

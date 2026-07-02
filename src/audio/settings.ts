@@ -57,3 +57,12 @@ export function musicGain(s: AudioLevels): number {
 export function sfxGain(s: AudioLevels): number {
   return s.muted ? 0 : s.master * s.sfx
 }
+
+/**
+ * Gain « ducké » (sidechain) : tant qu'une voix joue, on rabat le gain de fond à
+ * `duck × base` pour que l'annonceur passe au-dessus de la musique/ambiance.
+ * Pur → testable. `duck` ∈ [0, 1] (0.28 ≈ musique très en retrait).
+ */
+export function duckedGain(base: number, voiceActive: boolean, duck: number): number {
+  return voiceActive ? base * duck : base
+}

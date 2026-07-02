@@ -90,7 +90,13 @@ export const SPAWN = {
 /** Mini-boss (PRD : apparition à 5:00). */
 export const MINI_BOSS = {
   /** Instant d'apparition, en ms de temps de jeu. */
-  atMs: 5 * 60_000
+  atMs: 5 * 60_000,
+  /**
+   * Rayon d'apparition du boss (px), plus court que l'anneau normal (560) pour le
+   * faire entrer À L'ÉCRAN → le combat de climax est vu et engagé, pas un spawn
+   * hors-champ que le joueur fond à distance sans le remarquer.
+   */
+  spawnRadius: 320
 } as const
 
 /**

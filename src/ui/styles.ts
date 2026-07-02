@@ -121,6 +121,43 @@ const CSS = `
   animation: banner-blink 0.5s steps(1, end) infinite;
 }
 @keyframes banner-blink { 50% { opacity: 0.2; } }
+#ui-root .banner--boss {
+  top: 30%;
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  background: ${PALETTE.rougeAlerte};
+  color: ${PALETTE.blanc};
+  font-size: 26px;
+  text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+#ui-root .bossbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: ${PALETTE.brunSombre};
+  border: 3px solid ${PALETTE.contour};
+  box-shadow: 4px 4px 0 ${PALETTE.contour};
+}
+#ui-root .bossbar__name {
+  color: ${PALETTE.rougeAlerte};
+  font-size: 14px;
+  font-weight: bold;
+  text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+#ui-root .bossbar__track {
+  width: 260px;
+  height: 14px;
+  background: ${PALETTE.contour};
+  border: 2px solid ${PALETTE.contour};
+}
+#ui-root .bossbar__fill { height: 100%; background: ${PALETTE.rougeAlerte}; }
 #ui-root .hud__stage { font-size: 14px; }
 #ui-root .hud__stagenum { color: ${PALETTE.jauneSecurite}; }
 #ui-root .hud__stagename { color: ${PALETTE.blanc}; }

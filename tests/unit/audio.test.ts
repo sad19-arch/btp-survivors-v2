@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { musicForState, MUSIC, SFX, VOICE, voiceStage, SFX_FILES, MUSIC_FILES, VOICE_FILES } from '@/audio/manifest'
-import { clamp01, musicGain, sfxGain, type AudioLevels } from '@/audio/settings'
+import { clamp01, musicGain, sfxGain, duckedGain, type AudioLevels } from '@/audio/settings'
 import { Simulation } from '@core/simulation'
 
 describe('audio — musique par état (pure)', () => {
@@ -76,6 +76,11 @@ describe('audio — réglages (gains)', () => {
     expect(clamp01(-0.5)).toBe(0)
     expect(clamp01(1.5)).toBe(1)
     expect(clamp01(0.3)).toBe(0.3)
+  })
+  it('duckedGain : voix active → gain rabattu ; sinon inchangé', () => {
+    expect(duckedGain(0.44, false, 0.28)).toBeCloseTo(0.44) // pas de voix → plein
+    expect(duckedGain(0.44, true, 0.28)).toBeCloseTo(0.1232) // voix → ducké à 28 %
+    expect(duckedGain(0, true, 0.28)).toBe(0) // base nulle (muet) reste nulle
   })
 })
 

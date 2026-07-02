@@ -2,19 +2,25 @@ import type Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
 import type { WeaponFiredEvent, PickupCollectedEvent } from '@core/events'
 import { SFX, VOICE, voiceStage, musicForState, AMB, type MusicKey } from './manifest'
-import { musicGain, sfxGain, type AudioLevels } from './settings'
+import { musicGain, sfxGain, duckedGain, type AudioLevels } from './settings'
 
 /** Instance de son loopée (sous-ensemble commun WebAudio/HTML5, découplé de Phaser). */
 interface SoundInstance {
   volume: number
+  /** Vrai tant que le son joue (Phaser `BaseSound.isPlaying`) → pilote le ducking. */
+  isPlaying: boolean
   play: () => boolean
   stop: () => boolean
   destroy: () => void
+  /** S'abonne une fois à un événement (ex. 'complete') — Phaser `EventEmitter.once`. */
+  once: (event: string, fn: () => void) => void
 }
 
 const FADE_STEP = 0.045 // montée/descente du volume musique/ambiance par frame
 const AMB_LEVEL = 0.5 // l'ambiance joue à ~50 % du volume musique (nappe discrète)
 const VOICE_LEVEL = 1.0 // la voix passe au volume plein du canal SFX (annonces claires)
+const MUSIC_DUCK = 0.28 // pendant une voix, la musique tombe à ~28 % (annonceur au-dessus)
+const AMB_DUCK = 0.15 // et l'ambiance quasi muette (~15 %) pour dégager la voix
 
 /** Écrans où l'ambiance de chantier tourne (nappe de fond). */
 const GAMEPLAY_SCREENS = new Set(['game', 'upgrade', 'paused'])
@@ -111,14 +117,32 @@ export class AudioDirector {
     if (key === undefined || !this.hasAudio(key)) {
       return
     }
-    if (this.voice !== null) {
-      this.voice.stop()
-      this.voice.destroy()
-      this.voice = null
-    }
+    this.stopVoice()
     const snd = this.sound.add(key, { volume: VOICE_LEVEL * sfxGain(this.settings) }) as unknown as SoundInstance
+    // Auto-nettoyage en fin de réplique → relâche le ducking (voix devient inactive).
+    snd.once('complete', () => {
+      if (this.voice === snd) {
+        this.voice = null
+        snd.destroy()
+      }
+    })
     snd.play()
     this.voice = snd
+  }
+
+  /** Coupe la voix courante (met `voice` à null AVANT destroy → pas de double-destroy). */
+  private stopVoice(): void {
+    const v = this.voice
+    if (v !== null) {
+      this.voice = null
+      v.stop()
+      v.destroy()
+    }
+  }
+
+  /** Vrai tant qu'une réplique d'annonceur joue → la musique/ambiance ducke. */
+  private voiceActive(): boolean {
+    return this.voice !== null && this.voice.isPlaying
   }
 
   // --- Musique + ambiance + voix d'écran (observation de l'état, chaque frame) -
@@ -193,7 +217,7 @@ export class AudioDirector {
   }
 
   private rampMusic(): void {
-    const target = musicGain(this.settings)
+    const target = duckedGain(musicGain(this.settings), this.voiceActive(), MUSIC_DUCK)
     if (this.current !== null) {
       this.current.volume = approach(this.current.volume, target, FADE_STEP)
     }
@@ -209,7 +233,8 @@ export class AudioDirector {
   }
 
   private rampAmbience(screen: string): void {
-    const target = GAMEPLAY_SCREENS.has(screen) ? musicGain(this.settings) * AMB_LEVEL : 0
+    const base = GAMEPLAY_SCREENS.has(screen) ? musicGain(this.settings) * AMB_LEVEL : 0
+    const target = duckedGain(base, this.voiceActive(), AMB_DUCK)
     if (this.amb === null) {
       if (target <= 0 || !this.hasAudio(AMB)) {
         return

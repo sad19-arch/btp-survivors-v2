@@ -153,6 +153,7 @@ export interface EnemyState {
   x: number
   y: number
   hp: number
+  maxHp: number
   isElite: boolean
   isBoss: boolean
 }

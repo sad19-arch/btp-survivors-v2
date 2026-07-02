@@ -49,14 +49,24 @@ export function spawnWave(
   }
 }
 
-/** Invoque un ennemi spécifique (ex. mini-boss) à un angle donné, sur l'anneau. */
-export function spawnBoss(world: World, def: EnemyDef, center: Vec2, angle: number): void {
+/**
+ * Invoque un ennemi spécifique (ex. mini-boss) à un angle donné.
+ * `radius` = distance d'apparition ; par défaut l'anneau de spawn, mais le mini-boss
+ * passe un rayon plus court pour apparaître À L'ÉCRAN (combat de climax lisible).
+ */
+export function spawnBoss(
+  world: World,
+  def: EnemyDef,
+  center: Vec2,
+  angle: number,
+  radius: number = SPAWN.ringRadius
+): void {
   spawnEnemy(
     world,
     def,
     {
-      x: center.x + Math.cos(angle) * SPAWN.ringRadius,
-      y: center.y + Math.sin(angle) * SPAWN.ringRadius
+      x: center.x + Math.cos(angle) * radius,
+      y: center.y + Math.sin(angle) * radius
     },
     true
   )

@@ -14,6 +14,10 @@ export class Overlay {
   private readonly bannerLayer: HTMLElement
   /** Couche du carton d'intro « PHASE N · TITRE ». */
   private readonly introLayer: HTMLElement
+  /** Couche de la barre de PV de boss (haut-centre, tant qu'un boss est en vie). */
+  private readonly bossLayer: HTMLElement
+  /** Remplissage de la barre de PV de boss (mis à jour chaque frame ; null = pas de boss). */
+  private bossBarFill: HTMLElement | null = null
   private signature = ''
   /** Suivi inter-frames pour déclencher le bandeau (départ de run / arrivée boss). */
   private prevInGame = false
@@ -32,7 +36,8 @@ export class Overlay {
     this.screenLayer = h('div')
     this.bannerLayer = h('div')
     this.introLayer = h('div')
-    root.append(this.hud, this.screenLayer, this.bannerLayer, this.introLayer)
+    this.bossLayer = h('div')
+    root.append(this.hud, this.screenLayer, this.bannerLayer, this.introLayer, this.bossLayer)
   }
 
   /** Met à jour l'overlay depuis l'état applicatif. */
@@ -41,6 +46,7 @@ export class Overlay {
     this.syncScreen(state)
     this.syncBanner(state)
     this.syncIntroCard(state)
+    this.syncBossBar(state)
   }
 
   private syncHud(state: AppViewState): void {
@@ -143,16 +149,19 @@ export class Overlay {
     const hasBoss = state.enemies.some((e) => e.isBoss)
     const startedRun = inGame && !this.prevInGame && state.elapsedMs < 500
     const bossArrived = inGame && hasBoss && !this.prevHadBoss
-    if (startedRun || bossArrived) {
-      this.showBanner()
+    // L'arrivée du boss a son propre bandeau (rouge, nom du boss) → alerte claire.
+    if (bossArrived) {
+      this.showBanner('Alerte — Contremaître', 'banner banner--boss')
+    } else if (startedRun) {
+      this.showBanner('Zone à sécuriser →', 'banner')
     }
     this.prevInGame = inGame
     this.prevHadBoss = hasBoss
   }
 
-  private showBanner(): void {
+  private showBanner(text: string, className: string): void {
     clear(this.bannerLayer)
-    this.bannerLayer.append(h('div', { className: 'banner', text: 'ZONE À SÉCURISER →' }))
+    this.bannerLayer.append(h('div', { className, text }))
     if (this.bannerTimer !== null) {
       window.clearTimeout(this.bannerTimer)
     }
@@ -160,6 +169,39 @@ export class Overlay {
       clear(this.bannerLayer)
       this.bannerTimer = null
     }, 1800)
+  }
+
+  /**
+   * Barre de PV de boss (haut-centre) tant qu'un boss est en vie. Rend la mise à
+   * mort LISIBLE : la jauge se vide jusqu'à 0 → victoire (plus de « victoire au
+   * timer, boss encore vivant »). Reconstruite à l'apparition, largeur maj/frame.
+   */
+  private syncBossBar(state: AppViewState): void {
+    const inRun =
+      (state.screen === 'game' || state.screen === 'upgrade' || state.screen === 'paused') && !state.introActive
+    const boss = inRun ? state.enemies.find((e) => e.isBoss) : undefined
+    if (boss === undefined) {
+      if (this.bossBarFill !== null) {
+        clear(this.bossLayer)
+        this.bossBarFill = null
+      }
+      return
+    }
+    if (this.bossBarFill === null) {
+      clear(this.bossLayer)
+      const fill = h('div', { className: 'bossbar__fill' })
+      this.bossLayer.append(
+        h(
+          'div',
+          { className: 'bossbar' },
+          h('div', { className: 'bossbar__name', text: 'Contremaître' }),
+          h('div', { className: 'bossbar__track' }, fill)
+        )
+      )
+      this.bossBarFill = fill
+    }
+    const frac = boss.maxHp > 0 ? boss.hp / boss.maxHp : 0
+    this.bossBarFill.style.width = `${Math.round(Math.max(0, Math.min(1, frac)) * 100)}%`
   }
 
   /**
