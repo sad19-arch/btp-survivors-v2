@@ -6,7 +6,7 @@ import { GamepadInput } from '@input/gamepad'
 import { routeInput, type FrameInput } from '@input/intents'
 import { INTRO, WORLD } from '@content/config'
 import { createGround } from '@render/ground'
-import { createProps } from '@render/props'
+import { createProps, createLandmark, createStructures, phaseSalt } from '@render/props'
 import { dirRow, walkFrame, idleFrame } from '@render/sprites'
 import { stageRender, type StageRender } from '@render/stages'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
@@ -105,6 +105,8 @@ export class GameScene extends Phaser.Scene {
   /** Sprites du prisonnier : cage + ouvrier barbu, par id d'entité. */
   private readonly prisonerCages = new Map<number, Phaser.GameObjects.Image | Phaser.GameObjects.Arc>()
   private readonly prisonerWorkers = new Map<number, CharSprite>()
+  /** PNJ d'ambiance non-hostile du stage (idle), ou null si absent. */
+  private ambientSprite: Phaser.GameObjects.Sprite | null = null
   /** VFX d'onde de choc du marteau, déclenché par l'événement d'aura de la sim. */
   private readonly onAuraPulse = (e: Event): void => {
     const p = e as AuraPulseEvent
@@ -142,6 +144,16 @@ export class GameScene extends Phaser.Scene {
     for (const p of this.stage.props) {
       this.load.image(p.key, p.file)
     }
+    // Landmark de bâtiment (image décor) — chargé comme les autres décors.
+    if (this.stage.landmark !== undefined) {
+      this.load.image(this.stage.landmark.key, this.stage.landmark.file)
+    }
+    // Grandes structures qui remplissent l'arène (images décor).
+    if (this.stage.structures !== undefined) {
+      for (const s of this.stage.structures) {
+        this.load.image(s.key, s.file)
+      }
+    }
     // Feuilles de personnages 4×4 (lourdes) — sautées en mode allégé (→ cercles).
     if (!this.lite) {
       const boss = this.stage.boss
@@ -158,6 +170,11 @@ export class GameScene extends Phaser.Scene {
       this.load.spritesheet('player_idle_gold', 'player_idle_gold.png', { frameWidth: 192, frameHeight: 192 })
       // Ouvrier prisonnier (sosie barbu du héros) — même gabarit que le joueur (192).
       this.load.spritesheet('prisoner', 'stage01/npc/prisoner_walk.png', { frameWidth: 192, frameHeight: 192 })
+      // PNJ d'ambiance non-hostile du stage (feuille perso).
+      if (this.stage.ambient !== undefined) {
+        const a = this.stage.ambient
+        this.load.spritesheet(a.key, a.file, { frameWidth: a.frame, frameHeight: a.frame })
+      }
     }
     this.load.image('proj_scie', 'stage01/weapons/proj_scie.png')
     this.load.image('proj_cloueur', 'stage01/weapons/proj_cloueur.png')
@@ -290,19 +307,21 @@ export class GameScene extends Phaser.Scene {
     this.following = false
     this.introStartMs = -1
     this.introDone = false
+    this.ambientSprite = null
   }
 
   create(): void {
     // Les objets d'affichage sont détruits au shutdown : on repart de maps vides.
     this.resetRunState()
     // Sol : base tuilée seedée + décalques épars (rendu pur, aucune logique).
-    const seed = this.app.getState().seed
+    // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
+    const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
     createGround(
       this,
       WORLD.width,
       WORLD.height,
       { tileKeys: this.stage.ground.map((g) => g.key), decalKeys: this.stage.decals.map((d) => d.key) },
-      seed
+      stageSeed
     )
     // Props décoratifs dispersés (au-dessus du sol, sous les entités).
     createProps(
@@ -310,8 +329,31 @@ export class GameScene extends Phaser.Scene {
       WORLD.width,
       WORLD.height,
       this.stage.props.map((p) => ({ key: p.key, scale: p.scale, count: p.count })),
-      seed
+      stageSeed
     )
+    // Grandes structures qui remplissent l'arène (l'étape de chantier partout, hors centre).
+    if (this.stage.structures !== undefined) {
+      createStructures(
+        this,
+        WORLD.width,
+        WORLD.height,
+        this.stage.structures.map((s) => ({ key: s.key, scale: s.scale, count: s.count, band: s.band })),
+        stageSeed
+      )
+    }
+    // Landmark HERO de la phase — grand, en périphérie, décor.
+    const lm = this.stage.landmark
+    if (lm !== undefined) {
+      createLandmark(this, WORLD.width, WORLD.height, { key: lm.key, scale: lm.scale, count: lm.count }, stageSeed)
+    }
+    // PNJ d'ambiance non-hostile (geste métier) à un spot seedé hors du centre — « vie » du chantier.
+    const amb = this.stage.ambient
+    if (amb !== undefined && this.textures.exists(amb.key)) {
+      const ang = (((stageSeed * 2654435761) >>> 0) % 1000) / 1000 * Math.PI * 2
+      const ax = WORLD.width / 2 + Math.cos(ang) * 470
+      const ay = WORLD.height / 2 + Math.sin(ang) * 470
+      this.ambientSprite = this.add.sprite(ax, ay, amb.key).setScale(amb.scale).setDepth(1)
+    }
     this.add
       .rectangle(WORLD.width / 2, WORLD.height / 2, WORLD.width, WORLD.height)
       .setStrokeStyle(4, 0xf5c542)
@@ -536,6 +578,11 @@ export class GameScene extends Phaser.Scene {
         sprite.destroy()
         this.pickupSprites.delete(id)
       }
+    }
+
+    // PNJ d'ambiance : léger balancement sud (boucle lente), il ne se bat pas.
+    if (this.ambientSprite !== null) {
+      this.ambientSprite.setFrame(walkFrame(0, this.time.now, this.stage.ambient?.framePeriodMs ?? 300))
     }
 
     this.syncPrisoners(state.prisoners)

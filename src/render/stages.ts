@@ -29,6 +29,21 @@ export interface StageEnemySprite {
   scale: number
 }
 
+/** Bande de placement d'une structure (anneau autour du centre du monde). */
+export type StageStructureBand = 'mid' | 'periphery'
+
+/**
+ * Grande pièce structurelle qui remplit l'arène (l'étape de chantier VISIBLE partout).
+ * `count` instances dispersées dans la `band`, hors de la zone centrale de jeu.
+ */
+export interface StageStructure {
+  key: string
+  file: string
+  scale: number
+  count: number
+  band: StageStructureBand
+}
+
 export interface StageRender {
   ground: StageKeyFile[]
   decals: StageKeyFile[]
@@ -37,6 +52,25 @@ export interface StageRender {
   enemies: Record<string, StageEnemySprite>
   /** Skin du mini-boss (contremaitre) pour ce stage. */
   boss: StageEnemySprite
+  /** Grand landmark de bâtiment (la structure HERO à CETTE phase) — placé en périphérie, décoratif. */
+  landmark?: StageProp
+  /** Grandes structures qui remplissent l'arène (l'étape de chantier partout). */
+  structures?: StageStructure[]
+  /** PNJ d'ambiance non-hostile (feuille perso, geste métier) — la « vie » du chantier. */
+  ambient?: StageAmbient
+}
+
+/** PNJ d'ambiance : skin perso + période d'animation optionnelle (vitesse du geste). */
+export interface StageAmbient extends StageEnemySprite {
+  /** Période d'une frame du geste, en ms (défaut 300). */
+  framePeriodMs?: number
+}
+
+/** Ajouts optionnels d'ambiance d'un stage (landmark + structures + PNJ). */
+export interface StageExtra {
+  landmark?: StageProp
+  structures?: StageStructure[]
+  ambient?: StageAmbient
 }
 
 export const DEFAULT_STAGE = 'terrain_vierge'
@@ -72,7 +106,13 @@ const TERRAIN_VIERGE_RENDER: StageRender = {
     inspecteur: { key: 'imp', file: 'stage01/enemies/imp_walk.png', frame: 192, scale: 0.9 },
     paperasse: { key: 'mudling', file: 'stage01/enemies/mudling_walk.png', frame: 192, scale: 1.25 }
   },
-  boss: GROUND_KEEPER
+  boss: GROUND_KEEPER,
+  // Terrain vierge : bornage du terrain (parcelles piquetées) + géomètre qui vise.
+  landmark: { key: 'landmark_stage01', file: 'stage01/landmarks/permit.png', scale: 1.5, count: 1 },
+  structures: [
+    { key: 'struct_stage01_plot', file: 'stage01/structures/plot.png', scale: 0.85, count: 3, band: 'mid' }
+  ],
+  ambient: { key: 'npc_stage01', file: 'stage01/npc/geometre_work.png', frame: 256, scale: 0.72, framePeriodMs: 320 }
 }
 
 const TERRASSEMENT_RENDER: StageRender = {
@@ -93,7 +133,13 @@ const TERRASSEMENT_RENDER: StageRender = {
     foreur: { key: 'enemy_s2_foreur', file: 'stage02/enemies/foreur_walk.png', frame: 256, scale: 0.64 },
     rocheux: { key: 'enemy_s2_rocheux', file: 'stage02/enemies/rocheux_walk.png', frame: 256, scale: 0.8 }
   },
-  boss: { key: 'boss_s2_terrassement', file: 'stage02/boss/boss_walk.png', frame: 256, scale: 1.27 }
+  boss: { key: 'boss_s2_terrassement', file: 'stage02/boss/boss_walk.png', frame: 256, scale: 1.27 },
+  // Terrassement : grandes fouilles excavées partout + chef de chantier qui montre le plan.
+  landmark: { key: 'landmark_stage02', file: 'stage02/landmarks/pit.png', scale: 1.4, count: 1 },
+  structures: [
+    { key: 'struct_stage02_pit', file: 'stage02/structures/pit_big.png', scale: 0.8, count: 5, band: 'mid' }
+  ],
+  ambient: { key: 'npc_stage02', file: 'stage02/npc/chef_work.png', frame: 256, scale: 0.71, framePeriodMs: 340 }
 }
 
 /** Spécification compacte d'un prop : [nom de fichier (sans ext), échelle, nombre]. */
@@ -120,7 +166,8 @@ function makeStage(
   propSpecs: readonly PropSpec[],
   decals: readonly string[],
   enemyScales: readonly [number, number, number] = [0.74, 0.64, 0.8],
-  bossScale = 0.7
+  bossScale = 0.7,
+  extra: StageExtra = {}
 ): StageRender {
   return {
     ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_${prefix}_${i}`, file: `${prefix}/ground/tile_${i}.png` })),
@@ -131,7 +178,8 @@ function makeStage(
       [ids[1]]: { key: `enemy_${prefix}_fast`, file: `${prefix}/enemies/fast_walk.png`, frame: 256, scale: enemyScales[1] },
       [ids[2]]: { key: `enemy_${prefix}_tank`, file: `${prefix}/enemies/tank_walk.png`, frame: 256, scale: enemyScales[2] }
     },
-    boss: { key: `boss_${prefix}`, file: `${prefix}/boss/boss_walk.png`, frame: 256, scale: bossScale }
+    boss: { key: `boss_${prefix}`, file: `${prefix}/boss/boss_walk.png`, frame: 256, scale: bossScale },
+    ...extra
   }
 }
 
@@ -150,7 +198,15 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     ],
     ['spill', 'crack'],
     [1.18, 0.62, 0.94],
-    1.25
+    1.25,
+    {
+      // Fondations : dalle hero + travées de coffrage/ferraillage qui remplissent le chantier + ferrailleur au travail.
+      landmark: { key: 'landmark_stage03', file: 'stage03/landmarks/slab.png', scale: 1.5, count: 1 },
+      structures: [
+        { key: 'struct_stage03_formwork', file: 'stage03/structures/formwork_bay.png', scale: 0.9, count: 7, band: 'mid' }
+      ],
+      ambient: { key: 'npc_stage03', file: 'stage03/npc/ferrailleur_work.png', frame: 256, scale: 0.69, framePeriodMs: 260 }
+    }
   ),
   reseaux_enterres: makeStage(
     'stage04',
@@ -163,7 +219,15 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     ],
     ['trench', 'mud', 'dig_tunnels'],
     [0.75, 0.65, 0.77],
-    1.22
+    1.22,
+    {
+      // Réseaux enterrés : réseaux de tranchées/tuyaux partout + électricien qui tire un câble.
+      landmark: { key: 'landmark_stage04', file: 'stage04/landmarks/pipes.png', scale: 1.5, count: 1 },
+      structures: [
+        { key: 'struct_stage04_trench', file: 'stage04/structures/trench_junction.png', scale: 0.8, count: 4, band: 'mid' }
+      ],
+      ambient: { key: 'npc_stage04', file: 'stage04/npc/electricien_work.png', frame: 256, scale: 0.71, framePeriodMs: 280 }
+    }
   ),
   gros_oeuvre: makeStage(
     'stage05',
@@ -176,7 +240,15 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     ],
     ['mortar', 'rubble'],
     [0.71, 0.63, 0.8],
-    1.19
+    1.19,
+    {
+      // Gros œuvre : murs hero + pans de mur qui montent partout + maçon qui pose une brique.
+      landmark: { key: 'landmark_stage05', file: 'stage05/landmarks/walls.png', scale: 1.5, count: 1 },
+      structures: [
+        { key: 'struct_stage05_wall', file: 'stage05/structures/wall_section.png', scale: 0.85, count: 7, band: 'mid' }
+      ],
+      ambient: { key: 'npc_stage05', file: 'stage05/npc/mason_work.png', frame: 256, scale: 0.79, framePeriodMs: 280 }
+    }
   ),
   echafaudages: makeStage(
     'stage06',
@@ -188,7 +260,15 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     ],
     ['bolt_scatter', 'oil'],
     [0.71, 0.65, 0.77],
-    1.41
+    1.41,
+    {
+      // Échafaudages : tours d'échafaudage partout + échafaudeur qui serre un boulon.
+      landmark: { key: 'landmark_stage06', file: 'stage06/landmarks/scaffold_tower.png', scale: 1.5, count: 1 },
+      structures: [
+        { key: 'struct_stage06_scaffold', file: 'stage06/structures/scaffold_grid.png', scale: 0.8, count: 6, band: 'mid' }
+      ],
+      ambient: { key: 'npc_stage06', file: 'stage06/npc/echafaudeur_work.png', frame: 256, scale: 0.68, framePeriodMs: 260 }
+    }
   ),
   charpente_toiture: makeStage(
     'stage07',
@@ -200,7 +280,15 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     ],
     ['sawdust', 'woodchips'],
     [0.5, 0.66, 0.78],
-    1.22
+    1.22,
+    {
+      // Charpente : rangées de fermes de toit partout + charpentier qui cloue.
+      landmark: { key: 'landmark_stage07', file: 'stage07/landmarks/roof_frame.png', scale: 1.5, count: 1 },
+      structures: [
+        { key: 'struct_stage07_roof', file: 'stage07/structures/roof_trusses.png', scale: 0.85, count: 5, band: 'mid' }
+      ],
+      ambient: { key: 'npc_stage07', file: 'stage07/npc/charpentier_work.png', frame: 256, scale: 0.69, framePeriodMs: 220 }
+    }
   ),
   second_oeuvre: makeStage(
     'stage08',
@@ -212,7 +300,15 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     ],
     ['plaster_dust', 'scrap'],
     [0.72, 0.63, 0.8],
-    1.30
+    1.30,
+    {
+      // Second œuvre : cloisons/pièces en pose partout + plaquiste qui lisse le plâtre.
+      landmark: { key: 'landmark_stage08', file: 'stage08/landmarks/partition.png', scale: 1.5, count: 1 },
+      structures: [
+        { key: 'struct_stage08_partition', file: 'stage08/structures/partition_room.png', scale: 0.8, count: 5, band: 'mid' }
+      ],
+      ambient: { key: 'npc_stage08', file: 'stage08/npc/plaquiste_work.png', frame: 256, scale: 0.69, framePeriodMs: 280 }
+    }
   ),
   finitions: makeStage(
     'stage09',
@@ -224,7 +320,15 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     ],
     ['paint_spot'],
     [0.68, 0.63, 0.8],
-    1.09
+    1.09,
+    {
+      // Finitions : pièces finies (carrelage, fenêtres) partout + peintre au rouleau.
+      landmark: { key: 'landmark_stage09', file: 'stage09/landmarks/finished_corner.png', scale: 1.5, count: 1 },
+      structures: [
+        { key: 'struct_stage09_room', file: 'stage09/structures/finished_room.png', scale: 0.8, count: 4, band: 'mid' }
+      ],
+      ambient: { key: 'npc_stage09', file: 'stage09/npc/painter_work.png', frame: 256, scale: 0.74, framePeriodMs: 260 }
+    }
   ),
   livraison_audit: makeStage(
     'stage10',
@@ -236,7 +340,15 @@ export const STAGE_RENDER: Record<string, StageRender> = {
     ],
     ['tape_line'],
     [0.65, 0.65, 0.88],
-    1.25
+    1.25,
+    {
+      // Livraison/audit : bâtiments livrés « CONFORME » partout + inspecteur qui note.
+      landmark: { key: 'landmark_stage10', file: 'stage10/landmarks/gate.png', scale: 1.5, count: 1 },
+      structures: [
+        { key: 'struct_stage10_building', file: 'stage10/structures/building.png', scale: 0.7, count: 5, band: 'mid' }
+      ],
+      ambient: { key: 'npc_stage10', file: 'stage10/npc/inspecteur_work.png', frame: 256, scale: 0.71, framePeriodMs: 340 }
+    }
   )
 }
 
