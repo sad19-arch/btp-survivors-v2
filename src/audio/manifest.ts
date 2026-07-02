@@ -1,9 +1,9 @@
 /**
  * Manifeste audio (data-driven, PUR — aucun Phaser/DOM ici, testable en Vitest).
  *
- * Déclare : les fichiers à précharger, les « cues » SFX (pool + volume + variation
- * + throttle) et la logique de choix de musique selon l'état. Les niveaux sont
- * volontairement modestes et se peaufinent à l'oreille (voir `settings`).
+ * Déclare : fichiers à précharger, cues SFX (pool + volume + variation + throttle),
+ * pistes de musique + logique de choix selon l'état, VOIX arcade (pools par moment),
+ * ambiance de chantier. Niveaux modestes, à peaufiner à l'oreille (voir `settings`).
  */
 
 /** Un cue SFX : pool de clés (tiré aléatoirement), volume, pitch + jitter, throttle. */
@@ -23,22 +23,30 @@ export const MUSIC = {
   menu: 'music_menu',
   boss: 'music_boss',
   victory: 'music_victory',
+  gameover: 'music_gameover',
   stage_a: 'music_stage_a',
   stage_b: 'music_stage_b',
-  stage_c: 'music_stage_c'
+  stage_c: 'music_stage_c',
+  stage_alt: 'music_stage_alt'
 } as const
 
 export type MusicKey = (typeof MUSIC)[keyof typeof MUSIC]
 
-/** Fichiers musique à précharger (clé Phaser → chemin sous public/). */
+/** Clé de l'ambiance de chantier (nappe loopée sous la musique de jeu). */
+export const AMB = 'amb_chantier'
+
+/** Fichiers musique + ambiance à précharger (clé Phaser → chemin sous public/). */
 export const MUSIC_FILES: ReadonlyArray<readonly [string, string]> = [
   [MUSIC.title, 'audio/music/title.ogg'],
   [MUSIC.menu, 'audio/music/menu.ogg'],
   [MUSIC.stage_a, 'audio/music/stage_a.ogg'],
   [MUSIC.stage_b, 'audio/music/stage_b.ogg'],
   [MUSIC.stage_c, 'audio/music/stage_c.ogg'],
+  [MUSIC.stage_alt, 'audio/music/stage_alt.ogg'],
   [MUSIC.boss, 'audio/music/boss.ogg'],
-  [MUSIC.victory, 'audio/music/victory.ogg']
+  [MUSIC.victory, 'audio/music/victory.ogg'],
+  [MUSIC.gameover, 'audio/music/gameover.ogg'],
+  [AMB, 'audio/amb/chantier.ogg']
 ]
 
 const SFX_NAMES: readonly string[] = [
@@ -56,6 +64,21 @@ export const SFX_FILES: ReadonlyArray<readonly [string, string]> = [
   ...SFX_NAMES.map((n) => [`sfx_${n}`, `audio/sfx/${n}.wav`] as const),
   ['sfx_stage_clear', 'audio/sfx/stage_clear.ogg']
 ]
+
+const VOICE_NAMES: readonly string[] = [
+  'presents', 'ready', 'fight',
+  'stage_1', 'stage_2', 'stage_3', 'stage_4', 'stage_5',
+  'stage_6', 'stage_7', 'stage_8', 'stage_9', 'stage_10', 'final_stage',
+  'boss', 'prepare_yourself_for_an_epic_battle', 'final_wave',
+  'bonus', 'thankyou', 'choose_your_destiny', 'keep_going',
+  'victory', 'stage_clear', 'you_are_incredible', 'flowless_victory',
+  'gameover', 'that_was_terrible', 'you_are_such_a_looser'
+]
+
+/** Fichiers voix à précharger (clé `voice_<nom>` → chemin). */
+export const VOICE_FILES: ReadonlyArray<readonly [string, string]> = VOICE_NAMES.map(
+  (n) => [`voice_${n}`, `audio/voice/voice_${n}.ogg`] as const
+)
 
 /**
  * Cues SFX logiques → pool + paramètres. Les placeholders (`weapon_cloueur`,
@@ -79,15 +102,33 @@ export const SFX: Readonly<Record<string, SfxCue>> = {
   stageClear: { keys: ['sfx_stage_clear'], volume: 0.7 }
 }
 
-/** Rotation des 3 pistes gameplay par phase (clé = id de phase). */
+/** Pools de VOIX arcade (annonceur) par moment de jeu. */
+export const VOICE = {
+  intro: ['voice_presents'],
+  runStart: ['voice_ready', 'voice_fight'],
+  boss: ['voice_boss', 'voice_prepare_yourself_for_an_epic_battle', 'voice_final_wave'],
+  bonus: ['voice_bonus'],
+  thankyou: ['voice_thankyou'],
+  upgrade: ['voice_choose_your_destiny', 'voice_keep_going'],
+  victory: ['voice_victory', 'voice_stage_clear', 'voice_you_are_incredible'],
+  flawless: ['voice_flowless_victory'],
+  gameover: ['voice_gameover', 'voice_that_was_terrible', 'voice_you_are_such_a_looser']
+} as const
+
+/** Annonce de stage : la phase 10 dit « FINAL STAGE », sinon « STAGE N ». */
+export function voiceStage(order: number): string {
+  return order >= 10 ? 'voice_final_stage' : `voice_stage_${order}`
+}
+
+/** Rotation des 4 pistes gameplay par phase (clé = id de phase). */
 const STAGE_MUSIC: Readonly<Record<string, MusicKey>> = {
   terrain_vierge: MUSIC.stage_a,
   terrassement: MUSIC.stage_a,
-  gros_oeuvre: MUSIC.stage_a,
-  livraison_audit: MUSIC.stage_a,
   fondations: MUSIC.stage_b,
   reseaux_enterres: MUSIC.stage_b,
   echafaudages: MUSIC.stage_b,
+  gros_oeuvre: MUSIC.stage_alt,
+  livraison_audit: MUSIC.stage_alt,
   charpente_toiture: MUSIC.stage_c,
   second_oeuvre: MUSIC.stage_c,
   finitions: MUSIC.stage_c
@@ -109,7 +150,7 @@ export function musicForState(ctx: MusicContext): MusicKey | null {
     case 'victory':
       return MUSIC.victory
     case 'gameover':
-      return null
+      return MUSIC.gameover
     default: // game / upgrade : la musique de jeu continue (boss prioritaire)
       if (ctx.bossPresent) {
         return MUSIC.boss

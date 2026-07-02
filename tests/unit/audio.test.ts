@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { musicForState, MUSIC, SFX, SFX_FILES, MUSIC_FILES } from '@/audio/manifest'
+import { musicForState, MUSIC, SFX, VOICE, voiceStage, SFX_FILES, MUSIC_FILES, VOICE_FILES } from '@/audio/manifest'
 import { clamp01, musicGain, sfxGain, type AudioLevels } from '@/audio/settings'
 import { Simulation } from '@core/simulation'
 
@@ -7,22 +7,22 @@ describe('audio — musique par état (pure)', () => {
   const g = (screen: string, stageId: string, bossPresent = false): string | null =>
     musicForState({ screen, stageId, bossPresent })
 
-  it('titre → piste titre ; gameover → silence', () => {
+  it('titre → titre ; pause → menu ; victoire/gameover → leur thème', () => {
     expect(g('title', 'terrain_vierge')).toBe(MUSIC.title)
-    expect(g('gameover', 'terrain_vierge')).toBeNull()
-    expect(g('victory', 'terrain_vierge')).toBe(MUSIC.victory)
     expect(g('paused', 'terrain_vierge')).toBe(MUSIC.menu)
+    expect(g('victory', 'terrain_vierge')).toBe(MUSIC.victory)
+    expect(g('gameover', 'terrain_vierge')).toBe(MUSIC.gameover)
   })
 
   it('boss présent → musique boss (prioritaire)', () => {
     expect(g('game', 'finitions', true)).toBe(MUSIC.boss)
   })
 
-  it('rotation des 3 pistes par phase', () => {
+  it('rotation des 4 pistes par phase', () => {
     expect(g('game', 'terrain_vierge')).toBe(MUSIC.stage_a)
-    expect(g('game', 'livraison_audit')).toBe(MUSIC.stage_a)
     expect(g('game', 'fondations')).toBe(MUSIC.stage_b)
-    expect(g('game', 'echafaudages')).toBe(MUSIC.stage_b)
+    expect(g('game', 'gros_oeuvre')).toBe(MUSIC.stage_alt)
+    expect(g('game', 'livraison_audit')).toBe(MUSIC.stage_alt)
     expect(g('game', 'charpente_toiture')).toBe(MUSIC.stage_c)
     expect(g('game', 'finitions')).toBe(MUSIC.stage_c)
   })
@@ -47,6 +47,19 @@ describe('audio — cohérence manifeste ↔ préchargement', () => {
     const loaded = new Set(MUSIC_FILES.map(([k]) => k))
     for (const key of Object.values(MUSIC)) {
       expect(loaded.has(key), `${key} non préchargé`).toBe(true)
+    }
+  })
+
+  it('chaque pool de VOIX (+ annonces de stage) ne référence que des clés préchargées', () => {
+    const loaded = new Set(VOICE_FILES.map(([k]) => k))
+    for (const [name, pool] of Object.entries(VOICE)) {
+      expect(pool.length, name).toBeGreaterThan(0)
+      for (const key of pool) {
+        expect(loaded.has(key), `${name} → ${key} non préchargé`).toBe(true)
+      }
+    }
+    for (let order = 1; order <= 10; order++) {
+      expect(loaded.has(voiceStage(order)), `stage ${order}`).toBe(true)
     }
   })
 })
