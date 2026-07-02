@@ -79,3 +79,10 @@ export class BossSpawnedEvent extends Event {
     super('bossSpawned')
   }
 }
+
+/** Une arme vient d'évoluer (coffre ramassé + conditions réunies). */
+export class EvolvedEvent extends Event {
+  constructor(readonly weaponId: string) {
+    super('evolved')
+  }
+}

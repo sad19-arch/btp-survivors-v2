@@ -43,7 +43,15 @@ export function pickupSystem(world: World, dtMs: number, collected?: PickupKind[
   }
 }
 
-/** Applique l'effet d'un pickup au joueur qui le ramasse. Déterministe. */
+/**
+ * Applique l'effet d'un pickup au joueur qui le ramasse. Déterministe.
+ *
+ * NB distinction des deux types « coffre » du butin :
+ * - `'chest'` : lot d'XP bonus dormant (chance de drop = 0 pour l'instant, cf. `PICKUP_DROPS`).
+ * - `'coffre'` : coffre d'évolution — ne donne AUCUN effet direct ici ; c'est
+ *   `simulation.step` qui, en voyant `'coffre'` dans `collected`, appelle
+ *   `tryEvolve` puis dispatch `EvolvedEvent` (ou soigne en bonus de repli).
+ */
 function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
   switch (pickup.type) {
     case 'xp':
@@ -63,6 +71,10 @@ function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
     }
     case 'magnet': {
       vacuumXpGems(world, player)
+      break
+    }
+    case 'coffre': {
+      // Aucun effet direct : la sim gère l'évolution (ou le bonus de repli).
       break
     }
   }

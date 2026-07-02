@@ -9,6 +9,7 @@ import {
   WeaponFiredEvent,
   PickupCollectedEvent,
   BossSpawnedEvent,
+  EvolvedEvent,
   type AuraPulse
 } from './events'
 import { STEP_MS } from './clock'
@@ -26,6 +27,7 @@ import { consumeLevelUp, initialProgress } from './systems/leveling'
 import { allPlayersDead } from './systems/gameRules'
 import { recomputePlayerStats } from './systems/playerStats'
 import { rollCards, type Inventory } from './systems/cards'
+import { tryEvolve } from './systems/evolution'
 import { MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
 import { SPAWN_RAMP, spawnParamsAt, difficultyScaleAt } from '@content/spawnRamp'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
@@ -252,6 +254,49 @@ export class Simulation {
     }
   }
 
+  /**
+   * [Debug/seam] Octroie directement des armes/passifs au joueur 1, sans
+   * passer par la progression normale (upgrades). Réservé aux tests et au
+   * seam de debug (`window.__GAME__`) — jamais utilisé en jeu normal.
+   */
+  debugGrant(opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] }): void {
+    const e = this.playerEntities.get(1)
+    if (e === undefined) {
+      return
+    }
+    if (opts.weapons !== undefined) {
+      const loadout = this.world.get(e, 'weapons')
+      if (loadout !== undefined) {
+        loadout.slots = opts.weapons.map((w) => ({ id: w.id, level: w.level, cooldownLeftMs: 0 }))
+      }
+    }
+    if (opts.passives !== undefined) {
+      const passives = this.world.get(e, 'passives')
+      if (passives !== undefined) {
+        passives.list = opts.passives.map((p) => ({ id: p.id, level: p.level }))
+      }
+    }
+    recomputePlayerStats(this.world, e)
+  }
+
+  /**
+   * [Debug/seam] Fait apparaître un coffre d'évolution sur la position du
+   * joueur 1 (collecte immédiate au pas suivant), sans attendre le boss.
+   */
+  debugSpawnChestOnPlayer(): void {
+    const e = this.playerEntities.get(1)
+    if (e === undefined) {
+      return
+    }
+    const pos = this.world.get(e, 'position')
+    if (pos === undefined) {
+      return
+    }
+    const gem = this.world.spawn()
+    this.world.add(gem, 'position', { x: pos.x, y: pos.y })
+    this.world.add(gem, 'pickup', { type: 'coffre', value: 0 })
+  }
+
   /** Vue texte lisible pour « jouer à l'aveugle ». */
   renderToText(): string {
     const s = this.getState()
@@ -364,6 +409,7 @@ export class Simulation {
     const killed = reapDeadEnemies(this.world, this.lootRng)
     this.score += killed
     pickupSystem(this.world, dtMs, collected)
+    this.handleChestPickups(collected)
     rescueSystem(this.world, freed)
     projectileLifetimeSystem(this.world, dtMs)
     this.updateWin() // boss vaincu → victoire (priorité sur la mort simultanée)
@@ -391,6 +437,35 @@ export class Simulation {
     }
     for (const f of freed) {
       this.events.dispatchEvent(new PrisonerFreedEvent(f.x, f.y))
+    }
+  }
+
+  /**
+   * Traite les coffres d'évolution ramassés ce pas (tranche solo → joueur 1) :
+   * évolution si éligible (`tryEvolve` + `EvolvedEvent`), sinon bonus de soin
+   * de repli (30 PV bornés à `maxHp`). Simplification multi-joueurs assumée :
+   * en solo il n'existe qu'un ramasseur possible (joueur 1) ; à généraliser
+   * (ramasseur réel par pickup) si le coop est implémenté.
+   */
+  private handleChestPickups(collected: PickupKind[]): void {
+    const chestCount = collected.filter((k) => k === 'coffre').length
+    if (chestCount === 0) {
+      return
+    }
+    const player = this.playerEntities.get(1)
+    if (player === undefined) {
+      return
+    }
+    for (let i = 0; i < chestCount; i++) {
+      const evolvedId = tryEvolve(this.world, player)
+      if (evolvedId !== null) {
+        this.events.dispatchEvent(new EvolvedEvent(evolvedId))
+      } else {
+        const health = this.world.get(player, 'health')
+        if (health !== undefined) {
+          health.hp = Math.min(health.maxHp, health.hp + 30)
+        }
+      }
     }
   }
 
