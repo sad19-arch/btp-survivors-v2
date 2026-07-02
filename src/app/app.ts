@@ -1,8 +1,18 @@
 import { Simulation } from '@core/simulation'
-import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
+import {
+  AuraPulseEvent,
+  PrisonerFreedEvent,
+  EnemyKilledEvent,
+  PlayerHurtEvent,
+  LevelUpEvent,
+  WeaponFiredEvent,
+  PickupCollectedEvent,
+  BossSpawnedEvent
+} from '@core/events'
 import { FocusModel } from '@ui/focusModel'
 import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
 import { INTRO } from '@content/config'
+import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
 import type { GameMode, GameState, PlayerInput } from '@core/types'
 import type { AppViewState, MenuItemView, MenuView, NavDir, Screen } from './appState'
 
@@ -36,6 +46,7 @@ const KONAMI: readonly ComboAction[] = [
 /** Items fixes des menus (hors titre — dynamique — et cartes d'upgrade). */
 const PAUSE_ITEMS: MenuItemView[] = [
   { id: 'reprendre', label: 'Reprendre', hint: null },
+  { id: 'options', label: 'Options', hint: null },
   { id: 'recommencer', label: 'Recommencer', hint: null },
   { id: 'quitter', label: 'Quitter', hint: null }
 ]
@@ -69,6 +80,10 @@ export class App {
   private readonly introEnabled: boolean
   /** Temps restant de gel pour l'intro de run, en ms (0 = pas d'intro en cours). */
   private introMsLeft = 0
+  /** Écran Options ouvert (surcouche au-dessus du titre / pause). */
+  private optionsOpen = false
+  /** Niveaux audio (possédés ici pour l'UI Options ; l'AudioDirector les lit). */
+  private audioLevels: AudioLevels = loadAudioSettings()
 
   constructor(opts: AppOptions) {
     this.seed = opts.seed
@@ -95,6 +110,19 @@ export class App {
       const p = e as PrisonerFreedEvent
       this.events.dispatchEvent(new PrisonerFreedEvent(p.x, p.y))
     })
+    // Relais des événements sémantiques audio (sim → App → AudioDirector).
+    this.sim.events.addEventListener('enemyKilled', (e) => {
+      this.events.dispatchEvent(new EnemyKilledEvent((e as EnemyKilledEvent).count))
+    })
+    this.sim.events.addEventListener('playerHurt', () => { this.events.dispatchEvent(new PlayerHurtEvent()) })
+    this.sim.events.addEventListener('levelUp', () => { this.events.dispatchEvent(new LevelUpEvent()) })
+    this.sim.events.addEventListener('weaponFired', (e) => {
+      this.events.dispatchEvent(new WeaponFiredEvent((e as WeaponFiredEvent).kind))
+    })
+    this.sim.events.addEventListener('pickupCollected', (e) => {
+      this.events.dispatchEvent(new PickupCollectedEvent((e as PickupCollectedEvent).kind))
+    })
+    this.sim.events.addEventListener('bossSpawned', () => { this.events.dispatchEvent(new BossSpawnedEvent()) })
     this.introMsLeft = this.introEnabled ? INTRO.durationMs : 0
     this.started = true
     this.refreshFocus()
@@ -141,10 +169,19 @@ export class App {
     // Sélecteur de niveau au titre : gauche/droite changent la phase (pas le focus).
     if (this.screen === 'title' && this.focus.current() === 'stage' && (dir === 'left' || dir === 'right')) {
       this.cycleStage(dir === 'right' ? 1 : -1)
+      this.emitUi('menuMove')
+      return
+    }
+    // Options : gauche/droite règlent le volume de l'item focalisé.
+    const cur = this.focus.current()
+    if (this.screen === 'options' && cur !== null && cur.startsWith('vol_') && (dir === 'left' || dir === 'right')) {
+      this.adjustVolume(cur.slice(4) as 'master' | 'music' | 'sfx', dir === 'right' ? 0.1 : -0.1)
+      this.emitUi('menuMove')
       return
     }
     const delta = dir === 'up' ? -1 : dir === 'down' ? 1 : dir === 'left' ? -1 : 1
     this.focus.move(delta)
+    this.emitUi('menuMove')
   }
 
   /** Sélectionne+valide un item par index (clic souris) — passe par le focus + `activate`. */
@@ -175,6 +212,12 @@ export class App {
   /** Retour / annulation, selon l'écran. */
   back(): void {
     this.recordCombo('back')
+    if (this.optionsOpen) {
+      this.optionsOpen = false
+      this.emitUi('menuBack')
+      this.refreshFocus()
+      return
+    }
     switch (this.screen) {
       case 'game':
         this.sim?.pause()
@@ -188,6 +231,7 @@ export class App {
       default:
         break // titre / upgrade : pas de retour
     }
+    this.emitUi('menuBack')
     this.refreshFocus()
   }
 
@@ -273,8 +317,11 @@ export class App {
 
   // --- interne --------------------------------------------------------------
 
-  /** Écran courant, dérivé de l'état de la simulation. */
+  /** Écran courant, dérivé de l'état de la simulation (Options = surcouche prioritaire). */
   private get screen(): Screen {
+    if (this.optionsOpen) {
+      return 'options'
+    }
     if (!this.started || this.sim === null) {
       return 'title'
     }
@@ -307,9 +354,41 @@ export class App {
         return this.victoryItems()
       case 'upgrade':
         return this.upgradeItems()
+      case 'options':
+        return this.optionsItems()
       default:
         return []
     }
+  }
+
+  /** Écran Options : volumes (◄/►) + mute + retour. */
+  private optionsItems(): MenuItemView[] {
+    const a = this.audioLevels
+    const pct = (v: number): string => `${Math.round(v * 100)}%`
+    return [
+      { id: 'vol_master', label: `◄ Volume général : ${pct(a.master)} ►`, hint: 'Gauche/Droite pour régler' },
+      { id: 'vol_music', label: `◄ Musique : ${pct(a.music)} ►`, hint: 'Gauche/Droite pour régler' },
+      { id: 'vol_sfx', label: `◄ Effets : ${pct(a.sfx)} ►`, hint: 'Gauche/Droite pour régler' },
+      { id: 'mute', label: `Son : ${a.muted ? 'COUPÉ' : 'activé'}`, hint: 'Valider pour basculer' },
+      { id: 'retour', label: 'Retour', hint: null }
+    ]
+  }
+
+  /** Niveaux audio courants (lus par l'AudioDirector). */
+  getAudioLevels(): AudioLevels {
+    return { ...this.audioLevels }
+  }
+
+  private adjustVolume(kind: 'master' | 'music' | 'sfx', delta: number): void {
+    this.audioLevels = { ...this.audioLevels, [kind]: clamp01(this.audioLevels[kind] + delta) }
+    saveAudioSettings(this.audioLevels)
+    this.events.dispatchEvent(new Event('audioSettings'))
+    this.refreshFocus()
+  }
+
+  /** Émet un SFX d'UI (navigation/valider/annuler) — écouté par l'AudioDirector. */
+  private emitUi(name: string): void {
+    this.events.dispatchEvent(new Event(name))
   }
 
   /** Écran de victoire : passer au stage suivant (sauf dernier) ou revenir au titre. */
@@ -372,9 +451,23 @@ export class App {
 
   /** Exécute l'action d'un item de menu. */
   private activate(screen: Screen, id: string): void {
+    this.emitUi(screen === 'upgrade' ? 'upgradePick' : 'menuConfirm')
+    if (screen === 'options') {
+      if (id === 'mute') {
+        this.audioLevels = { ...this.audioLevels, muted: !this.audioLevels.muted }
+        saveAudioSettings(this.audioLevels)
+        this.events.dispatchEvent(new Event('audioSettings'))
+      } else if (id === 'retour') {
+        this.optionsOpen = false
+      }
+      this.refreshFocus()
+      return
+    }
     if (screen === 'paused') {
       if (id === 'reprendre') {
         this.sim?.resume()
+      } else if (id === 'options') {
+        this.optionsOpen = true
       } else if (id === 'recommencer') {
         this.restart()
       } else if (id === 'quitter') {
@@ -388,7 +481,10 @@ export class App {
         this.start(this.mode)
       } else if (id === 'stage') {
         this.cycleStage()
+      } else if (id === 'options') {
+        this.optionsOpen = true
       }
+      this.refreshFocus()
       return
     }
     if (screen === 'gameover') {

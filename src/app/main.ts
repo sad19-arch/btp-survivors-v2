@@ -1,7 +1,9 @@
 import Phaser from 'phaser'
 import { App } from './app'
 import { GameScene, type GameSceneData } from '@render/scenes/GameScene'
+import { BootScene } from '@render/scenes/BootScene'
 import { Overlay } from '@ui/overlay'
+import { AudioDirector } from '@/audio/audioDirector'
 import { parseBootOptions } from './bootOptions'
 import { phaseIdFromLevel } from '@content/phases'
 import { createSeam, installSeam } from './seam'
@@ -50,7 +52,12 @@ const game = new Phaser.Game({
   scene: []
 })
 
-game.scene.add('game', GameScene, true, data)
+// BootScene précharge l'audio puis lance 'game' (GameScene n'auto-démarre plus).
+game.scene.add('game', GameScene, false, data)
+game.scene.add('boot', BootScene, true, data)
+
+// AudioDirector : créé une fois, coupé en test/headless. Lit les niveaux via l'App.
+const audio = opts.test ? null : new AudioDirector(game.sound, app.events, () => app.getAudioLevels())
 
 // Overlay DOM des écrans (HUD, menus) — observe l'état de l'App à chaque frame.
 const uiRoot = document.getElementById('ui-root')
@@ -58,7 +65,9 @@ if (uiRoot !== null) {
   // Clic souris sur un item de menu → sélection+validation via l'App.
   const overlay = new Overlay(uiRoot, (i) => app.clickItem(i))
   const tick = (): void => {
-    overlay.sync(app.getState())
+    const state = app.getState()
+    overlay.sync(state)
+    audio?.observe(state) // musique par écran/phase/boss (crossfade)
     window.requestAnimationFrame(tick)
   }
   window.requestAnimationFrame(tick)

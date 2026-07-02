@@ -13,7 +13,7 @@ import { HITBOX } from '@content/config'
  *
  * Déterministe (pas d'aléa). La mort des ennemis est récoltée par `reapDeadEnemies`.
  */
-export function weaponSystem(world: World, dtMs: number, pulses?: AuraPulse[]): void {
+export function weaponSystem(world: World, dtMs: number, pulses?: AuraPulse[], fired?: string[]): void {
   despawnOrphanOrbiters(world)
 
   for (const e of world.query('player', 'position', 'weapons', 'health')) {
@@ -35,7 +35,7 @@ export function weaponSystem(world: World, dtMs: number, pulses?: AuraPulse[]): 
       }
       switch (def.kind) {
         case 'projectile':
-          tickProjectile(world, slot, def, pos, player, dtMs)
+          tickProjectile(world, slot, def, pos, player, dtMs, fired)
           break
         case 'aura':
           tickAura(world, slot, def, pos, player, dtMs, pulses)
@@ -60,7 +60,8 @@ function tickProjectile(
   def: WeaponDef,
   pos: Vec2,
   player: PlayerComp,
-  dtMs: number
+  dtMs: number,
+  fired?: string[]
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -72,6 +73,7 @@ function tickProjectile(
     return
   }
   fireProjectile(world, pos, target, def, player.playerId, player.damageMult)
+  fired?.push(def.id)
   slot.cooldownLeftMs = def.cooldownMs * player.cooldownMult
 }
 

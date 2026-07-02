@@ -1,6 +1,16 @@
 import { World } from './world'
 import { Rng } from './rng'
-import { AuraPulseEvent, PrisonerFreedEvent, type AuraPulse } from './events'
+import {
+  AuraPulseEvent,
+  PrisonerFreedEvent,
+  EnemyKilledEvent,
+  PlayerHurtEvent,
+  LevelUpEvent,
+  WeaponFiredEvent,
+  PickupCollectedEvent,
+  BossSpawnedEvent,
+  type AuraPulse
+} from './events'
 import { STEP_MS } from './clock'
 import { movementSystem } from './systems/movement'
 import { worldBoundsSystem } from './systems/bounds'
@@ -27,6 +37,7 @@ import type {
   GameState,
   PendingLevelUp,
   PickupState,
+  PickupKind,
   PlayerInput,
   PlayerState,
   PrisonerState,
@@ -90,6 +101,8 @@ export class Simulation {
   /** Vrai une fois le boss RÉELLEMENT apparu (garde-fou anti faux-positif de victoire). */
   private bossEverSpawned = false
   private pendingLevelUp: PendingLevelUp | null = null
+  /** PV totaux des joueurs au pas précédent → détecte les dégâts (SFX, observation pure). */
+  private prevHpTotal = 0
   private readonly inputs = new Map<number, PlayerInput>()
   private readonly playerEntities = new Map<number, EntityId>()
 
@@ -240,6 +253,16 @@ export class Simulation {
     this.playerEntities.clear()
     this.spawnPlayers()
     this.spawnPrisoner()
+    this.prevHpTotal = this.totalPlayerHp()
+  }
+
+  /** Somme des PV de tous les joueurs (pour détecter une perte de PV entre deux pas). */
+  private totalPlayerHp(): number {
+    let total = 0
+    for (const e of this.playerEntities.values()) {
+      total += this.world.get(e, 'health')?.hp ?? 0
+    }
+    return total
   }
 
   /** Place l'unique ouvrier prisonnier de la run (position seedée, à distance du centre). */
@@ -289,21 +312,39 @@ export class Simulation {
     }
     const pulses: AuraPulse[] = []
     const freed: Vec2[] = []
+    const fired: string[] = []
+    const collected: PickupKind[] = []
     this.runSpawns(dtMs)
     this.applyPlayerInputs()
-    weaponSystem(this.world, dtMs, pulses)
+    weaponSystem(this.world, dtMs, pulses, fired)
     enemyAiSystem(this.world)
     movementSystem(this.world, dtMs)
     worldBoundsSystem(this.world, WORLD)
     collisionSystem(this.world, dtMs)
-    this.score += reapDeadEnemies(this.world, this.lootRng)
-    pickupSystem(this.world, dtMs)
+    const killed = reapDeadEnemies(this.world, this.lootRng)
+    this.score += killed
+    pickupSystem(this.world, dtMs, collected)
     rescueSystem(this.world, freed)
     projectileLifetimeSystem(this.world, dtMs)
     this.updateWin() // boss vaincu → victoire (priorité sur la mort simultanée)
     this.updateGameOver()
     if (this.scene === 'game') {
       this.checkLevelUp()
+    }
+    // --- Événements sémantiques pour l'audio (observation pure, aucun effet sim) ---
+    const hpNow = this.totalPlayerHp()
+    if (hpNow < this.prevHpTotal - 0.001) {
+      this.events.dispatchEvent(new PlayerHurtEvent())
+    }
+    this.prevHpTotal = hpNow
+    if (killed > 0) {
+      this.events.dispatchEvent(new EnemyKilledEvent(killed))
+    }
+    for (const k of fired) {
+      this.events.dispatchEvent(new WeaponFiredEvent(k))
+    }
+    for (const c of collected) {
+      this.events.dispatchEvent(new PickupCollectedEvent(c))
     }
     for (const p of pulses) {
       this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius))
@@ -328,6 +369,7 @@ export class Simulation {
         continue
       }
       if (consumeLevelUp(progress)) {
+        this.events.dispatchEvent(new LevelUpEvent())
         this.pendingLevelUp = {
           playerId,
           choices: rollUpgradeChoices(this.rng, PROGRESSION.choices)
@@ -383,6 +425,7 @@ export class Simulation {
     if (def !== undefined) {
       spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2))
       this.bossEverSpawned = true
+      this.events.dispatchEvent(new BossSpawnedEvent())
     }
     this.miniBossSpawned = true
   }

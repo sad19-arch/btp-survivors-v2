@@ -31,5 +31,5 @@ test('l’écran de pause s’affiche', async ({ page }) => {
   await page.waitForFunction(() => window.__GAME__?.ready === true)
   await page.evaluate(() => window.__GAME__?.pause())
   await expect(page.locator('.panel__title')).toHaveText('Pause')
-  await expect(page.locator('.menu__item')).toHaveCount(3)
+  await expect(page.locator('.menu__item')).toHaveCount(4)
 })

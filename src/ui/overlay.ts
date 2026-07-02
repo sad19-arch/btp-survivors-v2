@@ -108,6 +108,9 @@ export class Overlay {
       case 'upgrade':
         this.screenLayer.append(this.upgradePanel(state))
         break
+      case 'options':
+        this.screenLayer.append(this.menuPanel('Options', 'Réglages audio', state))
+        break
       default:
         break // en jeu : pas de modale
     }
@@ -308,7 +311,9 @@ export class Overlay {
   /** Signature : ne reconstruit la modale que si l'écran/menu/focus change. */
   private computeSignature(state: AppViewState): string {
     const menu = state.menu
-    const menuPart = menu === null ? '' : `${menu.items.map((i) => i.id).join(',')}#${menu.index}`
+    // Inclut les LIBELLÉS (pas que les ids) → re-rend quand un % de volume ou le
+    // nom de phase du sélecteur change (mêmes ids, libellé différent).
+    const menuPart = menu === null ? '' : `${menu.items.map((i) => `${i.id}:${i.label}`).join(',')}#${menu.index}`
     const statsPart =
       state.screen === 'gameover' || state.screen === 'victory' ? `${state.elapsedMs}|${state.score}` : ''
     // Le déblocage du casque doré change le panneau titre → l'inclure dans la signature.

@@ -33,3 +33,49 @@ export class PrisonerFreedEvent extends Event {
     super('prisonerFreed')
   }
 }
+
+// --- Événements sémantiques pour l'AUDIO (observés par la couche audio) --------
+// Purement observationnels : dispatchés en fin de pas, ils N'ALTÈRENT PAS l'état
+// de la simulation (déterminisme préservé ; aucun écouteur en headless/tests).
+
+/** Un ou plusieurs ennemis sont morts ce pas (pour un SFX d'explosion). */
+export class EnemyKilledEvent extends Event {
+  constructor(readonly count: number) {
+    super('enemyKilled')
+  }
+}
+
+/** Un joueur a perdu des PV ce pas (pour un SFX de dégât). */
+export class PlayerHurtEvent extends Event {
+  constructor() {
+    super('playerHurt')
+  }
+}
+
+/** Un joueur vient de monter de niveau (carte d'upgrade proposée). */
+export class LevelUpEvent extends Event {
+  constructor() {
+    super('levelUp')
+  }
+}
+
+/** Une arme vient de tirer (kind = id de l'arme : cloueur, scie, marteau). */
+export class WeaponFiredEvent extends Event {
+  constructor(readonly kind: string) {
+    super('weaponFired')
+  }
+}
+
+/** Un pickup vient d'être ramassé (kind : xp, heal, magnet, chest). */
+export class PickupCollectedEvent extends Event {
+  constructor(readonly kind: string) {
+    super('pickupCollected')
+  }
+}
+
+/** Le boss vient d'apparaître (pour SFX + bascule musique). */
+export class BossSpawnedEvent extends Event {
+  constructor() {
+    super('bossSpawned')
+  }
+}

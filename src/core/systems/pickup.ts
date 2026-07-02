@@ -1,5 +1,5 @@
 import type { World } from '../world'
-import type { EntityId, PickupComp, Vec2 } from '../types'
+import type { EntityId, PickupComp, PickupKind, Vec2 } from '../types'
 import { HITBOX, PICKUP } from '@content/config'
 
 /**
@@ -8,7 +8,7 @@ import { HITBOX, PICKUP } from '@content/config'
  *
  * Pur et déterministe (pas d'aléa). Les pickups hors rayon restent immobiles.
  */
-export function pickupSystem(world: World, dtMs: number): void {
+export function pickupSystem(world: World, dtMs: number, collected?: PickupKind[]): void {
   const dt = dtMs / 1000
   const collectDist = HITBOX.player + PICKUP.collectRadius
 
@@ -30,6 +30,7 @@ export function pickupSystem(world: World, dtMs: number): void {
 
     if (dist <= collectDist) {
       applyPickup(world, target.entity, pickup)
+      collected?.push(pickup.type)
       world.despawn(gem)
       continue
     }
