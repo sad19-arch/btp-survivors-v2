@@ -46,7 +46,7 @@ describe('arme orbitale (scie)', () => {
     addPlayer(w, 'scie')
     weaponSystem(w, 16)
     const orbiters = [...w.query('orbiter')]
-    expect(orbiters.length).toBe(2)
+    expect(orbiters.length).toBe(3)
   })
 
   it('blesse un ennemi situé sur la trajectoire des lames', () => {
@@ -64,7 +64,7 @@ describe('arme orbitale (scie)', () => {
     const w = new World()
     const p = addPlayer(w, 'scie')
     weaponSystem(w, 16)
-    expect([...w.query('orbiter')].length).toBe(2)
+    expect([...w.query('orbiter')].length).toBe(3)
     const h = w.get(p, 'health')
     if (h !== undefined) {
       h.hp = 0

@@ -68,6 +68,6 @@ export function difficultyScaleAt(elapsedMs: number): DifficultyScale {
   return {
     hp: 0.7 + 0.28 * min, // 0:00→0,70 · 5:00→2,1 · 8:00→3,0
     contactDamage: 0.5 + 0.17 * min, // 0:00→0,50 · 5:00→1,35 · 8:00→1,86
-    speed: Math.min(1.2, 0.9 + 0.06 * min) // 0:00→0,9 (esquivable) · ≥5:00→1,2 (dépasse le joueur)
+    speed: Math.min(1.2, 1.0 + 0.04 * min) // 0:00→1,0 (fast>joueur colle déjà) · ≥5:00→1,2 (mur)
   }
 }

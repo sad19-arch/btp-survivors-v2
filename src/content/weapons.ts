@@ -51,10 +51,13 @@ export const WEAPONS: Record<string, WeaponDef> = {
     cooldownMs: 250, // cadence des dégâts
     damage: 4,
     range: 0,
-    orbitCount: 2,
-    orbitRadius: 72,
-    orbitSpeed: 3.2,
-    orbitHitRadius: 18
+    // Portée élargie : 3 lames sur un rayon 104 → couvre la zone où l'essaim colle
+    // désormais au joueur (fast ≈ vitesse joueur). Avant (2 lames, r72) elles
+    // balayaient le vide car les ennemis restaient à ~250 px.
+    orbitCount: 3,
+    orbitRadius: 104,
+    orbitSpeed: 3.6,
+    orbitHitRadius: 22
   },
   marteau: {
     id: 'marteau',
@@ -62,6 +65,6 @@ export const WEAPONS: Record<string, WeaponDef> = {
     kind: 'aura',
     cooldownMs: 900,
     damage: 10,
-    range: 120 // rayon de l'onde
+    range: 175 // rayon de l'onde (120→175 : atteint l'essaim rapproché)
   }
 }
