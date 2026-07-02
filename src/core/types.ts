@@ -5,6 +5,8 @@
  *   origine en haut-gauche, +x vers la droite, +y vers le bas.
  */
 
+import type { PlayerStats } from '@content/passives'
+
 export type EntityId = number
 
 export interface Vec2 {
@@ -51,7 +53,7 @@ export interface EnemyComp {
 }
 
 /** Types de pickups ramassables. */
-export type PickupKind = 'xp' | 'heal' | 'magnet' | 'chest'
+export type PickupKind = 'xp' | 'heal' | 'magnet' | 'chest' | 'coffre'
 
 /** Un pickup ramassable au sol (gemme d'XP, soin, aimant, coffre). */
 export interface PickupComp {
@@ -85,15 +87,27 @@ export interface PrisonerComp {
   freed: boolean
 }
 
-/** Une arme équipée et son cooldown courant. */
+/** Une arme équipée, son niveau et son cooldown courant. */
 export interface WeaponSlot {
   id: string
+  level: number
   cooldownLeftMs: number
 }
 
 /** L'arsenal d'une entité (joueur). */
 export interface WeaponLoadout {
   slots: WeaponSlot[]
+}
+
+/** Un passif possédé et son niveau. */
+export interface PassiveSlot {
+  id: string
+  level: number
+}
+
+/** Les passifs possédés par une entité (joueur). */
+export interface PassiveLoadout {
+  list: PassiveSlot[]
 }
 
 /**
@@ -112,6 +126,9 @@ export interface Components {
   orbiter: OrbiterComp
   weapons: WeaponLoadout
   prisoner: PrisonerComp
+  passives: PassiveLoadout
+  /** Stats dérivées des passifs possédés (recalculées par `recomputePlayerStats`). */
+  stats: PlayerStats
 }
 
 export type ComponentKey = keyof Components
@@ -145,6 +162,8 @@ export interface PlayerState {
   nextThreshold: number
   alive: boolean
   weapons: string[]
+  weaponLevels: number[]
+  passives: { id: string; level: number }[]
 }
 
 export interface EnemyState {

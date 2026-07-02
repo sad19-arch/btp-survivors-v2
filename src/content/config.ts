@@ -74,6 +74,9 @@ export const HITBOX = {
 /** Armes de départ du joueur (slice 1). */
 export const STARTING_WEAPONS: readonly string[] = ['cloueur']
 
+/** Capacité d'inventaire du joueur (armes / passifs simultanés). */
+export const INVENTORY = { weapons: 6, passives: 6 } as const
+
 /**
  * Paramètres de spawn (géométrie & perf). La cadence et la quantité d'ennemis
  * dans le temps vivent dans `spawnRamp.ts` (rampe data-driven) ; le mini-boss
