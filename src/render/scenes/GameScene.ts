@@ -75,6 +75,10 @@ export class GameScene extends Phaser.Scene {
   private testMode = false
   private seam: GameSeam | null = null
   private lite = false
+  /** Données d'init conservées pour relancer la scène (changement de stage). */
+  private sceneData!: GameSceneData
+  /** stageId dont les assets sont actuellement chargés (pour détecter un changement). */
+  private loadedStageId = ''
   /** Config de rendu du stage courant (sol/décalques/props/skins d'ennemis). */
   private stage!: StageRender
   private keyboardInput: KeyboardInput | null = null
@@ -86,6 +90,10 @@ export class GameScene extends Phaser.Scene {
   private readonly pickupSprites = new Map<number, CharSprite>()
   /** Dernier niveau connu par joueur (détection de montée de niveau → VFX). */
   private readonly prevLevel = new Map<number, number>()
+  /** Derniers PV connus par joueur (détection de dégât → flash rouge). */
+  private readonly prevHp = new Map<number, number>()
+  /** Instant (this.time.now) jusqu'auquel le sprite joueur reste teinté « touché ». */
+  private readonly damageFlashUntil = new Map<number, number>()
   /** Skin doré (code Konami), rafraîchi depuis l'état à chaque frame. */
   private goldSkin = false
   /** Dernier instant de mouvement par joueur (pour l'animation d'attente impatiente). */
@@ -118,7 +126,9 @@ export class GameScene extends Phaser.Scene {
     this.testMode = data.testMode
     this.seam = data.seam
     this.lite = data.lite ?? false
-    this.stage = stageRender(this.app.getState().stageId)
+    this.sceneData = data
+    this.loadedStageId = this.app.getState().stageId
+    this.stage = stageRender(this.loadedStageId)
   }
 
   preload(): void {
@@ -265,7 +275,26 @@ export class GameScene extends Phaser.Scene {
     return this.goldSkin && this.textures.exists('player_idle_gold') ? 'player_idle_gold' : 'player_idle'
   }
 
+  /** Réinitialise l'état par-run (indispensable car `scene.restart` réutilise l'instance). */
+  private resetRunState(): void {
+    this.playerSprites.clear()
+    this.enemySprites.clear()
+    this.projectileSprites.clear()
+    this.pickupSprites.clear()
+    this.prisonerCages.clear()
+    this.prisonerWorkers.clear()
+    this.prevLevel.clear()
+    this.prevHp.clear()
+    this.damageFlashUntil.clear()
+    this.lastMoveMs.clear()
+    this.following = false
+    this.introStartMs = -1
+    this.introDone = false
+  }
+
   create(): void {
+    // Les objets d'affichage sont détruits au shutdown : on repart de maps vides.
+    this.resetRunState()
     // Sol : base tuilée seedée + décalques épars (rendu pur, aucune logique).
     const seed = this.app.getState().seed
     createGround(
@@ -314,6 +343,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    // Changement de stage (partie lancée sur une autre phase que celle chargée) :
+    // on relance la scène pour recharger sol/props/skins du bon stage.
+    const st = this.app.getState()
+    if (st.screen !== 'title' && st.stageId !== this.loadedStageId) {
+      this.scene.restart(this.sceneData)
+      return
+    }
     if (!this.testMode) {
       routeInput(this.app, this.readInput())
       this.app.advanceTime(Math.min(delta, MAX_FRAME_MS))
@@ -391,6 +427,19 @@ export class GameScene extends Phaser.Scene {
         this.spawnVfx('vfx_levelup', p.x, p.y, 0.4, 2, 500)
       }
       this.prevLevel.set(p.id, p.level)
+      // Retour visuel de dégât : teinte rouge tant que les PV baissent.
+      const prevHp = this.prevHp.get(p.id)
+      if (prevHp !== undefined && p.hp < prevHp - 0.01 && p.alive) {
+        this.damageFlashUntil.set(p.id, this.time.now + 140)
+      }
+      this.prevHp.set(p.id, p.hp)
+      if (sprite instanceof Phaser.GameObjects.Sprite) {
+        if (this.time.now < (this.damageFlashUntil.get(p.id) ?? 0)) {
+          sprite.setTint(0xff5a5a)
+        } else {
+          sprite.clearTint()
+        }
+      }
     }
 
     // Fin d'intro : flourish d'étincelles une fois, puis le suivi caméra reprend.
@@ -549,9 +598,11 @@ export class GameScene extends Phaser.Scene {
     sprite.setFrame(moving ? walkFrame(row, this.time.now) : idleFrame(row))
   }
 
-  /** Dessine l'ouvrier prisonnier (cage + sosie barbu) ; la cage disparaît une fois libéré. */
+  /** Dessine l'ouvrier prisonnier (cage + sosie barbu) ; libéré → il court hors écran. */
   private syncPrisoners(prisoners: readonly PrisonerState[]): void {
+    const seen = new Set<number>()
     for (const pr of prisoners) {
+      seen.add(pr.id)
       let worker = this.prisonerWorkers.get(pr.id)
       if (worker === undefined) {
         worker = this.textures.exists('prisoner')
@@ -561,19 +612,32 @@ export class GameScene extends Phaser.Scene {
         this.prisonerWorkers.set(pr.id, worker)
       }
 
-      // Cage devant l'ouvrier (barreaux) tant qu'il n'est pas libéré.
+      // Cage assez grande pour enfermer l'ouvrier (~96 px), barreaux devant.
       let cage = this.prisonerCages.get(pr.id)
       if (cage === undefined) {
         cage = this.textures.exists('cage')
-          ? this.add.image(pr.x, pr.y, 'cage').setScale(0.5)
-          : this.add.circle(pr.x, pr.y, 22, 0x8a8a8a, 0).setStrokeStyle(3, 0x8a8a8a)
+          ? this.add.image(pr.x, pr.y, 'cage').setScale(1.2)
+          : this.add.circle(pr.x, pr.y, 30, 0x8a8a8a, 0).setStrokeStyle(3, 0x8a8a8a)
         cage.setDepth(3)
         this.prisonerCages.set(pr.id, cage)
       }
       cage.setVisible(!pr.freed)
       worker.setPosition(pr.x, pr.y)
       if (worker instanceof Phaser.GameObjects.Sprite) {
-        worker.setFrame(idleFrame(0))
+        // Libéré → animation de marche (il s'enfuit vers le bas) ; sinon immobile en cage.
+        worker.setFrame(pr.freed ? walkFrame(0, this.time.now) : idleFrame(0))
+      }
+    }
+    // Prisonnier disparu (libéré sorti du monde → despawn) : on nettoie ses sprites.
+    for (const [id, worker] of this.prisonerWorkers) {
+      if (!seen.has(id)) {
+        worker.destroy()
+        this.prisonerWorkers.delete(id)
+        const cage = this.prisonerCages.get(id)
+        if (cage !== undefined) {
+          cage.destroy()
+          this.prisonerCages.delete(id)
+        }
       }
     }
   }

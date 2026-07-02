@@ -138,8 +138,24 @@ export class App {
     if (this.menuItems().length === 0) {
       return
     }
-    const delta = dir === 'up' || dir === 'left' ? -1 : 1
+    // Sélecteur de niveau au titre : gauche/droite changent la phase (pas le focus).
+    if (this.screen === 'title' && this.focus.current() === 'stage' && (dir === 'left' || dir === 'right')) {
+      this.cycleStage(dir === 'right' ? 1 : -1)
+      return
+    }
+    const delta = dir === 'up' ? -1 : dir === 'down' ? 1 : dir === 'left' ? -1 : 1
     this.focus.move(delta)
+  }
+
+  /** Sélectionne+valide un item par index (clic souris) — passe par le focus + `activate`. */
+  clickItem(index: number): void {
+    this.refreshFocus()
+    const items = this.menuItems()
+    if (items[index] === undefined) {
+      return
+    }
+    this.focus.setIndex(index)
+    this.activate(this.screen, items[index].id)
   }
 
   /** Valide l'item focalisé du menu actif. */
@@ -266,6 +282,9 @@ export class App {
     if (st.scene === 'gameover') {
       return 'gameover'
     }
+    if (st.scene === 'won') {
+      return 'victory'
+    }
     if (st.scene === 'paused') {
       return 'paused'
     }
@@ -284,6 +303,8 @@ export class App {
         return PAUSE_ITEMS
       case 'gameover':
         return GAMEOVER_ITEMS
+      case 'victory':
+        return this.victoryItems()
       case 'upgrade':
         return this.upgradeItems()
       default:
@@ -291,21 +312,35 @@ export class App {
     }
   }
 
-  /** Items du titre : Jouer, sélecteur de niveau (cyclable), Options, Crédits. */
+  /** Écran de victoire : passer au stage suivant (sauf dernier) ou revenir au titre. */
+  private victoryItems(): MenuItemView[] {
+    const i = ORDERED_PHASES.findIndex((p) => p.id === this.selectedPhase)
+    const hasNext = i >= 0 && i < ORDERED_PHASES.length - 1
+    const items: MenuItemView[] = []
+    if (hasNext) {
+      items.push({ id: 'stage_suivant', label: 'Stage suivant', hint: null })
+    }
+    items.push({ id: 'titre', label: 'Menu titre', hint: null })
+    return items
+  }
+
+  /** Items du titre : Jouer, sélecteur de niveau (◄/►), Options, Crédits. */
   private titleItems(): MenuItemView[] {
     const phase = ORDERED_PHASES.find((p) => p.id === this.selectedPhase)
     return [
       { id: 'jouer', label: 'Jouer', hint: null },
-      { id: 'stage', label: `Niveau : ${phase?.title ?? '—'}`, hint: 'Valider pour changer' },
+      { id: 'stage', label: `◄ Niveau ${phase?.order ?? 1}/10 : ${phase?.title ?? '—'} ►`, hint: 'Gauche/Droite pour changer' },
       { id: 'options', label: 'Options', hint: null },
       { id: 'credits', label: 'Crédits', hint: null }
     ]
   }
 
-  /** Passe à la phase suivante (cycle) — pour le sélecteur de niveau du titre. */
-  private cycleStage(): void {
+  /** Décale la phase sélectionnée de `step` (cycle) — sélecteur de niveau du titre. */
+  private cycleStage(step = 1): void {
+    const n = ORDERED_PHASES.length
     const i = ORDERED_PHASES.findIndex((p) => p.id === this.selectedPhase)
-    this.selectedPhase = ORDERED_PHASES[(i + 1) % ORDERED_PHASES.length]?.id ?? this.selectedPhase
+    const next = (((i + step) % n) + n) % n
+    this.selectedPhase = ORDERED_PHASES[next]?.id ?? this.selectedPhase
     this.refreshFocus()
   }
 
@@ -359,6 +394,20 @@ export class App {
     if (screen === 'gameover') {
       if (id === 'recommencer') {
         this.restart()
+      } else if (id === 'titre') {
+        this.started = false
+      }
+      this.refreshFocus()
+      return
+    }
+    if (screen === 'victory') {
+      if (id === 'stage_suivant') {
+        const i = ORDERED_PHASES.findIndex((p) => p.id === this.selectedPhase)
+        const next = ORDERED_PHASES[i + 1]
+        if (next !== undefined) {
+          this.selectedPhase = next.id
+        }
+        this.start(this.mode)
       } else if (id === 'titre') {
         this.started = false
       }

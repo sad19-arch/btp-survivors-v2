@@ -8,7 +8,7 @@ export interface HProps {
   dataset?: Record<string, string>
   /** Attributs bruts (ex. `src`, `alt` pour une img). Valeurs contrôlées, pas de données utilisateur. */
   attrs?: Record<string, string>
-  onClick?: () => void
+  onClick?: (() => void) | undefined
 }
 
 type Child = Node | string

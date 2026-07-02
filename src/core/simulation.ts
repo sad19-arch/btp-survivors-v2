@@ -15,7 +15,7 @@ import { projectileLifetimeSystem } from './systems/projectile'
 import { consumeLevelUp, initialProgress } from './systems/leveling'
 import { allPlayersDead } from './systems/gameRules'
 import { MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
-import { SPAWN_RAMP, spawnParamsAt } from '@content/spawnRamp'
+import { SPAWN_RAMP, spawnParamsAt, difficultyScaleAt } from '@content/spawnRamp'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
 import { ENEMIES, MINI_BOSS_ID } from '@content/enemies'
 import { UPGRADES, rollUpgradeChoices } from '@content/upgrades'
@@ -87,6 +87,8 @@ export class Simulation {
   private spawnAccMs = 0
   private score = 0
   private miniBossSpawned = false
+  /** Vrai une fois le boss RÉELLEMENT apparu (garde-fou anti faux-positif de victoire). */
+  private bossEverSpawned = false
   private pendingLevelUp: PendingLevelUp | null = null
   private readonly inputs = new Map<number, PlayerInput>()
   private readonly playerEntities = new Map<number, EntityId>()
@@ -232,6 +234,7 @@ export class Simulation {
     this.spawnAccMs = 0
     this.score = 0
     this.miniBossSpawned = false
+    this.bossEverSpawned = false
     this.pendingLevelUp = null
     this.inputs.clear()
     this.playerEntities.clear()
@@ -297,6 +300,7 @@ export class Simulation {
     pickupSystem(this.world, dtMs)
     rescueSystem(this.world, freed)
     projectileLifetimeSystem(this.world, dtMs)
+    this.updateWin() // boss vaincu → victoire (priorité sur la mort simultanée)
     this.updateGameOver()
     if (this.scene === 'game') {
       this.checkLevelUp()
@@ -333,8 +337,25 @@ export class Simulation {
     }
   }
 
+  /** Victoire : le boss de fin a été invoqué puis vaincu (plus aucun boss vivant). */
+  private updateWin(): void {
+    if (this.scene === 'game' && this.bossEverSpawned && !this.anyBossAlive()) {
+      this.scene = 'won'
+      this.events.dispatchEvent(new Event('win'))
+    }
+  }
+
+  private anyBossAlive(): boolean {
+    for (const e of this.world.query('enemy')) {
+      if (this.world.get(e, 'enemy')?.isBoss === true) {
+        return true
+      }
+    }
+    return false
+  }
+
   private updateGameOver(): void {
-    if (allPlayersDead(this.world)) {
+    if (this.scene === 'game' && allPlayersDead(this.world)) {
       this.scene = 'gameover'
       this.events.dispatchEvent(new Event('gameOver'))
     }
@@ -344,10 +365,11 @@ export class Simulation {
     this.maybeSpawnMiniBoss()
     this.spawnAccMs += dtMs
     const { intervalMs, countPerWave } = spawnParamsAt(SPAWN_RAMP, this.elapsedMs)
+    const scale = difficultyScaleAt(this.elapsedMs)
     while (this.spawnAccMs >= intervalMs) {
       this.spawnAccMs -= intervalMs
       if (this.countEnemies() < SPAWN.maxActive) {
-        spawnWave(this.world, this.rng, this.phase, this.playersCentroid(), countPerWave)
+        spawnWave(this.world, this.rng, this.phase, this.playersCentroid(), countPerWave, scale)
       }
     }
   }
@@ -360,6 +382,7 @@ export class Simulation {
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
       spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2))
+      this.bossEverSpawned = true
     }
     this.miniBossSpawned = true
   }

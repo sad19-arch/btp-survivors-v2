@@ -55,7 +55,8 @@ game.scene.add('game', GameScene, true, data)
 // Overlay DOM des écrans (HUD, menus) — observe l'état de l'App à chaque frame.
 const uiRoot = document.getElementById('ui-root')
 if (uiRoot !== null) {
-  const overlay = new Overlay(uiRoot)
+  // Clic souris sur un item de menu → sélection+validation via l'App.
+  const overlay = new Overlay(uiRoot, (i) => app.clickItem(i))
   const tick = (): void => {
     overlay.sync(app.getState())
     window.requestAnimationFrame(tick)

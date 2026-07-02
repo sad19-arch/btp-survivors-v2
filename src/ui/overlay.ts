@@ -21,9 +21,12 @@ export class Overlay {
   private bannerTimer: number | null = null
   /** Carton d'intro affiché (évite de le reconstruire chaque frame). */
   private introShown = false
+  /** Callback de sélection d'un item par index (clic souris) ; route vers l'App. */
+  private readonly onSelect: ((index: number) => void) | undefined
 
-  constructor(root: HTMLElement) {
+  constructor(root: HTMLElement, onSelect?: (index: number) => void) {
     injectStyles()
+    this.onSelect = onSelect
     root.id = 'ui-root'
     this.hud = h('div', { className: 'hud' })
     this.screenLayer = h('div')
@@ -98,6 +101,9 @@ export class Overlay {
         break
       case 'gameover':
         this.screenLayer.append(this.gameOverPanel(state))
+        break
+      case 'victory':
+        this.screenLayer.append(this.victoryPanel(state))
         break
       case 'upgrade':
         this.screenLayer.append(this.upgradePanel(state))
@@ -211,12 +217,40 @@ export class Overlay {
     )
   }
 
+  private victoryPanel(state: AppViewState): HTMLElement {
+    const p = state.players[0]
+    const hasNext = (state.menu?.items ?? []).some((it) => it.id === 'stage_suivant')
+    const stats = h(
+      'div',
+      { className: 'stats' },
+      h('span', { text: `Chantier : ${state.stageTitle}` }),
+      h('span', { text: `Temps : ${formatTime(state.elapsedMs)}` }),
+      h('span', { text: `Niveau atteint : ${p?.level ?? 1}` }),
+      h('span', { text: `Score : ${state.score}` })
+    )
+    return h(
+      'div',
+      { className: 'screen' },
+      h(
+        'div',
+        { className: 'panel' },
+        h('h1', { className: 'panel__title', text: hasNext ? 'Chantier livré !' : 'Chantier terminé !' }),
+        h('p', {
+          className: 'panel__subtitle',
+          text: hasNext ? 'Direction le chantier suivant' : 'Bravo — tous les chantiers sont livrés'
+        }),
+        stats,
+        this.menuList(state)
+      )
+    )
+  }
+
   private upgradePanel(state: AppViewState): HTMLElement {
     const items = state.menu?.items ?? []
     const index = state.menu?.index ?? 0
     const cards = h('div', { className: 'cards' })
     items.forEach((item, i) => {
-      cards.append(this.card(item, i === index))
+      cards.append(this.card(item, i === index, i))
     })
     return h(
       'div',
@@ -232,10 +266,13 @@ export class Overlay {
     )
   }
 
-  private card(item: MenuItemView, focused: boolean): HTMLElement {
+  private card(item: MenuItemView, focused: boolean, index: number): HTMLElement {
     return h(
       'div',
-      { className: focused ? 'card card--focus' : 'card' },
+      {
+        className: focused ? 'card card--focus' : 'card',
+        onClick: this.onSelect === undefined ? undefined : () => { this.onSelect?.(index) }
+      },
       h('img', {
         className: 'card__icon',
         attrs: { src: `${import.meta.env.BASE_URL}stage01/ui/icon_${item.id}.png`, alt: '' }
@@ -258,7 +295,11 @@ export class Overlay {
     const index = state.menu?.index ?? 0
     items.forEach((item, i) => {
       list.append(
-        h('div', { className: i === index ? 'menu__item menu__item--focus' : 'menu__item', text: item.label })
+        h('div', {
+          className: i === index ? 'menu__item menu__item--focus' : 'menu__item',
+          text: item.label,
+          onClick: this.onSelect === undefined ? undefined : () => { this.onSelect?.(i) }
+        })
       )
     })
     return list
@@ -268,7 +309,8 @@ export class Overlay {
   private computeSignature(state: AppViewState): string {
     const menu = state.menu
     const menuPart = menu === null ? '' : `${menu.items.map((i) => i.id).join(',')}#${menu.index}`
-    const statsPart = state.screen === 'gameover' ? `${state.elapsedMs}|${state.score}` : ''
+    const statsPart =
+      state.screen === 'gameover' || state.screen === 'victory' ? `${state.elapsedMs}|${state.score}` : ''
     // Le déblocage du casque doré change le panneau titre → l'inclure dans la signature.
     const titlePart = state.screen === 'title' && state.goldSkin ? 'gold' : ''
     return `${state.screen}|${menuPart}|${statsPart}|${titlePart}`

@@ -119,7 +119,7 @@ export type ComponentKey = keyof Components
 // --- Modes & scènes -------------------------------------------------------
 
 export type GameMode = 'solo' | 'coop' | 'coop3' | 'coop4'
-export type SceneName = 'title' | 'game' | 'paused' | 'gameover'
+export type SceneName = 'title' | 'game' | 'paused' | 'gameover' | 'won'
 
 // --- Entrées joueur (injectées via le seam) -------------------------------
 

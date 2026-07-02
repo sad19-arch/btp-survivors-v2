@@ -36,6 +36,11 @@ export class FocusModel {
     return this.items[this.idx] ?? null
   }
 
+  /** Place le curseur sur un index précis (clic souris), borné à la liste. */
+  setIndex(index: number): void {
+    this.idx = this.clamp(index)
+  }
+
   /** Déplace le curseur de `delta` crans (avec bouclage). */
   move(delta: number): void {
     if (this.items.length === 0) {

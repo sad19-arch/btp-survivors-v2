@@ -18,61 +18,71 @@ export interface EnemyDef {
 }
 
 /**
- * Roster MVP (PRD) : 3 rôles lisibles.
- *  - `inspecteur` = petit rapide   (fast)
- *  - `paperasse`  = moyen standard (base)
- *  - `huissier`   = gros lent      (tank)
+ * Roster (PRD) : 3 rôles lisibles, STATS PARTAGÉES par archétype (source unique
+ * → tuning en un seul endroit ; les 24 re-skins de stage héritent des mêmes stats).
+ *
+ * Équilibrage « tendu mais gagnable » (refonte playtest) :
+ *  - `fast` va aussi vite que le joueur (200) → on ne peut plus tout distancer,
+ *    il faut louvoyer et on ENCAISSE ⇒ le kite gratuit est cassé.
+ *  - `base` moins lent qu'avant, `tank` moins escargot ; dégâts de contact revus
+ *    à la hausse (contact = vraie menace). Les stats montent aussi avec le temps
+ *    (voir `difficultyScaleAt` dans spawnRamp) → la fin de run devient un mur.
  */
+type EnemyStats = Omit<EnemyDef, 'id' | 'name'>
+const BASE: EnemyStats = { hp: 18, speed: 120, contactDamage: 6, archetype: 'base', xpValue: 5 }
+const FAST: EnemyStats = { hp: 11, speed: 175, contactDamage: 5, archetype: 'fast', xpValue: 4 }
+const TANK: EnemyStats = { hp: 60, speed: 88, contactDamage: 11, archetype: 'tank', xpValue: 12 }
+const mk = (id: string, name: string, stats: EnemyStats): EnemyDef => ({ id, name, ...stats })
+
 export const ENEMIES: Record<string, EnemyDef> = {
-  paperasse: { id: 'paperasse', name: 'Paperasse', hp: 12, speed: 90, contactDamage: 5, archetype: 'base', xpValue: 5 },
-  inspecteur: { id: 'inspecteur', name: 'Inspecteur', hp: 9, speed: 150, contactDamage: 4, archetype: 'fast', xpValue: 4 },
-  huissier: { id: 'huissier', name: 'Huissier', hp: 40, speed: 58, contactDamage: 8, archetype: 'tank', xpValue: 12 },
-  // Stage 02 (terrassement) — mêmes STATS que le stage 01 (équilibrage préservé),
-  // seul le thème/skin change. base/fast/tank ↔ paperasse/inspecteur/huissier.
-  boueux: { id: 'boueux', name: 'Boueux', hp: 12, speed: 90, contactDamage: 5, archetype: 'base', xpValue: 5 },
-  foreur: { id: 'foreur', name: 'Foreur', hp: 9, speed: 150, contactDamage: 4, archetype: 'fast', xpValue: 4 },
-  rocheux: { id: 'rocheux', name: 'Rocheux', hp: 40, speed: 58, contactDamage: 8, archetype: 'tank', xpValue: 12 },
-  // Stages 03-10 : re-skins par phase, STATS IDENTIQUES aux archétypes stage 01
-  // (base=paperasse, fast=inspecteur, tank=huissier) → équilibrage préservé.
+  // Stage 01 — terrain vierge
+  paperasse: mk('paperasse', 'Paperasse', BASE),
+  inspecteur: mk('inspecteur', 'Inspecteur', FAST),
+  huissier: mk('huissier', 'Huissier', TANK),
+  // 02 terrassement
+  boueux: mk('boueux', 'Boueux', BASE),
+  foreur: mk('foreur', 'Foreur', FAST),
+  rocheux: mk('rocheux', 'Rocheux', TANK),
   // 03 fondations
-  gachee: { id: 'gachee', name: 'Gâchée', hp: 12, speed: 90, contactDamage: 5, archetype: 'base', xpValue: 5 },
-  ferrailleur: { id: 'ferrailleur', name: 'Ferrailleur', hp: 9, speed: 150, contactDamage: 4, archetype: 'fast', xpValue: 4 },
-  massif: { id: 'massif', name: 'Massif', hp: 40, speed: 58, contactDamage: 8, archetype: 'tank', xpValue: 12 },
+  gachee: mk('gachee', 'Gâchée', BASE),
+  ferrailleur: mk('ferrailleur', 'Ferrailleur', FAST),
+  massif: mk('massif', 'Massif', TANK),
   // 04 réseaux enterrés
-  gaine: { id: 'gaine', name: 'Gaine', hp: 12, speed: 90, contactDamage: 5, archetype: 'base', xpValue: 5 },
-  fileur: { id: 'fileur', name: 'Fileur', hp: 9, speed: 150, contactDamage: 4, archetype: 'fast', xpValue: 4 },
-  collecteur: { id: 'collecteur', name: 'Collecteur', hp: 40, speed: 58, contactDamage: 8, archetype: 'tank', xpValue: 12 },
+  gaine: mk('gaine', 'Gaine', BASE),
+  fileur: mk('fileur', 'Fileur', FAST),
+  collecteur: mk('collecteur', 'Collecteur', TANK),
   // 05 gros œuvre
-  parpaing: { id: 'parpaing', name: 'Parpaing', hp: 12, speed: 90, contactDamage: 5, archetype: 'base', xpValue: 5 },
-  truelle: { id: 'truelle', name: 'Truelle', hp: 9, speed: 150, contactDamage: 4, archetype: 'fast', xpValue: 4 },
-  banche: { id: 'banche', name: 'Banche', hp: 40, speed: 58, contactDamage: 8, archetype: 'tank', xpValue: 12 },
+  parpaing: mk('parpaing', 'Parpaing', BASE),
+  truelle: mk('truelle', 'Truelle', FAST),
+  banche: mk('banche', 'Banche', TANK),
   // 06 échafaudages
-  boulon: { id: 'boulon', name: 'Boulon', hp: 12, speed: 90, contactDamage: 5, archetype: 'base', xpValue: 5 },
-  grimpeur: { id: 'grimpeur', name: 'Grimpeur', hp: 9, speed: 150, contactDamage: 4, archetype: 'fast', xpValue: 4 },
-  pylone: { id: 'pylone', name: 'Pylône', hp: 40, speed: 58, contactDamage: 8, archetype: 'tank', xpValue: 12 },
+  boulon: mk('boulon', 'Boulon', BASE),
+  grimpeur: mk('grimpeur', 'Grimpeur', FAST),
+  pylone: mk('pylone', 'Pylône', TANK),
   // 07 charpente / toiture
-  copeau: { id: 'copeau', name: 'Copeau', hp: 12, speed: 90, contactDamage: 5, archetype: 'base', xpValue: 5 },
-  chevron: { id: 'chevron', name: 'Chevron', hp: 9, speed: 150, contactDamage: 4, archetype: 'fast', xpValue: 4 },
-  poutre: { id: 'poutre', name: 'Poutre', hp: 40, speed: 58, contactDamage: 8, archetype: 'tank', xpValue: 12 },
+  copeau: mk('copeau', 'Copeau', BASE),
+  chevron: mk('chevron', 'Chevron', FAST),
+  poutre: mk('poutre', 'Poutre', TANK),
   // 08 second œuvre
-  platras: { id: 'platras', name: 'Plâtras', hp: 12, speed: 90, contactDamage: 5, archetype: 'base', xpValue: 5 },
-  gainard: { id: 'gainard', name: 'Gainard', hp: 9, speed: 150, contactDamage: 4, archetype: 'fast', xpValue: 4 },
-  cloison: { id: 'cloison', name: 'Cloison', hp: 40, speed: 58, contactDamage: 8, archetype: 'tank', xpValue: 12 },
+  platras: mk('platras', 'Plâtras', BASE),
+  gainard: mk('gainard', 'Gainard', FAST),
+  cloison: mk('cloison', 'Cloison', TANK),
   // 09 finitions
-  goutte: { id: 'goutte', name: 'Goutte', hp: 12, speed: 90, contactDamage: 5, archetype: 'base', xpValue: 5 },
-  pinceau: { id: 'pinceau', name: 'Pinceau', hp: 9, speed: 150, contactDamage: 4, archetype: 'fast', xpValue: 4 },
-  pot: { id: 'pot', name: 'Pot de peinture', hp: 40, speed: 58, contactDamage: 8, archetype: 'tank', xpValue: 12 },
+  goutte: mk('goutte', 'Goutte', BASE),
+  pinceau: mk('pinceau', 'Pinceau', FAST),
+  pot: mk('pot', 'Pot de peinture', TANK),
   // 10 livraison / audit
-  formulaire: { id: 'formulaire', name: 'Formulaire', hp: 12, speed: 90, contactDamage: 5, archetype: 'base', xpValue: 5 },
-  auditeur: { id: 'auditeur', name: 'Auditeur', hp: 9, speed: 150, contactDamage: 4, archetype: 'fast', xpValue: 4 },
-  commission: { id: 'commission', name: 'Commission', hp: 40, speed: 58, contactDamage: 8, archetype: 'tank', xpValue: 12 },
-  // Mini-boss (hors pool de vague — invoqué par le directeur temporel à 5:00).
+  formulaire: mk('formulaire', 'Formulaire', BASE),
+  auditeur: mk('auditeur', 'Auditeur', FAST),
+  commission: mk('commission', 'Commission', TANK),
+  // Boss de fin (invoqué par le directeur temporel ~5:00). Le vaincre = victoire.
+  // Non affecté par le scaling temporel (stats propres, tunées séparément).
   contremaitre: {
     id: 'contremaitre',
     name: 'Contremaître',
-    hp: 900, // tenace : force un vrai combat de plusieurs secondes au contact (climax)
-    speed: 215, // > vitesse joueur (200) : rattrape et reste au contact → dip HP fiable au climax 5:00 (mais tuable = gagnable)
-    contactDamage: 20,
+    hp: 900,
+    speed: 215, // > joueur (200) : rattrape et reste au contact → vrai combat de climax
+    contactDamage: 22,
     archetype: 'elite',
     xpValue: 80
   }

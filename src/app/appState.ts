@@ -1,7 +1,7 @@
 import type { GameState } from '@core/types'
 
 /** Écran applicatif courant (dérivé de l'état de la simulation). */
-export type Screen = 'title' | 'game' | 'paused' | 'upgrade' | 'gameover'
+export type Screen = 'title' | 'game' | 'paused' | 'upgrade' | 'gameover' | 'victory'
 
 /** Direction de navigation dans les menus. */
 export type NavDir = 'up' | 'down' | 'left' | 'right'

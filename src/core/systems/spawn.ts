@@ -6,6 +6,10 @@ import { phasePoolIds } from '@content/phases'
 import { ENEMIES } from '@content/enemies'
 import type { EnemyDef } from '@content/enemies'
 import { SPAWN } from '@content/config'
+import type { DifficultyScale } from '@content/spawnRamp'
+
+/** Aucun renforcement (boss / défaut). */
+const NO_SCALE: DifficultyScale = { hp: 1, contactDamage: 1, speed: 1 }
 
 /**
  * Fait apparaître une vague d'ennemis autour d'un centre, sur un anneau
@@ -17,7 +21,8 @@ export function spawnWave(
   rng: Rng,
   phase: ConstructionPhase,
   center: Vec2,
-  count: number
+  count: number,
+  scale: DifficultyScale = NO_SCALE
 ): void {
   const pool = phasePoolIds(phase)
   if (pool.length === 0) {
@@ -31,10 +36,16 @@ export function spawnWave(
       continue
     }
     const angle = rng.float(0, Math.PI * 2)
-    spawnEnemy(world, def, {
-      x: center.x + Math.cos(angle) * SPAWN.ringRadius,
-      y: center.y + Math.sin(angle) * SPAWN.ringRadius
-    })
+    spawnEnemy(
+      world,
+      def,
+      {
+        x: center.x + Math.cos(angle) * SPAWN.ringRadius,
+        y: center.y + Math.sin(angle) * SPAWN.ringRadius
+      },
+      false,
+      scale
+    )
   }
 }
 
@@ -51,18 +62,19 @@ export function spawnBoss(world: World, def: EnemyDef, center: Vec2, angle: numb
   )
 }
 
-/** Fabrique une entité ennemie à partir d'une définition de contenu. */
-function spawnEnemy(world: World, def: EnemyDef, pos: Vec2, isBoss = false): void {
+/** Fabrique une entité ennemie à partir d'une définition, avec renforcement temporel. */
+function spawnEnemy(world: World, def: EnemyDef, pos: Vec2, isBoss = false, scale: DifficultyScale = NO_SCALE): void {
+  const hp = Math.round(def.hp * scale.hp)
   const e = world.spawn()
   world.add(e, 'position', { x: pos.x, y: pos.y })
   world.add(e, 'velocity', { x: 0, y: 0 })
-  world.add(e, 'health', { hp: def.hp, maxHp: def.hp })
+  world.add(e, 'health', { hp, maxHp: hp })
   world.add(e, 'enemy', {
     type: def.id,
-    speed: def.speed,
+    speed: def.speed * scale.speed,
     isElite: def.archetype === 'elite',
     isBoss,
-    contactDamage: def.contactDamage,
+    contactDamage: def.contactDamage * scale.contactDamage,
     xpValue: def.xpValue
   })
 }

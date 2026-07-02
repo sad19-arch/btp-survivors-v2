@@ -80,8 +80,9 @@ export const STARTING_WEAPONS: readonly string[] = ['cloueur']
  * à 5:00 est géré par le directeur de spawn (`simulation.ts`).
  */
 export const SPAWN = {
-  /** Rayon d'apparition autour du centre des joueurs (hors écran). */
-  ringRadius: 700,
+  /** Rayon d'apparition autour du centre des joueurs (hors écran).
+   *  Resserré (700→560) pour laisser moins de temps de réaction et favoriser la nasse. */
+  ringRadius: 560,
   /** Plafond d'ennemis simultanés (perf). */
   maxActive: 200
 } as const
@@ -108,7 +109,9 @@ export const RESCUE = {
   heal: 40,
   /** Distance min/max du spawn au centre du monde (évite l'auto-libération au départ). */
   minDist: 360,
-  maxDist: 560
+  maxDist: 560,
+  /** Vitesse de fuite (px/s) de l'ouvrier libéré, qui part vers le bas hors écran. */
+  fleeSpeed: 260
 } as const
 
 /** Intro de run (micro-animation d'entrée du héros). Purement cosmétique. */
