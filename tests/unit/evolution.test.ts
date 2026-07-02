@@ -23,4 +23,19 @@ describe('tryEvolve', () => {
     const { w, e } = setup([{ id: 'cloueur', level: 7 }], [{ id: 'air_comprime', level: 1 }])
     expect(tryEvolve(w, e)).toBeNull()
   })
+  it('resets cooldownLeftMs on evolution', () => {
+    const w = new World()
+    const e = w.spawn()
+    // Set up a weapon slot with a nonzero cooldownLeftMs
+    w.add(e, 'weapons', { slots: [{ id: 'cloueur', level: 8, cooldownLeftMs: 500 }] })
+    w.add(e, 'passives', { list: [{ id: 'air_comprime', level: 1 }] })
+
+    expect(tryEvolve(w, e)).toBe('mitrailleuse_clous')
+    const weapons = w.get(e, 'weapons')
+    expect(weapons?.slots[0]).toEqual({
+      id: 'mitrailleuse_clous',
+      level: 1,
+      cooldownLeftMs: 0
+    })
+  })
 })
