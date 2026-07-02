@@ -18,7 +18,7 @@ function addProjectile(w: World, x: number, y: number, damage: number, lifeMs = 
   const e = w.spawn()
   w.add(e, 'position', { x, y })
   w.add(e, 'velocity', { x: 0, y: 0 })
-  w.add(e, 'projectile', { type: 'cloueur', damage, ownerId: 1, lifeMs, radius: 6 })
+  w.add(e, 'projectile', { type: 'cloueur', damage, ownerId: 1, lifeMs, radius: 6, pierce: 0 })
   return e
 }
 

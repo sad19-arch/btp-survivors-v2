@@ -25,9 +25,16 @@ export interface PlayerComp {
   playerId: number
   speed: number // px/seconde
   vigilance: number
-  /** Multiplicateur de dégâts des armes (modifié par les upgrades). */
+  /**
+   * Multiplicateur de dégâts des armes. RÉSERVÉ/INUTILISÉ actuellement : le
+   * système d'armes (`weaponSystem`/`effectiveWeaponStats`) lit `stats` (agrégé
+   * des passifs), pas ce champ. Conservé pour éviter du churn ; pas de logique lue.
+   */
   damageMult: number
-  /** Multiplicateur de cooldown des armes (<1 = tire plus vite). */
+  /**
+   * Multiplicateur de cooldown des armes (<1 = tire plus vite). RÉSERVÉ/INUTILISÉ
+   * actuellement, pour la même raison que `damageMult` ci-dessus.
+   */
   cooldownMult: number
   /** Rayon d'aimantation des pickups, en px. */
   pickupRadius: number
@@ -70,6 +77,8 @@ export interface ProjectileComp {
   /** Durée de vie restante, en ms. */
   lifeMs: number
   radius: number
+  /** Nombre d'ennemis SUPPLÉMENTAIRES que le projectile peut encore traverser après un impact (0 = despawn au 1er impact). */
+  pierce: number
 }
 
 /** Une lame en orbite autour d'un joueur (arme « scie »). */

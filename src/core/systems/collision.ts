@@ -3,7 +3,8 @@ import { HITBOX } from '@content/config'
 
 /**
  * Collisions du combat (dégâts uniquement — la mort est récoltée par `reapDeadEnemies`) :
- *  - projectile ↔ ennemi : inflige les dégâts puis consomme le projectile.
+ *  - projectile ↔ ennemi : inflige les dégâts puis consomme le projectile, sauf perforation
+ *    (`pierce > 0`) qui laisse le projectile continuer sa route vers d'autres ennemis.
  *  - ennemi ↔ joueur : dégâts de contact continus (proportionnels au temps).
  */
 export function collisionSystem(world: World, dtMs: number): void {
@@ -24,8 +25,14 @@ export function collisionSystem(world: World, dtMs: number): void {
       const reach = proj.radius + HITBOX.enemy
       if ((epos.x - ppos.x) ** 2 + (epos.y - ppos.y) ** 2 <= reach * reach) {
         eh.hp -= proj.damage
-        deadProjectiles.add(p)
-        break // projectile consommé (pas de perforation en slice 1)
+        // Un seul ennemi touché par ce projectile CE pas (break) : l'ennemi visé ici
+        // ne peut pas être re-touché par le même projectile dans cette même itération.
+        if (proj.pierce > 0) {
+          proj.pierce -= 1 // perfore : le projectile continue, sera réévalué au pas suivant
+        } else {
+          deadProjectiles.add(p) // perforation épuisée (ou nulle) : projectile consommé
+        }
+        break
       }
     }
   }

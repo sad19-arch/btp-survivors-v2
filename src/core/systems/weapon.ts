@@ -153,7 +153,8 @@ function fireProjectiles(
       damage: eff.damage,
       ownerId,
       lifeMs: life,
-      radius: HITBOX.projectile
+      radius: HITBOX.projectile,
+      pierce: eff.pierce
     })
   }
 }
