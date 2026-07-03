@@ -69,4 +69,38 @@ describe('Simulation (façade / seam de test)', () => {
     const sim = new Simulation({ seed: 1, mode: 'solo' })
     expect(sim.events).toBeInstanceOf(EventTarget)
   })
+
+  describe('arme de départ par personnage (Persos-B T2)', () => {
+    it('sans `characters` : tous les joueurs = ouvrier + cloueur (défaut inchangé)', () => {
+      const sim = new Simulation({ seed: 1, mode: 'solo' })
+      const p0 = sim.getState().players[0]
+      expect(p0?.characterId).toBe('ouvrier')
+      expect(p0?.weapons).toContain('cloueur')
+    })
+
+    it('coop avec `characters` : chaque joueur démarre avec SON arme de personnage', () => {
+      const sim = new Simulation({ seed: 1, mode: 'coop', characters: ['soudeur', 'electricien'] })
+      const [p1, p2] = sim.getState().players
+      expect(p1?.characterId).toBe('soudeur')
+      expect(p1?.weapons).toContain('scie')
+      expect(p2?.characterId).toBe('electricien')
+      expect(p2?.weapons).toContain('court_circuit')
+    })
+
+    it('id de personnage inconnu ⇒ fallback ouvrier/cloueur', () => {
+      const sim = new Simulation({ seed: 1, mode: 'solo', characters: ['inconnu-xyz'] })
+      const p0 = sim.getState().players[0]
+      expect(p0?.characterId).toBe('ouvrier')
+      expect(p0?.weapons).toContain('cloueur')
+    })
+
+    it('`characters` plus court que le nombre de joueurs ⇒ les manquants = défaut', () => {
+      const sim = new Simulation({ seed: 1, mode: 'coop', characters: ['macon'] })
+      const [p1, p2] = sim.getState().players
+      expect(p1?.characterId).toBe('macon')
+      expect(p1?.weapons).toContain('marteau')
+      expect(p2?.characterId).toBe('ouvrier')
+      expect(p2?.weapons).toContain('cloueur')
+    })
+  })
 })

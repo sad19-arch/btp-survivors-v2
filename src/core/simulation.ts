@@ -31,10 +31,11 @@ import { allPlayersDead } from './systems/gameRules'
 import { recomputePlayerStats } from './systems/playerStats'
 import { rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
-import { coopHpFactor, FINAL_BOSS, MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, STARTING_WEAPONS, TETHER, WORLD } from '@content/config'
+import { coopHpFactor, FINAL_BOSS, MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
 import { SPAWN_RAMP, spawnParamsAt, difficultyScaleAt } from '@content/spawnRamp'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
 import { ENEMIES, MINI_BOSS_ID } from '@content/enemies'
+import { characterDef, DEFAULT_CHARACTER_ID } from '@content/characters'
 import type { ConstructionPhase } from '@content/phases'
 import type {
   EnemyState,
@@ -56,6 +57,12 @@ export interface SimOptions {
   mode: GameMode
   /** Phase/stage du chantier (défaut : terrain vierge). */
   phaseId?: ConstructionPhaseId | undefined
+  /**
+   * Id de personnage par joueur (index = playerId-1). Détermine l'arme de
+   * départ (et plus tard le skin). Absent/index manquant ⇒ `DEFAULT_CHARACTER_ID`
+   * (ouvrier + cloueur) — comportement solo/défaut inchangé.
+   */
+  characters?: readonly string[] | undefined
 }
 
 const COORD_SYSTEM = 'origin top-left, +x right, +y down'
@@ -97,6 +104,8 @@ export class Simulation {
   private prisonerRng: Rng
   private readonly phaseId: ConstructionPhaseId
   private phase: ConstructionPhase
+  /** Id de personnage par joueur (index = playerId-1), résolu au spawn. */
+  private readonly characters: readonly string[]
   private currentSeed: number
   private scene: GameState['scene'] = 'game'
   private elapsedMs = 0
@@ -129,6 +138,7 @@ export class Simulation {
     this.prisonerRng = new Rng((opts.seed ^ 0x2b1d) | 0)
     this.phaseId = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
     this.phase = resolvePhase(this.phaseId)
+    this.characters = opts.characters ?? []
     this.reset(opts.seed)
   }
 
@@ -436,6 +446,8 @@ export class Simulation {
     const cy = WORLD.height / 2
     for (let i = 0; i < count; i++) {
       const id = i + 1
+      const charId = this.characters[i] ?? DEFAULT_CHARACTER_ID
+      const char = characterDef(charId)
       const e = this.world.spawn()
       this.world.add(e, 'position', { x: cx + i * 40, y: cy }) // formation en ligne
       this.world.add(e, 'velocity', { x: 0, y: 0 })
@@ -446,11 +458,12 @@ export class Simulation {
         vigilance: PLAYER_BASE.vigilance,
         damageMult: 1,
         cooldownMult: 1,
-        pickupRadius: PLAYER_BASE.pickupRadius
+        pickupRadius: PLAYER_BASE.pickupRadius,
+        characterId: char.id
       })
       this.world.add(e, 'progress', initialProgress())
       this.world.add(e, 'weapons', {
-        slots: STARTING_WEAPONS.map((wid) => ({ id: wid, level: 1, cooldownLeftMs: 0 }))
+        slots: [{ id: char.startingWeapon, level: 1, cooldownLeftMs: 0 }]
       })
       this.world.add(e, 'passives', { list: [] })
       recomputePlayerStats(this.world, e)
@@ -710,6 +723,7 @@ export class Simulation {
         alive: health.hp > 0,
         downed: health.hp <= 0,
         reviveProgress: revive?.progress ?? 0,
+        characterId: player.characterId ?? DEFAULT_CHARACTER_ID,
         weapons: loadout === undefined ? [] : loadout.slots.map((s) => s.id),
         weaponLevels: loadout === undefined ? [] : loadout.slots.map((s) => s.level),
         passives: passives === undefined ? [] : passives.list.map((p) => ({ id: p.id, level: p.level }))

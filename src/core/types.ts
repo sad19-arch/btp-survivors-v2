@@ -38,6 +38,13 @@ export interface PlayerComp {
   cooldownMult: number
   /** Rayon d'aimantation des pickups, en px. */
   pickupRadius: number
+  /**
+   * Id du personnage jouable (`@content/characters`), déterminant l'arme de
+   * départ et (plus tard) le skin. Optionnel pour ne pas casser les fixtures
+   * de test existantes qui construisent un `PlayerComp` littéral sans ce
+   * champ ; absent ⇒ traité comme `DEFAULT_CHARACTER_ID` par `collectPlayers`.
+   */
+  characterId?: string
 }
 
 /** Progression d'un joueur (XP / niveau). Par joueur → prêt-N-joueurs. */
@@ -189,6 +196,8 @@ export interface PlayerState {
   downed: boolean
   /** Progrès de relève courant [0,1] (0 si pas à terre ou pas en cours de relève). */
   reviveProgress: number
+  /** Id du personnage jouable (`@content/characters`). Additif. */
+  characterId: string
   weapons: string[]
   weaponLevels: number[]
   passives: { id: string; level: number }[]
