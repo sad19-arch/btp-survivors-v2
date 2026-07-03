@@ -14,6 +14,7 @@ import { SpritePool } from '@render/spritePool'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { PlayerState, PrisonerState } from '@core/types'
 import { PALETTE_HEX } from '@ui/palette'
+import { playerColor } from '@content/players'
 
 /** Feuille PARTAGÉE (tous stages) : le joueur. Ennemis ET boss sont PAR STAGE (voir stages.ts). */
 const SHARED_SHEETS: ReadonlyArray<readonly [string, string, number]> = [['player', 'player_j1.png', 192]]
@@ -84,6 +85,13 @@ export class GameScene extends Phaser.Scene {
   private gamepads: GamepadInput[] = []
   private following = false
   private readonly playerSprites = new Map<number, CharSprite>()
+  /**
+   * Anneau coloré au sol sous chaque joueur (identité co-op, T3/CO-2). Un seul
+   * Graphics persistant, effacé/redessiné chaque frame — pas d'objet par joueur
+   * à fuir, pas de pooling nécessaire (≤4 ellipses). Masqué en solo (aucun
+   * changement visuel quand `players.length===1`).
+   */
+  private playerRings!: Phaser.GameObjects.Graphics
   private readonly enemySprites = new Map<number, CharSprite>()
   private readonly projectileSprites = new Map<number, CharSprite>()
   private readonly pickupSprites = new Map<number, CharSprite>()
@@ -473,6 +481,11 @@ export class GameScene extends Phaser.Scene {
       .rectangle(WORLD.width / 2, WORLD.height / 2, WORLD.width, WORLD.height)
       .setStrokeStyle(4, 0xf5c542)
 
+    // Anneaux couleur des joueurs (co-op) : au-dessus du sol/props (depth -10..1),
+    // sous les sprites de personnages (depth par défaut 0... en pratique dessiné
+    // avant eux dans l'ordre de création, mais on force -1 pour être sûr avec le pool).
+    this.playerRings = this.add.graphics().setDepth(-1)
+
     this.cameras.main.setBounds(0, 0, WORLD.width, WORLD.height)
     this.cameras.main.setZoom(1.2)
 
@@ -538,6 +551,24 @@ export class GameScene extends Phaser.Scene {
     return buildPlayerInputs(kb, pads, playerCount)
   }
 
+  /**
+   * Dessine le « beacon » coloré au sol sous les pieds d'un joueur (co-op
+   * uniquement) : ellipse remplie basse-opacité + liseré plus vif pour la
+   * lisibilité, teinté avec la couleur du joueur (`@content/players`). Ne crée
+   * aucun GameObject — dessine sur le Graphics partagé `playerRings`.
+   */
+  private drawPlayerRing(p: PlayerState): void {
+    const color = playerColor(p.id).num
+    const x = p.x
+    const y = p.y + 34
+    const w = 44
+    const h = 16
+    this.playerRings.fillStyle(color, 0.35)
+    this.playerRings.fillEllipse(x, y, w, h)
+    this.playerRings.lineStyle(2, color, 0.8)
+    this.playerRings.strokeEllipse(x, y, w, h)
+  }
+
   /** Synchronise les sprites avec l'état courant de la simulation. */
   private syncSprites(): void {
     const state = this.app.getStateForFrame(this.app.frameId)
@@ -551,6 +582,11 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.stopFollow()
     }
 
+    // Anneaux couleur (identité co-op) : jamais en solo, un seul Graphics
+    // effacé/redessiné chaque frame — aucun objet par joueur à gérer/détruire.
+    this.playerRings.clear()
+    const showRings = state.players.length > 1
+
     for (const p of state.players) {
       let sprite = this.playerSprites.get(p.id)
       if (sprite === undefined) {
@@ -560,6 +596,9 @@ export class GameScene extends Phaser.Scene {
           : this.add.circle(p.x, p.y, PLAYER_RADIUS, PLAYER_COLOR)
         this.playerSprites.set(p.id, sprite)
         this.lastMoveMs.set(p.id, this.time.now)
+      }
+      if (showRings && p.alive) {
+        this.drawPlayerRing(p)
       }
       if (introActive && p.id === 1) {
         this.renderIntroPlayer(sprite, p)
