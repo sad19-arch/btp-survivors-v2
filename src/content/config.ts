@@ -36,7 +36,13 @@ export const PICKUP = {
   /** Vitesse d'aimantation vers le joueur, en px/seconde. */
   magnetSpeed: 420,
   /** Rayon de collecte (en plus du rayon joueur), en px. */
-  collectRadius: 10
+  collectRadius: 10,
+  /**
+   * Durée de vie (ms) d'une gemme d'XP non ramassée avant qu'elle disparaisse.
+   * Borne l'accumulation de gemmes loin du joueur (horde). `coffre`/`heal`/
+   * `magnet` n'ont PAS de durée de vie (persistants).
+   */
+  gemLifeMs: 20000
 } as const
 
 /**

@@ -69,6 +69,8 @@ export type PickupKind = 'xp' | 'heal' | 'magnet' | 'chest' | 'coffre'
 export interface PickupComp {
   type: PickupKind
   value: number
+  /** Durée de vie restante (ms) avant despawn auto. Seules les gemmes d'XP en ont une. */
+  lifeMs?: number
 }
 
 /** Un projectile en vol. */

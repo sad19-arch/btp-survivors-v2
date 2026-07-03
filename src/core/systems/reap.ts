@@ -1,7 +1,7 @@
 import type { World } from '../world'
 import type { Rng } from '../rng'
 import type { PickupKind, Vec2 } from '../types'
-import { PICKUP_DROPS } from '@content/config'
+import { PICKUP, PICKUP_DROPS } from '@content/config'
 
 /**
  * Récolte les ennemis morts, quelle que soit la source de dégâts (projectile,
@@ -50,9 +50,14 @@ function maybeDropBonus(world: World, rng: Rng, pos: Vec2): void {
   }
 }
 
-/** Fait apparaître un pickup à une position. */
+/**
+ * Fait apparaître un pickup à une position. Seules les gemmes d'XP reçoivent
+ * une durée de vie (`lifeMs`) : elles sont produites en masse par la horde et
+ * doivent s'effacer si personne ne les ramasse. `coffre`/`heal`/`magnet`/`chest`
+ * restent persistants (pas de `lifeMs`).
+ */
 function dropPickup(world: World, pos: Vec2, type: PickupKind, value: number): void {
   const gem = world.spawn()
   world.add(gem, 'position', { x: pos.x, y: pos.y })
-  world.add(gem, 'pickup', { type, value })
+  world.add(gem, 'pickup', type === 'xp' ? { type, value, lifeMs: PICKUP.gemLifeMs } : { type, value })
 }

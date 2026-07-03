@@ -19,6 +19,18 @@ export function pickupSystem(world: World, dtMs: number, collected?: PickupKind[
       continue
     }
 
+    // Durée de vie : décrémente AVANT le early-continue "pas de joueur" ci-dessous,
+    // sinon les gemmes loin de tout joueur ne s'éteignent jamais (accumulation
+    // non bornée de la horde). Seuls les pickups avec `lifeMs` fini expirent
+    // (coffre/heal/magnet n'ont pas de `lifeMs` -> persistants).
+    if (pickup.lifeMs !== undefined) {
+      pickup.lifeMs -= dtMs
+      if (pickup.lifeMs <= 0) {
+        world.despawn(gem)
+        continue
+      }
+    }
+
     const target = nearestPlayer(world, gpos)
     if (target === null) {
       continue
