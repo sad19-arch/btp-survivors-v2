@@ -31,7 +31,7 @@ import { allPlayersDead } from './systems/gameRules'
 import { recomputePlayerStats } from './systems/playerStats'
 import { rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
-import { FINAL_BOSS, MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, STARTING_WEAPONS, TETHER, WORLD } from '@content/config'
+import { coopHpFactor, FINAL_BOSS, MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, STARTING_WEAPONS, TETHER, WORLD } from '@content/config'
 import { SPAWN_RAMP, spawnParamsAt, difficultyScaleAt } from '@content/spawnRamp'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
 import { ENEMIES, MINI_BOSS_ID } from '@content/enemies'
@@ -344,7 +344,8 @@ export class Simulation {
       return
     }
     const radius = role === 'mid' ? MINI_BOSS.spawnRadius : FINAL_BOSS.spawnRadius
-    spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), radius, role)
+    const bossScale = { hp: coopHpFactor(this.playerCount()), contactDamage: 1, speed: 1 }
+    spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), radius, role, bossScale)
     this.events.dispatchEvent(new BossSpawnedEvent(role))
     if (role === 'mid') {
       this.midBossSpawned = true
@@ -607,16 +608,24 @@ export class Simulation {
     }
   }
 
+  /** Nombre de joueurs du mode courant (garde défensive : au moins 1). */
+  private playerCount(): number {
+    return MODE_PLAYER_COUNT[this.mode] ?? 1
+  }
+
   private runSpawns(dtMs: number): void {
     this.maybeSpawnMidBoss()
     this.maybeSpawnFinalBoss()
     this.spawnAccMs += dtMs
     const { intervalMs, countPerWave } = spawnParamsAt(SPAWN_RAMP, this.elapsedMs)
     const scale = difficultyScaleAt(this.elapsedMs)
+    // Renforce les PV ennemis selon le nombre de joueurs (co-op) — dégâts/vitesse
+    // inchangés. Solo (n=1) : `coopHpFactor(1)=1` → `scale.hp` identique à avant.
+    const coopScale = { ...scale, hp: scale.hp * coopHpFactor(this.playerCount()) }
     while (this.spawnAccMs >= intervalMs) {
       this.spawnAccMs -= intervalMs
       if (this.countEnemies() < SPAWN.maxActive) {
-        spawnWave(this.world, this.rng, this.phase, this.playersCentroid(), countPerWave, scale)
+        spawnWave(this.world, this.rng, this.phase, this.playersCentroid(), countPerWave, coopScale)
       }
     }
   }
@@ -631,7 +640,8 @@ export class Simulation {
     }
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
-      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), MINI_BOSS.spawnRadius, 'mid')
+      const bossScale = { hp: coopHpFactor(this.playerCount()), contactDamage: 1, speed: 1 }
+      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), MINI_BOSS.spawnRadius, 'mid', bossScale)
       this.events.dispatchEvent(new BossSpawnedEvent('mid'))
     }
     this.midBossSpawned = true
@@ -644,7 +654,8 @@ export class Simulation {
     }
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
-      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), FINAL_BOSS.spawnRadius, 'final')
+      const bossScale = { hp: coopHpFactor(this.playerCount()), contactDamage: 1, speed: 1 }
+      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), FINAL_BOSS.spawnRadius, 'final', bossScale)
       this.events.dispatchEvent(new BossSpawnedEvent('final'))
     }
     this.finalBossSpawned = true

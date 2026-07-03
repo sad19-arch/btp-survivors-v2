@@ -60,7 +60,8 @@ export function spawnBoss(
   center: Vec2,
   angle: number,
   radius: number = SPAWN.ringRadius,
-  role?: 'mid' | 'final'
+  role?: 'mid' | 'final',
+  scale: DifficultyScale = NO_SCALE
 ): void {
   spawnEnemy(
     world,
@@ -70,7 +71,7 @@ export function spawnBoss(
       y: center.y + Math.sin(angle) * radius
     },
     true,
-    NO_SCALE,
+    scale,
     role
   )
 }

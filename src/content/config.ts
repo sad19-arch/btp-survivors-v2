@@ -71,6 +71,19 @@ export const MODE_PLAYER_COUNT: Record<GameMode, number> = {
 }
 
 /**
+ * Facteur de renforcement des PV ennemis/boss par joueur supplémentaire (co-op).
+ * `coopHpFactor(n) = 1 + (n-1) * COOP_HP_K` : n=1→1.0 (solo inchangé), n=2→1.5,
+ * n=3→2.0, n=4→2.5. Ne s'applique qu'aux PV (pas aux dégâts de contact ni à la
+ * vitesse) — cf. Plan « Fin de CO-2 » tâche 3.
+ */
+export const COOP_HP_K = 0.5
+
+/** Multiplicateur de PV à appliquer selon le nombre de joueurs (borné à 1 min). */
+export function coopHpFactor(playerCount: number): number {
+  return 1 + (Math.max(1, playerCount) - 1) * COOP_HP_K
+}
+
+/**
  * Dérive le `GameMode` de boot à partir d'un nombre de joueurs (sélecteur titre).
  * Hors plage [1,4] : bornée à la valeur valide la plus proche (garde défensive).
  */
