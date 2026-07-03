@@ -7,7 +7,8 @@ import {
   LevelUpEvent,
   WeaponFiredEvent,
   PickupCollectedEvent,
-  BossSpawnedEvent
+  BossSpawnedEvent,
+  EvolvedEvent
 } from '@core/events'
 import { FocusModel } from '@ui/focusModel'
 import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
@@ -123,6 +124,9 @@ export class App {
       this.events.dispatchEvent(new PickupCollectedEvent((e as PickupCollectedEvent).kind))
     })
     this.sim.events.addEventListener('bossSpawned', () => { this.events.dispatchEvent(new BossSpawnedEvent()) })
+    this.sim.events.addEventListener('evolved', (e) => {
+      this.events.dispatchEvent(new EvolvedEvent((e as EvolvedEvent).weaponId))
+    })
     this.introMsLeft = this.introEnabled ? INTRO.durationMs : 0
     this.started = true
     this.refreshFocus()
