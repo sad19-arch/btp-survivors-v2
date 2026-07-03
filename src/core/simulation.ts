@@ -15,6 +15,7 @@ import {
 } from './events'
 import { STEP_MS } from './clock'
 import { movementSystem } from './systems/movement'
+import { tetherSystem } from './systems/tether'
 import { worldBoundsSystem } from './systems/bounds'
 import { enemyAiSystem } from './systems/enemyAi'
 import { spawnBoss, spawnWave } from './systems/spawn'
@@ -29,7 +30,7 @@ import { allPlayersDead } from './systems/gameRules'
 import { recomputePlayerStats } from './systems/playerStats'
 import { rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
-import { FINAL_BOSS, MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
+import { FINAL_BOSS, MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, STARTING_WEAPONS, TETHER, WORLD } from '@content/config'
 import { SPAWN_RAMP, spawnParamsAt, difficultyScaleAt } from '@content/spawnRamp'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
 import { ENEMIES, MINI_BOSS_ID } from '@content/enemies'
@@ -468,6 +469,7 @@ export class Simulation {
     this.rebuildEnemyGrid()
     weaponSystem(this.world, dtMs, pulses, fired, this.rng, this.enemyGrid)
     enemyAiSystem(this.world)
+    tetherSystem(this.world, MODE_PLAYER_COUNT[this.mode] ?? 1, TETHER.maxRadius)
     movementSystem(this.world, dtMs)
     worldBoundsSystem(this.world, WORLD)
     this.rebuildEnemyGrid()

@@ -88,6 +88,16 @@ export function modeForCount(n: number): GameMode {
   }
 }
 
+/**
+ * Laisse souple coop (« tether ») : au-delà de ce rayon (px) autour du
+ * centroïde du groupe, la composante radiale sortante de la vélocité d'un
+ * joueur est annulée (pas un ressort, juste un mur souple). No-op en solo
+ * (`playerCount<=1`), cf. `tetherSystem`.
+ */
+export const TETHER = {
+  maxRadius: 450
+} as const
+
 /** Rayons de collision (px), par catégorie d'entité. */
 export const HITBOX = {
   player: 16,
