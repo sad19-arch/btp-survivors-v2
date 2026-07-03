@@ -3,7 +3,20 @@ import { World } from '@core/world'
 import { collisionSystem } from '@core/systems/collision'
 import { reapDeadEnemies } from '@core/systems/reap'
 import { projectileLifetimeSystem } from '@core/systems/projectile'
+import { SpatialGrid } from '@core/spatialGrid'
 import type { EntityId } from '@core/types'
+
+/** Reconstruit l'index spatial des ennemis (sans filtre HP) — reflète `Simulation.rebuildEnemyGrid`. */
+function grid(w: World): SpatialGrid {
+  const g = new SpatialGrid(64)
+  for (const e of w.query('enemy', 'position')) {
+    const p = w.get(e, 'position')
+    if (p !== undefined) {
+      g.insert(e, p.x, p.y)
+    }
+  }
+  return g
+}
 
 function addEnemy(w: World, x: number, y: number, hp: number, contactDamage = 10): EntityId {
   const e = w.spawn()
@@ -36,7 +49,7 @@ describe('collisionSystem', () => {
     const w = new World()
     const enemy = addEnemy(w, 0, 0, 10)
     const proj = addProjectile(w, 0, 0, 6)
-    collisionSystem(w, 16)
+    collisionSystem(w, 16, grid(w))
     expect(w.get(enemy, 'health')?.hp).toBe(4)
     expect(w.alive(proj)).toBe(false)
   })
@@ -45,7 +58,7 @@ describe('collisionSystem', () => {
     const w = new World()
     const enemy = addEnemy(w, 0, 0, 5)
     addProjectile(w, 0, 0, 6)
-    collisionSystem(w, 16)
+    collisionSystem(w, 16, grid(w))
     expect(w.get(enemy, 'health')?.hp).toBeLessThanOrEqual(0)
     const kills = reapDeadEnemies(w)
     expect(kills).toBe(1)
@@ -59,7 +72,7 @@ describe('collisionSystem', () => {
     const w = new World()
     const enemy = addEnemy(w, 500, 0, 10)
     const proj = addProjectile(w, 0, 0, 6)
-    collisionSystem(w, 16)
+    collisionSystem(w, 16, grid(w))
     expect(w.get(enemy, 'health')?.hp).toBe(10)
     expect(w.alive(proj)).toBe(true)
   })
@@ -68,7 +81,7 @@ describe('collisionSystem', () => {
     const w = new World()
     const player = addPlayer(w, 0, 0, 100)
     addEnemy(w, 0, 0, 10, 10) // 10 dégâts/seconde
-    collisionSystem(w, 1000) // 1 seconde
+    collisionSystem(w, 1000, grid(w)) // 1 seconde
     expect(w.get(player, 'health')?.hp).toBeCloseTo(90)
   })
 
@@ -76,7 +89,7 @@ describe('collisionSystem', () => {
     const w = new World()
     const player = addPlayer(w, 0, 0, 100)
     addEnemy(w, 800, 0, 10, 10)
-    collisionSystem(w, 1000)
+    collisionSystem(w, 1000, grid(w))
     expect(w.get(player, 'health')?.hp).toBe(100)
   })
 })

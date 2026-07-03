@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { World } from '@core/world'
 import { collisionSystem } from '@core/systems/collision'
+import { SpatialGrid } from '@core/spatialGrid'
 
 /**
  * Vérifie que `pierce` sur un projectile fonctionne réellement à travers le
@@ -26,6 +27,18 @@ function spawnEnemy(w: World, x: number, hp = 50) {
   return e
 }
 
+/** Reconstruit l'index spatial des ennemis (sans filtre HP) — reflète `Simulation.rebuildEnemyGrid`. */
+function grid(w: World): SpatialGrid {
+  const g = new SpatialGrid(64)
+  for (const e of w.query('enemy', 'position')) {
+    const p = w.get(e, 'position')
+    if (p !== undefined) {
+      g.insert(e, p.x, p.y)
+    }
+  }
+  return g
+}
+
 describe('pierce (perforation des projectiles)', () => {
   it('pierce: 0 — le projectile ne touche que le premier ennemi puis est consommé', () => {
     const w = new World()
@@ -33,7 +46,7 @@ describe('pierce (perforation des projectiles)', () => {
     const enA = spawnEnemy(w, 0, 50) // superposé au projectile → touché immédiatement
     const enB = spawnEnemy(w, 3, 50) // à portée dès le spawn (rayon combiné 18)
 
-    collisionSystem(w, 16)
+    collisionSystem(w, 16, grid(w))
 
     expect(w.get(enA, 'health')?.hp).toBe(40) // touché
     expect(w.get(enB, 'health')?.hp).toBe(50) // jamais touché : projectile consommé au 1er hit
@@ -47,7 +60,7 @@ describe('pierce (perforation des projectiles)', () => {
     const enB = spawnEnemy(w, 20, 50) // hors de portée au 1er pas, atteint après déplacement
 
     // Pas 1 : touche enA, ne despawn pas (pierce encore disponible), continue sa route.
-    collisionSystem(w, 16)
+    collisionSystem(w, 16, grid(w))
     expect(w.get(enA, 'health')?.hp).toBe(40)
     expect(w.alive(proj)).toBe(true)
     expect(w.get(proj, 'projectile')?.pierce).toBe(0)
@@ -59,7 +72,7 @@ describe('pierce (perforation des projectiles)', () => {
     }
 
     // Pas 2 : touche enB, pierce épuisé → despawn.
-    collisionSystem(w, 16)
+    collisionSystem(w, 16, grid(w))
     expect(w.get(enB, 'health')?.hp).toBe(40)
     expect(w.alive(proj)).toBe(false)
 

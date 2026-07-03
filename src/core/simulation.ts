@@ -1,5 +1,6 @@
 import { World } from './world'
 import { Rng } from './rng'
+import { SpatialGrid } from './spatialGrid'
 import {
   AuraPulseEvent,
   PrisonerFreedEvent,
@@ -109,6 +110,13 @@ export class Simulation {
   private prevHpTotal = 0
   private readonly inputs = new Map<number, PlayerInput>()
   private readonly playerEntities = new Map<number, EntityId>()
+  /** Index spatial des ennemis (positions courantes, post-mouvement), reconstruit chaque pas
+   *  juste avant `collisionSystem`. Indexe TOUS les ennemis avec position (pas de filtre HP :
+   *  le contact ennemi→joueur d'origine n'a jamais filtré par HP — un ennemi tué ce pas-ci par
+   *  `weaponSystem` doit encore pouvoir taper au contact avant d'être récolté). Ne fournit que
+   *  des candidats — le test de distance + toute logique de dégâts restent exacts et inchangés
+   *  (cf. `collisionSystem`), donc n'affecte pas les dégâts observables. */
+  private readonly enemyGrid = new SpatialGrid(64)
 
   constructor(opts: SimOptions) {
     this.mode = opts.mode
@@ -446,7 +454,8 @@ export class Simulation {
     enemyAiSystem(this.world)
     movementSystem(this.world, dtMs)
     worldBoundsSystem(this.world, WORLD)
-    collisionSystem(this.world, dtMs)
+    this.rebuildEnemyGrid()
+    collisionSystem(this.world, dtMs, this.enemyGrid)
     const killed = reapDeadEnemies(this.world, this.lootRng)
     this.score += killed
     pickupSystem(this.world, dtMs, collected)
@@ -742,6 +751,25 @@ export class Simulation {
       prisoners.push({ id: e, x: pos.x, y: pos.y, freed: prisoner.freed })
     }
     return prisoners
+  }
+
+  /**
+   * Reconstruit l'index spatial des ennemis (positions courantes) avant collision.
+   * Indexe TOUS les ennemis avec position — SANS filtre HP. Le scan linéaire projectile↔ennemi
+   * qu'il remplace filtrait déjà `hp > 0` lui-même (exact check dans `collisionSystem`) ; le
+   * contact ennemi↔joueur qu'il remplace ne filtrait PAS par HP. Filtrer ici casserait ce
+   * second cas (un ennemi tué ce pas-ci par `weaponSystem`, avant collision, doit encore
+   * pouvoir taper au contact une dernière fois avant `reapDeadEnemies`) : sortie identique
+   * garantie par `npm run sim:check` (baseline inchangée).
+   */
+  private rebuildEnemyGrid(): void {
+    this.enemyGrid.clear()
+    for (const e of this.world.query('enemy', 'position')) {
+      const p = this.world.get(e, 'position')
+      if (p !== undefined) {
+        this.enemyGrid.insert(e, p.x, p.y)
+      }
+    }
   }
 
   private countEnemies(): number {
