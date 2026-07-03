@@ -106,6 +106,7 @@ export class App {
 
   /** Démarre une nouvelle partie (depuis le titre). */
   start(mode: GameMode = this.mode): void {
+    this.bumpState()
     this.mode = mode
     this.sim = new Simulation({ seed: this.seed, mode, phaseId: this.selectedPhase })
     // Relaie les événements de sim (ex. onde d'aura, libération) vers l'App → rendu.
@@ -140,6 +141,7 @@ export class App {
 
   /** Change la seed ; relance la partie en cours le cas échéant. */
   setSeed(seed: number): void {
+    this.bumpState()
     this.seed = seed
     if (this.started) {
       this.start(this.mode)
@@ -148,6 +150,7 @@ export class App {
 
   /** Relance une partie neuve (même seed). */
   restart(): void {
+    this.bumpState()
     this.start(this.mode)
   }
 
@@ -157,20 +160,26 @@ export class App {
     if (this.introMsLeft > 0) {
       this.introMsLeft = Math.max(0, this.introMsLeft - ms)
       this.refreshFocus()
-      this.frame++
+      this.bumpState()
       return
     }
     this.sim?.advanceTime(ms)
     this.refreshFocus()
-    this.frame++
+    this.bumpState()
   }
 
-  /** Identifiant de frame courant (bumpé en fin d'`advanceTime`) — clé de `getStateForFrame`. */
+  /** Identifiant de frame courant (bumpé à chaque mutation d'état observable) — clé de `getStateForFrame`. */
   get frameId(): number {
     return this.frame
   }
 
+  /** Incrémente le compteur de version d'état — à appeler en tête de toute méthode publique mutatrice. */
+  private bumpState(): void {
+    this.frame++
+  }
+
   setInput(playerId: number, input: PlayerInput): void {
+    this.bumpState()
     this.sim?.setInput(playerId, input)
   }
 
@@ -178,6 +187,7 @@ export class App {
 
   /** Déplace le curseur dans le menu actif. */
   nav(dir: NavDir): void {
+    this.bumpState()
     this.recordCombo(dir)
     this.refreshFocus()
     if (this.menuItems().length === 0) {
@@ -203,6 +213,7 @@ export class App {
 
   /** Sélectionne+valide un item par index (clic souris) — passe par le focus + `activate`. */
   clickItem(index: number): void {
+    this.bumpState()
     this.refreshFocus()
     const items = this.menuItems()
     if (items[index] === undefined) {
@@ -214,6 +225,7 @@ export class App {
 
   /** Valide l'item focalisé du menu actif. */
   confirm(): void {
+    this.bumpState()
     // Au titre, la touche « valider » peut compléter le code Konami : on la consomme alors.
     if (this.recordCombo('confirm')) {
       return
@@ -228,6 +240,7 @@ export class App {
 
   /** Retour / annulation, selon l'écran. */
   back(): void {
+    this.bumpState()
     this.recordCombo('back')
     if (this.optionsOpen) {
       this.optionsOpen = false
@@ -254,18 +267,21 @@ export class App {
 
   /** Met en pause (depuis le jeu). */
   pause(): void {
+    this.bumpState()
     this.sim?.pause()
     this.refreshFocus()
   }
 
   /** Reprend (depuis la pause). */
   resume(): void {
+    this.bumpState()
     this.sim?.resume()
     this.refreshFocus()
   }
 
   /** Bascule pause/reprise (touche dédiée). */
   togglePause(): void {
+    this.bumpState()
     if (this.screen === 'game') {
       this.sim?.pause()
     } else if (this.screen === 'paused') {
@@ -276,6 +292,7 @@ export class App {
 
   /** Choisit une carte d'upgrade par index (API directe pour le seam). */
   chooseUpgrade(index: number): void {
+    this.bumpState()
     this.sim?.chooseUpgrade(index)
     this.refreshFocus()
   }
@@ -287,30 +304,35 @@ export class App {
    * aux tests et au seam de debug (`window.__GAME__`) — jamais en jeu normal.
    */
   debugGrant(opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] }): void {
+    this.bumpState()
     this.sim?.debugGrant(opts)
     this.refreshFocus()
   }
 
   /** [Debug/seam] Ajoute de l'XP au joueur 1 (force un level-up déterministe). */
   debugAddXp(amount: number): void {
+    this.bumpState()
     this.sim?.debugAddXp(amount)
     this.refreshFocus()
   }
 
   /** [Debug/seam] Fait apparaître un coffre d'évolution sur la position du joueur 1. */
   debugSpawnChestOnPlayer(): void {
+    this.bumpState()
     this.sim?.debugSpawnChestOnPlayer()
     this.refreshFocus()
   }
 
   /** [Debug/seam] Fait apparaître immédiatement le boss du rôle demandé (`mid`/`final`). */
   debugSpawnBoss(role: 'mid' | 'final'): void {
+    this.bumpState()
     this.sim?.debugSpawnBoss(role)
     this.refreshFocus()
   }
 
   /** [Debug/seam] Fait apparaître `n` ennemis autour des joueurs (stress test horde). */
   debugSpawnEnemies(n: number): void {
+    this.bumpState()
     this.sim?.debugSpawnEnemies(n)
   }
 

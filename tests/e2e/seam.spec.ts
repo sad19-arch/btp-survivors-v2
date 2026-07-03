@@ -127,7 +127,7 @@ test('montée de niveau → écran upgrade, le choix relance la partie', async (
 
   const up = await page.evaluate(() => window.__GAME__?.getState())
   expect(up?.screen).toBe('upgrade')
-  expect(up?.menu?.items.length).toBe(3)
+  expect(up?.menu?.items.length).toBe(4)
 
   await page.evaluate(() => window.__GAME__?.confirm())
   expect((await page.evaluate(() => window.__GAME__?.getState()))?.screen).toBe('game')
