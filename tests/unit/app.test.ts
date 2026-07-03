@@ -33,23 +33,53 @@ describe('App — écrans & navigation', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     const s = app.getState()
     expect(s.screen).toBe('title')
-    expect(s.menu?.items.map((i) => i.id)).toEqual(['jouer', 'stage', 'options', 'credits'])
+    expect(s.menu?.items.map((i) => i.id)).toEqual(['jouer', 'players', 'stage', 'options', 'credits'])
     expect(s.players.length).toBe(0)
   })
 
   it('le sélecteur « Niveau » cycle les phases et lance le stage choisi', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
-    const item = () => app.getState().menu?.items[1]
+    const item = () => app.getState().menu?.items[2]
     expect(item()?.id).toBe('stage')
     expect(item()?.label).toContain('Terrain vierge')
-    app.nav('down') // focus le sélecteur (index 1)
+    app.nav('down') // focus « players » (index 1)
+    app.nav('down') // focus le sélecteur de niveau (index 2)
     app.confirm() // cycle → phase suivante
     expect(item()?.label).toContain('Terrassement')
     expect(app.getState().screen).toBe('title') // toujours au titre, pas de partie lancée
+    app.nav('up')
     app.nav('up') // focus « Jouer »
     app.confirm()
     expect(app.getState().screen).toBe('game')
     expect(app.getState().stageId).toBe('terrassement') // le stage choisi est bien lancé
+  })
+
+  it('le sélecteur « Joueurs » cycle le nombre borné [1,4] et lance la coop choisie', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    const item = () => app.getState().menu?.items[1]
+    expect(item()?.id).toBe('players')
+    expect(item()?.label).toContain('1')
+    app.nav('down') // focus « players » (index 1)
+    app.nav('right')
+    expect(item()?.label).toContain('2')
+    app.nav('right')
+    app.nav('right')
+    expect(item()?.label).toContain('4')
+    app.nav('right') // borné à 4, pas de cycle
+    expect(item()?.label).toContain('4')
+    app.nav('left')
+    app.nav('left')
+    app.nav('left')
+    expect(item()?.label).toContain('1')
+    app.nav('left') // borné à 1
+    expect(item()?.label).toContain('1')
+
+    // Remonte à 2 puis lance : la partie démarre avec 2 joueurs.
+    app.nav('right')
+    app.nav('up') // focus « Jouer »
+    app.confirm()
+    expect(app.getState().screen).toBe('game')
+    expect(app.getState().players.length).toBe(2)
   })
 
   it('autostart démarre directement en jeu', () => {

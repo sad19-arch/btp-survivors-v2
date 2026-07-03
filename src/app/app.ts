@@ -12,7 +12,7 @@ import {
 } from '@core/events'
 import { FocusModel } from '@ui/focusModel'
 import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
-import { INTRO } from '@content/config'
+import { INTRO, MODE_PLAYER_COUNT, modeForCount } from '@content/config'
 import { WEAPONS } from '@content/weapons'
 import { PASSIVES } from '@content/passives'
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
@@ -72,6 +72,8 @@ export class App {
   private mode: GameMode
   /** Phase sélectionnée au titre (départ : URL `?level=` ou terrain vierge). */
   private selectedPhase: ConstructionPhaseId
+  /** Nombre de joueurs sélectionné au titre (départ : dérivé du mode de boot, ex. `?autostart=coop4`). */
+  private selectedPlayers: number
   private started = false
   private readonly focus = new FocusModel()
   private focusKey = ''
@@ -98,6 +100,7 @@ export class App {
     this.seed = opts.seed
     this.mode = opts.mode
     this.selectedPhase = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
+    this.selectedPlayers = MODE_PLAYER_COUNT[opts.mode] ?? 1
     this.introEnabled = opts.intro ?? false
     if (opts.autostart) {
       this.start(opts.mode)
@@ -195,6 +198,12 @@ export class App {
     this.recordCombo(dir)
     this.refreshFocus()
     if (this.menuItems().length === 0) {
+      return
+    }
+    // Sélecteur de joueurs au titre : gauche/droite changent le nombre (pas le focus).
+    if (this.screen === 'title' && this.focus.current() === 'players' && (dir === 'left' || dir === 'right')) {
+      this.cyclePlayers(dir === 'right' ? 1 : -1)
+      this.emitUi('menuMove')
       return
     }
     // Sélecteur de niveau au titre : gauche/droite changent la phase (pas le focus).
@@ -495,11 +504,12 @@ export class App {
     return items
   }
 
-  /** Items du titre : Jouer, sélecteur de niveau (◄/►), Options, Crédits. */
+  /** Items du titre : Jouer, sélecteur de joueurs (◄/►), sélecteur de niveau (◄/►), Options, Crédits. */
   private titleItems(): MenuItemView[] {
     const phase = ORDERED_PHASES.find((p) => p.id === this.selectedPhase)
     return [
       { id: 'jouer', label: 'Jouer', hint: null },
+      { id: 'players', label: `◄ Joueurs : ${this.selectedPlayers} ►`, hint: 'Gauche/Droite pour changer' },
       { id: 'stage', label: `◄ Niveau ${phase?.order ?? 1}/10 : ${phase?.title ?? '—'} ►`, hint: 'Gauche/Droite pour changer' },
       { id: 'options', label: 'Options', hint: null },
       { id: 'credits', label: 'Crédits', hint: null }
@@ -512,6 +522,12 @@ export class App {
     const i = ORDERED_PHASES.findIndex((p) => p.id === this.selectedPhase)
     const next = (((i + step) % n) + n) % n
     this.selectedPhase = ORDERED_PHASES[next]?.id ?? this.selectedPhase
+    this.refreshFocus()
+  }
+
+  /** Change le nombre de joueurs sélectionné de `step`, borné à [1,4] (pas de cycle) — sélecteur du titre. */
+  private cyclePlayers(step: number): void {
+    this.selectedPlayers = Math.min(4, Math.max(1, this.selectedPlayers + step))
     this.refreshFocus()
   }
 
@@ -570,7 +586,9 @@ export class App {
     }
     if (screen === 'title') {
       if (id === 'jouer') {
-        this.start(this.mode)
+        this.start(modeForCount(this.selectedPlayers))
+      } else if (id === 'players') {
+        this.cyclePlayers(1)
       } else if (id === 'stage') {
         this.cycleStage()
       } else if (id === 'options') {

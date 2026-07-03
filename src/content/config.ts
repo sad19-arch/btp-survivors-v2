@@ -70,6 +70,24 @@ export const MODE_PLAYER_COUNT: Record<GameMode, number> = {
   coop4: 4
 }
 
+/**
+ * Dérive le `GameMode` de boot à partir d'un nombre de joueurs (sélecteur titre).
+ * Hors plage [1,4] : bornée à la valeur valide la plus proche (garde défensive).
+ */
+export function modeForCount(n: number): GameMode {
+  const clamped = Math.min(4, Math.max(1, Math.round(n)))
+  switch (clamped) {
+    case 1:
+      return 'solo'
+    case 2:
+      return 'coop'
+    case 3:
+      return 'coop3'
+    default:
+      return 'coop4'
+  }
+}
+
 /** Rayons de collision (px), par catégorie d'entité. */
 export const HITBOX = {
   player: 16,
