@@ -16,6 +16,7 @@ import type { EvolvedEvent } from '@core/events'
 import type { PlayerState, PrisonerState } from '@core/types'
 import { PALETTE_HEX } from '@ui/palette'
 import { playerColor } from '@content/players'
+import { characterDef } from '@content/characters'
 import type { AppViewState } from '@/app/appState'
 
 /** Feuille PARTAGÉE (tous stages) : le joueur. Ennemis ET boss sont PAR STAGE (voir stages.ts). */
@@ -304,6 +305,11 @@ export class GameScene extends Phaser.Scene {
         frameHeight: FINAL_BOSS_SKIN.frame
       })
       // Feuille d'attente + variantes dorées du héros (clins d'œil ; repli si absentes).
+      // Tous les persos du roster (`@content/characters`) pointent sur `sheet: 'player'`
+      // (placeholder) aujourd'hui, déjà chargée via SHARED_SHEETS ci-dessus. La phase C
+      // ajoutera des feuilles dédiées `char_<id>.png` par personnage + une boucle de
+      // préchargement sur `Object.values(CHARACTERS)` ici — `walkTextureKey`/`idleTextureKey`
+      // résolvent déjà par `characterId` et n'auront pas besoin d'être re-touchées.
       this.load.spritesheet('player_idle', 'player_idle.png', { frameWidth: 192, frameHeight: 192 })
       this.load.spritesheet('player_gold', 'player_j1_gold.png', { frameWidth: 192, frameHeight: 192 })
       this.load.spritesheet('player_idle_gold', 'player_idle_gold.png', { frameWidth: 192, frameHeight: 192 })
@@ -432,14 +438,25 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Clé de feuille de marche du héros (dorée si débloquée + présente). */
-  private walkTextureKey(): string {
-    return this.goldSkin && this.textures.exists('player_gold') ? 'player_gold' : 'player'
+  /**
+   * Clé de feuille de marche du héros, par personnage (dorée si débloquée + présente,
+   * uniquement sur la feuille par défaut de l'ouvrier — clin d'œil P1 Konami).
+   * Aujourd'hui tous les persos partagent `sheet: 'player'` (placeholder) ; la phase C
+   * ajoutera des feuilles `char_<id>.png` par perso — ce switch les servira sans y retoucher.
+   */
+  private walkTextureKey(characterId: string): string {
+    const base = characterDef(characterId).sheet
+    return this.goldSkin && base === 'player' && this.textures.exists('player_gold') ? 'player_gold' : base
   }
 
-  /** Clé de feuille d'attente du héros (dorée si débloquée + présente). */
-  private idleTextureKey(): string {
-    return this.goldSkin && this.textures.exists('player_idle_gold') ? 'player_idle_gold' : 'player_idle'
+  /** Clé de feuille d'attente du héros, par personnage (dorée si débloquée + présente). */
+  private idleTextureKey(characterId: string): string {
+    const base = characterDef(characterId).sheet
+    const idle = `${base}_idle`
+    if (this.goldSkin && base === 'player' && this.textures.exists('player_idle_gold')) {
+      return 'player_idle_gold'
+    }
+    return this.textures.exists(idle) ? idle : base
   }
 
   /** Réinitialise l'état par-run (indispensable car `scene.restart` réutilise l'instance). */
@@ -707,7 +724,7 @@ export class GameScene extends Phaser.Scene {
     for (const p of state.players) {
       let sprite = this.playerSprites.get(p.id)
       if (sprite === undefined) {
-        const key = this.walkTextureKey()
+        const key = this.walkTextureKey(p.characterId)
         sprite = this.textures.exists(key)
           ? this.add.sprite(p.x, p.y, key).setScale(PLAYER_SCALE)
           : this.add.circle(p.x, p.y, PLAYER_RADIUS, PLAYER_COLOR)
@@ -891,7 +908,7 @@ export class GameScene extends Phaser.Scene {
     const walkPortion = 0.65
     sprite.setVisible(true)
     if (sprite instanceof Phaser.GameObjects.Sprite) {
-      const key = this.walkTextureKey()
+      const key = this.walkTextureKey(p.characterId)
       if (sprite.texture.key !== key && this.textures.exists(key)) {
         sprite.setTexture(key)
       }
@@ -918,7 +935,7 @@ export class GameScene extends Phaser.Scene {
       this.lastMoveMs.set(p.id, this.time.now)
     }
     const idleFor = this.time.now - (this.lastMoveMs.get(p.id) ?? this.time.now)
-    const idleKey = this.idleTextureKey()
+    const idleKey = this.idleTextureKey(p.characterId)
     if (!moving && idleFor > IDLE_EMOTE_MS && this.textures.exists(idleKey)) {
       if (sprite.texture.key !== idleKey) {
         sprite.setTexture(idleKey)
@@ -926,7 +943,7 @@ export class GameScene extends Phaser.Scene {
       sprite.setFrame(walkFrame(0, this.time.now, 220)) // boucle lente, face caméra
       return
     }
-    const walkKey = this.walkTextureKey()
+    const walkKey = this.walkTextureKey(p.characterId)
     if (sprite.texture.key !== walkKey) {
       sprite.setTexture(walkKey)
     }
