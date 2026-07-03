@@ -265,12 +265,16 @@ export class Simulation {
   }
 
   /**
-   * [Debug/seam] Octroie directement des armes/passifs au joueur 1, sans
-   * passer par la progression normale (upgrades). Réservé aux tests et au
-   * seam de debug (`window.__GAME__`) — jamais utilisé en jeu normal.
+   * [Debug/seam] Octroie directement des armes/passifs à un joueur (1 par
+   * défaut), sans passer par la progression normale (upgrades). Réservé aux
+   * tests et au seam de debug (`window.__GAME__`) — jamais utilisé en jeu
+   * normal.
    */
-  debugGrant(opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] }): void {
-    const e = this.playerEntities.get(1)
+  debugGrant(
+    opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] },
+    playerId = 1
+  ): void {
+    const e = this.playerEntities.get(playerId)
     if (e === undefined) {
       return
     }
@@ -307,11 +311,12 @@ export class Simulation {
   }
 
   /**
-   * [Debug/seam] Fait apparaître un coffre d'évolution sur la position du
-   * joueur 1 (collecte immédiate au pas suivant), sans attendre le boss.
+   * [Debug/seam] Fait apparaître un coffre d'évolution sur la position d'un
+   * joueur (1 par défaut ; collecte immédiate au pas suivant), sans attendre
+   * le boss.
    */
-  debugSpawnChestOnPlayer(): void {
-    const e = this.playerEntities.get(1)
+  debugSpawnChestOnPlayer(playerId = 1): void {
+    const e = this.playerEntities.get(playerId)
     if (e === undefined) {
       return
     }

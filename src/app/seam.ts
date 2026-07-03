@@ -27,12 +27,15 @@ export interface GameSeam {
   chooseUpgrade(index: number): void
   events: EventTarget
   // --- helpers de debug (test-only : fast-forward pour Playwright/e2e) ---
-  /** [Debug] Octroie directement des armes/passifs au joueur 1. */
-  debugGrant(opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] }): void
+  /** [Debug] Octroie directement des armes/passifs à un joueur (1 par défaut). */
+  debugGrant(
+    opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] },
+    playerId?: number
+  ): void
   /** [Debug] Ajoute de l'XP au joueur 1 (force un level-up déterministe). */
   debugAddXp(amount: number): void
-  /** [Debug] Fait apparaître un coffre d'évolution sur la position du joueur 1. */
-  debugSpawnChestOnPlayer(): void
+  /** [Debug] Fait apparaître un coffre d'évolution sur la position d'un joueur (1 par défaut). */
+  debugSpawnChestOnPlayer(playerId?: number): void
   /** [Debug] Fait apparaître immédiatement le boss du rôle demandé (`mid`/`final`). */
   debugSpawnBoss(role: 'mid' | 'final'): void
   /** [Debug] Fait apparaître `n` ennemis autour des joueurs (stress test horde). */
@@ -86,14 +89,14 @@ export function createSeam(app: App): GameSeam {
     },
     events: app.events,
     // --- helpers de debug (test-only) ---
-    debugGrant: (opts) => {
-      app.debugGrant(opts)
+    debugGrant: (opts, playerId = 1) => {
+      app.debugGrant(opts, playerId)
     },
     debugAddXp: (amount: number) => {
       app.debugAddXp(amount)
     },
-    debugSpawnChestOnPlayer: () => {
-      app.debugSpawnChestOnPlayer()
+    debugSpawnChestOnPlayer: (playerId = 1) => {
+      app.debugSpawnChestOnPlayer(playerId)
     },
     debugSpawnBoss: (role: 'mid' | 'final') => {
       app.debugSpawnBoss(role)

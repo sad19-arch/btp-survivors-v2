@@ -314,12 +314,16 @@ export class App {
   // --- helpers de debug (test-only — passe-plat vers Simulation pour le seam) ---
 
   /**
-   * [Debug/seam] Octroie directement des armes/passifs au joueur 1. Réservé
-   * aux tests et au seam de debug (`window.__GAME__`) — jamais en jeu normal.
+   * [Debug/seam] Octroie directement des armes/passifs à un joueur (1 par
+   * défaut). Réservé aux tests et au seam de debug (`window.__GAME__`) —
+   * jamais en jeu normal.
    */
-  debugGrant(opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] }): void {
+  debugGrant(
+    opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] },
+    playerId = 1
+  ): void {
     this.bumpState()
-    this.sim?.debugGrant(opts)
+    this.sim?.debugGrant(opts, playerId)
     this.refreshFocus()
   }
 
@@ -330,10 +334,10 @@ export class App {
     this.refreshFocus()
   }
 
-  /** [Debug/seam] Fait apparaître un coffre d'évolution sur la position du joueur 1. */
-  debugSpawnChestOnPlayer(): void {
+  /** [Debug/seam] Fait apparaître un coffre d'évolution sur la position d'un joueur (1 par défaut). */
+  debugSpawnChestOnPlayer(playerId = 1): void {
     this.bumpState()
-    this.sim?.debugSpawnChestOnPlayer()
+    this.sim?.debugSpawnChestOnPlayer(playerId)
     this.refreshFocus()
   }
 

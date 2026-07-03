@@ -48,4 +48,21 @@ describe('coffre → évolution', () => {
     const xpAfter = player1(sim).xp
     expect(xpAfter).toBe(xpBefore)
   })
+
+  it('coop : coffre ramassé par le joueur 2 fait évoluer SON arme, pas celle du joueur 1', () => {
+    const sim = new Simulation({ seed: 1, mode: 'coop' })
+    sim.debugGrant?.({ weapons: [{ id: 'cloueur', level: 8 }], passives: [{ id: 'air_comprime', level: 1 }] }, 2)
+    sim.debugSpawnChestOnPlayer?.(2)
+    for (let i = 0; i < 50 && !sim.getState().players[1]?.weapons.includes('mitrailleuse_clous'); i++) {
+      sim.advanceTime(200)
+    }
+    const state = sim.getState()
+    const p1 = state.players[0]
+    const p2 = state.players[1]
+    if (p1 === undefined || p2 === undefined) {
+      throw new Error('joueurs coop introuvables')
+    }
+    expect(p2.weapons).toContain('mitrailleuse_clous')
+    expect(p1.weapons).not.toContain('mitrailleuse_clous')
+  })
 })
