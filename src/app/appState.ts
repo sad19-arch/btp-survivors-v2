@@ -1,7 +1,15 @@
 import type { GameState, PlayerState } from '@core/types'
 
 /** Écran applicatif courant (dérivé de l'état de la simulation + surcouche Options). */
-export type Screen = 'title' | 'game' | 'paused' | 'upgrade' | 'gameover' | 'victory' | 'options'
+export type Screen =
+  | 'title'
+  | 'characterSelect'
+  | 'game'
+  | 'paused'
+  | 'upgrade'
+  | 'gameover'
+  | 'victory'
+  | 'options'
 
 /** Une entrée d'inventaire résolue : id + nom lisible + niveau courant. */
 export interface InventoryEntry {
@@ -55,4 +63,6 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   stageSubtitle: string
   /** Numéro de phase dans le cycle (1..10). */
   stageOrder: number
+  /** Sélection de personnage en cours (joueur actif / total) ; `null` hors de ce flux. */
+  characterSelect: { player: number; total: number } | null
 }

@@ -137,6 +137,9 @@ export class Overlay {
       case 'title':
         this.screenLayer.append(this.titlePanel(state))
         break
+      case 'characterSelect':
+        this.screenLayer.append(this.characterSelectPanel(state))
+        break
       case 'paused':
         this.screenLayer.append(this.menuPanel('Pause', null, state))
         break
@@ -171,6 +174,25 @@ export class Overlay {
     if (state.goldSkin) {
       panel.append(h('p', { className: 'unlock-line', text: 'Casque doré débloqué' }))
     }
+    return h('div', { className: 'screen' }, panel)
+  }
+
+  /** Panneau de sélection de personnage : un joueur à la fois, carrousel ◄ Nom — Arme ►. */
+  private characterSelectPanel(state: AppViewState): HTMLElement {
+    const sel = state.characterSelect
+    const player = sel?.player ?? 1
+    const total = sel?.total ?? 1
+    const color = playerColor(player)
+    const header = h('h1', { className: 'panel__title', text: `Joueur ${player}/${total}` })
+    header.style.color = color.hex
+    const panel = h(
+      'div',
+      { className: 'panel' },
+      header,
+      h('p', { className: 'panel__subtitle', text: 'Choisis ton personnage' }),
+      this.menuList(state),
+      h('p', { className: 'hint-line', text: 'Gauche/Droite pour changer • Valider: A / Entrée' })
+    )
     return h('div', { className: 'screen' }, panel)
   }
 
@@ -464,7 +486,13 @@ export class Overlay {
       state.screen === 'gameover' || state.screen === 'victory' ? `${state.elapsedMs}|${state.score}` : ''
     // Le déblocage du casque doré change le panneau titre → l'inclure dans la signature.
     const titlePart = state.screen === 'title' && state.goldSkin ? 'gold' : ''
-    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}`
+    // Sélection de personnage : le joueur actif (couleur du header) ne fait pas partie du
+    // menu (item unique 'char') → inclure explicitement pour re-rendre au changement de joueur.
+    const charSelectPart =
+      state.screen === 'characterSelect' && state.characterSelect !== null
+        ? `p${state.characterSelect.player}/${state.characterSelect.total}`
+        : ''
+    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}|${charSelectPart}`
   }
 }
 

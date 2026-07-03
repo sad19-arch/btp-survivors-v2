@@ -15,6 +15,7 @@ import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
 import { INTRO, MODE_PLAYER_COUNT, modeForCount } from '@content/config'
 import { WEAPONS } from '@content/weapons'
 import { PASSIVES } from '@content/passives'
+import { CHARACTERS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
 import type { AppViewState, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
@@ -87,6 +88,14 @@ export class App {
   private introMsLeft = 0
   /** Écran Options ouvert (surcouche au-dessus du titre / pause). */
   private optionsOpen = false
+  /** Sélection de personnage en cours (ouverte par « Jouer » au titre, avant le lancement de la partie). */
+  private charSelectOpen = false
+  /** Joueur (1-based) en train de choisir son personnage. */
+  private charSelectPlayer = 1
+  /** Personnages choisis jusqu'ici (index = playerId-1), passés à `start()` une fois complets. */
+  private selectedCharacters: string[] = []
+  /** Index courant dans la liste de roster (curseur du carrousel), remis à 0 à chaque joueur. */
+  private charCursor = 0
   /** Niveaux audio (possédés ici pour l'UI Options ; l'AudioDirector les lit). */
   private audioLevels: AudioLevels = loadAudioSettings()
   /** Compteur de frame, bumpé en fin d'`advanceTime` — clé du cache `getStateForFrame`. */
@@ -109,11 +118,11 @@ export class App {
 
   // --- cycle de vie ---------------------------------------------------------
 
-  /** Démarre une nouvelle partie (depuis le titre). */
-  start(mode: GameMode = this.mode): void {
+  /** Démarre une nouvelle partie (depuis le titre, ou après la sélection de personnage). */
+  start(mode: GameMode = this.mode, characters?: readonly string[]): void {
     this.bumpState()
     this.mode = mode
-    this.sim = new Simulation({ seed: this.seed, mode, phaseId: this.selectedPhase })
+    this.sim = new Simulation({ seed: this.seed, mode, phaseId: this.selectedPhase, characters })
     // Relaie les événements de sim (ex. onde d'aura, libération) vers l'App → rendu.
     this.sim.events.addEventListener('auraPulse', (e) => {
       const p = e as AuraPulseEvent
@@ -213,6 +222,12 @@ export class App {
       this.emitUi('menuMove')
       return
     }
+    // Carrousel de personnage : gauche/droite changent le perso (pas le focus, un seul item).
+    if (this.screen === 'characterSelect' && this.focus.current() === 'char' && (dir === 'left' || dir === 'right')) {
+      this.cycleCharacter(dir === 'right' ? 1 : -1)
+      this.emitUi('menuMove')
+      return
+    }
     // Options : gauche/droite règlent le volume de l'item focalisé.
     const cur = this.focus.current()
     if (this.screen === 'options' && cur !== null && cur.startsWith('vol_') && (dir === 'left' || dir === 'right')) {
@@ -271,6 +286,15 @@ export class App {
         break
       case 'gameover':
         this.started = false
+        break
+      case 'characterSelect':
+        if (this.charSelectPlayer > 1) {
+          this.charSelectPlayer--
+          this.selectedCharacters.pop()
+          this.charCursor = 0
+        } else {
+          this.charSelectOpen = false
+        }
         break
       default:
         break // titre / upgrade : pas de retour
@@ -392,7 +416,10 @@ export class App {
       introActive: this.introMsLeft > 0,
       stageTitle: phase?.title ?? '—',
       stageSubtitle: phase?.subtitle ?? '',
-      stageOrder: phase?.order ?? 0
+      stageOrder: phase?.order ?? 0,
+      characterSelect: this.charSelectOpen
+        ? { player: this.charSelectPlayer, total: this.selectedPlayers }
+        : null
     }
   }
 
@@ -428,6 +455,9 @@ export class App {
     if (this.optionsOpen) {
       return 'options'
     }
+    if (this.charSelectOpen && !this.started) {
+      return 'characterSelect'
+    }
     if (!this.started || this.sim === null) {
       return 'title'
     }
@@ -452,6 +482,8 @@ export class App {
     switch (this.screen) {
       case 'title':
         return this.titleItems()
+      case 'characterSelect':
+        return this.characterSelectItems()
       case 'paused':
         return PAUSE_ITEMS
       case 'gameover':
@@ -519,6 +551,32 @@ export class App {
       { id: 'options', label: 'Options', hint: null },
       { id: 'credits', label: 'Crédits', hint: null }
     ]
+  }
+
+  /** Liste des ids du roster de personnages, dans l'ordre de déclaration. */
+  private rosterIds(): string[] {
+    return Object.keys(CHARACTERS)
+  }
+
+  /** Item unique du carrousel de sélection de personnage (◄ Nom — Arme ►). */
+  private characterSelectItems(): MenuItemView[] {
+    const ids = this.rosterIds()
+    const char = characterDef(ids[this.charCursor] ?? DEFAULT_CHARACTER_ID)
+    const weaponName = WEAPONS[char.startingWeapon]?.name ?? char.startingWeapon
+    return [
+      { id: 'char', label: `◄ ${char.name} — ${weaponName} ►`, hint: 'Gauche/Droite • A: valider' }
+    ]
+  }
+
+  /** Décale le curseur de roster de `step` (cycle) — carrousel de sélection de personnage. */
+  private cycleCharacter(step: number): void {
+    const ids = this.rosterIds()
+    const n = ids.length
+    if (n === 0) {
+      return
+    }
+    this.charCursor = (((this.charCursor + step) % n) + n) % n
+    this.refreshFocus()
   }
 
   /** Décale la phase sélectionnée de `step` (cycle) — sélecteur de niveau du titre. */
@@ -591,13 +649,31 @@ export class App {
     }
     if (screen === 'title') {
       if (id === 'jouer') {
-        this.start(modeForCount(this.selectedPlayers))
+        this.charSelectOpen = true
+        this.charSelectPlayer = 1
+        this.selectedCharacters = []
+        this.charCursor = 0
       } else if (id === 'players') {
         this.cyclePlayers(1)
       } else if (id === 'stage') {
         this.cycleStage()
       } else if (id === 'options') {
         this.optionsOpen = true
+      }
+      this.refreshFocus()
+      return
+    }
+    if (screen === 'characterSelect') {
+      if (id === 'char') {
+        const chosen = this.rosterIds()[this.charCursor] ?? DEFAULT_CHARACTER_ID
+        this.selectedCharacters[this.charSelectPlayer - 1] = chosen
+        if (this.charSelectPlayer < this.selectedPlayers) {
+          this.charSelectPlayer++
+          this.charCursor = 0
+        } else {
+          this.charSelectOpen = false
+          this.start(modeForCount(this.selectedPlayers), this.selectedCharacters)
+        }
       }
       this.refreshFocus()
       return

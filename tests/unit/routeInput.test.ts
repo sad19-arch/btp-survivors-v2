@@ -11,8 +11,10 @@ describe('routeInput', () => {
     expect(app.getState().menu?.index).toBe(0)
   })
 
-  it('confirme « Jouer » et lance la partie', () => {
+  it('confirme « Jouer » puis le personnage par défaut et lance la partie', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    routeInput(app, new Map([[1, { move: { x: 0, y: 0 }, pressed: ['confirm'], action: false }]]))
+    expect(app.getState().screen).toBe('characterSelect')
     routeInput(app, new Map([[1, { move: { x: 0, y: 0 }, pressed: ['confirm'], action: false }]]))
     expect(app.getState().screen).toBe('game')
   })

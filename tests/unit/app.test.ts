@@ -49,7 +49,9 @@ describe('App — écrans & navigation', () => {
     expect(app.getState().screen).toBe('title') // toujours au titre, pas de partie lancée
     app.nav('up')
     app.nav('up') // focus « Jouer »
-    app.confirm()
+    app.confirm() // ouvre la sélection de personnage (solo → 1 joueur)
+    expect(app.getState().screen).toBe('characterSelect')
+    app.confirm() // valide le perso par défaut du carrousel → lance la partie
     expect(app.getState().screen).toBe('game')
     expect(app.getState().stageId).toBe('terrassement') // le stage choisi est bien lancé
   })
@@ -77,7 +79,12 @@ describe('App — écrans & navigation', () => {
     // Remonte à 2 puis lance : la partie démarre avec 2 joueurs.
     app.nav('right')
     app.nav('up') // focus « Jouer »
-    app.confirm()
+    app.confirm() // ouvre la sélection de personnage — joueur 1/2
+    expect(app.getState().screen).toBe('characterSelect')
+    expect(app.getState().characterSelect).toEqual({ player: 1, total: 2 })
+    app.confirm() // P1 valide son perso → tour du joueur 2
+    expect(app.getState().characterSelect).toEqual({ player: 2, total: 2 })
+    app.confirm() // P2 valide son perso → lance la partie
     expect(app.getState().screen).toBe('game')
     expect(app.getState().players.length).toBe(2)
   })
@@ -90,7 +97,7 @@ describe('App — écrans & navigation', () => {
     expect(s.menu).toBeNull()
   })
 
-  it('navigue puis valide « Jouer » pour lancer la partie', () => {
+  it('navigue puis valide « Jouer » pour lancer la partie (via la sélection de personnage)', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     expect(app.getState().menu?.index).toBe(0)
     app.nav('down')
@@ -98,6 +105,8 @@ describe('App — écrans & navigation', () => {
     app.nav('up')
     expect(app.getState().menu?.index).toBe(0) // sur « Jouer »
     app.confirm()
+    expect(app.getState().screen).toBe('characterSelect')
+    app.confirm() // valide le perso par défaut (solo, 1 seul joueur)
     expect(app.getState().screen).toBe('game')
     expect(app.getState().players.length).toBe(1)
   })
@@ -140,6 +149,68 @@ describe('App — écrans & navigation', () => {
     expect(s.menu?.items[0]?.hint).not.toBeNull() // l'effet est décrit
     app.confirm()
     expect(app.getState().screen).toBe('game')
+  })
+})
+
+describe('App — sélection SÉQUENTIELLE de personnage (titre → characterSelect → jeu)', () => {
+  it('solo : « Jouer » ouvre characterSelect (P1/1) puis confirm lance la partie avec le perso choisi', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    app.confirm() // « Jouer » (focus par défaut = index 0)
+    expect(app.getState().screen).toBe('characterSelect')
+    expect(app.getState().characterSelect).toEqual({ player: 1, total: 1 })
+    const label0 = app.getState().menu?.items[0]?.label
+    app.nav('right') // cycle vers le perso suivant du roster
+    const label1 = app.getState().menu?.items[0]?.label
+    expect(label1).not.toBe(label0)
+    app.confirm() // valide → dernier (et seul) joueur → lance la partie
+    const s = app.getState()
+    expect(s.screen).toBe('game')
+    expect(s.players.length).toBe(1)
+    const p1 = s.players[0]
+    expect(p1?.characterId).toBeDefined()
+    // L'arme de départ du joueur correspond bien au perso choisi (pas au défaut 'ouvrier').
+    expect(p1?.inventory.weapons[0]?.id).not.toBe('cloueur')
+  })
+
+  it('coop 2 joueurs : chacun choisit son perso à son tour, puis la partie démarre avec les deux personnages', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    app.nav('down') // focus « players »
+    app.nav('right') // 2 joueurs
+    app.nav('up') // focus « Jouer »
+    app.confirm() // ouvre characterSelect — P1
+    expect(app.getState().characterSelect).toEqual({ player: 1, total: 2 })
+    app.nav('right') // P1 choisit le perso suivant (index 1 du roster)
+    const p1Label = app.getState().menu?.items[0]?.label
+    app.confirm() // valide P1 → tour de P2
+    expect(app.getState().characterSelect).toEqual({ player: 2, total: 2 })
+    // Le curseur est remis à 0 pour le joueur suivant (le carrousel repart du début).
+    const p2Label = app.getState().menu?.items[0]?.label
+    app.confirm() // valide P2 (perso par défaut du carrousel) → lance la partie
+    const s = app.getState()
+    expect(s.screen).toBe('game')
+    expect(s.players.length).toBe(2)
+    const [j1, j2] = s.players
+    expect(j1?.characterId).toBeDefined()
+    expect(j2?.characterId).toBeDefined()
+    expect(j1?.characterId).not.toBe(j2?.characterId)
+    // Armes de départ distinctes, cohérentes avec les persos choisis.
+    expect(j1?.inventory.weapons[0]?.id).not.toBe(j2?.inventory.weapons[0]?.id)
+    expect(p1Label).not.toBe(p2Label)
+  })
+
+  it('back depuis characterSelect P1 revient au titre ; depuis P2 revient à P1', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    app.nav('down')
+    app.nav('right') // 2 joueurs
+    app.nav('up')
+    app.confirm() // characterSelect P1/2
+    app.confirm() // valide P1 → P2/2
+    expect(app.getState().characterSelect).toEqual({ player: 2, total: 2 })
+    app.back() // retour à P1
+    expect(app.getState().screen).toBe('characterSelect')
+    expect(app.getState().characterSelect).toEqual({ player: 1, total: 2 })
+    app.back() // retour au titre
+    expect(app.getState().screen).toBe('title')
   })
 })
 
