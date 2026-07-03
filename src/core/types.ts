@@ -55,6 +55,8 @@ export interface EnemyComp {
   speed: number // px/seconde
   isElite: boolean
   isBoss: boolean
+  /** Rôle de boss (mini-boss intermédiaire vs boss final). Absent pour les ennemis non-boss. */
+  bossRole?: 'mid' | 'final'
   contactDamage: number
   /** XP lâchée à la mort. */
   xpValue: number
