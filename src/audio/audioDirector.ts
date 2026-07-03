@@ -1,6 +1,7 @@
 import type Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
 import type { WeaponFiredEvent, PickupCollectedEvent } from '@core/events'
+import { WEAPONS } from '@content/weapons'
 import { SFX, VOICE, voiceStage, musicForState, AMB, type MusicKey } from './manifest'
 import { musicGain, sfxGain, duckedGain, type AudioLevels } from './settings'
 
@@ -62,7 +63,10 @@ export class AudioDirector {
     on('playerHurt', () => { this.playCue('playerHurt') })
     on('levelUp', () => { this.playCue('levelUp') })
     on('weaponFired', (e) => {
-      if ((e as WeaponFiredEvent).kind === 'cloueur') {
+      const kind = (e as WeaponFiredEvent).kind
+      // Toute arme de type projectile (cloueur + son évolution mitrailleuse_clous)
+      // partage le même SFX de tir — sinon l'évoluée tire en silence.
+      if (WEAPONS[kind]?.kind === 'projectile') {
         this.playCue('weapon_cloueur')
       }
     })

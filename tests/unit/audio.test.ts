@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { musicForState, MUSIC, SFX, VOICE, voiceStage, SFX_FILES, MUSIC_FILES, VOICE_FILES } from '@/audio/manifest'
 import { clamp01, musicGain, sfxGain, duckedGain, type AudioLevels } from '@/audio/settings'
 import { Simulation } from '@core/simulation'
+import { WEAPONS } from '@content/weapons'
 
 describe('audio — musique par état (pure)', () => {
   const g = (screen: string, stageId: string, bossPresent = false): string | null =>
@@ -81,6 +82,15 @@ describe('audio — réglages (gains)', () => {
     expect(duckedGain(0.44, false, 0.28)).toBeCloseTo(0.44) // pas de voix → plein
     expect(duckedGain(0.44, true, 0.28)).toBeCloseTo(0.1232) // voix → ducké à 28 %
     expect(duckedGain(0, true, 0.28)).toBe(0) // base nulle (muet) reste nulle
+  })
+})
+
+describe('audio — SFX de tir couvre toute arme projectile (pas seulement cloueur)', () => {
+  it('cloueur ET son évolution mitrailleuse_clous sont de type projectile', () => {
+    // AudioDirector.weaponFired joue le SFX de tir pour WEAPONS[kind]?.kind === 'projectile' —
+    // vérifie ici que l'évoluée qualifie bien (sinon elle tirerait en silence).
+    expect(WEAPONS['cloueur']?.kind).toBe('projectile')
+    expect(WEAPONS['mitrailleuse_clous']?.kind).toBe('projectile')
   })
 })
 
