@@ -8,7 +8,12 @@ import { HITBOX, PICKUP } from '@content/config'
  *
  * Pur et déterministe (pas d'aléa). Les pickups hors rayon restent immobiles.
  */
-export function pickupSystem(world: World, dtMs: number, collected?: PickupKind[]): void {
+export function pickupSystem(
+  world: World,
+  dtMs: number,
+  collected?: PickupKind[],
+  chestCollectors?: number[]
+): void {
   const dt = dtMs / 1000
   const collectDist = HITBOX.player + PICKUP.collectRadius
 
@@ -43,6 +48,12 @@ export function pickupSystem(world: World, dtMs: number, collected?: PickupKind[
     if (dist <= collectDist) {
       applyPickup(world, target.entity, pickup)
       collected?.push(pickup.type)
+      if (pickup.type === 'coffre') {
+        const playerId = world.get(target.entity, 'player')?.playerId
+        if (playerId !== undefined) {
+          chestCollectors?.push(playerId)
+        }
+      }
       world.despawn(gem)
       continue
     }

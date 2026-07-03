@@ -83,9 +83,9 @@ export class BossSpawnedEvent extends Event {
   }
 }
 
-/** Une arme vient d'évoluer (coffre ramassé + conditions réunies). */
+/** Une arme vient d'évoluer (coffre ramassé + conditions réunies), pour le joueur `playerId` (le ramasseur réel du coffre). */
 export class EvolvedEvent extends Event {
-  constructor(readonly weaponId: string) {
+  constructor(readonly weaponId: string, readonly playerId: number) {
     super('evolved')
   }
 }

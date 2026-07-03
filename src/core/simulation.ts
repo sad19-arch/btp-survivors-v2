@@ -460,6 +460,7 @@ export class Simulation {
     const freed: Vec2[] = []
     const fired: string[] = []
     const collected: PickupKind[] = []
+    const chestCollectors: number[] = []
     this.runSpawns(dtMs)
     this.applyPlayerInputs()
     // Snapshot pré-mouvement : les armes voient les ennemis là où ils sont AVANT
@@ -476,8 +477,8 @@ export class Simulation {
     collisionSystem(this.world, dtMs, this.enemyGrid)
     const killed = reapDeadEnemies(this.world, this.lootRng)
     this.score += killed
-    pickupSystem(this.world, dtMs, collected)
-    this.handleChestPickups(collected)
+    pickupSystem(this.world, dtMs, collected, chestCollectors)
+    this.handleChestPickups(chestCollectors)
     rescueSystem(this.world, freed)
     projectileLifetimeSystem(this.world, dtMs)
     this.updateWin() // boss vaincu → victoire (priorité sur la mort simultanée)
@@ -509,28 +510,25 @@ export class Simulation {
   }
 
   /**
-   * Traite les coffres d'évolution ramassés ce pas (tranche solo → joueur 1) :
-   * évolution si éligible (`tryEvolve` + `EvolvedEvent`), sinon bonus de soin
-   * de repli (30 PV bornés à `maxHp`). Simplification multi-joueurs assumée :
-   * en solo il n'existe qu'un ramasseur possible (joueur 1) ; à généraliser
-   * (ramasseur réel par pickup) si le coop est implémenté.
+   * Traite les coffres d'évolution ramassés ce pas, crédités au ramasseur réel
+   * (identifié par `pickupSystem` via le composant `player` de l'entité qui a
+   * touché le coffre — plus de joueur 1 codé en dur) : évolution si éligible
+   * (`tryEvolve` + `EvolvedEvent`), sinon bonus de soin de repli (30 PV bornés
+   * à `maxHp`). En solo, un seul ramasseur possible (joueur 1) → comportement
+   * inchangé.
    */
-  private handleChestPickups(collected: PickupKind[]): void {
-    const chestCount = collected.filter((k) => k === 'coffre').length
-    if (chestCount === 0) {
-      return
-    }
-    const player = this.playerEntities.get(1)
-    if (player === undefined) {
-      return
-    }
+  private handleChestPickups(collectors: number[]): void {
     // Boucle intentionnelle : chaque coffre réévalue l'inventaire APRÈS la
     // mutation du coffre précédent (une évolution consommée ce tour ne doit
     // pas retenter d'évoluer la même arme deux fois dans la même frame).
-    for (let i = 0; i < chestCount; i++) {
+    for (const playerId of collectors) {
+      const player = this.playerEntities.get(playerId)
+      if (player === undefined) {
+        continue
+      }
       const evolvedId = tryEvolve(this.world, player)
       if (evolvedId !== null) {
-        this.events.dispatchEvent(new EvolvedEvent(evolvedId))
+        this.events.dispatchEvent(new EvolvedEvent(evolvedId, playerId))
       } else {
         const health = this.world.get(player, 'health')
         if (health !== undefined) {

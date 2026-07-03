@@ -12,6 +12,7 @@ import { dirRow, walkFrame, idleFrame } from '@render/sprites'
 import { stageRender, type StageRender, FINAL_BOSS_SKIN } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
+import type { EvolvedEvent } from '@core/events'
 import type { PlayerState, PrisonerState } from '@core/types'
 import { PALETTE_HEX } from '@ui/palette'
 import { playerColor } from '@content/players'
@@ -229,11 +230,13 @@ export class GameScene extends Phaser.Scene {
   }
   /**
    * Évolution d'arme (coffre ramassé + conditions réunies) : grand halo au sol
-   * sur le joueur 1, réutilise l'asset de montée de niveau (agrandi) — pas de
-   * nouvel asset. Le bandeau/son sont gérés ailleurs (overlay/audio).
+   * sur le joueur qui a réellement ramassé le coffre (`EvolvedEvent.playerId`),
+   * réutilise l'asset de montée de niveau (agrandi) — pas de nouvel asset. Le
+   * bandeau/son sont gérés ailleurs (overlay/audio).
    */
-  private readonly onEvolved = (): void => {
-    const p = this.app.getStateForFrame(this.app.frameId).players[0]
+  private readonly onEvolved = (e: Event): void => {
+    const playerId = (e as EvolvedEvent).playerId
+    const p = this.app.getStateForFrame(this.app.frameId).players.find((pl) => pl.id === playerId)
     if (p === undefined) {
       return
     }

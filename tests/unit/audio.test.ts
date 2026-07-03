@@ -115,7 +115,7 @@ describe('audio — évolution (arme évoluée) déclenche un cue', () => {
     const settings: AudioLevels = { master: 1, music: 1, sfx: 1, muted: false }
     const director = new AudioDirector(manager, events, () => settings)
     expect(director).toBeInstanceOf(AudioDirector) // construit pour son effet de bord (bindEvents s'abonne au bus)
-    events.dispatchEvent(new EvolvedEvent('mitrailleuse_clous'))
+    events.dispatchEvent(new EvolvedEvent('mitrailleuse_clous', 1))
     expect(played.some((k) => SFX['bonus']?.keys.includes(k))).toBe(true)
   })
 })

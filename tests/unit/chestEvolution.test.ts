@@ -17,13 +17,17 @@ describe('coffre → évolution', () => {
     const sim = new Simulation({ seed: 1, mode: 'solo' })
     sim.debugGrant?.({ weapons: [{ id: 'cloueur', level: 8 }], passives: [{ id: 'air_comprime', level: 1 }] })
     let evolved = ''
+    let evolvedPlayerId = -1
     sim.events.addEventListener('evolved', (e) => {
       evolved = (e as EvolvedEvent).weaponId
+      evolvedPlayerId = (e as EvolvedEvent).playerId
     })
     sim.debugSpawnChestOnPlayer?.()
     sim.advanceTime(200)
     expect(evolved).toBe('mitrailleuse_clous')
     expect(player1(sim).weapons).toContain('mitrailleuse_clous')
+    // Solo : ramasseur unique possible = joueur 1 (comportement inchangé après le fix coop).
+    expect(evolvedPlayerId).toBe(1)
   })
 
   it('coffre ramassé sans évolution éligible → bonus de soin borné à maxHp', () => {

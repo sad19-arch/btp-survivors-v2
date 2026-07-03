@@ -139,7 +139,8 @@ export class App {
       this.events.dispatchEvent(new BossSpawnedEvent((e as BossSpawnedEvent).role))
     })
     this.sim.events.addEventListener('evolved', (e) => {
-      this.events.dispatchEvent(new EvolvedEvent((e as EvolvedEvent).weaponId))
+      const ev = e as EvolvedEvent
+      this.events.dispatchEvent(new EvolvedEvent(ev.weaponId, ev.playerId))
     })
     this.introMsLeft = this.introEnabled ? INTRO.durationMs : 0
     this.started = true
