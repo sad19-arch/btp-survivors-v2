@@ -65,7 +65,7 @@ if (uiRoot !== null) {
   // Clic souris sur un item de menu → sélection+validation via l'App.
   const overlay = new Overlay(uiRoot, (i) => app.clickItem(i))
   const tick = (): void => {
-    const state = app.getState()
+    const state = app.getStateForFrame(app.frameId)
     overlay.sync(state)
     audio?.observe(state) // musique par écran/phase/boss (crossfade)
     window.requestAnimationFrame(tick)

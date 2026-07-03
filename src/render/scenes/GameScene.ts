@@ -414,7 +414,7 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     // Changement de stage (partie lancée sur une autre phase que celle chargée) :
     // on relance la scène pour recharger sol/props/skins du bon stage.
-    const st = this.app.getState()
+    const st = this.app.getStateForFrame(this.app.frameId)
     if (st.screen !== 'title' && st.stageId !== this.loadedStageId) {
       this.scene.restart(this.sceneData)
       return
@@ -429,7 +429,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Démarre le suivi caméra dès que le sprite du joueur 1 existe (pas pendant l'intro). */
   private followLeader(): void {
-    if (this.following || this.app.getState().introActive) {
+    if (this.following || this.app.getStateForFrame(this.app.frameId).introActive) {
       return
     }
     const leader = this.playerSprites.get(1)
@@ -461,7 +461,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Synchronise les sprites avec l'état courant de la simulation. */
   private syncSprites(): void {
-    const state = this.app.getState()
+    const state = this.app.getStateForFrame(this.app.frameId)
     this.goldSkin = state.goldSkin // rafraîchi chaque frame (débloqué au titre à tout moment)
     const introActive = state.introActive
     // Nouvelle run : ré-arme l'intro (start relance introActive) et rend la main plus tard.

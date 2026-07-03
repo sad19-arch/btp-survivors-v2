@@ -85,6 +85,12 @@ export class App {
   private optionsOpen = false
   /** Niveaux audio (possédés ici pour l'UI Options ; l'AudioDirector les lit). */
   private audioLevels: AudioLevels = loadAudioSettings()
+  /** Compteur de frame, bumpé en fin d'`advanceTime` — clé du cache `getStateForFrame`. */
+  private frame = 0
+  /** Cache du dernier `AppViewState` calculé, partagé par rendu/overlay/audio sur une frame. */
+  private cachedState: AppViewState | null = null
+  /** Frame à laquelle `cachedState` a été calculé (-1 = jamais). */
+  private cachedFrame = -1
 
   constructor(opts: AppOptions) {
     this.seed = opts.seed
@@ -151,10 +157,17 @@ export class App {
     if (this.introMsLeft > 0) {
       this.introMsLeft = Math.max(0, this.introMsLeft - ms)
       this.refreshFocus()
+      this.frame++
       return
     }
     this.sim?.advanceTime(ms)
     this.refreshFocus()
+    this.frame++
+  }
+
+  /** Identifiant de frame courant (bumpé en fin d'`advanceTime`) — clé de `getStateForFrame`. */
+  get frameId(): number {
+    return this.frame
   }
 
   setInput(playerId: number, input: PlayerInput): void {
@@ -335,6 +348,20 @@ export class App {
       stageSubtitle: phase?.subtitle ?? '',
       stageOrder: phase?.order ?? 0
     }
+  }
+
+  /**
+   * Variante mise en cache de `getState()`, clée sur un numéro de frame : plusieurs
+   * appels avec le même `frame` renvoient la MÊME référence (rendu/overlay/audio
+   * mutualisent un seul `AppViewState`). `getState()` reste inchangé (toujours frais).
+   */
+  getStateForFrame(frame: number): AppViewState {
+    if (frame === this.cachedFrame && this.cachedState !== null) {
+      return this.cachedState
+    }
+    this.cachedState = this.getState()
+    this.cachedFrame = frame
+    return this.cachedState
   }
 
   renderToText(): string {
