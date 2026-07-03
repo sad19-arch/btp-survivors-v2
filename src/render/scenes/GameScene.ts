@@ -8,7 +8,7 @@ import { INTRO, WORLD } from '@content/config'
 import { createGround } from '@render/ground'
 import { createProps, createLandmark, createStructures, phaseSalt } from '@render/props'
 import { dirRow, walkFrame, idleFrame } from '@render/sprites'
-import { stageRender, type StageRender } from '@render/stages'
+import { stageRender, type StageRender, FINAL_BOSS_SKIN } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { PlayerState, PrisonerState } from '@core/types'
@@ -199,6 +199,15 @@ export class GameScene extends Phaser.Scene {
       for (const [key, file, frame] of SHARED_SHEETS) {
         this.load.spritesheet(key, file, { frameWidth: frame, frameHeight: frame })
       }
+      // Skin du boss FINAL (contremaître maudit) — PARTAGÉ entre tous les stages
+      // (comme les feuilles ci-dessus), chargé une seule fois indépendamment du
+      // stage courant. Phaser tolère un load.spritesheet répété sur une même clé
+      // (no-op si déjà en cache) — pas de garde nécessaire au-delà de ce que fait
+      // déjà SHARED_SHEETS ci-dessus.
+      this.load.spritesheet(FINAL_BOSS_SKIN.key, FINAL_BOSS_SKIN.file, {
+        frameWidth: FINAL_BOSS_SKIN.frame,
+        frameHeight: FINAL_BOSS_SKIN.frame
+      })
       // Feuille d'attente + variantes dorées du héros (clins d'œil ; repli si absentes).
       this.load.spritesheet('player_idle', 'player_idle.png', { frameWidth: 192, frameHeight: 192 })
       this.load.spritesheet('player_gold', 'player_j1_gold.png', { frameWidth: 192, frameHeight: 192 })
@@ -550,7 +559,7 @@ export class GameScene extends Phaser.Scene {
       seen.add(en.id)
       let sprite = this.enemySprites.get(en.id)
       if (sprite === undefined) {
-        const skin = en.isBoss ? this.stage.boss : this.stage.enemies[en.type]
+        const skin = en.isBoss ? (en.bossRole === 'final' ? FINAL_BOSS_SKIN : this.stage.boss) : this.stage.enemies[en.type]
         const key = skin?.key
         const scale = skin?.scale ?? DEFAULT_CHAR_SCALE
         if (key !== undefined && this.textures.exists(key)) {
