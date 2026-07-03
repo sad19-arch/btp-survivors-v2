@@ -15,6 +15,7 @@ import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { PlayerState, PrisonerState } from '@core/types'
 import { PALETTE_HEX } from '@ui/palette'
 import { playerColor } from '@content/players'
+import type { AppViewState } from '@/app/appState'
 
 /** Feuille PARTAGÉE (tous stages) : le joueur. Ennemis ET boss sont PAR STAGE (voir stages.ts). */
 const SHARED_SHEETS: ReadonlyArray<readonly [string, string, number]> = [['player', 'player_j1.png', 192]]
@@ -29,6 +30,25 @@ const DEFAULT_CHAR_SCALE = 0.516
 const IDLE_EMOTE_MS = 4000
 /** Décalage vertical (px monde) d'où le héros entre en marchant pendant l'intro. */
 const INTRO_ENTER_OFFSET = 380
+
+/** Zoom cible en solo / dernier survivant (identique au zoom initial de `create()`). */
+const SOLO_ZOOM = 1.0
+/** Vitesse de lerp du zoom caméra (par frame) — doux, jamais un « snap ». */
+const CAMERA_ZOOM_LERP = 0.05
+/** Vitesse de lerp du centrage caméra en coop (par frame) — évite le jitter. */
+const CAMERA_SCROLL_LERP = 0.08
+/**
+ * Paliers de zoom de la caméra de groupe (coop) selon l'écartement max entre
+ * joueurs vivants (px monde). On ne zoome JAMAIS au-delà de 1.0 (pas de zoom
+ * avant) — seulement en arrière pour que tout le monde reste cadré.
+ */
+const GROUP_ZOOM_TIERS: ReadonlyArray<{ maxSpread: number; zoom: number }> = [
+  { maxSpread: 350, zoom: 1.0 },
+  { maxSpread: 650, zoom: 0.85 },
+  { maxSpread: 950, zoom: 0.72 },
+]
+/** Zoom de repli si l'écartement dépasse tous les paliers ci-dessus. */
+const GROUP_ZOOM_FAR = 0.6
 
 /** Sprites de projectiles par type d'arme (spin = rotation continue ; faceVel = orienté vers la vitesse). */
 const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; faceVel: boolean }> = {
@@ -490,7 +510,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setZoom(1.2)
 
     this.syncSprites()
-    this.followLeader()
+    this.updateCamera(this.app.getStateForFrame(this.app.frameId))
 
     // Onde de choc du marteau + libération de prisonnier + évolution d'arme : la sim émet, l'App relaie.
     this.app.events.addEventListener('auraPulse', this.onAuraPulse)
@@ -528,19 +548,79 @@ export class GameScene extends Phaser.Scene {
       this.app.advanceTime(Math.min(delta, MAX_FRAME_MS))
     }
     this.syncSprites()
-    this.followLeader()
+    this.updateCamera(st)
   }
 
-  /** Démarre le suivi caméra dès que le sprite du joueur 1 existe (pas pendant l'intro). */
-  private followLeader(): void {
-    if (this.following || this.app.getStateForFrame(this.app.frameId).introActive) {
+  /**
+   * Caméra : suivi solo (P1/dernier survivant) inchangé ; caméra de groupe en
+   * coop (≥2 vivants) — centroïde + zoom par paliers d'écartement, tout lerpé.
+   * Ne fait rien pendant l'intro (le rendu scripté gère déjà le cadrage).
+   */
+  private updateCamera(state: AppViewState): void {
+    if (state.introActive) {
       return
     }
-    const leader = this.playerSprites.get(1)
-    if (leader !== undefined) {
-      this.cameras.main.startFollow(leader, true, 0.1, 0.1)
-      this.following = true
+    const alive = state.players.filter((p) => p.alive)
+
+    if (alive.length <= 1) {
+      // Solo / dernier survivant : comportement identique à l'ancien `followLeader`.
+      this.cameras.main.zoom = Phaser.Math.Linear(this.cameras.main.zoom, SOLO_ZOOM, CAMERA_ZOOM_LERP)
+      if (this.following) {
+        return
+      }
+      const leaderId = alive[0]?.id ?? 1
+      const leader = this.playerSprites.get(leaderId)
+      if (leader !== undefined) {
+        this.cameras.main.startFollow(leader, true, 0.1, 0.1)
+        this.following = true
+      }
+      return
     }
+
+    // Coop (≥2 vivants) : caméra de groupe, pas de suivi de sprite unique.
+    if (this.following) {
+      this.cameras.main.stopFollow()
+      this.following = false
+    }
+
+    let sumX = 0
+    let sumY = 0
+    for (const p of alive) {
+      sumX += p.x
+      sumY += p.y
+    }
+    const cx = sumX / alive.length
+    const cy = sumY / alive.length
+
+    let maxSpread = 0
+    for (let i = 0; i < alive.length; i++) {
+      for (let j = i + 1; j < alive.length; j++) {
+        const a = alive[i]
+        const b = alive[j]
+        if (a === undefined || b === undefined) {
+          continue
+        }
+        const d = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y)
+        if (d > maxSpread) {
+          maxSpread = d
+        }
+      }
+    }
+
+    let targetZoom = GROUP_ZOOM_FAR
+    for (const tier of GROUP_ZOOM_TIERS) {
+      if (maxSpread < tier.maxSpread) {
+        targetZoom = tier.zoom
+        break
+      }
+    }
+
+    const cam = this.cameras.main
+    cam.zoom = Phaser.Math.Linear(cam.zoom, targetZoom, CAMERA_ZOOM_LERP)
+    const targetScrollX = cx - cam.width / 2 / cam.zoom
+    const targetScrollY = cy - cam.height / 2 / cam.zoom
+    cam.scrollX = Phaser.Math.Linear(cam.scrollX, targetScrollX, CAMERA_SCROLL_LERP)
+    cam.scrollY = Phaser.Math.Linear(cam.scrollY, targetScrollY, CAMERA_SCROLL_LERP)
   }
 
   /** Construit les entrées par joueur (clavier⊕pad0 pour P1, pad(k-1) pour P k≥2). */
