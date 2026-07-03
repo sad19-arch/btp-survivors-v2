@@ -281,6 +281,23 @@ export class Simulation {
   }
 
   /**
+   * [Debug/seam] Ajoute de l'XP directement à la progression du joueur 1, sans
+   * passer par un pickup. Permet de forcer un level-up de façon déterministe
+   * (tests, seam de debug) — jamais utilisé en jeu normal.
+   */
+  debugAddXp(amount: number): void {
+    const e = this.playerEntities.get(1)
+    if (e === undefined) {
+      return
+    }
+    const progress = this.world.get(e, 'progress')
+    if (progress === undefined) {
+      return
+    }
+    progress.xp += amount
+  }
+
+  /**
    * [Debug/seam] Fait apparaître un coffre d'évolution sur la position du
    * joueur 1 (collecte immédiate au pas suivant), sans attendre le boss.
    */
@@ -518,11 +535,15 @@ export class Simulation {
           weapons: loadout?.slots.map((s) => ({ id: s.id, level: s.level })) ?? [],
           passives: passives?.list.map((p) => ({ id: p.id, level: p.level })) ?? []
         }
-        this.pendingLevelUp = {
-          playerId,
-          choices: rollCards(this.rng, inv, PROGRESSION.choices)
+        const choices = rollCards(this.rng, inv, PROGRESSION.choices)
+        // Inventaire déjà maxé (0 carte éligible) : le niveau est déjà consommé
+        // (`consumeLevelUp` ci-dessus), mais on ne gèle PAS le temps sur un écran
+        // à 0 carte — ce serait un soft-lock (aucun moyen de le lever). On continue.
+        if (choices.length > 0) {
+          this.pendingLevelUp = { playerId, choices }
+          return
         }
-        return
+        continue
       }
     }
   }
