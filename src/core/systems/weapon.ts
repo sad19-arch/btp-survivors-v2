@@ -8,6 +8,7 @@ import { effectiveWeaponStats } from '@content/effectiveStats'
 import { BASE_STATS } from '@content/passives'
 import { HITBOX } from '@content/config'
 import { Rng } from '../rng'
+import type { SpatialGrid } from '../spatialGrid'
 
 /**
  * Système d'armes : chaque arme du joueur agit automatiquement selon son `kind`.
@@ -27,7 +28,8 @@ export function weaponSystem(
   dtMs: number,
   pulses?: AuraPulse[],
   fired?: string[],
-  rng?: Rng
+  rng?: Rng,
+  grid?: SpatialGrid
 ): void {
   despawnOrphanOrbiters(world)
 
@@ -56,16 +58,16 @@ export function weaponSystem(
           tickProjectile(world, slot, def, eff, pos, player, dtMs, fired)
           break
         case 'aura':
-          tickAura(slot, eff, pos, dtMs, world, def.kind, pulses)
+          tickAura(slot, eff, pos, dtMs, world, def.kind, pulses, grid)
           break
         case 'orbital':
-          tickOrbital(world, slot, def, eff, e, pos, player, dtMs)
+          tickOrbital(world, slot, def, eff, e, pos, player, dtMs, grid)
           break
         case 'sweep':
-          tickSweep(slot, eff, pos, dtMs, world, def.kind, pulses)
+          tickSweep(slot, eff, pos, dtMs, world, def.kind, pulses, grid)
           break
         case 'strike':
-          tickStrike(slot, eff, dtMs, world, def.kind, rng, pulses)
+          tickStrike(slot, eff, dtMs, world, def.kind, rng, pulses, grid)
           break
       }
     }
@@ -102,6 +104,8 @@ function tickProjectile(
   slot.cooldownLeftMs = eff.cooldownMs
 }
 
+// Reste linéaire volontairement : s'exécute à la cadence de l'arme (cooldown),
+// pas par frame ni par projectile — coût négligeable, la grille n'apporterait rien ici.
 function findNearestEnemy(world: World, from: Vec2, range: number): Vec2 | null {
   let best: Vec2 | null = null
   let bestDist = range * range
@@ -168,7 +172,8 @@ function tickAura(
   dtMs: number,
   world: World,
   kind: string,
-  pulses?: AuraPulse[]
+  pulses?: AuraPulse[],
+  grid?: SpatialGrid
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -176,7 +181,7 @@ function tickAura(
   }
   slot.cooldownLeftMs = eff.cooldownMs
   const reach = eff.area + HITBOX.enemy
-  damageEnemiesInRadius(world, pos, reach, eff.damage)
+  damageEnemiesInRadius(world, pos, reach, eff.damage, grid)
   pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind })
 }
 
@@ -194,7 +199,8 @@ function tickSweep(
   dtMs: number,
   world: World,
   kind: string,
-  pulses?: AuraPulse[]
+  pulses?: AuraPulse[],
+  grid?: SpatialGrid
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -204,7 +210,7 @@ function tickSweep(
   const reach = eff.area + HITBOX.enemy
   const passes = Math.max(1, Math.round(eff.count))
   for (let i = 0; i < passes; i++) {
-    damageEnemiesInRadius(world, pos, reach, eff.damage)
+    damageEnemiesInRadius(world, pos, reach, eff.damage, grid)
   }
   pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind })
 }
@@ -251,7 +257,8 @@ function tickStrike(
   world: World,
   kind: string,
   rng?: Rng,
-  pulses?: AuraPulse[]
+  pulses?: AuraPulse[],
+  grid?: SpatialGrid
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -265,7 +272,7 @@ function tickStrike(
     if (tpos === undefined) {
       continue
     }
-    damageEnemiesInRadius(world, tpos, eff.area, eff.damage)
+    damageEnemiesInRadius(world, tpos, eff.area, eff.damage, grid)
     // Retour visuel : une onde à chaque ennemi frappé (VFX propre = passe DA).
     pulses?.push({ x: tpos.x, y: tpos.y, radius: eff.area, kind })
   }
@@ -281,7 +288,8 @@ function tickOrbital(
   owner: EntityId,
   pos: Vec2,
   player: PlayerComp,
-  dtMs: number
+  dtMs: number,
+  grid?: SpatialGrid
 ): void {
   const count = Math.max(1, Math.round(eff.count))
   const radius = eff.orbitRadius > 0 ? eff.orbitRadius : 60
@@ -312,7 +320,7 @@ function tickOrbital(
   }
   slot.cooldownLeftMs = eff.cooldownMs
   for (const b of blades) {
-    damageEnemiesInRadius(world, b, hitRadius + HITBOX.enemy, eff.damage)
+    damageEnemiesInRadius(world, b, hitRadius + HITBOX.enemy, eff.damage, grid)
   }
 }
 
@@ -370,9 +378,38 @@ function despawnOrphanOrbiters(world: World): void {
 
 // --- commun ---------------------------------------------------------------
 
-/** Inflige `damage` à tous les ennemis vivants dans un rayon `reach` d'un point. */
-function damageEnemiesInRadius(world: World, center: Vec2, reach: number, damage: number): void {
+// Scratch réutilisé par tous les appels `damageEnemiesInRadius` avec grille (évite une
+// allocation par frappe). Sûr : la fonction consomme le tableau de façon synchrone avant
+// tout autre appel (pas de réentrance/async dans le core).
+const radiusQueryScratch: number[] = []
+
+/**
+ * Inflige `damage` à tous les ennemis vivants dans un rayon `reach` d'un point.
+ *
+ * Avec `grid` : les candidats viennent de `grid.queryCircle` (surensemble spatial, cf.
+ * `SpatialGrid`) puis subissent EXACTEMENT le même test (distance au carré + `hp > 0`)
+ * que le repli linéaire ci-dessous. C'est une frappe de zone (AoE) : TOUS les ennemis dans
+ * le rayon encaissent les dégâts, il n'y a pas de `break`/premier-touché — donc l'ORDRE des
+ * candidats n'affecte pas l'ensemble endommagé (contrairement à `collisionSystem`, qui doit
+ * retrier par id). Sans `grid` (tests existants, appels sans grille) : repli linéaire
+ * inchangé — comportement identique bit à bit.
+ */
+function damageEnemiesInRadius(world: World, center: Vec2, reach: number, damage: number, grid?: SpatialGrid): void {
   const r2 = reach * reach
+  if (grid !== undefined) {
+    grid.queryCircle(center.x, center.y, reach, radiusQueryScratch)
+    for (const en of radiusQueryScratch) {
+      const epos = world.get(en, 'position')
+      const eh = world.get(en, 'health')
+      if (epos === undefined || eh === undefined || eh.hp <= 0) {
+        continue
+      }
+      if ((epos.x - center.x) ** 2 + (epos.y - center.y) ** 2 <= r2) {
+        eh.hp -= damage
+      }
+    }
+    return
+  }
   for (const en of world.query('enemy', 'position', 'health')) {
     const epos = world.get(en, 'position')
     const eh = world.get(en, 'health')

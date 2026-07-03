@@ -450,7 +450,12 @@ export class Simulation {
     const collected: PickupKind[] = []
     this.runSpawns(dtMs)
     this.applyPlayerInputs()
-    weaponSystem(this.world, dtMs, pulses, fired, this.rng)
+    // Snapshot pré-mouvement : les armes voient les ennemis là où ils sont AVANT
+    // `movementSystem` (le scan linéaire qu'elles remplaçaient itérait le monde à cet
+    // instant précis). Reconstruit une seconde fois plus bas (post-mouvement) pour
+    // `collisionSystem` — deux instantanés distincts, chacun exact pour son système.
+    this.rebuildEnemyGrid()
+    weaponSystem(this.world, dtMs, pulses, fired, this.rng, this.enemyGrid)
     enemyAiSystem(this.world)
     movementSystem(this.world, dtMs)
     worldBoundsSystem(this.world, WORLD)
