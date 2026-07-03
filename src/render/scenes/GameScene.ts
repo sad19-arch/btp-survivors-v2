@@ -513,7 +513,7 @@ export class GameScene extends Phaser.Scene {
       return
     }
     if (!this.testMode) {
-      routeInput(this.app, this.readInput())
+      routeInput(this.app, new Map([[1, this.readInput()]]))
       this.app.advanceTime(Math.min(delta, MAX_FRAME_MS))
     }
     this.syncSprites()
