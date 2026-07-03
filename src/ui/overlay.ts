@@ -451,16 +451,17 @@ function monogram(label: string): string {
 }
 
 /**
- * Icône générique (carte d'upgrade ou tuile d'inventaire) : tente `icon_<id>.png` ;
- * bascule sur un MONOGRAMME (initiales du libellé) si le fichier n'existe pas
- * encore. Factorisé entre `cardIcon` (upgrade) et `invTile` (inventaire HUD) —
- * mêmes règles, classes CSS différentes selon le contexte.
+ * Icône générique (carte d'upgrade ou tuile d'inventaire) : tente
+ * `icon_<id>_64.png` (pixel-art PixelLab, lot B3) ; bascule sur un MONOGRAMME
+ * (initiales du libellé) si le fichier n'existe pas encore (ex. armes évoluées
+ * sans icône dédiée). Factorisé entre `cardIcon` (upgrade) et `invTile`
+ * (inventaire HUD) — mêmes règles, classes CSS différentes selon le contexte.
  */
 function icon(id: string, label: string, boxClass: string, imgClass: string, monoClass: string): HTMLElement {
   const box = h('div', { className: boxClass })
   const img = h('img', {
     className: imgClass,
-    attrs: { src: `${import.meta.env.BASE_URL}stage01/ui/icon_${id}.png`, alt: '' }
+    attrs: { src: `${import.meta.env.BASE_URL}stage01/ui/icon_${id}_64.png`, alt: '' }
   })
   img.addEventListener('error', () => {
     img.remove()

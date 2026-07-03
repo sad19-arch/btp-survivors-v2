@@ -29,6 +29,14 @@ test('l’écran titre s’affiche et se navigue', async ({ page }) => {
   // avec un marqueur de niveau (« Nv. »).
   await expect(page.locator('.inv__tile').first()).toBeVisible()
   await expect(page.locator('.inv')).toContainText('Nv.')
+
+  // L'icône pixel (lot B3) de l'arme de départ se charge RÉELLEMENT : l'<img>
+  // n'a pas été retiré au profit du monogramme, et sa largeur naturelle est > 0.
+  const startIcon = page.locator('.inv__tile img').first()
+  await expect(startIcon).toBeVisible()
+  await expect
+    .poll(() => startIcon.evaluate((el) => (el instanceof HTMLImageElement ? el.naturalWidth : 0)))
+    .toBeGreaterThan(0)
 })
 
 test('l’écran de pause s’affiche', async ({ page }) => {
