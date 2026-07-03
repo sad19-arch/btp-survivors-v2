@@ -1,6 +1,7 @@
 import { h, clear } from './h'
 import { injectStyles } from './styles'
-import type { AppViewState, InventoryEntry, MenuItemView } from '@/app/appState'
+import { playerColor } from '@content/players'
+import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView } from '@/app/appState'
 
 /**
  * Overlay DOM des écrans (Titre / Pause / Upgrade / Game Over) + HUD. Observe
@@ -93,6 +94,34 @@ export class Overlay {
         this.bar(hp / maxHp, 'hud__bar--hp'),
         h('span', { className: 'hud__xp', text: `XP ${Math.floor(xp)}/${threshold}` }),
         this.bar(xp / threshold, 'hud__bar--xp')
+      )
+    )
+    // Co-op (>1 joueur) : bandeau de mini-HUD par joueur (pastille couleur + PV + niveau).
+    // Solo (1 joueur) : rien de plus — le HUD ci-dessus reste visuellement inchangé.
+    if (state.players.length > 1) {
+      this.hud.append(
+        h(
+          'div',
+          { className: 'hud__players' },
+          ...state.players.map((player) => this.playerCard(player))
+        )
+      )
+    }
+  }
+
+  /** Mini-HUD d'un joueur (co-op) : pastille couleur + id + PV + niveau, atténué si mort. */
+  private playerCard(player: AppPlayerState): HTMLElement {
+    const color = playerColor(player.id)
+    const swatch = h('div', { className: 'hud__pswatch' })
+    swatch.style.backgroundColor = color.hex
+    return h(
+      'div',
+      { className: player.alive ? 'hud__pcard' : 'hud__pcard hud__pcard--dead' },
+      swatch,
+      h('div', { className: 'hud__pinfo' },
+        h('span', { className: 'hud__pid', text: `J${player.id}` }),
+        h('span', { className: 'hud__php', text: `PV ${Math.ceil(player.hp)}/${Math.round(player.maxHp)}` }),
+        h('span', { className: 'hud__plvl', text: `Nv ${player.level}` })
       )
     )
   }

@@ -42,6 +42,38 @@ const CSS = `
 #ui-root .hud__bar-fill { height: 100%; }
 #ui-root .hud__bar--hp .hud__bar-fill { background: ${PALETTE.vertBonus}; }
 #ui-root .hud__bar--xp .hud__bar-fill { background: ${PALETTE.cyanAccent}; }
+#ui-root .hud__players {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  margin-top: 2px;
+}
+#ui-root .hud__pcard {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: ${PALETTE.brunSombre};
+  border: 2px solid ${PALETTE.contour};
+  box-shadow: 3px 3px 0 ${PALETTE.contour};
+  padding: 4px 6px;
+}
+#ui-root .hud__pcard--dead { opacity: 0.45; }
+#ui-root .hud__pswatch {
+  width: 12px;
+  height: 12px;
+  border: 2px solid ${PALETTE.contour};
+  flex-shrink: 0;
+}
+#ui-root .hud__pinfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+#ui-root .hud__pid { color: ${PALETTE.jauneSecurite}; font-weight: bold; }
+#ui-root .hud__php { color: ${PALETTE.vertBonus}; }
+#ui-root .hud__plvl { color: ${PALETTE.blanc}; }
 #ui-root .screen {
   position: absolute;
   inset: 0;

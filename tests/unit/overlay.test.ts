@@ -145,3 +145,45 @@ describe('Overlay — bandeau d’évolution', () => {
     expect(banner?.textContent).toContain('Mitrailleuse à clous')
   })
 })
+
+describe('Overlay — HUD multi-joueur (co-op)', () => {
+  it('3 joueurs → 3 mini-HUD, PV/niveau par joueur, couleurs distinctes', () => {
+    const app = new App({ seed: 1, mode: 'coop3', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+
+    const state = app.getState()
+    expect(state.players.length).toBe(3)
+
+    const cards = root.querySelectorAll<HTMLElement>('.hud__pcard')
+    expect(cards.length).toBe(3)
+
+    cards.forEach((card, i) => {
+      const p = state.players[i]
+      expect(p).toBeDefined()
+      expect(card.textContent).toContain(`J${p?.id}`)
+      expect(card.textContent).toContain(`PV ${Math.ceil(p?.hp ?? 0)}`)
+      expect(card.textContent).toContain(`Nv ${p?.level ?? 1}`)
+    })
+
+    const colors = Array.from(cards).map(
+      (card) => card.querySelector<HTMLElement>('.hud__pswatch')?.style.backgroundColor
+    )
+    expect(new Set(colors).size).toBe(colors.length) // toutes distinctes
+  })
+
+  it('solo (1 joueur) → pas de bandeau .hud__players, HUD inchangé', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+
+    expect(root.querySelector('.hud__players')).toBeNull()
+    expect(root.querySelectorAll('.hud__pcard').length).toBe(0)
+
+    const hud = root.querySelector<HTMLElement>('.hud')
+    expect(hud?.style.display).toBe('flex')
+    expect(hud?.textContent).toContain('Niv. 1')
+    expect(hud?.textContent).toContain('PV ')
+    expect(hud?.textContent).toContain('XP ')
+  })
+})
