@@ -28,9 +28,9 @@ export const SPAWN_RAMP: readonly SpawnRampStep[] = [
   { fromSec: 340, intervalMs: 650, countPerWave: 3 }, // ~4,6/s
   { fromSec: 420, intervalMs: 520, countPerWave: 4 }, // ~7,7/s — on fauche
   { fromSec: 500, intervalMs: 430, countPerWave: 5 },
-  { fromSec: 540, intervalMs: 360, countPerWave: 6 }, // 9:00 : tension
-  { fromSec: 600, intervalMs: 320, countPerWave: 7 }, // 10:00
-  { fromSec: 630, intervalMs: 280, countPerWave: 8 } // 10:30 : climax + boss final
+  { fromSec: 540, intervalMs: 330, countPerWave: 7 }, // 9:00 : tension
+  { fromSec: 600, intervalMs: 280, countPerWave: 8 }, // 10:00
+  { fromSec: 630, intervalMs: 230, countPerWave: 9 } // 10:30 : climax + boss final
 ]
 
 /** Palier courant : le dernier dont `fromSec` est ≤ au temps écoulé. */
@@ -68,11 +68,11 @@ export interface DifficultyScale {
  */
 export function difficultyScaleAt(elapsedMs: number): DifficultyScale {
   const min = Math.max(0, elapsedMs) / 60000
-  // PV : montée DOUCE pendant la puissance (fondent) puis coup de fouet après 9:00 (mur).
-  const hp = min <= 9 ? 0.7 + 0.12 * min : 0.7 + 0.12 * 9 + 0.55 * (min - 9)
+  // PV : montée DOUCE pendant la puissance (fondent) puis coup de fouet après 8:30 (mur).
+  const hp = min <= 8.5 ? 0.7 + 0.12 * min : 0.7 + 0.12 * 8.5 + 1.3 * (min - 8.5)
   return {
-    hp, // 3:00→1,06 · 6:00→1,42 · 9:00→1,78 · 11:00→2,88
-    contactDamage: 0.5 + 0.16 * min,
+    hp, // 3:00→1,06 · 6:00→1,42 · 8:30→1,72 · 11:00→5,0
+    contactDamage: 0.5 + 0.18 * min,
     speed: Math.min(1.2, 1.0 + 0.04 * min)
   }
 }

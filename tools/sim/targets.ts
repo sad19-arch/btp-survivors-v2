@@ -14,12 +14,12 @@ export interface TargetReport {
  *  - greedy/idle meurent (imprudents) mais pas instantanément.
  * Oracle final = playtest humain ; ces seuils sont un garde-fou de régression.
  */
-const KITE_MIN_SURVIVAL_MEDIAN_MS = 150000 // survie médiane ≥ 2:30 (atteint le milieu de run)
-const KITE_MAX_SURVIVE_FULL_PCT = 60 // ne doit PAS survivre passivement toute la run
-const KITE_MIN_FIRST_DEATH_MS = 45000 // aucune run ne meurt avant 0:45 (départ non punitif)
-const KITE_MAX_HP_DIP_PCT = 45 // les PV médians doivent plonger sous ce seuil (tension)
+const KITE_MIN_SURVIVAL_MEDIAN_MS = 300000 // survie médiane ≥ 5:00 (atteint le boss de mi-parcours)
+const KITE_MAX_SURVIVE_FULL_PCT = 55 // ne doit PAS survivre passivement les 11 min
+const KITE_MIN_FIRST_DEATH_MS = 60000 // aucune run ne meurt avant 1:00 (départ non punitif)
+const KITE_MAX_HP_DIP_PCT = 40 // les PV médians doivent plonger sous ce seuil (climax 9-11 min)
 /** Un bot non-skillé meurt, mais pas dans les toutes premières secondes. */
-const UNSKILLED_MIN_DEATH_MS = 40000
+const UNSKILLED_MIN_DEATH_MS = 45000
 
 export function evaluateTargets(aggs: BotAggregate[]): TargetReport {
   const byBot = new Map(aggs.map((a) => [a.bot, a]))
