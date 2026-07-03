@@ -7,6 +7,8 @@ import { AudioDirector } from '@/audio/audioDirector'
 import { parseBootOptions } from './bootOptions'
 import { phaseIdFromLevel } from '@content/phases'
 import { createSeam, installSeam } from './seam'
+import type { EvolvedEvent } from '@core/events'
+import { WEAPONS } from '@content/weapons'
 
 /**
  * Point d'entrée (couche rendu). Lit les options de boot, instancie l'App (qui
@@ -64,6 +66,12 @@ const uiRoot = document.getElementById('ui-root')
 if (uiRoot !== null) {
   // Clic souris sur un item de menu → sélection+validation via l'App.
   const overlay = new Overlay(uiRoot, (i) => app.clickItem(i))
+  // Bandeau d'évolution : résout le nom via WEAPONS ici (composition root) pour
+  // garder l'Overlay libre de toute dépendance à `src/content`.
+  app.events.addEventListener('evolved', (e) => {
+    const weaponId = (e as EvolvedEvent).weaponId
+    overlay.showEvolutionBanner(WEAPONS[weaponId]?.name ?? weaponId)
+  })
   const tick = (): void => {
     const state = app.getStateForFrame(app.frameId)
     overlay.sync(state)

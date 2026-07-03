@@ -87,6 +87,8 @@ export class AudioDirector {
       this.playCue('auraPulse', rateMul)
     })
     on('prisonerFreed', () => { this.playCue('prisonerFreed'); this.playVoice(VOICE.thankyou) })
+    // Fanfare d'évolution (coffre ramassé + conditions réunies) : cue existant + voix triomphante.
+    on('evolved', () => { this.playCue('bonus'); this.playVoice(VOICE.bonus) })
     on('upgradePick', () => { this.playCue('upgradePick') })
     on('menuMove', () => { this.playCue('menuMove') })
     on('menuConfirm', () => { this.playCue('menuConfirm') })

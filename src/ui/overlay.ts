@@ -165,6 +165,15 @@ export class Overlay {
     this.prevHadBoss = hasBoss
   }
 
+  /**
+   * Bandeau « ÉVOLUTION — <nom> » (coffre ramassé + conditions réunies). Appelé
+   * depuis la composition root (`main.ts`) qui résout le nom via `WEAPONS` —
+   * l'Overlay reste sans dépendance à `src/content`.
+   */
+  showEvolutionBanner(name: string): void {
+    this.showBanner(`Évolution — ${name}`, 'banner banner--evolution')
+  }
+
   private showBanner(text: string, className: string): void {
     clear(this.bannerLayer)
     this.bannerLayer.append(h('div', { className, text }))

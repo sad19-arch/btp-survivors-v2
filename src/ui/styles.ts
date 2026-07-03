@@ -140,6 +140,18 @@ const CSS = `
   font-size: 26px;
   text-shadow: 2px 2px 0 ${PALETTE.contour};
 }
+#ui-root .banner--evolution {
+  top: 30%;
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  background: ${PALETTE.vertBonus};
+  color: ${PALETTE.contour};
+  border-color: ${PALETTE.jauneSecurite};
+  font-size: 24px;
+  text-shadow: none;
+  animation: none;
+}
 #ui-root .bossbar {
   position: absolute;
   top: 12px;

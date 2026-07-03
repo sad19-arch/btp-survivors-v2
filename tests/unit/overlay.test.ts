@@ -109,3 +109,13 @@ describe('Overlay — inventaire HUD (armes/passifs + niveaux)', () => {
     expect(root.querySelectorAll('.inv__tile').length).toBe(0)
   })
 })
+
+describe('Overlay — bandeau d’évolution', () => {
+  it('showEvolutionBanner insère un .banner--evolution avec le nom de l’arme', () => {
+    const { root, overlay } = mount()
+    overlay.showEvolutionBanner('Mitrailleuse à clous')
+    const banner = root.querySelector('.banner--evolution')
+    expect(banner).not.toBeNull()
+    expect(banner?.textContent).toContain('Mitrailleuse à clous')
+  })
+})

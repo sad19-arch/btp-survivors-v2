@@ -141,6 +141,18 @@ export class GameScene extends Phaser.Scene {
     this.spawnVfx('vfx_sparkle', p.x, p.y, 0.5, 1.9, 450)
     this.spawnBubble(p.x, p.y)
   }
+  /**
+   * Évolution d'arme (coffre ramassé + conditions réunies) : grand halo au sol
+   * sur le joueur 1, réutilise l'asset de montée de niveau (agrandi) — pas de
+   * nouvel asset. Le bandeau/son sont gérés ailleurs (overlay/audio).
+   */
+  private readonly onEvolved = (): void => {
+    const p = this.app.getStateForFrame(this.app.frameId).players[0]
+    if (p === undefined) {
+      return
+    }
+    this.spawnVfx('vfx_levelup', p.x, p.y, 0.5, 2.5, 600)
+  }
 
   constructor() {
     super('game')
@@ -401,12 +413,14 @@ export class GameScene extends Phaser.Scene {
     this.syncSprites()
     this.followLeader()
 
-    // Onde de choc du marteau + libération de prisonnier : la sim émet, l'App relaie.
+    // Onde de choc du marteau + libération de prisonnier + évolution d'arme : la sim émet, l'App relaie.
     this.app.events.addEventListener('auraPulse', this.onAuraPulse)
     this.app.events.addEventListener('prisonerFreed', this.onPrisonerFreed)
+    this.app.events.addEventListener('evolved', this.onEvolved)
     this.events.once('shutdown', () => {
       this.app.events.removeEventListener('auraPulse', this.onAuraPulse)
       this.app.events.removeEventListener('prisonerFreed', this.onPrisonerFreed)
+      this.app.events.removeEventListener('evolved', this.onEvolved)
     })
 
     if (this.input.keyboard !== null) {
