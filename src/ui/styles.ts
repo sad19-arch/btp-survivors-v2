@@ -189,6 +189,47 @@ const CSS = `
 #ui-root .stagecard__title { color: ${PALETTE.blanc}; font-size: 30px; font-weight: bold; text-shadow: 3px 3px 0 ${PALETTE.contour}; }
 #ui-root .stagecard__sub { color: ${PALETTE.solSable}; font-size: 13px; text-transform: none; letter-spacing: 0; }
 @keyframes stagecard-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+#ui-root .inv {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(43, 32, 24, 0.85);
+  border: 3px solid ${PALETTE.contour};
+  box-shadow: 4px 4px 0 ${PALETTE.contour};
+  padding: 6px;
+}
+#ui-root .inv__row { display: flex; gap: 6px; min-height: 32px; }
+#ui-root .inv__tile {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  box-sizing: border-box;
+}
+#ui-root .inv__icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
+#ui-root .inv__img { width: 32px; height: 32px; image-rendering: pixelated; }
+#ui-root .inv__mono {
+  width: 32px; height: 32px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  background: ${PALETTE.brunSombre};
+  border: 2px solid ${PALETTE.contour};
+  color: ${PALETTE.jauneSecurite};
+  font-size: 13px; font-weight: bold;
+}
+#ui-root .inv__lvl {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  background: ${PALETTE.contour};
+  border: 2px solid ${PALETTE.jauneSecurite};
+  color: ${PALETTE.blanc};
+  font-size: 9px;
+  font-weight: bold;
+  line-height: 1;
+  padding: 2px 3px;
+}
 `
 
 let injected = false

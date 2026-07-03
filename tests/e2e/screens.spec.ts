@@ -24,6 +24,11 @@ test('l’écran titre s’affiche et se navigue', async ({ page }) => {
   })
   await expect(page.locator('.panel')).toHaveCount(0)
   await expect(page.locator('.hud')).toContainText('Niv. 1')
+
+  // L'inventaire (armes/passifs) est visible en jeu : l'arme de départ apparaît,
+  // avec un marqueur de niveau (« Nv. »).
+  await expect(page.locator('.inv__tile').first()).toBeVisible()
+  await expect(page.locator('.inv')).toContainText('Nv.')
 })
 
 test('l’écran de pause s’affiche', async ({ page }) => {

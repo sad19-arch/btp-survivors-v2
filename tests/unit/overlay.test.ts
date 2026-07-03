@@ -70,3 +70,42 @@ describe('Overlay (DOM)', () => {
     expect(root.querySelectorAll('.card').length).toBe(4)
   })
 })
+
+describe('Overlay — inventaire HUD (armes/passifs + niveaux)', () => {
+  it('affiche une tuile par arme/passif possédé, avec le niveau', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({
+      weapons: [{ id: 'scie', level: 3 }],
+      passives: [{ id: 'air_comprime', level: 2 }]
+    })
+    const { root, overlay } = mount()
+    // happy-dom n'a pas de vrai décodeur d'image → l'event `error` ne se déclenche
+    // pas forcément tout seul ; on vérifie juste que sync() ne plante pas et que
+    // les tuiles existent (le fallback monogramme est couvert par un sync direct).
+    overlay.sync(app.getState())
+    const s = app.getState()
+    const expected = s.players[0]?.inventory.weapons.length ?? 0
+    const expectedPassives = s.players[0]?.inventory.passives.length ?? 0
+    const tiles = root.querySelectorAll('.inv__tile')
+    expect(tiles.length).toBe(expected + expectedPassives)
+    expect(root.querySelector('.inv')?.textContent).toContain('Nv.')
+  })
+
+  it('le fallback monogramme ne plante pas (pas de vraie image en happy-dom)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    expect(() => overlay.sync(app.getState())).not.toThrow()
+    // Force l'échec de chargement de chaque <img> (comme un navigateur réel sans le fichier).
+    root.querySelectorAll<HTMLImageElement>('.inv__img').forEach((img) => {
+      img.dispatchEvent(new Event('error'))
+    })
+    expect(root.querySelectorAll('.inv__mono').length).toBeGreaterThan(0)
+  })
+
+  it("masque l'inventaire hors écran de jeu (titre)", () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+    expect(root.querySelectorAll('.inv__tile').length).toBe(0)
+  })
+})

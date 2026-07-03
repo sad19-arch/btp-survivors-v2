@@ -153,3 +153,36 @@ describe('App — helpers de debug (passe-plat vers Simulation, pour le seam)', 
     expect(evolvedId).toBe('mitrailleuse_clous')
   })
 })
+
+describe('App — inventaire résolu (getState().players[i].inventory)', () => {
+  it("l'arme de départ apparaît dans l'inventaire avec son nom résolu", () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const p = app.getState().players[0]
+    const cloueur = p?.inventory.weapons.find((w) => w.id === 'cloueur')
+    expect(cloueur?.name).toBe('Cloueur')
+    expect(cloueur?.level).toBeGreaterThanOrEqual(1)
+  })
+
+  it('les armes/passifs octroyés via debugGrant sont résolus (id, nom, niveau)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({
+      weapons: [{ id: 'scie', level: 3 }],
+      passives: [{ id: 'air_comprime', level: 2 }]
+    })
+    const p = app.getState().players[0]
+    expect(p?.inventory.weapons).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'scie', name: 'Scie orbitale', level: 3 })])
+    )
+    expect(p?.inventory.passives).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'air_comprime', name: 'Air comprimé', level: 2 })])
+    )
+  })
+
+  it('un id de contenu inconnu se replie sur son id brut (garde, pas de crash)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({ weapons: [{ id: 'arme_inexistante', level: 1 }] })
+    const p = app.getState().players[0]
+    const entry = p?.inventory.weapons.find((w) => w.id === 'arme_inexistante')
+    expect(entry?.name).toBe('arme_inexistante')
+  })
+})

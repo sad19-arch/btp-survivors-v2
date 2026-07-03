@@ -1,6 +1,6 @@
 import { h, clear } from './h'
 import { injectStyles } from './styles'
-import type { AppViewState, MenuItemView } from '@/app/appState'
+import type { AppViewState, InventoryEntry, MenuItemView } from '@/app/appState'
 
 /**
  * Overlay DOM des écrans (Titre / Pause / Upgrade / Game Over) + HUD. Observe
@@ -16,8 +16,12 @@ export class Overlay {
   private readonly introLayer: HTMLElement
   /** Couche de la barre de PV de boss (haut-centre, tant qu'un boss est en vie). */
   private readonly bossLayer: HTMLElement
+  /** Couche de l'inventaire (armes/passifs + niveaux) — lecture seule, coin dédié. */
+  private readonly inventoryLayer: HTMLElement
   /** Remplissage de la barre de PV de boss (mis à jour chaque frame ; null = pas de boss). */
   private bossBarFill: HTMLElement | null = null
+  /** Signature (ids+niveaux) du dernier inventaire rendu — évite de reconstruire à chaque frame. */
+  private inventorySignature = ''
   private signature = ''
   /** Suivi inter-frames pour déclencher le bandeau (départ de run / arrivée boss). */
   private prevInGame = false
@@ -37,7 +41,8 @@ export class Overlay {
     this.bannerLayer = h('div')
     this.introLayer = h('div')
     this.bossLayer = h('div')
-    root.append(this.hud, this.screenLayer, this.bannerLayer, this.introLayer, this.bossLayer)
+    this.inventoryLayer = h('div')
+    root.append(this.hud, this.screenLayer, this.bannerLayer, this.introLayer, this.bossLayer, this.inventoryLayer)
   }
 
   /** Met à jour l'overlay depuis l'état applicatif. */
@@ -47,6 +52,7 @@ export class Overlay {
     this.syncBanner(state)
     this.syncIntroCard(state)
     this.syncBossBar(state)
+    this.syncInventory(state)
   }
 
   private syncHud(state: AppViewState): void {
@@ -205,6 +211,52 @@ export class Overlay {
   }
 
   /**
+   * Inventaire du joueur 1 (armes + passifs, icône + niveau) — lecture seule,
+   * coin dédié pour ne pas couvrir PV/XP/barre de boss. Visible en run (jeu/pause/
+   * upgrade), masqué pendant l'intro. Reconstruit seulement quand la signature
+   * (ids+niveaux) change (l'inventaire évolue rarement).
+   */
+  private syncInventory(state: AppViewState): void {
+    const inRun =
+      (state.screen === 'game' || state.screen === 'paused' || state.screen === 'upgrade') && !state.introActive
+    if (!inRun) {
+      if (this.inventorySignature !== '') {
+        clear(this.inventoryLayer)
+        this.inventorySignature = ''
+      }
+      return
+    }
+    const inv = state.players[0]?.inventory ?? { weapons: [], passives: [] }
+    const sig = [...inv.weapons, ...inv.passives].map((e) => `${e.id}:${e.level}`).join(',')
+    if (sig === this.inventorySignature) {
+      return
+    }
+    this.inventorySignature = sig
+    clear(this.inventoryLayer)
+    if (inv.weapons.length === 0 && inv.passives.length === 0) {
+      return
+    }
+    this.inventoryLayer.append(
+      h(
+        'div',
+        { className: 'inv' },
+        h('div', { className: 'inv__row' }, ...inv.weapons.map((e) => this.invTile(e))),
+        h('div', { className: 'inv__row' }, ...inv.passives.map((e) => this.invTile(e)))
+      )
+    )
+  }
+
+  /** Une tuile d'inventaire : icône (ou monogramme de secours) + pastille de niveau. */
+  private invTile(entry: InventoryEntry): HTMLElement {
+    return h(
+      'div',
+      { className: 'inv__tile' },
+      icon(entry.id, entry.name, 'inv__icon', 'inv__img', 'inv__mono'),
+      h('div', { className: 'inv__lvl', text: `Nv.${entry.level}` })
+    )
+  }
+
+  /**
    * Carton d'intro « arcade » : pendant l'intro de run, affiche PHASE N / titre /
    * sous-titre au centre. C'est aussi ce qui NOMME la phase en jeu (le HUD la garde
    * ensuite en permanence). Reconstruit une seule fois par intro.
@@ -331,17 +383,7 @@ export class Overlay {
    * dès qu'une icône `icon_<id>.png` existe, elle s'affiche automatiquement.
    */
   private cardIcon(item: MenuItemView): HTMLElement {
-    const box = h('div', { className: 'card__icon' })
-    const img = h('img', {
-      className: 'card__img',
-      attrs: { src: `${import.meta.env.BASE_URL}stage01/ui/icon_${item.id}.png`, alt: '' }
-    })
-    img.addEventListener('error', () => {
-      img.remove()
-      box.append(h('div', { className: 'card__mono', text: monogram(item.label) }))
-    })
-    box.append(img)
-    return box
+    return icon(item.id, item.label, 'card__icon', 'card__img', 'card__mono')
   }
 
   /** Barre de progression (remplissage proportionnel), pour le HUD. */
@@ -397,4 +439,24 @@ function monogram(label: string): string {
   const significant = all.filter((w) => !MONOGRAM_STOPWORDS.has(w.toLowerCase()))
   const words = significant.length > 0 ? significant : all
   return words.slice(0, 2).map((w) => w.charAt(0)).join('').toUpperCase()
+}
+
+/**
+ * Icône générique (carte d'upgrade ou tuile d'inventaire) : tente `icon_<id>.png` ;
+ * bascule sur un MONOGRAMME (initiales du libellé) si le fichier n'existe pas
+ * encore. Factorisé entre `cardIcon` (upgrade) et `invTile` (inventaire HUD) —
+ * mêmes règles, classes CSS différentes selon le contexte.
+ */
+function icon(id: string, label: string, boxClass: string, imgClass: string, monoClass: string): HTMLElement {
+  const box = h('div', { className: boxClass })
+  const img = h('img', {
+    className: imgClass,
+    attrs: { src: `${import.meta.env.BASE_URL}stage01/ui/icon_${id}.png`, alt: '' }
+  })
+  img.addEventListener('error', () => {
+    img.remove()
+    box.append(h('div', { className: monoClass, text: monogram(label) }))
+  })
+  box.append(img)
+  return box
 }

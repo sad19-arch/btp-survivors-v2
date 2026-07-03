@@ -13,9 +13,11 @@ import {
 import { FocusModel } from '@ui/focusModel'
 import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
 import { INTRO } from '@content/config'
+import { WEAPONS } from '@content/weapons'
+import { PASSIVES } from '@content/passives'
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
-import type { GameMode, GameState, PlayerInput } from '@core/types'
-import type { AppViewState, MenuItemView, MenuView, NavDir, Screen } from './appState'
+import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
+import type { AppViewState, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
 
 export interface AppOptions {
   seed: number
@@ -367,6 +369,7 @@ export class App {
     return {
       ...base,
       scene: base.scene,
+      players: base.players.map((p) => ({ ...p, inventory: buildInventory(p) })),
       screen,
       menu: this.menu(screen),
       goldSkin: this.goldSkin,
@@ -620,4 +623,23 @@ function emptyState(seed: number, stageId: ConstructionPhaseId): GameState {
     prisoners: [],
     pendingLevelUp: null
   }
+}
+
+/**
+ * Résout l'inventaire lisible (armes + passifs, noms + niveaux) d'un joueur à
+ * partir des ids core (`weapons`/`weaponLevels` parallèles, `passives`). Garde
+ * contre un id de contenu inconnu (replie sur l'id brut, jamais de `!`).
+ */
+function buildInventory(p: PlayerState): InventoryView {
+  const weapons = p.weapons.map((id, i) => ({
+    id,
+    name: WEAPONS[id]?.name ?? id,
+    level: p.weaponLevels[i] ?? 1
+  }))
+  const passives = p.passives.map(({ id, level }) => ({
+    id,
+    name: PASSIVES[id]?.name ?? id,
+    level
+  }))
+  return { weapons, passives }
 }
