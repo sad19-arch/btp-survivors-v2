@@ -4,6 +4,7 @@ import type { GameSeam } from '@/app/seam'
 import { KeyboardInput } from '@input/keyboard'
 import { GamepadInput } from '@input/gamepad'
 import { routeInput, type FrameInput } from '@input/intents'
+import { buildPlayerInputs } from '@input/players'
 import { INTRO, WORLD } from '@content/config'
 import { createGround } from '@render/ground'
 import { createProps, createLandmark, createStructures, phaseSalt } from '@render/props'
@@ -63,10 +64,6 @@ const MAX_FRAME_MS = 100
 /** Sprite de personnage : feuille pixel-art si l'asset existe, sinon cercle de repli. */
 type CharSprite = Phaser.GameObjects.Sprite | Phaser.GameObjects.Arc
 
-function clamp(v: number, lo: number, hi: number): number {
-  return v < lo ? lo : v > hi ? hi : v
-}
-
 /**
  * Scène de jeu : couche RENDU. Elle observe `Simulation.getState()` et dessine ;
  * elle n'abrite aucune logique de gameplay. En mode test, ni le clavier ni le
@@ -84,7 +81,7 @@ export class GameScene extends Phaser.Scene {
   /** Config de rendu du stage courant (sol/décalques/props/skins d'ennemis). */
   private stage!: StageRender
   private keyboardInput: KeyboardInput | null = null
-  private gamepadInput: GamepadInput | null = null
+  private gamepads: GamepadInput[] = []
   private following = false
   private readonly playerSprites = new Map<number, CharSprite>()
   private readonly enemySprites = new Map<number, CharSprite>()
@@ -495,8 +492,9 @@ export class GameScene extends Phaser.Scene {
     if (this.input.keyboard !== null) {
       this.keyboardInput = new KeyboardInput(this.input.keyboard)
     }
-    if (this.input.gamepad !== null) {
-      this.gamepadInput = new GamepadInput(this.input.gamepad)
+    const gamepadPlugin = this.input.gamepad
+    if (gamepadPlugin !== null) {
+      this.gamepads = [0, 1, 2, 3].map((i) => new GamepadInput(gamepadPlugin, i))
     }
 
     if (this.seam !== null) {
@@ -513,7 +511,7 @@ export class GameScene extends Phaser.Scene {
       return
     }
     if (!this.testMode) {
-      routeInput(this.app, new Map([[1, this.readInput()]]))
+      routeInput(this.app, this.readPlayerInputs(st.players.length))
       this.app.advanceTime(Math.min(delta, MAX_FRAME_MS))
     }
     this.syncSprites()
@@ -532,24 +530,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Fusionne clavier + manette en une entrée de frame. */
-  private readInput(): FrameInput {
-    const frames: FrameInput[] = []
-    if (this.keyboardInput !== null) {
-      frames.push(this.keyboardInput.readFrame())
-    }
-    if (this.gamepadInput !== null) {
-      frames.push(this.gamepadInput.readFrame())
-    }
-    let x = 0
-    let y = 0
-    const pressed: FrameInput['pressed'] = []
-    for (const f of frames) {
-      x += f.move.x
-      y += f.move.y
-      pressed.push(...f.pressed)
-    }
-    return { move: { x: clamp(x, -1, 1), y: clamp(y, -1, 1) }, pressed }
+  /** Construit les entrées par joueur (clavier⊕pad0 pour P1, pad(k-1) pour P k≥2). */
+  private readPlayerInputs(playerCount: number): Map<number, FrameInput> {
+    const empty: FrameInput = { move: { x: 0, y: 0 }, pressed: [] }
+    const kb = this.keyboardInput !== null ? this.keyboardInput.readFrame() : empty
+    const pads = this.gamepads.map((g) => g.readFrame())
+    return buildPlayerInputs(kb, pads, playerCount)
   }
 
   /** Synchronise les sprites avec l'état courant de la simulation. */
