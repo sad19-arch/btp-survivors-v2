@@ -31,24 +31,25 @@ const IDLE_EMOTE_MS = 4000
 /** Décalage vertical (px monde) d'où le héros entre en marchant pendant l'intro. */
 const INTRO_ENTER_OFFSET = 380
 
-/** Zoom cible en solo / dernier survivant (identique au zoom initial de `create()`). */
-const SOLO_ZOOM = 1.0
+/** Zoom cible en solo / dernier survivant (identique au zoom initial de `create()` = 1.2). */
+const SOLO_ZOOM = 1.2
 /** Vitesse de lerp du zoom caméra (par frame) — doux, jamais un « snap ». */
 const CAMERA_ZOOM_LERP = 0.05
 /** Vitesse de lerp du centrage caméra en coop (par frame) — évite le jitter. */
 const CAMERA_SCROLL_LERP = 0.08
 /**
  * Paliers de zoom de la caméra de groupe (coop) selon l'écartement max entre
- * joueurs vivants (px monde). On ne zoome JAMAIS au-delà de 1.0 (pas de zoom
- * avant) — seulement en arrière pour que tout le monde reste cadré.
+ * joueurs vivants (px monde). Proches ⇒ 1.2 (identique au solo) ; on ne zoome
+ * JAMAIS au-delà de 1.2 (pas de zoom avant) — seulement en arrière pour que
+ * tout le monde reste cadré quand les joueurs s'écartent.
  */
 const GROUP_ZOOM_TIERS: ReadonlyArray<{ maxSpread: number; zoom: number }> = [
-  { maxSpread: 350, zoom: 1.0 },
-  { maxSpread: 650, zoom: 0.85 },
-  { maxSpread: 950, zoom: 0.72 },
+  { maxSpread: 350, zoom: 1.2 },
+  { maxSpread: 650, zoom: 1.0 },
+  { maxSpread: 950, zoom: 0.82 },
 ]
 /** Zoom de repli si l'écartement dépasse tous les paliers ci-dessus. */
-const GROUP_ZOOM_FAR = 0.6
+const GROUP_ZOOM_FAR = 0.66
 
 /** Sprites de projectiles par type d'arme (spin = rotation continue ; faceVel = orienté vers la vitesse). */
 const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; faceVel: boolean }> = {
