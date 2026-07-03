@@ -101,7 +101,16 @@ const CSS = `
   gap: 10px;
 }
 #ui-root .card--focus { border-color: ${PALETTE.jauneSecurite}; box-shadow: 5px 5px 0 ${PALETTE.contour}; }
-#ui-root .card__icon { width: 56px; height: 56px; align-self: center; image-rendering: pixelated; }
+#ui-root .card__icon { width: 56px; height: 56px; align-self: center; display: flex; align-items: center; justify-content: center; }
+#ui-root .card__img { width: 56px; height: 56px; image-rendering: pixelated; }
+#ui-root .card__mono {
+  width: 56px; height: 56px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  background: ${PALETTE.brunSombre};
+  border: 2px solid ${PALETTE.contour};
+  color: ${PALETTE.jauneSecurite};
+  font-size: 22px; font-weight: bold;
+}
 #ui-root .card__name { color: ${PALETTE.jauneSecurite}; font-size: 16px; font-weight: bold; text-align: center; }
 #ui-root .card__hint { color: ${PALETTE.blanc}; font-size: 13px; text-transform: none; letter-spacing: 0; }
 #ui-root .stats { display: flex; flex-direction: column; gap: 4px; font-size: 16px; }

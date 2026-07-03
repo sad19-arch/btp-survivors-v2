@@ -318,13 +318,30 @@ export class Overlay {
         className: focused ? 'card card--focus' : 'card',
         onClick: this.onSelect === undefined ? undefined : () => { this.onSelect?.(index) }
       },
-      h('img', {
-        className: 'card__icon',
-        attrs: { src: `${import.meta.env.BASE_URL}stage01/ui/icon_${item.id}.png`, alt: '' }
-      }),
+      this.cardIcon(item),
       h('div', { className: 'card__name', text: item.label }),
       h('div', { className: 'card__hint', text: item.hint ?? '' })
     )
+  }
+
+  /**
+   * Icône de carte : tente `icon_<id>.png` (pixel-art dédié à venir en passe DA) ;
+   * en l'absence de fichier (armes/passifs sans icône propre pour l'instant), bascule
+   * sur un MONOGRAMME lisible (initiales) plutôt qu'une image cassée. Forward-compatible :
+   * dès qu'une icône `icon_<id>.png` existe, elle s'affiche automatiquement.
+   */
+  private cardIcon(item: MenuItemView): HTMLElement {
+    const box = h('div', { className: 'card__icon' })
+    const img = h('img', {
+      className: 'card__img',
+      attrs: { src: `${import.meta.env.BASE_URL}stage01/ui/icon_${item.id}.png`, alt: '' }
+    })
+    img.addEventListener('error', () => {
+      img.remove()
+      box.append(h('div', { className: 'card__mono', text: monogram(item.label) }))
+    })
+    box.append(img)
+    return box
   }
 
   /** Barre de progression (remplissage proportionnel), pour le HUD. */
@@ -370,4 +387,14 @@ function formatTime(ms: number): string {
   const m = Math.floor(total / 60)
   const s = total % 60
   return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+const MONOGRAM_STOPWORDS = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'a', 'au', 'aux', 'et'])
+
+/** Monogramme d'une carte : initiales des 2 premiers mots significatifs, en capitales (icône de secours). */
+function monogram(label: string): string {
+  const all = label.split(/[\s-]+/).filter((w) => w.length > 0)
+  const significant = all.filter((w) => !MONOGRAM_STOPWORDS.has(w.toLowerCase()))
+  const words = significant.length > 0 ? significant : all
+  return words.slice(0, 2).map((w) => w.charAt(0)).join('').toUpperCase()
 }
