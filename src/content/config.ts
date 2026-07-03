@@ -90,7 +90,11 @@ export const SPAWN = {
   maxActive: 200
 } as const
 
-/** Mini-boss (PRD : apparition à 5:00). */
+/**
+ * Boss de mi-parcours (PRD : apparition à 5:00). Rôle `mid` : NE déclenche PAS
+ * la victoire — sa mort lâche un coffre d'évolution (cf. reap.ts) qui rend une
+ * évolution atteignable EN COURS DE RUN, avant le boss final.
+ */
 export const MINI_BOSS = {
   /** Instant d'apparition, en ms de temps de jeu. */
   atMs: 5 * 60_000,
@@ -99,6 +103,17 @@ export const MINI_BOSS = {
    * faire entrer À L'ÉCRAN → le combat de climax est vu et engagé, pas un spawn
    * hors-champ que le joueur fond à distance sans le remarquer.
    */
+  spawnRadius: 320
+} as const
+
+/**
+ * Boss final (rôle `final`). Sa mort est la condition de victoire de la run
+ * (remplace l'ancienne victoire au mini-boss de 5:00 — cf. Plan B1, split de boss).
+ */
+export const FINAL_BOSS = {
+  /** Instant d'apparition, en ms de temps de jeu (~10:30). */
+  atMs: 630_000,
+  /** Rayon d'apparition du boss (px), même logique que MINI_BOSS : à l'écran. */
   spawnRadius: 320
 } as const
 

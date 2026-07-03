@@ -28,7 +28,7 @@ import { allPlayersDead } from './systems/gameRules'
 import { recomputePlayerStats } from './systems/playerStats'
 import { rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
-import { MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
+import { FINAL_BOSS, MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, STARTING_WEAPONS, WORLD } from '@content/config'
 import { SPAWN_RAMP, spawnParamsAt, difficultyScaleAt } from '@content/spawnRamp'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
 import { ENEMIES, MINI_BOSS_ID } from '@content/enemies'
@@ -100,9 +100,10 @@ export class Simulation {
   private remainderMs = 0
   private spawnAccMs = 0
   private score = 0
-  private miniBossSpawned = false
-  /** Vrai une fois le boss RÉELLEMENT apparu (garde-fou anti faux-positif de victoire). */
-  private bossEverSpawned = false
+  /** Vrai une fois le boss de mi-parcours (5:00, rôle `mid`) apparu. Ne déclenche PAS la victoire. */
+  private midBossSpawned = false
+  /** Vrai une fois le boss FINAL (rôle `final`) RÉELLEMENT apparu (garde-fou anti faux-positif de victoire). */
+  private finalBossSpawned = false
   private pendingLevelUp: PendingLevelUp | null = null
   /** PV totaux des joueurs au pas précédent → détecte les dégâts (SFX, observation pure). */
   private prevHpTotal = 0
@@ -297,6 +298,29 @@ export class Simulation {
     this.world.add(gem, 'pickup', { type: 'coffre', value: 0 })
   }
 
+  /**
+   * [Debug/seam] Fait apparaître immédiatement le boss du rôle demandé (`mid`
+   * ou `final`) au centroïde des joueurs, sans attendre le seuil temporel
+   * (5:00 / ~10:30). Pose le flag `*BossSpawned` correspondant, exactement
+   * comme le spawn normal, pour que `updateWin`/le coffre en mi-mort se
+   * comportent de façon identique. Réservé aux tests et au seam de debug —
+   * jamais utilisé en jeu normal.
+   */
+  debugSpawnBoss(role: 'mid' | 'final'): void {
+    const def = ENEMIES[MINI_BOSS_ID]
+    if (def === undefined) {
+      return
+    }
+    const radius = role === 'mid' ? MINI_BOSS.spawnRadius : FINAL_BOSS.spawnRadius
+    spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), radius, role)
+    this.events.dispatchEvent(new BossSpawnedEvent())
+    if (role === 'mid') {
+      this.midBossSpawned = true
+    } else {
+      this.finalBossSpawned = true
+    }
+  }
+
   /** Vue texte lisible pour « jouer à l'aveugle ». */
   renderToText(): string {
     const s = this.getState()
@@ -329,8 +353,8 @@ export class Simulation {
     this.remainderMs = 0
     this.spawnAccMs = 0
     this.score = 0
-    this.miniBossSpawned = false
-    this.bossEverSpawned = false
+    this.midBossSpawned = false
+    this.finalBossSpawned = false
     this.pendingLevelUp = null
     this.inputs.clear()
     this.playerEntities.clear()
@@ -503,17 +527,18 @@ export class Simulation {
     }
   }
 
-  /** Victoire : le boss de fin a été invoqué puis vaincu (plus aucun boss vivant). */
+  /** Victoire : le boss FINAL a été invoqué puis vaincu (plus aucun boss final vivant). */
   private updateWin(): void {
-    if (this.scene === 'game' && this.bossEverSpawned && !this.anyBossAlive()) {
+    if (this.scene === 'game' && this.finalBossSpawned && !this.anyFinalBossAlive()) {
       this.scene = 'won'
       this.events.dispatchEvent(new Event('win'))
     }
   }
 
-  private anyBossAlive(): boolean {
+  /** Vrai si le boss FINAL précisément (rôle `final`) est vivant — condition de victoire. */
+  private anyFinalBossAlive(): boolean {
     for (const e of this.world.query('enemy')) {
-      if (this.world.get(e, 'enemy')?.isBoss === true) {
+      if (this.world.get(e, 'enemy')?.bossRole === 'final') {
         return true
       }
     }
@@ -528,7 +553,8 @@ export class Simulation {
   }
 
   private runSpawns(dtMs: number): void {
-    this.maybeSpawnMiniBoss()
+    this.maybeSpawnMidBoss()
+    this.maybeSpawnFinalBoss()
     this.spawnAccMs += dtMs
     const { intervalMs, countPerWave } = spawnParamsAt(SPAWN_RAMP, this.elapsedMs)
     const scale = difficultyScaleAt(this.elapsedMs)
@@ -540,18 +566,33 @@ export class Simulation {
     }
   }
 
-  /** Invoque le mini-boss une seule fois, au seuil temporel (PRD : 5:00). */
-  private maybeSpawnMiniBoss(): void {
-    if (this.miniBossSpawned || this.elapsedMs < MINI_BOSS.atMs) {
+  /**
+   * Invoque le boss de mi-parcours une seule fois, au seuil temporel (PRD : 5:00).
+   * Rôle `mid` : NE déclenche PAS la victoire (sa mort lâche un coffre, cf. reap.ts).
+   */
+  private maybeSpawnMidBoss(): void {
+    if (this.midBossSpawned || this.elapsedMs < MINI_BOSS.atMs) {
       return
     }
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
-      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), MINI_BOSS.spawnRadius)
-      this.bossEverSpawned = true
+      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), MINI_BOSS.spawnRadius, 'mid')
       this.events.dispatchEvent(new BossSpawnedEvent())
     }
-    this.miniBossSpawned = true
+    this.midBossSpawned = true
+  }
+
+  /** Invoque le boss FINAL une seule fois, au seuil temporel (~10:30). Sa mort = victoire. */
+  private maybeSpawnFinalBoss(): void {
+    if (this.finalBossSpawned || this.elapsedMs < FINAL_BOSS.atMs) {
+      return
+    }
+    const def = ENEMIES[MINI_BOSS_ID]
+    if (def !== undefined) {
+      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), FINAL_BOSS.spawnRadius, 'final')
+      this.events.dispatchEvent(new BossSpawnedEvent())
+    }
+    this.finalBossSpawned = true
   }
 
   private applyPlayerInputs(): void {

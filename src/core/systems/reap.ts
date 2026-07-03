@@ -25,6 +25,11 @@ export function reapDeadEnemies(world: World, lootRng?: Rng): number {
     const ecomp = world.get(en, 'enemy')
     if (epos !== undefined && ecomp !== undefined) {
       dropPickup(world, epos, 'xp', ecomp.xpValue)
+      if (ecomp.bossRole === 'mid') {
+        // Boss de mi-parcours : lâche un coffre d'évolution (rend une évolution
+        // atteignable EN RUN, avant le boss final — cf. Plan B1 split de boss).
+        dropPickup(world, epos, 'coffre', 0)
+      }
       if (lootRng !== undefined) {
         maybeDropBonus(world, lootRng, epos)
       }
