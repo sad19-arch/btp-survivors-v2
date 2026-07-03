@@ -172,6 +172,22 @@ export const RESCUE = {
   fleeSpeed: 260
 } as const
 
+/**
+ * Relève co-op : un joueur à terre (hp<=0) peut être relevé par un coéquipier
+ * VIVANT qui reste à proximité en maintenant l'action. Solo : aucun coéquipier
+ * possible → no-op naturel (jamais relevé, game-over identique à aujourd'hui).
+ */
+export const REVIVE = {
+  /** Rayon de proximité (px) entre le releveur et le joueur à terre. */
+  radius: 80,
+  /** Temps (s) de maintien continu pour relever complètement. */
+  fillSeconds: 3,
+  /** Temps (s) pour que le progrès retombe à 0 une fois le maintien interrompu. */
+  decaySeconds: 2,
+  /** Fraction des PV max restaurés à la relève complète. */
+  hpFraction: 0.5
+} as const
+
 /** Intro de run (micro-animation d'entrée du héros). Purement cosmétique. */
 export const INTRO = {
   /** Durée du préambule pendant lequel la sim est gelée, en ms. */

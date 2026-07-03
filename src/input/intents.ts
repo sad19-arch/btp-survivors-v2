@@ -8,6 +8,8 @@ export type NavAction = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' | 
 export interface FrameInput {
   move: Vec2
   pressed: NavAction[]
+  /** Bouton d'action MAINTENU cette frame (pas un front) — ex. relever un coéquipier à terre. */
+  action: boolean
 }
 
 /**
@@ -21,7 +23,7 @@ export interface FrameInput {
  */
 export function routeInput(app: App, perPlayer: ReadonlyMap<number, FrameInput>): void {
   for (const [playerId, frame] of perPlayer) {
-    app.setInput(playerId, { move: frame.move, attack: false })
+    app.setInput(playerId, { move: frame.move, attack: false, action: frame.action })
   }
 
   const actions = new Set<NavAction>()

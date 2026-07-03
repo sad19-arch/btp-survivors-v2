@@ -85,6 +85,12 @@ export interface ProjectileComp {
   pierce: number
 }
 
+/** Progrès de relève d'un joueur à terre (hp<=0), en cours de secours par un coéquipier. */
+export interface ReviveComp {
+  /** Progression vers la relève, [0,1[ ; >=1 déclenche la relève (retire ce composant). */
+  progress: number
+}
+
 /** Une lame en orbite autour d'un joueur (arme « scie »). */
 export interface OrbiterComp {
   ownerId: number
@@ -143,6 +149,8 @@ export interface Components {
   passives: PassiveLoadout
   /** Stats dérivées des passifs possédés (recalculées par `recomputePlayerStats`). */
   stats: PlayerStats
+  /** Présent uniquement pendant qu'un joueur à terre est en cours de relève. */
+  revive: ReviveComp
 }
 
 export type ComponentKey = keyof Components
@@ -158,6 +166,8 @@ export interface PlayerInput {
   /** Direction de déplacement, composantes dans [-1, 1]. */
   move: Vec2
   attack: boolean
+  /** Bouton d'action MAINTENU (relever un coéquipier à terre). Optionnel : lu `?? false`. */
+  action?: boolean
 }
 
 // --- État de jeu sérialisable (contrat du seam window.__GAME__) -----------
@@ -175,6 +185,10 @@ export interface PlayerState {
   xp: number
   nextThreshold: number
   alive: boolean
+  /** À terre (hp<=0) mais partie en cours (pas de game over) — en attente de relève. */
+  downed: boolean
+  /** Progrès de relève courant [0,1] (0 si pas à terre ou pas en cours de relève). */
+  reviveProgress: number
   weapons: string[]
   weaponLevels: number[]
   passives: { id: string; level: number }[]

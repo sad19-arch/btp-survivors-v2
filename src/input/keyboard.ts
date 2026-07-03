@@ -66,6 +66,9 @@ export class KeyboardInput {
       pressed.push('pause')
     }
 
-    return { move: { x, y }, pressed }
+    // Bouton d'action MAINTENU (pas un front) — ex. relever un coéquipier à terre.
+    const action = held([K.E])
+
+    return { move: { x, y }, pressed, action }
   }
 }

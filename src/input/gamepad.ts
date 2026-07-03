@@ -37,7 +37,7 @@ export class GamepadInput {
     const pad = this.plugin.getPad(this.padIndex)
     if (pad === undefined) {
       this.prev = new Set()
-      return { move: { x: 0, y: 0 }, pressed: [] }
+      return { move: { x: 0, y: 0 }, pressed: [], action: false }
     }
 
     const ax = pad.axes.length > 0 ? pad.axes[0]?.getValue() ?? 0 : 0
@@ -93,6 +93,9 @@ export class GamepadInput {
     }
     this.prev = now
 
-    return { move: { x: mx, y: my }, pressed }
+    // Bouton d'action MAINTENU (pas un front) — ex. relever un coéquipier à terre.
+    const action = down(BTN.A)
+
+    return { move: { x: mx, y: my }, pressed, action }
   }
 }

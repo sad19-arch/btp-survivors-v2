@@ -24,6 +24,7 @@ import { collisionSystem } from './systems/collision'
 import { reapDeadEnemies } from './systems/reap'
 import { pickupSystem } from './systems/pickup'
 import { rescueSystem } from './systems/rescue'
+import { reviveSystem } from './systems/revive'
 import { projectileLifetimeSystem } from './systems/projectile'
 import { consumeLevelUp, initialProgress } from './systems/leveling'
 import { allPlayersDead } from './systems/gameRules'
@@ -486,6 +487,9 @@ export class Simulation {
     this.handleChestPickups(chestCollectors)
     rescueSystem(this.world, freed)
     projectileLifetimeSystem(this.world, dtMs)
+    // Après collision/reap (les joueurs peuvent tomber à terre ce pas-ci), avant les
+    // vérifs de fin de partie (une relève complétée ce pas-ci doit annuler un game over).
+    reviveSystem(this.world, this.inputs, dtMs)
     this.updateWin() // boss vaincu → victoire (priorité sur la mort simultanée)
     this.updateGameOver()
     if (this.scene === 'game') {
@@ -679,6 +683,7 @@ export class Simulation {
       const loadout = this.world.get(e, 'weapons')
       const progress = this.world.get(e, 'progress')
       const passives = this.world.get(e, 'passives')
+      const revive = this.world.get(e, 'revive')
       players.push({
         id,
         x: pos.x,
@@ -692,6 +697,8 @@ export class Simulation {
         xp: progress?.xp ?? 0,
         nextThreshold: progress?.nextThreshold ?? PROGRESSION.firstThreshold,
         alive: health.hp > 0,
+        downed: health.hp <= 0,
+        reviveProgress: revive?.progress ?? 0,
         weapons: loadout === undefined ? [] : loadout.slots.map((s) => s.id),
         weaponLevels: loadout === undefined ? [] : loadout.slots.map((s) => s.level),
         passives: passives === undefined ? [] : passives.list.map((p) => ({ id: p.id, level: p.level }))

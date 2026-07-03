@@ -1,6 +1,6 @@
 import type { FrameInput, NavAction } from './intents'
 
-const EMPTY: FrameInput = { move: { x: 0, y: 0 }, pressed: [] }
+const EMPTY: FrameInput = { move: { x: 0, y: 0 }, pressed: [], action: false }
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v))
@@ -13,7 +13,8 @@ export function mergeFrames(a: FrameInput, b: FrameInput): FrameInput {
     y: clamp(a.move.y + b.move.y, -1, 1),
   }
   const pressed: NavAction[] = [...new Set([...a.pressed, ...b.pressed])]
-  return { move, pressed }
+  const action = a.action || b.action
+  return { move, pressed, action }
 }
 
 /**

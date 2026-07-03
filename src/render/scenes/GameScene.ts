@@ -114,6 +114,12 @@ export class GameScene extends Phaser.Scene {
    * changement visuel quand `players.length===1`).
    */
   private playerRings!: Phaser.GameObjects.Graphics
+  /**
+   * Barre de progrès de relève au-dessus des joueurs à terre (co-op). Un seul
+   * Graphics persistant, effacé/redessiné chaque frame — même schéma que
+   * `playerRings` (pas d'objet par joueur à gérer/détruire).
+   */
+  private reviveBars!: Phaser.GameObjects.Graphics
   private readonly enemySprites = new Map<number, CharSprite>()
   private readonly projectileSprites = new Map<number, CharSprite>()
   private readonly pickupSprites = new Map<number, CharSprite>()
@@ -509,6 +515,8 @@ export class GameScene extends Phaser.Scene {
     // sous les sprites de personnages (depth par défaut 0... en pratique dessiné
     // avant eux dans l'ordre de création, mais on force -1 pour être sûr avec le pool).
     this.playerRings = this.add.graphics().setDepth(-1)
+    // Au-dessus des sprites (depth par défaut 0) pour rester lisible pendant la relève.
+    this.reviveBars = this.add.graphics().setDepth(5)
 
     this.cameras.main.setBounds(0, 0, WORLD.width, WORLD.height)
     this.cameras.main.setZoom(1.2)
@@ -629,7 +637,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Construit les entrées par joueur (clavier⊕pad0 pour P1, pad(k-1) pour P k≥2). */
   private readPlayerInputs(playerCount: number): Map<number, FrameInput> {
-    const empty: FrameInput = { move: { x: 0, y: 0 }, pressed: [] }
+    const empty: FrameInput = { move: { x: 0, y: 0 }, pressed: [], action: false }
     const kb = this.keyboardInput !== null ? this.keyboardInput.readFrame() : empty
     const pads = this.gamepads.map((g) => g.readFrame())
     return buildPlayerInputs(kb, pads, playerCount)
@@ -653,6 +661,26 @@ export class GameScene extends Phaser.Scene {
     this.playerRings.strokeEllipse(x, y, w, h)
   }
 
+  /**
+   * Barre de progrès de relève au-dessus d'un joueur à terre : cadre sombre +
+   * remplissage coloré (couleur du joueur) proportionnel à `reviveProgress`.
+   * Dessine sur le Graphics partagé `reviveBars` — aucun GameObject créé.
+   */
+  private drawReviveBar(p: PlayerState): void {
+    const color = playerColor(p.id).num
+    const w = 40
+    const h = 6
+    const x = p.x - w / 2
+    const y = p.y - 46
+    this.reviveBars.fillStyle(0x000000, 0.6)
+    this.reviveBars.fillRect(x - 1, y - 1, w + 2, h + 2)
+    const fillW = Math.max(0, Math.min(1, p.reviveProgress)) * w
+    if (fillW > 0) {
+      this.reviveBars.fillStyle(color, 0.95)
+      this.reviveBars.fillRect(x, y, fillW, h)
+    }
+  }
+
   /** Synchronise les sprites avec l'état courant de la simulation. */
   private syncSprites(): void {
     const state = this.app.getStateForFrame(this.app.frameId)
@@ -670,6 +698,11 @@ export class GameScene extends Phaser.Scene {
     // effacé/redessiné chaque frame — aucun objet par joueur à gérer/détruire.
     this.playerRings.clear()
     const showRings = state.players.length > 1
+    // Barres de relève : effacées/redessinées chaque frame (même schéma que playerRings).
+    this.reviveBars.clear()
+    // Partie terminée (game over) : plus de relève possible, on garde le rendu figé
+    // d'aujourd'hui (sprite masqué) plutôt que le traitement « à terre » transitoire.
+    const gameOver = state.screen === 'gameover'
 
     for (const p of state.players) {
       let sprite = this.playerSprites.get(p.id)
@@ -689,7 +722,10 @@ export class GameScene extends Phaser.Scene {
         continue
       }
       sprite.setPosition(p.x, p.y)
-      sprite.setVisible(p.alive)
+      // À terre (hp<=0) mais partie en cours : reste visible (couché/grisé) en
+      // attente de relève, au lieu de disparaître — seul un game over le masque.
+      const downedActive = p.downed && !gameOver
+      sprite.setVisible(p.alive || downedActive)
       if (sprite instanceof Phaser.GameObjects.Sprite) {
         this.animatePlayer(sprite, p)
       }
@@ -705,11 +741,17 @@ export class GameScene extends Phaser.Scene {
       }
       this.prevHp.set(p.id, p.hp)
       if (sprite instanceof Phaser.GameObjects.Sprite) {
-        if (this.time.now < (this.damageFlashUntil.get(p.id) ?? 0)) {
+        if (downedActive) {
+          // À terre : la teinte grise gagne toujours face au flash de dégât.
+          sprite.setTint(0x888888)
+        } else if (this.time.now < (this.damageFlashUntil.get(p.id) ?? 0)) {
           sprite.setTint(0xff5a5a)
         } else {
           sprite.clearTint()
         }
+      }
+      if (downedActive) {
+        this.drawReviveBar(p)
       }
     }
 
