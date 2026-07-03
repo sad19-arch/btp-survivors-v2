@@ -6,19 +6,22 @@
  * comme navigateur.
  */
 
-/** Données d'une pulsation d'aura (onde de choc du marteau). */
+/** Données d'une pulsation d'aura (onde de choc du marteau/pied-de-biche/court-circuit). */
 export interface AuraPulse {
   x: number
   y: number
   radius: number
+  /** Sorte d'arme à l'origine de l'impulsion (`aura` | `sweep` | `strike`) — pour teinter le VFX. */
+  kind: string
 }
 
-/** Émis à chaque impulsion d'une arme d'aura (pour un VFX d'onde de choc). */
+/** Émis à chaque impulsion d'une arme d'aura/sweep/strike (pour un VFX d'onde de choc). */
 export class AuraPulseEvent extends Event {
   constructor(
     readonly x: number,
     readonly y: number,
-    readonly radius: number
+    readonly radius: number,
+    readonly kind: string = 'aura'
   ) {
     super('auraPulse')
   }

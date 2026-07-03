@@ -1,6 +1,6 @@
 import type Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
-import type { WeaponFiredEvent, PickupCollectedEvent } from '@core/events'
+import type { WeaponFiredEvent, PickupCollectedEvent, AuraPulseEvent } from '@core/events'
 import { WEAPONS } from '@content/weapons'
 import { SFX, VOICE, voiceStage, musicForState, AMB, type MusicKey } from './manifest'
 import { musicGain, sfxGain, duckedGain, type AudioLevels } from './settings'
@@ -80,7 +80,12 @@ export class AudioDirector {
       }
     })
     on('bossSpawned', () => { this.playCue('bossSpawned'); this.playVoice(VOICE.boss) })
-    on('auraPulse', () => { this.playCue('auraPulse') })
+    on('auraPulse', (e) => {
+      // Variation de hauteur par sorte d'arme (sans nouvel asset) : strike plus aigu, aura plus grave.
+      const kind = (e as AuraPulseEvent).kind
+      const rateMul = kind === 'strike' ? 1.15 : kind === 'aura' ? 0.9 : 1
+      this.playCue('auraPulse', rateMul)
+    })
     on('prisonerFreed', () => { this.playCue('prisonerFreed'); this.playVoice(VOICE.thankyou) })
     on('upgradePick', () => { this.playCue('upgradePick') })
     on('menuMove', () => { this.playCue('menuMove') })
@@ -88,7 +93,8 @@ export class AudioDirector {
     on('menuBack', () => { this.playCue('menuBack') })
   }
 
-  private playCue(name: string): void {
+  /** `rateMul` : multiplicateur de hauteur additionnel (ex. varier une même cue par sorte d'arme). */
+  private playCue(name: string, rateMul = 1): void {
     if (this.isLocked()) {
       return
     }
@@ -109,7 +115,7 @@ export class AudioDirector {
       return
     }
     const jitter = cue.rateJitter !== undefined ? (Math.random() * 2 - 1) * cue.rateJitter : 0
-    this.sound.play(key, { volume: cue.volume * sfxGain(this.settings), rate: (cue.rate ?? 1) * (1 + jitter) })
+    this.sound.play(key, { volume: cue.volume * sfxGain(this.settings), rate: (cue.rate ?? 1) * rateMul * (1 + jitter) })
   }
 
   /** Joue une réplique de voix (canal unique : coupe la précédente, pas de chevauchement). */

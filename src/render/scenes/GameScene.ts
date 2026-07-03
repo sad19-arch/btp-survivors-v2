@@ -11,6 +11,7 @@ import { dirRow, walkFrame, idleFrame } from '@render/sprites'
 import { stageRender, type StageRender } from '@render/stages'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { PlayerState, PrisonerState } from '@core/types'
+import { PALETTE_HEX } from '@ui/palette'
 
 /** Feuille PARTAGÉE (tous stages) : le joueur. Ennemis ET boss sont PAR STAGE (voir stages.ts). */
 const SHARED_SHEETS: ReadonlyArray<readonly [string, string, number]> = [['player', 'player_j1.png', 192]]
@@ -107,10 +108,25 @@ export class GameScene extends Phaser.Scene {
   private readonly prisonerWorkers = new Map<number, CharSprite>()
   /** PNJ d'ambiance non-hostile du stage (idle), ou null si absent. */
   private ambientSprite: Phaser.GameObjects.Sprite | null = null
-  /** VFX d'onde de choc du marteau, déclenché par l'événement d'aura de la sim. */
+  /**
+   * VFX d'onde de choc des armes à impulsion (marteau/pied-de-biche/court-circuit),
+   * déclenché par l'événement d'aura de la sim. Une teinte par `kind` les distingue
+   * visuellement sans nouvel asset (VFX dédiés = passe DA ultérieure) :
+   *  - aura (marteau)        → pas de teinte (couleur native du sprite)
+   *  - sweep (pied-de-biche) → jaune sécurité (chaud)
+   *  - strike (court-circuit)→ cyan accent (électrique)
+   */
   private readonly onAuraPulse = (e: Event): void => {
     const p = e as AuraPulseEvent
-    this.spawnVfx('vfx_shockwave', p.x, p.y, 0.4, Math.max(1.5, (p.radius * 2) / 90), 320)
+    const fx = this.spawnVfx('vfx_shockwave', p.x, p.y, 0.4, Math.max(1.5, (p.radius * 2) / 90), 320)
+    if (fx === null) {
+      return
+    }
+    if (p.kind === 'sweep') {
+      fx.setTint(PALETTE_HEX.jauneSecurite)
+    } else if (p.kind === 'strike') {
+      fx.setTint(PALETTE_HEX.cyanAccent)
+    }
   }
   /** Libération d'un prisonnier : étincelles + bulle « Merci ! » au-dessus de l'ouvrier. */
   private readonly onPrisonerFreed = (e: Event): void => {
@@ -194,10 +210,20 @@ export class GameScene extends Phaser.Scene {
     this.load.image('bubble_merci', 'stage01/ui/bubble_merci.png')
   }
 
-  /** Joue un effet transitoire (scale + fondu) à une position, puis se détruit. Rendu pur. */
-  private spawnVfx(key: string, x: number, y: number, from: number, to: number, durationMs: number): void {
+  /**
+   * Joue un effet transitoire (scale + fondu) à une position, puis se détruit. Rendu pur.
+   * Retourne le sprite (ou `null` si la texture est absente) pour un habillage ponctuel (ex. teinte).
+   */
+  private spawnVfx(
+    key: string,
+    x: number,
+    y: number,
+    from: number,
+    to: number,
+    durationMs: number
+  ): Phaser.GameObjects.Sprite | null {
     if (!this.textures.exists(key)) {
-      return
+      return null
     }
     const fx = this.add.sprite(x, y, key).setScale(from).setDepth(5)
     this.tweens.add({
@@ -208,6 +234,7 @@ export class GameScene extends Phaser.Scene {
       ease: 'Quad.easeOut',
       onComplete: () => fx.destroy()
     })
+    return fx
   }
 
   /** Éclair blanc bref (primitive, sans asset) — accompagne la fumée à la mort d'un ennemi. */

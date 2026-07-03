@@ -105,7 +105,7 @@ export class App {
     // Relaie les événements de sim (ex. onde d'aura, libération) vers l'App → rendu.
     this.sim.events.addEventListener('auraPulse', (e) => {
       const p = e as AuraPulseEvent
-      this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius))
+      this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius, p.kind))
     })
     this.sim.events.addEventListener('prisonerFreed', (e) => {
       const p = e as PrisonerFreedEvent

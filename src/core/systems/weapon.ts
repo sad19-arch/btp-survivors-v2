@@ -56,16 +56,16 @@ export function weaponSystem(
           tickProjectile(world, slot, def, eff, pos, player, dtMs, fired)
           break
         case 'aura':
-          tickAura(slot, eff, pos, dtMs, world, pulses)
+          tickAura(slot, eff, pos, dtMs, world, def.kind, pulses)
           break
         case 'orbital':
           tickOrbital(world, slot, def, eff, e, pos, player, dtMs)
           break
         case 'sweep':
-          tickSweep(slot, eff, pos, dtMs, world, pulses)
+          tickSweep(slot, eff, pos, dtMs, world, def.kind, pulses)
           break
         case 'strike':
-          tickStrike(slot, eff, dtMs, world, rng, pulses)
+          tickStrike(slot, eff, dtMs, world, def.kind, rng, pulses)
           break
       }
     }
@@ -167,6 +167,7 @@ function tickAura(
   pos: Vec2,
   dtMs: number,
   world: World,
+  kind: string,
   pulses?: AuraPulse[]
 ): void {
   slot.cooldownLeftMs -= dtMs
@@ -176,7 +177,7 @@ function tickAura(
   slot.cooldownLeftMs = eff.cooldownMs
   const reach = eff.area + HITBOX.enemy
   damageEnemiesInRadius(world, pos, reach, eff.damage)
-  pulses?.push({ x: pos.x, y: pos.y, radius: reach })
+  pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind })
 }
 
 // --- sweep (pied-de-biche) --------------------------------------------------
@@ -192,6 +193,7 @@ function tickSweep(
   pos: Vec2,
   dtMs: number,
   world: World,
+  kind: string,
   pulses?: AuraPulse[]
 ): void {
   slot.cooldownLeftMs -= dtMs
@@ -204,7 +206,7 @@ function tickSweep(
   for (let i = 0; i < passes; i++) {
     damageEnemiesInRadius(world, pos, reach, eff.damage)
   }
-  pulses?.push({ x: pos.x, y: pos.y, radius: reach })
+  pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind })
 }
 
 // --- strike (court-circuit) -------------------------------------------------
@@ -247,6 +249,7 @@ function tickStrike(
   eff: EffectiveStats,
   dtMs: number,
   world: World,
+  kind: string,
   rng?: Rng,
   pulses?: AuraPulse[]
 ): void {
@@ -264,7 +267,7 @@ function tickStrike(
     }
     damageEnemiesInRadius(world, tpos, eff.area, eff.damage)
     // Retour visuel : une onde à chaque ennemi frappé (VFX propre = passe DA).
-    pulses?.push({ x: tpos.x, y: tpos.y, radius: eff.area })
+    pulses?.push({ x: tpos.x, y: tpos.y, radius: eff.area, kind })
   }
 }
 

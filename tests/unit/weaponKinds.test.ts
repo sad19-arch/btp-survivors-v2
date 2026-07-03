@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { World } from '@core/world'
 import { weaponSystem } from '@core/systems/weapon'
 import type { EntityId } from '@core/types'
+import type { AuraPulse } from '@core/events'
 import { BASE_STATS } from '@content/passives'
 
 function addPlayer(w: World, weaponId: string): EntityId {
@@ -39,6 +40,38 @@ describe('arme aura (marteau)', () => {
     const far = addEnemy(w, 500, 0)
     weaponSystem(w, 16)
     expect(w.get(far, 'health')?.hp).toBe(100)
+  })
+
+  it('pousse une impulsion de kind "aura" pour le VFX', () => {
+    const w = new World()
+    addPlayer(w, 'marteau')
+    const pulses: AuraPulse[] = []
+    weaponSystem(w, 16, pulses)
+    expect(pulses).toHaveLength(1)
+    expect(pulses[0]?.kind).toBe('aura')
+  })
+})
+
+describe('arme sweep (pied-de-biche)', () => {
+  it('pousse une impulsion de kind "sweep" pour le VFX', () => {
+    const w = new World()
+    addPlayer(w, 'pied_de_biche')
+    const pulses: AuraPulse[] = []
+    weaponSystem(w, 16, pulses)
+    expect(pulses).toHaveLength(1)
+    expect(pulses[0]?.kind).toBe('sweep')
+  })
+})
+
+describe('arme strike (court-circuit)', () => {
+  it('pousse une impulsion de kind "strike" pour le VFX', () => {
+    const w = new World()
+    addPlayer(w, 'court_circuit')
+    addEnemy(w, 10, 0)
+    const pulses: AuraPulse[] = []
+    weaponSystem(w, 16, pulses)
+    expect(pulses.length).toBeGreaterThan(0)
+    expect(pulses[0]?.kind).toBe('strike')
   })
 })
 
