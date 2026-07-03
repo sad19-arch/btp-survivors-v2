@@ -267,6 +267,35 @@ export class App {
     this.refreshFocus()
   }
 
+  // --- helpers de debug (test-only — passe-plat vers Simulation pour le seam) ---
+
+  /**
+   * [Debug/seam] Octroie directement des armes/passifs au joueur 1. Réservé
+   * aux tests et au seam de debug (`window.__GAME__`) — jamais en jeu normal.
+   */
+  debugGrant(opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] }): void {
+    this.sim?.debugGrant(opts)
+    this.refreshFocus()
+  }
+
+  /** [Debug/seam] Ajoute de l'XP au joueur 1 (force un level-up déterministe). */
+  debugAddXp(amount: number): void {
+    this.sim?.debugAddXp(amount)
+    this.refreshFocus()
+  }
+
+  /** [Debug/seam] Fait apparaître un coffre d'évolution sur la position du joueur 1. */
+  debugSpawnChestOnPlayer(): void {
+    this.sim?.debugSpawnChestOnPlayer()
+    this.refreshFocus()
+  }
+
+  /** [Debug/seam] Fait apparaître immédiatement le boss du rôle demandé (`mid`/`final`). */
+  debugSpawnBoss(role: 'mid' | 'final'): void {
+    this.sim?.debugSpawnBoss(role)
+    this.refreshFocus()
+  }
+
   // --- état exposé ----------------------------------------------------------
 
   /**

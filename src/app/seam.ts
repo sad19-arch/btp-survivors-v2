@@ -26,6 +26,15 @@ export interface GameSeam {
   restart(): void
   chooseUpgrade(index: number): void
   events: EventTarget
+  // --- helpers de debug (test-only : fast-forward pour Playwright/e2e) ---
+  /** [Debug] Octroie directement des armes/passifs au joueur 1. */
+  debugGrant(opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] }): void
+  /** [Debug] Ajoute de l'XP au joueur 1 (force un level-up déterministe). */
+  debugAddXp(amount: number): void
+  /** [Debug] Fait apparaître un coffre d'évolution sur la position du joueur 1. */
+  debugSpawnChestOnPlayer(): void
+  /** [Debug] Fait apparaître immédiatement le boss du rôle demandé (`mid`/`final`). */
+  debugSpawnBoss(role: 'mid' | 'final'): void
 }
 
 declare global {
@@ -73,7 +82,20 @@ export function createSeam(app: App): GameSeam {
     chooseUpgrade: (index: number) => {
       app.chooseUpgrade(index)
     },
-    events: app.events
+    events: app.events,
+    // --- helpers de debug (test-only) ---
+    debugGrant: (opts) => {
+      app.debugGrant(opts)
+    },
+    debugAddXp: (amount: number) => {
+      app.debugAddXp(amount)
+    },
+    debugSpawnChestOnPlayer: () => {
+      app.debugSpawnChestOnPlayer()
+    },
+    debugSpawnBoss: (role: 'mid' | 'final') => {
+      app.debugSpawnBoss(role)
+    }
   }
 }
 

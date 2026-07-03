@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { App } from '@/app/app'
+import type { EvolvedEvent } from '@core/events'
 
 /** Avance (en ramassant les gemmes) jusqu'à l'écran d'upgrade. */
 function advanceToUpgrade(app: App, maxMs: number): void {
@@ -109,5 +110,46 @@ describe('App — écrans & navigation', () => {
     expect(s.menu?.items[0]?.hint).not.toBeNull() // l'effet est décrit
     app.confirm()
     expect(app.getState().screen).toBe('game')
+  })
+})
+
+describe('App — helpers de debug (passe-plat vers Simulation, pour le seam)', () => {
+  it('debugGrant + debugAddXp fast-forward un level-up sans planter', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({ weapons: [{ id: 'cloueur', level: 1 }] })
+    app.debugAddXp(1_000_000)
+    app.advanceTime(100)
+    // Soit un level-up est en attente (carte à choisir), soit l'inventaire était
+    // déjà couvert et le temps continue — dans tous les cas, pas de plantage et
+    // la scène de jeu reste valide.
+    expect(['game', 'upgrade']).toContain(app.getState().screen)
+  })
+
+  it('debugSpawnChestOnPlayer fait apparaître un coffre ramassable immédiatement', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugSpawnChestOnPlayer()
+    app.advanceTime(200)
+    // Sans évolution éligible, le coffre applique un bonus de soin (borné) — on
+    // vérifie juste que l'appel ne plante pas et que le joueur est toujours là.
+    expect(app.getState().players.length).toBe(1)
+  })
+
+  it('debugSpawnBoss("mid") fait apparaître un ennemi boss sans attendre le seuil temporel', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugSpawnBoss('mid')
+    const s = app.getState()
+    expect(s.enemies.some((e) => e.isBoss)).toBe(true)
+  })
+
+  it("l'évolution d'arme est relayée par App (EvolvedEvent)", () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    let evolvedId = ''
+    app.events.addEventListener('evolved', (e) => {
+      evolvedId = (e as EvolvedEvent).weaponId
+    })
+    app.debugGrant({ weapons: [{ id: 'cloueur', level: 8 }], passives: [{ id: 'air_comprime', level: 1 }] })
+    app.debugSpawnChestOnPlayer()
+    app.advanceTime(200)
+    expect(evolvedId).toBe('mitrailleuse_clous')
   })
 })
