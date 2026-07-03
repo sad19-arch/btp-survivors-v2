@@ -152,12 +152,18 @@ export class Overlay {
    */
   private syncBanner(state: AppViewState): void {
     const inGame = state.screen === 'game' && !state.introActive
-    const hasBoss = state.enemies.some((e) => e.isBoss)
+    const boss = state.enemies.find((e) => e.isBoss)
+    const hasBoss = boss !== undefined
     const startedRun = inGame && !this.prevInGame && state.elapsedMs < 500
     const bossArrived = inGame && hasBoss && !this.prevHadBoss
     // L'arrivée du boss a son propre bandeau (rouge, nom du boss) → alerte claire.
+    // Le boss FINAL a un bandeau distinct (nom + classe) — c'est un palier plus dangereux.
     if (bossArrived) {
-      this.showBanner('Alerte — Contremaître', 'banner banner--boss')
+      if (boss.bossRole === 'final') {
+        this.showBanner('DANGER — CONTREMAÎTRE MAUDIT', 'banner banner--boss-final')
+      } else {
+        this.showBanner('Alerte — Contremaître', 'banner banner--boss')
+      }
     } else if (startedRun) {
       this.showBanner('Zone à sécuriser →', 'banner')
     }
@@ -205,11 +211,12 @@ export class Overlay {
     if (this.bossBarFill === null) {
       clear(this.bossLayer)
       const fill = h('div', { className: 'bossbar__fill' })
+      const isFinal = boss.bossRole === 'final'
       this.bossLayer.append(
         h(
           'div',
-          { className: 'bossbar' },
-          h('div', { className: 'bossbar__name', text: 'Contremaître' }),
+          { className: isFinal ? 'bossbar bossbar--final' : 'bossbar' },
+          h('div', { className: 'bossbar__name', text: isFinal ? 'CONTREMAÎTRE MAUDIT' : 'Contremaître' }),
           h('div', { className: 'bossbar__track' }, fill)
         )
       )

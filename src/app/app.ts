@@ -132,7 +132,9 @@ export class App {
     this.sim.events.addEventListener('pickupCollected', (e) => {
       this.events.dispatchEvent(new PickupCollectedEvent((e as PickupCollectedEvent).kind))
     })
-    this.sim.events.addEventListener('bossSpawned', () => { this.events.dispatchEvent(new BossSpawnedEvent()) })
+    this.sim.events.addEventListener('bossSpawned', (e) => {
+      this.events.dispatchEvent(new BossSpawnedEvent((e as BossSpawnedEvent).role))
+    })
     this.sim.events.addEventListener('evolved', (e) => {
       this.events.dispatchEvent(new EvolvedEvent((e as EvolvedEvent).weaponId))
     })

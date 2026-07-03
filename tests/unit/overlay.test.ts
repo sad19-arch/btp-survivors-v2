@@ -110,6 +110,32 @@ describe('Overlay — inventaire HUD (armes/passifs + niveaux)', () => {
   })
 })
 
+describe('Overlay — identité du boss (mid vs final)', () => {
+  it('boss final → barre "CONTREMAÎTRE MAUDIT" + bandeau .banner--boss-final', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugSpawnBoss('final')
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+
+    const name = root.querySelector('.bossbar__name')
+    expect(name?.textContent).toContain('MAUDIT')
+    expect(root.querySelector('.banner--boss-final')).not.toBeNull()
+  })
+
+  it('boss mid → barre "Contremaître" (sans MAUDIT) + bandeau .banner--boss (pas final)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugSpawnBoss('mid')
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+
+    const name = root.querySelector('.bossbar__name')
+    expect(name?.textContent).toBe('Contremaître')
+    expect(name?.textContent).not.toContain('MAUDIT')
+    expect(root.querySelector('.banner--boss')).not.toBeNull()
+    expect(root.querySelector('.banner--boss-final')).toBeNull()
+  })
+})
+
 describe('Overlay — bandeau d’évolution', () => {
   it('showEvolutionBanner insère un .banner--evolution avec le nom de l’arme', () => {
     const { root, overlay } = mount()

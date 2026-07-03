@@ -78,7 +78,7 @@ export class PickupCollectedEvent extends Event {
 
 /** Le boss vient d'apparaître (pour SFX + bascule musique). */
 export class BossSpawnedEvent extends Event {
-  constructor() {
+  constructor(readonly role: 'mid' | 'final') {
     super('bossSpawned')
   }
 }

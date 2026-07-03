@@ -1,6 +1,6 @@
 import type Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
-import type { WeaponFiredEvent, PickupCollectedEvent, AuraPulseEvent } from '@core/events'
+import type { WeaponFiredEvent, PickupCollectedEvent, AuraPulseEvent, BossSpawnedEvent } from '@core/events'
 import { WEAPONS } from '@content/weapons'
 import { SFX, VOICE, voiceStage, musicForState, AMB, type MusicKey } from './manifest'
 import { musicGain, sfxGain, duckedGain, type AudioLevels } from './settings'
@@ -79,7 +79,12 @@ export class AudioDirector {
         this.playVoice(VOICE.bonus)
       }
     })
-    on('bossSpawned', () => { this.playCue('bossSpawned'); this.playVoice(VOICE.boss) })
+    on('bossSpawned', (e) => {
+      this.playCue('bossSpawned')
+      // Le boss final a une réplique dédiée (plus forte) — le mid-boss garde le pool générique.
+      const role = (e as BossSpawnedEvent).role
+      this.playVoice(role === 'final' ? VOICE.bossFinal : VOICE.boss)
+    })
     on('auraPulse', (e) => {
       // Variation de hauteur par sorte d'arme (sans nouvel asset) : strike plus aigu, aura plus grave.
       const kind = (e as AuraPulseEvent).kind

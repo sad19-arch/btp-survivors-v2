@@ -108,3 +108,19 @@ describe('simulation — split de boss', () => {
     expect(won).toBe(true)
   })
 })
+
+describe('simulation — bossRole exposé dans la vue (getState)', () => {
+  it('debugSpawnBoss("final") → enemies[].bossRole === "final"', () => {
+    const sim = new Simulation({ seed: 7, mode: 'solo' })
+    sim.debugSpawnBoss('final')
+    const boss = sim.getState().enemies.find((e) => e.isBoss)
+    expect(boss?.bossRole).toBe('final')
+  })
+
+  it('debugSpawnBoss("mid") → enemies[].bossRole === "mid"', () => {
+    const sim = new Simulation({ seed: 7, mode: 'solo' })
+    sim.debugSpawnBoss('mid')
+    const boss = sim.getState().enemies.find((e) => e.isBoss)
+    expect(boss?.bossRole).toBe('mid')
+  })
+})

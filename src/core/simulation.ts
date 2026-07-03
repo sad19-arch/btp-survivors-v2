@@ -338,7 +338,7 @@ export class Simulation {
     }
     const radius = role === 'mid' ? MINI_BOSS.spawnRadius : FINAL_BOSS.spawnRadius
     spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), radius, role)
-    this.events.dispatchEvent(new BossSpawnedEvent())
+    this.events.dispatchEvent(new BossSpawnedEvent(role))
     if (role === 'mid') {
       this.midBossSpawned = true
     } else {
@@ -623,7 +623,7 @@ export class Simulation {
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
       spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), MINI_BOSS.spawnRadius, 'mid')
-      this.events.dispatchEvent(new BossSpawnedEvent())
+      this.events.dispatchEvent(new BossSpawnedEvent('mid'))
     }
     this.midBossSpawned = true
   }
@@ -636,7 +636,7 @@ export class Simulation {
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
       spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), FINAL_BOSS.spawnRadius, 'final')
-      this.events.dispatchEvent(new BossSpawnedEvent())
+      this.events.dispatchEvent(new BossSpawnedEvent('final'))
     }
     this.finalBossSpawned = true
   }
@@ -713,7 +713,8 @@ export class Simulation {
         hp: health.hp,
         maxHp: health.maxHp,
         isElite: enemy.isElite,
-        isBoss: enemy.isBoss
+        isBoss: enemy.isBoss,
+        ...(enemy.bossRole !== undefined ? { bossRole: enemy.bossRole } : {})
       })
     }
     enemies.sort((a, b) => a.id - b.id)

@@ -140,6 +140,17 @@ const CSS = `
   font-size: 26px;
   text-shadow: 2px 2px 0 ${PALETTE.contour};
 }
+#ui-root .banner--boss-final {
+  top: 30%;
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  background: ${PALETTE.contour};
+  color: ${PALETTE.orangeDanger};
+  border-color: ${PALETTE.orangeDanger};
+  font-size: 26px;
+  text-shadow: 2px 2px 0 ${PALETTE.rougeAlerte};
+}
 #ui-root .banner--evolution {
   top: 30%;
   right: auto;
@@ -179,6 +190,9 @@ const CSS = `
   border: 2px solid ${PALETTE.contour};
 }
 #ui-root .bossbar__fill { height: 100%; background: ${PALETTE.rougeAlerte}; }
+#ui-root .bossbar--final { border-color: ${PALETTE.orangeDanger}; }
+#ui-root .bossbar--final .bossbar__name { color: ${PALETTE.orangeDanger}; }
+#ui-root .bossbar--final .bossbar__fill { background: ${PALETTE.orangeDanger}; }
 #ui-root .hud__stage { font-size: 14px; }
 #ui-root .hud__stagenum { color: ${PALETTE.jauneSecurite}; }
 #ui-root .hud__stagename { color: ${PALETTE.blanc}; }

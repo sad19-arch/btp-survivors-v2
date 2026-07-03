@@ -189,6 +189,8 @@ export interface EnemyState {
   maxHp: number
   isElite: boolean
   isBoss: boolean
+  /** Rôle de boss (mini-boss intermédiaire vs boss final). Absent pour les ennemis non-boss. */
+  bossRole?: 'mid' | 'final'
 }
 
 export interface ProjectileState {
