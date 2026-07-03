@@ -25,4 +25,13 @@ describe('seam — helpers de debug exposés', () => {
     seam.debugAddXp(5)
     expect(seam.getState().players[0]?.xp ?? 0).toBeGreaterThanOrEqual(before)
   })
+
+  it('debugSpawnEnemies(n) fait apparaître ~n ennemis supplémentaires', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const seam = createSeam(app)
+
+    const before = seam.getState().enemies.length
+    seam.debugSpawnEnemies(10)
+    expect(seam.getState().enemies.length).toBeGreaterThanOrEqual(before + 10)
+  })
 })

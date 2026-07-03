@@ -346,6 +346,17 @@ export class Simulation {
     }
   }
 
+  /**
+   * [Debug/seam] Fait apparaître `n` ennemis de la phase courante autour du
+   * centroïde des joueurs, via le spawner de vague normal (RNG seedé →
+   * déterministe). Ne clampe PAS sur `SPAWN.maxActive` : c'est un helper de
+   * stress dont le but est justement de dépasser le plafond normal. Réservé
+   * aux tests et au seam de debug (`window.__GAME__`) — jamais en jeu normal.
+   */
+  debugSpawnEnemies(n: number): void {
+    spawnWave(this.world, this.rng, this.phase, this.playersCentroid(), n, difficultyScaleAt(this.elapsedMs))
+  }
+
   /** Vue texte lisible pour « jouer à l'aveugle ». */
   renderToText(): string {
     const s = this.getState()

@@ -35,6 +35,8 @@ export interface GameSeam {
   debugSpawnChestOnPlayer(): void
   /** [Debug] Fait apparaître immédiatement le boss du rôle demandé (`mid`/`final`). */
   debugSpawnBoss(role: 'mid' | 'final'): void
+  /** [Debug] Fait apparaître `n` ennemis autour des joueurs (stress test horde). */
+  debugSpawnEnemies(n: number): void
 }
 
 declare global {
@@ -95,6 +97,9 @@ export function createSeam(app: App): GameSeam {
     },
     debugSpawnBoss: (role: 'mid' | 'final') => {
       app.debugSpawnBoss(role)
+    },
+    debugSpawnEnemies: (n: number) => {
+      app.debugSpawnEnemies(n)
     }
   }
 }

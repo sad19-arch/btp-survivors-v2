@@ -309,6 +309,11 @@ export class App {
     this.refreshFocus()
   }
 
+  /** [Debug/seam] Fait apparaître `n` ennemis autour des joueurs (stress test horde). */
+  debugSpawnEnemies(n: number): void {
+    this.sim?.debugSpawnEnemies(n)
+  }
+
   // --- état exposé ----------------------------------------------------------
 
   /**
