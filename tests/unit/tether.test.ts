@@ -26,16 +26,14 @@ function makePlayer(w: World, id: number, x: number, y: number, vx: number, vy: 
 describe('tetherSystem (fonction pure)', () => {
   it('annule la composante radiale sortante au-delà du rayon', () => {
     const w = new World()
-    // Centroïde attendu : (0,0). Deux joueurs opposés, distance chacun 600 > 2*450? non,
-    // mais chacun est à 600 du centroïde (>450), donc hors-rayon.
-    makePlayer(w, 1, 600, 0, 1, 0) // vitesse purement sortante (+x, éloigne du centre)
-    makePlayer(w, 2, -600, 0, -1, 0) // vitesse purement sortante (-x, éloigne du centre)
+    // Centroïde attendu : (0,0). Chaque joueur est à 600 du centroïde (>450), hors-rayon.
+    const e1 = makePlayer(w, 1, 600, 0, 1, 0) // vitesse purement sortante (+x)
+    const e2 = makePlayer(w, 2, -600, 0, -1, 0) // vitesse purement sortante (-x)
 
     tetherSystem(w, 2, MAX_RADIUS)
 
-    const entities = [...w.query('player', 'velocity')]
-    const v1 = w.get(entities[0], 'velocity')
-    const v2 = w.get(entities[1], 'velocity')
+    const v1 = w.get(e1, 'velocity')
+    const v2 = w.get(e2, 'velocity')
     expect(v1?.x).toBeCloseTo(0)
     expect(v1?.y).toBeCloseTo(0)
     expect(v2?.x).toBeCloseTo(0)
@@ -44,53 +42,49 @@ describe('tetherSystem (fonction pure)', () => {
 
   it('conserve la vélocité rentrante (dot radial négatif)', () => {
     const w = new World()
-    makePlayer(w, 1, 600, 0, -1, 0) // vers le centre : conservé
+    const e1 = makePlayer(w, 1, 600, 0, -1, 0) // vers le centre : conservé
     makePlayer(w, 2, -600, 0, 1, 0) // contrebalance le centroïde à (0,0)
 
     tetherSystem(w, 2, MAX_RADIUS)
 
-    const entities = [...w.query('player', 'velocity')]
-    const v1 = w.get(entities[0], 'velocity')
+    const v1 = w.get(e1, 'velocity')
     expect(v1).toEqual({ x: -1, y: 0 })
   })
 
   it('conserve la vélocité tangentielle (dot radial nul)', () => {
     const w = new World()
-    makePlayer(w, 1, 600, 0, 0, 1) // tangentielle pure : conservée
+    const e1 = makePlayer(w, 1, 600, 0, 0, 1) // tangentielle pure : conservée
     makePlayer(w, 2, -600, 0, 0, -1) // maintient le centroïde à (0,0)
 
     tetherSystem(w, 2, MAX_RADIUS)
 
-    const entities = [...w.query('player', 'velocity')]
-    const v1 = w.get(entities[0], 'velocity')
+    const v1 = w.get(e1, 'velocity')
     expect(v1?.x).toBeCloseTo(0)
     expect(v1?.y).toBeCloseTo(1)
   })
 
   it('ne touche à rien dans le rayon (d < maxRadius)', () => {
     const w = new World()
-    makePlayer(w, 1, 100, 0, 1, 0)
-    makePlayer(w, 2, -100, 0, -1, 0)
+    const e1 = makePlayer(w, 1, 100, 0, 1, 0)
+    const e2 = makePlayer(w, 2, -100, 0, -1, 0)
 
     tetherSystem(w, 2, MAX_RADIUS)
 
-    const entities = [...w.query('player', 'velocity')]
-    const v1 = w.get(entities[0], 'velocity')
-    const v2 = w.get(entities[1], 'velocity')
+    const v1 = w.get(e1, 'velocity')
+    const v2 = w.get(e2, 'velocity')
     expect(v1).toEqual({ x: 1, y: 0 })
     expect(v2).toEqual({ x: -1, y: 0 })
   })
 
   it('no-op strict en solo (playerCount<=1), quel que soit l’écartement', () => {
     const w = new World()
-    makePlayer(w, 1, 600, 0, 1, 0)
-    makePlayer(w, 2, -600, 0, -1, 0)
+    const e1 = makePlayer(w, 1, 600, 0, 1, 0)
+    const e2 = makePlayer(w, 2, -600, 0, -1, 0)
 
     tetherSystem(w, 1, MAX_RADIUS)
 
-    const entities = [...w.query('player', 'velocity')]
-    const v1 = w.get(entities[0], 'velocity')
-    const v2 = w.get(entities[1], 'velocity')
+    const v1 = w.get(e1, 'velocity')
+    const v2 = w.get(e2, 'velocity')
     expect(v1).toEqual({ x: 1, y: 0 })
     expect(v2).toEqual({ x: -1, y: 0 })
   })
