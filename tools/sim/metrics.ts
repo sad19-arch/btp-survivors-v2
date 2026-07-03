@@ -50,12 +50,29 @@ export function median(xs: number[]): number {
   return ((s[mid - 1] ?? 0) + (s[mid] ?? 0)) / 2
 }
 
-/** Médiane, colonne par colonne, d'une matrice de courbes (lignes = runs). Suppose des courbes alignées (même longueur) ; les colonnes manquantes d'une courbe plus courte sont comptées comme 0. */
+/**
+ * Médiane, colonne par colonne, d'une matrice de courbes (lignes = runs).
+ * Un run mort tôt a un tableau plus court (l'échantillonnage s'arrête à sa
+ * mort, cf. `runOne`) : ses colonnes manquantes ne sont PAS comptées comme 0
+ * (un run mort n'a pas « 0 % de PV » aux instants suivants — il n'a juste plus
+ * d'échantillon). On agrège donc chaque colonne uniquement sur les runs
+ * encore vivants à cet instant, et on exclut la colonne si aucun run n'y est
+ * vivant (plutôt que de la niveler à 0).
+ */
 function medianCurve(curves: number[][]): number[] {
   const len = curves.reduce((m, c) => Math.max(m, c.length), 0)
   const out: number[] = []
   for (let i = 0; i < len; i++) {
-    out.push(median(curves.map((c) => c[i] ?? 0)))
+    const alive: number[] = []
+    for (const c of curves) {
+      const v = c[i]
+      if (v !== undefined) {
+        alive.push(v)
+      }
+    }
+    if (alive.length > 0) {
+      out.push(median(alive))
+    }
   }
   return out
 }

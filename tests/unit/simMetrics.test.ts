@@ -46,4 +46,21 @@ describe('aggregate', () => {
     expect(a.survivalMsMax).toBe(0)
     expect(a.survivalMsMedian).toBe(0)
   })
+
+  it('un bucket tardif exclut les runs déjà morts (pas de 0-padding) — médiane des survivants', () => {
+    // 2 runs meurent tôt (échantillonnage qui s'arrête à la mort, cf. runOne), 3 runs survivent.
+    const dead = (n: number): { tSec: number; hpPct: number; enemies: number; level: number; score: number }[] =>
+      [{ tSec: 0, hpPct: 100, enemies: 0, level: 1, score: 0 }].slice(0, n)
+    const results: RunResult[] = [
+      run({ seed: 1, survived: false, samples: dead(1) }), // mort avant le bucket tardif
+      run({ seed: 2, survived: false, samples: dead(1) }), // idem
+      run({ seed: 3, survived: true, samples: [{ tSec: 0, hpPct: 100, enemies: 0, level: 1, score: 0 }, { tSec: 10, hpPct: 20, enemies: 5, level: 3, score: 30 }] }),
+      run({ seed: 4, survived: true, samples: [{ tSec: 0, hpPct: 100, enemies: 0, level: 1, score: 0 }, { tSec: 10, hpPct: 40, enemies: 5, level: 3, score: 30 }] }),
+      run({ seed: 5, survived: true, samples: [{ tSec: 0, hpPct: 100, enemies: 0, level: 1, score: 0 }, { tSec: 10, hpPct: 60, enemies: 5, level: 3, score: 30 }] })
+    ]
+    const a = aggregate(results)
+    // Bucket 1 (tardif) : seuls les 3 runs vivants y contribuent → médiane 40, PAS la médiane
+    // avec 0-padding des 2 runs morts (qui donnerait 20).
+    expect(a.hpPctCurve[1]).toBe(40)
+  })
 })
