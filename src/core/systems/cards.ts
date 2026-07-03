@@ -33,8 +33,15 @@ export interface Inventory {
   passives: ReadonlyArray<{ id: string; level: number }>
 }
 
-/** IDs des armes de base (non-évoluées) offrant des cartes de découverte. */
-const BASE_WEAPON_IDS = ['cloueur', 'scie', 'marteau', 'pied_de_biche', 'court_circuit'] as const
+/**
+ * IDs des armes de base (non-évoluées) offrant des cartes de découverte.
+ * Dérivé de WEAPONS (maxLevel > 1) plutôt que codé en dur : les armes évoluées
+ * ont `maxLevel === 1` (non progressives), donc ce filtre les exclut naturellement
+ * sans risquer d'oublier une nouvelle arme de base.
+ */
+const BASE_WEAPON_IDS = Object.values(WEAPONS)
+  .filter((w) => w.maxLevel > 1)
+  .map((w) => w.id)
 
 /**
  * Énumère les cartes éligibles pour un joueur donné.
