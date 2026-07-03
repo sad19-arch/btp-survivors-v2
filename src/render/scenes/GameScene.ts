@@ -9,6 +9,7 @@ import { createGround } from '@render/ground'
 import { createProps, createLandmark, createStructures, phaseSalt } from '@render/props'
 import { dirRow, walkFrame, idleFrame } from '@render/sprites'
 import { stageRender, type StageRender } from '@render/stages'
+import { SpritePool } from '@render/spritePool'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { PlayerState, PrisonerState } from '@core/types'
 import { PALETTE_HEX } from '@ui/palette'
@@ -89,6 +90,12 @@ export class GameScene extends Phaser.Scene {
   private readonly enemySprites = new Map<number, CharSprite>()
   private readonly projectileSprites = new Map<number, CharSprite>()
   private readonly pickupSprites = new Map<number, CharSprite>()
+  /**
+   * Pool de sprites pour ennemis/projectiles/pickups (horde 300-600 entités) : réutilise
+   * au lieu de create/destroy. INSTANCE FRAÎCHE à chaque `create()` (scene.restart en
+   * détruit une et en recrée une autre) — jamais un singleton de module.
+   */
+  private pool!: SpritePool
   /** Dernier niveau connu par joueur (détection de montée de niveau → VFX). */
   private readonly prevLevel = new Map<number, number>()
   /** Derniers PV connus par joueur (détection de dégât → flash rouge). */
@@ -340,6 +347,9 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     // Les objets d'affichage sont détruits au shutdown : on repart de maps vides.
     this.resetRunState()
+    // Nouvelle instance à chaque (re)création de scène — les anciens sprites poolés
+    // sont détruits par Phaser au shutdown, un pool réutilisé les rendrait fantômes.
+    this.pool = new SpritePool(this)
     // Sol : base tuilée seedée + décalques épars (rendu pur, aucune logique).
     // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
     const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
@@ -529,10 +539,12 @@ export class GameScene extends Phaser.Scene {
         const skin = en.isBoss ? this.stage.boss : this.stage.enemies[en.type]
         const key = skin?.key
         const scale = skin?.scale ?? DEFAULT_CHAR_SCALE
-        sprite =
-          key !== undefined && this.textures.exists(key)
-            ? this.add.sprite(en.x, en.y, key).setScale(scale)
-            : this.add.circle(en.x, en.y, ENEMY_RADIUS, ENEMY_COLOR)
+        if (key !== undefined && this.textures.exists(key)) {
+          sprite = this.pool.acquire(key, en.x, en.y)
+          sprite.setScale(scale)
+        } else {
+          sprite = this.add.circle(en.x, en.y, ENEMY_RADIUS, ENEMY_COLOR)
+        }
         this.enemySprites.set(en.id, sprite)
         // Arrivée de boss : téléporteur façon Mega Man (rendu seul, boss actif).
         if (en.isBoss) {
@@ -551,7 +563,11 @@ export class GameScene extends Phaser.Scene {
       if (!seen.has(id)) {
         this.spawnVfx('vfx_dust', sprite.x, sprite.y, 0.4, 1.6, 380)
         this.spawnFlash(sprite.x, sprite.y)
-        sprite.destroy()
+        if (sprite instanceof Phaser.GameObjects.Sprite) {
+          this.pool.release(sprite)
+        } else {
+          sprite.destroy()
+        }
         this.enemySprites.delete(id)
       }
     }
@@ -562,10 +578,12 @@ export class GameScene extends Phaser.Scene {
       let sprite = this.projectileSprites.get(pr.id)
       const cfg = PROJ_SPRITE[pr.type]
       if (sprite === undefined) {
-        sprite =
-          cfg !== undefined && this.textures.exists(cfg.key)
-            ? this.add.sprite(pr.x, pr.y, cfg.key).setScale(cfg.scale)
-            : this.add.circle(pr.x, pr.y, PROJECTILE_RADIUS, PROJECTILE_COLOR)
+        if (cfg !== undefined && this.textures.exists(cfg.key)) {
+          sprite = this.pool.acquire(cfg.key, pr.x, pr.y)
+          sprite.setScale(cfg.scale)
+        } else {
+          sprite = this.add.circle(pr.x, pr.y, PROJECTILE_RADIUS, PROJECTILE_COLOR)
+        }
         this.projectileSprites.set(pr.id, sprite)
       }
       sprite.setPosition(pr.x, pr.y)
@@ -580,7 +598,11 @@ export class GameScene extends Phaser.Scene {
     }
     for (const [id, sprite] of this.projectileSprites) {
       if (!seenProj.has(id)) {
-        sprite.destroy()
+        if (sprite instanceof Phaser.GameObjects.Sprite) {
+          this.pool.release(sprite)
+        } else {
+          sprite.destroy()
+        }
         this.projectileSprites.delete(id)
       }
     }
@@ -591,10 +613,12 @@ export class GameScene extends Phaser.Scene {
       let sprite = this.pickupSprites.get(pk.id)
       const cfg = PICKUP_SPRITE[pk.type]
       if (sprite === undefined) {
-        sprite =
-          cfg !== undefined && this.textures.exists(cfg.key)
-            ? this.add.sprite(pk.x, pk.y, cfg.key).setScale(cfg.scale)
-            : this.add.circle(pk.x, pk.y, PICKUP_RADIUS, PICKUP_COLOR)
+        if (cfg !== undefined && this.textures.exists(cfg.key)) {
+          sprite = this.pool.acquire(cfg.key, pk.x, pk.y)
+          sprite.setScale(cfg.scale)
+        } else {
+          sprite = this.add.circle(pk.x, pk.y, PICKUP_RADIUS, PICKUP_COLOR)
+        }
         this.pickupSprites.set(pk.id, sprite)
       }
       sprite.setPosition(pk.x, pk.y)
@@ -602,7 +626,11 @@ export class GameScene extends Phaser.Scene {
     for (const [id, sprite] of this.pickupSprites) {
       if (!seenPickup.has(id)) {
         this.spawnVfx('vfx_sparkle', sprite.x, sprite.y, 0.6, 1.6, 300)
-        sprite.destroy()
+        if (sprite instanceof Phaser.GameObjects.Sprite) {
+          this.pool.release(sprite)
+        } else {
+          sprite.destroy()
+        }
         this.pickupSprites.delete(id)
       }
     }
