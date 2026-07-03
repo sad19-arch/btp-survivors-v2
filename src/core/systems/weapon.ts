@@ -65,7 +65,7 @@ export function weaponSystem(
           tickSweep(slot, eff, pos, dtMs, world, pulses)
           break
         case 'strike':
-          tickStrike(slot, eff, dtMs, world, rng)
+          tickStrike(slot, eff, dtMs, world, rng, pulses)
           break
       }
     }
@@ -247,7 +247,8 @@ function tickStrike(
   eff: EffectiveStats,
   dtMs: number,
   world: World,
-  rng?: Rng
+  rng?: Rng,
+  pulses?: AuraPulse[]
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -262,6 +263,8 @@ function tickStrike(
       continue
     }
     damageEnemiesInRadius(world, tpos, eff.area, eff.damage)
+    // Retour visuel : une onde à chaque ennemi frappé (VFX propre = passe DA).
+    pulses?.push({ x: tpos.x, y: tpos.y, radius: eff.area })
   }
 }
 
