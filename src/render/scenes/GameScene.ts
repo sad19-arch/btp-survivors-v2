@@ -116,24 +116,84 @@ export class GameScene extends Phaser.Scene {
   /** PNJ d'ambiance non-hostile du stage (idle), ou null si absent. */
   private ambientSprite: Phaser.GameObjects.Sprite | null = null
   /**
-   * VFX d'onde de choc des armes à impulsion (marteau/pied-de-biche/court-circuit),
-   * déclenché par l'événement d'aura de la sim. Une teinte par `kind` les distingue
-   * visuellement sans nouvel asset (VFX dédiés = passe DA ultérieure) :
-   *  - aura (marteau)        → pas de teinte (couleur native du sprite)
-   *  - sweep (pied-de-biche) → jaune sécurité (chaud)
-   *  - strike (court-circuit)→ cyan accent (électrique)
+   * VFX des armes à impulsion (marteau/pied-de-biche/court-circuit), déclenché
+   * par l'événement d'aura de la sim. Une forme dédiée par `kind` — pas de
+   * nouvel asset, juste des primitives Phaser Graphics :
+   *  - aura (marteau)        → onde de choc ronde (sprite existant, pas de teinte)
+   *  - sweep (pied-de-biche) → arc/croissant balayé (jaune sécurité)
+   *  - strike (court-circuit)→ éclair en zigzag + flash d'impact (cyan accent)
    */
   private readonly onAuraPulse = (e: Event): void => {
     const p = e as AuraPulseEvent
-    const fx = this.spawnVfx('vfx_shockwave', p.x, p.y, 0.4, Math.max(1.5, (p.radius * 2) / 90), 320)
-    if (fx === null) {
+    if (p.kind === 'sweep') {
+      this.spawnSweepArc(p.x, p.y, p.radius)
       return
     }
-    if (p.kind === 'sweep') {
-      fx.setTint(PALETTE_HEX.jauneSecurite)
-    } else if (p.kind === 'strike') {
-      fx.setTint(PALETTE_HEX.cyanAccent)
+    if (p.kind === 'strike') {
+      this.spawnStrikeBolt(p.x, p.y, p.radius)
+      return
     }
+    this.spawnVfx('vfx_shockwave', p.x, p.y, 0.4, Math.max(1.5, (p.radius * 2) / 90), 320)
+  }
+  /**
+   * Balayage du pied-de-biche : arc épais (croissant, pas un cercle complet)
+   * qui pivote sur ~40° en s'estompant — lecture "coup de balayage", distincte
+   * de l'onde ronde du marteau. Primitive Graphics, aucune texture chargée.
+   */
+  private spawnSweepArc(x: number, y: number, radius: number): void {
+    const g = this.add.graphics().setPosition(x, y).setDepth(5)
+    const arcRadius = radius * 0.6
+    const span = Phaser.Math.DegToRad(120)
+    const startAngle = -Phaser.Math.DegToRad(90) - span / 2
+    g.lineStyle(7, PALETTE_HEX.jauneSecurite, 1)
+    g.beginPath()
+    g.arc(0, 0, arcRadius, startAngle, startAngle + span)
+    g.strokePath()
+    this.tweens.add({
+      targets: g,
+      rotation: Phaser.Math.DegToRad(40),
+      alpha: 0,
+      duration: 220,
+      ease: 'Quad.easeOut',
+      onComplete: () => g.destroy()
+    })
+  }
+  /**
+   * Coup du court-circuit : éclair en zigzag qui tombe sur la cible + petit
+   * flash d'impact. Le jitter latéral utilise Math.random() — cosmétique pur,
+   * rendu uniquement, sans effet sur l'état de sim (déterminisme préservé).
+   */
+  private spawnStrikeBolt(x: number, y: number, radius: number): void {
+    const g = this.add.graphics().setDepth(5)
+    const start = { x, y: y - radius * 0.9 }
+    const segments = 5
+    const rest: { x: number; y: number }[] = []
+    for (let i = 1; i < segments; i++) {
+      const t = i / segments
+      const jitter = (Math.random() * 2 - 1) * radius * 0.15
+      rest.push({ x: x + jitter, y: y - radius * 0.9 * (1 - t) })
+    }
+    rest.push({ x, y })
+    const drawBolt = (): void => {
+      g.beginPath()
+      g.moveTo(start.x, start.y)
+      for (const pt of rest) {
+        g.lineTo(pt.x, pt.y)
+      }
+      g.strokePath()
+    }
+    g.lineStyle(3, PALETTE_HEX.cyanAccent, 1)
+    drawBolt()
+    g.lineStyle(1, PALETTE_HEX.blanc, 0.9)
+    drawBolt()
+    this.spawnFlash(x, y)
+    this.tweens.add({
+      targets: g,
+      alpha: 0,
+      duration: 160,
+      ease: 'Quad.easeOut',
+      onComplete: () => g.destroy()
+    })
   }
   /** Libération d'un prisonnier : étincelles + bulle « Merci ! » au-dessus de l'ouvrier. */
   private readonly onPrisonerFreed = (e: Event): void => {
