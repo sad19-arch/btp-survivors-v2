@@ -87,7 +87,7 @@ export const SPAWN = {
    *  Resserré (700→560) pour laisser moins de temps de réaction et favoriser la nasse. */
   ringRadius: 560,
   /** Plafond d'ennemis simultanés (perf). */
-  maxActive: 200
+  maxActive: 300
 } as const
 
 /**

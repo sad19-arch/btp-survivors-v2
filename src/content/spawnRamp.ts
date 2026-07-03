@@ -1,11 +1,12 @@
 /**
  * Rampe de spawn temporelle (data-driven). Définit comment la pression
- * ennemie monte dans le temps sur une run de ~10 min :
- *  - 0-1 min : calme (PRD apprentissage), greedy/idle ne sont pas wipés d'emblée.
- *  - 1-5 min : montée régulière ; spike mini-boss à 5:00.
- *  - 5-10 min : escalade brutale → finale dense qui encercle même un kiter
- *    (le joueur, à 200 px/s, distance tout individuellement ; seule la densité
- *    via l'anneau de spawn peut le menacer → HP qui plonge = climax).
+ * ennemie monte dans le temps sur une run de ~10:30 :
+ *  - 0-3 min : calme (PRD apprentissage), greedy/idle ne sont pas wipés d'emblée.
+ *  - 3-9 min : phase de puissance — la PRESSION monte via le NOMBRE (densité de
+ *    spawn en forte hausse) pendant que les PV des ennemis montent doucement
+ *    (ils fondent encore) ; mini-boss dans cette fenêtre.
+ *  - 9-10:30 min : mur — PV en coup de fouet (cf. `difficultyScaleAt`), densité
+ *    au maximum → climax qui encercle même un kiter avant le boss final.
  *
  * Un palier = un seuil de temps. Tuné via le harness sim (cibles « skill récompensé »).
  */
@@ -19,15 +20,17 @@ export interface SpawnRampStep {
 }
 
 export const SPAWN_RAMP: readonly SpawnRampStep[] = [
-  { fromSec: 0, intervalMs: 3000, countPerWave: 1 }, // ~0,33/s — 1re minute d'apprentissage
-  { fromSec: 45, intervalMs: 2000, countPerWave: 1 }, // ~0,5/s
-  { fromSec: 95, intervalMs: 1400, countPerWave: 1 }, // ~0,71/s
-  { fromSec: 145, intervalMs: 1000, countPerWave: 2 }, // ~2,0/s — la pression monte
-  { fromSec: 225, intervalMs: 800, countPerWave: 2 }, // ~2,5/s
-  { fromSec: 300, intervalMs: 640, countPerWave: 3 }, // ~4,7/s — boss (5:00) dans la nasse
-  { fromSec: 390, intervalMs: 520, countPerWave: 4 }, // ~7,7/s
-  { fromSec: 470, intervalMs: 430, countPerWave: 5 }, // ~11,6/s
-  { fromSec: 540, intervalMs: 370, countPerWave: 6 } // ~16,2/s — pic final
+  { fromSec: 0, intervalMs: 3000, countPerWave: 1 }, // 0-3 min : fuite, apprentissage
+  { fromSec: 45, intervalMs: 2200, countPerWave: 1 },
+  { fromSec: 100, intervalMs: 1600, countPerWave: 1 },
+  { fromSec: 180, intervalMs: 1100, countPerWave: 2 }, // 3:00 : la puissance commence, densité ↑
+  { fromSec: 260, intervalMs: 850, countPerWave: 2 },
+  { fromSec: 340, intervalMs: 650, countPerWave: 3 }, // ~4,6/s
+  { fromSec: 420, intervalMs: 520, countPerWave: 4 }, // ~7,7/s — on fauche
+  { fromSec: 500, intervalMs: 430, countPerWave: 5 },
+  { fromSec: 540, intervalMs: 360, countPerWave: 6 }, // 9:00 : tension
+  { fromSec: 600, intervalMs: 320, countPerWave: 7 }, // 10:00
+  { fromSec: 630, intervalMs: 280, countPerWave: 8 } // 10:30 : climax + boss final
 ]
 
 /** Palier courant : le dernier dont `fromSec` est ≤ au temps écoulé. */
@@ -57,17 +60,19 @@ export interface DifficultyScale {
 }
 
 /**
- * Montée en puissance temporelle des ennemis de vague (pas le boss) : PV et dégâts
- * de contact croissent linéairement avec le temps, la vitesse un peu (plafonnée),
- * pour que la fin de run soit un vrai mur. Déterministe (fonction pure du temps).
+ * Montée en puissance temporelle des ennemis de vague (pas le boss) : les PV
+ * croissent doucement (les ennemis fondent) pendant la phase de puissance (≤9:00)
+ * puis en coup de fouet après (mur de fin de run) ; les dégâts de contact et la
+ * vitesse (plafonnée) croissent linéairement avec le temps. Déterministe (fonction
+ * pure du temps).
  */
 export function difficultyScaleAt(elapsedMs: number): DifficultyScale {
   const min = Math.max(0, elapsedMs) / 60000
-  // Départ SOUS 1 (ennemis affaiblis → 1re minute clémente) puis montée jusqu'à un
-  // mur en fin de run. Courbe « gentille → brutale » = tendu mais gagnable.
+  // PV : montée DOUCE pendant la puissance (fondent) puis coup de fouet après 9:00 (mur).
+  const hp = min <= 9 ? 0.7 + 0.12 * min : 0.7 + 0.12 * 9 + 0.55 * (min - 9)
   return {
-    hp: 0.7 + 0.28 * min, // 0:00→0,70 · 5:00→2,1 · 8:00→3,0
-    contactDamage: 0.5 + 0.17 * min, // 0:00→0,50 · 5:00→1,35 · 8:00→1,86
-    speed: Math.min(1.2, 1.0 + 0.04 * min) // 0:00→1,0 (fast>joueur colle déjà) · ≥5:00→1,2 (mur)
+    hp, // 3:00→1,06 · 6:00→1,42 · 9:00→1,78 · 11:00→2,88
+    contactDamage: 0.5 + 0.16 * min,
+    speed: Math.min(1.2, 1.0 + 0.04 * min)
   }
 }
