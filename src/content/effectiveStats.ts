@@ -13,6 +13,12 @@ export interface EffectiveStats {
   boomerangOutMs: number | undefined
   /** Rayon du projectile (px, scalé par `s.area`) ; 0 = non applicable (arme sans kind projectile). */
   projectileRadius: number
+  /**
+   * Intervalle entre deux ticks de dégâts (ms) pour les armes kind `hazard`.
+   * Non scalé (cadence fixe, indépendante des passifs).
+   * `undefined` si l'arme n'est pas de kind hazard.
+   */
+  tickMs: number | undefined
 }
 
 const MIN_COOLDOWN_MS = 60
@@ -31,6 +37,7 @@ export function effectiveWeaponStats(lvl: WeaponLevel, s: PlayerStats): Effectiv
     orbitHitRadius: (lvl.orbitHitRadius ?? 0) * s.area,
     bounces: lvl.bounces ?? 0,
     boomerangOutMs: lvl.boomerangOutMs !== undefined ? lvl.boomerangOutMs * s.duration : undefined,
-    projectileRadius: (lvl.projectileRadius ?? 0) * s.area
+    projectileRadius: (lvl.projectileRadius ?? 0) * s.area,
+    tickMs: lvl.tickMs
   }
 }

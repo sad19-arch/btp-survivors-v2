@@ -26,6 +26,7 @@ import { pickupSystem } from './systems/pickup'
 import { rescueSystem } from './systems/rescue'
 import { reviveSystem } from './systems/revive'
 import { projectileLifetimeSystem } from './systems/projectile'
+import { hazardSystem } from './systems/hazard'
 import { boomerangSystem } from './systems/boomerang'
 import { consumeLevelUp, initialProgress } from './systems/leveling'
 import { allPlayersDead } from './systems/gameRules'
@@ -43,6 +44,7 @@ import type {
   EntityId,
   GameMode,
   GameState,
+  HazardState,
   PendingLevelUp,
   PickupState,
   PickupKind,
@@ -272,6 +274,7 @@ export class Simulation {
       projectiles: this.collectProjectiles(),
       pickups: this.collectPickups(),
       prisoners: this.collectPrisoners(),
+      hazards: this.collectHazards(),
       pendingLevelUp: this.pendingLevelUp
     }
   }
@@ -503,6 +506,7 @@ export class Simulation {
     this.handleChestPickups(chestCollectors)
     rescueSystem(this.world, freed)
     projectileLifetimeSystem(this.world, dtMs)
+    hazardSystem(this.world, dtMs, this.enemyGrid)
     // Après collision/reap (les joueurs peuvent tomber à terre ce pas-ci), avant les
     // vérifs de fin de partie (une relève complétée ce pas-ci doit annuler un game over).
     reviveSystem(this.world, this.inputs, dtMs)
@@ -807,6 +811,20 @@ export class Simulation {
       prisoners.push({ id: e, x: pos.x, y: pos.y, freed: prisoner.freed })
     }
     return prisoners
+  }
+
+  private collectHazards(): HazardState[] {
+    const hazards: HazardState[] = []
+    for (const e of this.world.query('hazard', 'position')) {
+      const pos = this.world.get(e, 'position')
+      const haz = this.world.get(e, 'hazard')
+      if (pos === undefined || haz === undefined) {
+        continue
+      }
+      hazards.push({ id: e, x: pos.x, y: pos.y, radius: haz.radius, remainingMs: haz.lifeMs })
+    }
+    hazards.sort((a, b) => a.id - b.id)
+    return hazards
   }
 
   /**

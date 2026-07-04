@@ -69,6 +69,9 @@ export function weaponSystem(
         case 'strike':
           tickStrike(slot, eff, dtMs, world, def.kind, rng, pulses, grid)
           break
+        case 'hazard':
+          tickHazard(world, slot, def, eff, pos, player.playerId, dtMs)
+          break
       }
     }
   }
@@ -380,6 +383,57 @@ function despawnOrphanOrbiters(world: World): void {
   }
 }
 
+// --- hazard (goudron) ------------------------------------------------------
+
+/**
+ * Pose une (ou plusieurs) flaque(s) de goudron à la position du joueur.
+ * Chaque flaque est une entité avec composants `position` + `hazard` ;
+ * les dégâts par tick sont gérés par `hazardSystem`.
+ *
+ * `count > 1` : les flaques sont réparties en cercle autour du joueur avec
+ * un léger rayon d'offset (`HAZARD_OFFSET_RADIUS`) — angles déterministes.
+ */
+const HAZARD_OFFSET_RADIUS = 30 // px d'écart radial pour count > 1
+
+function tickHazard(
+  world: World,
+  slot: CooldownSlot,
+  def: WeaponDef,
+  eff: EffectiveStats,
+  pos: Vec2,
+  ownerId: number,
+  dtMs: number
+): void {
+  slot.cooldownLeftMs -= dtMs
+  if (slot.cooldownLeftMs > 0) {
+    return
+  }
+  slot.cooldownLeftMs = eff.cooldownMs
+
+  const count = Math.max(1, Math.round(eff.count))
+  const radius = eff.area + HITBOX.enemy
+  const tickMs = eff.tickMs ?? 400
+  const lifeMs = eff.projectileLifeMs > 0 ? eff.projectileLifeMs : 3000
+
+  for (let i = 0; i < count; i++) {
+    // Offset radial déterministe (angle réparti uniformément autour du joueur).
+    const angle = (Math.PI * 2 * i) / count
+    const offsetX = count > 1 ? Math.cos(angle) * HAZARD_OFFSET_RADIUS : 0
+    const offsetY = count > 1 ? Math.sin(angle) * HAZARD_OFFSET_RADIUS : 0
+    const e = world.spawn()
+    world.add(e, 'position', { x: pos.x + offsetX, y: pos.y + offsetY })
+    world.add(e, 'hazard', {
+      type: def.id,
+      ownerId,
+      damagePerTick: eff.damage,
+      radius,
+      tickMs,
+      tickLeftMs: 0,
+      lifeMs
+    })
+  }
+}
+
 // --- commun ---------------------------------------------------------------
 
 // Scratch réutilisé par tous les appels `damageEnemiesInRadius` avec grille (évite une
@@ -398,7 +452,7 @@ const radiusQueryScratch: number[] = []
  * retrier par id). Sans `grid` (tests existants, appels sans grille) : repli linéaire
  * inchangé — comportement identique bit à bit.
  */
-function damageEnemiesInRadius(world: World, center: Vec2, reach: number, damage: number, grid?: SpatialGrid): void {
+export function damageEnemiesInRadius(world: World, center: Vec2, reach: number, damage: number, grid?: SpatialGrid): void {
   const r2 = reach * reach
   if (grid !== undefined) {
     grid.queryCircle(center.x, center.y, reach, radiusQueryScratch)

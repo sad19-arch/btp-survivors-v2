@@ -103,6 +103,28 @@ export interface ProjectileComp {
   hitIds?: number[]
 }
 
+/**
+ * Une flaque de goudron au sol (kind `hazard`).
+ * Inflige `damagePerTick` à tous les ennemis vivants dans son `radius` toutes
+ * les `tickMs` ms, jusqu'à ce que `lifeMs` atteigne 0 (despawn automatique).
+ */
+export interface HazardComp {
+  /** Id de l'arme source (ex. `'goudron'`). */
+  type: string
+  /** PlayerId du joueur qui a posé la flaque. */
+  ownerId: number
+  /** Dégâts infligés par intervalle. */
+  damagePerTick: number
+  /** Rayon de la zone (px). */
+  radius: number
+  /** Durée entre deux ticks de dégâts (ms). */
+  tickMs: number
+  /** Temps restant avant le prochain tick (ms). 0 ou négatif → tick immédiat. */
+  tickLeftMs: number
+  /** Durée de vie restante de la flaque (ms). 0 ou négatif → despawn. */
+  lifeMs: number
+}
+
 /** Progrès de relève d'un joueur à terre (hp<=0), en cours de secours par un coéquipier. */
 export interface ReviveComp {
   /** Progression vers la relève, [0,1[ ; >=1 déclenche la relève (retire ce composant). */
@@ -169,6 +191,8 @@ export interface Components {
   stats: PlayerStats
   /** Présent uniquement pendant qu'un joueur à terre est en cours de relève. */
   revive: ReviveComp
+  /** Flaque de goudron au sol (kind `hazard`) : dégâts par tick. */
+  hazard: HazardComp
 }
 
 export type ComponentKey = keyof Components
@@ -251,6 +275,15 @@ export interface PrisonerState {
   freed: boolean
 }
 
+/** Flaque de goudron exposée dans le view-state (pour le rendu — Task 7/8). */
+export interface HazardState {
+  id: number
+  x: number
+  y: number
+  radius: number
+  remainingMs: number
+}
+
 export interface PendingLevelUp {
   playerId: number
   choices: Card[]
@@ -272,5 +305,7 @@ export interface GameState {
   pickups: PickupState[]
   /** Ouvriers prisonniers présents (cage + sosie à libérer). */
   prisoners: PrisonerState[]
+  /** Flaques de goudron actives (pour le rendu — Task 7/8). */
+  hazards: HazardState[]
   pendingLevelUp: PendingLevelUp | null
 }
