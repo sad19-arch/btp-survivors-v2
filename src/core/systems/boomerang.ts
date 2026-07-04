@@ -56,6 +56,12 @@ export function boomerangSystem(world: World, dtMs: number): void {
       proj.boomerangOutMs -= dtMs
       if (proj.boomerangOutMs <= 0) {
         proj.returning = true
+        // Vider hitIds au moment de l'inversion : chaque ennemi peut être touché une fois
+        // à l'aller et une fois au retour (double coup voulu). La liste se re-remplit
+        // pendant la phase retour, empêchant les hits répétés dans le même passage.
+        if (proj.hitIds !== undefined) {
+          proj.hitIds.length = 0
+        }
       }
     }
 

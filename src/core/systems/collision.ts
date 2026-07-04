@@ -11,6 +11,10 @@ const BOUNCE_SEEK_RADIUS = 320
  *    (`pierce > 0`) qui laisse le projectile continuer sa route vers d'autres ennemis.
  *  - projectile ricochet (`bounces > 0`) : à l'impact, redirige vers l'ennemi le plus proche
  *    non déjà touché ; déterministe (distance² minimale, tie-break id croissant).
+ *  - projectile boomerang (`boomerangOutMs`) : frappe à l'aller ET au retour. `hitIds` est vidé
+ *    par `boomerangSystem` au moment de l'inversion, ce qui autorise un re-hit au retour
+ *    (un ennemi peut être touché une fois à l'aller, une fois au retour). Le `pierce` borne
+ *    le nombre d'ennemis touchés par passage.
  *  - ennemi ↔ joueur : dégâts de contact continus (proportionnels au temps).
  *
  * `grid` fournit uniquement des CANDIDATS (surensemble spatial de TOUS les ennemis avec
@@ -34,10 +38,6 @@ export function collisionSystem(world: World, dtMs: number, grid: SpatialGrid): 
     const ppos = world.get(p, 'position')
     const proj = world.get(p, 'projectile')
     if (ppos === undefined || proj === undefined) {
-      continue
-    }
-    // Un boomerang en phase retour ne frappe plus les ennemis (retour inoffensif).
-    if (proj.returning === true) {
       continue
     }
     const reach = proj.radius + HITBOX.enemy

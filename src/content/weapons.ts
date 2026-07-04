@@ -141,7 +141,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   cle_molette: {
     id: 'cle_molette', name: 'Clé à molette', kind: 'projectile', maxLevel: 8,
     levels: buildLevels(
-      { damage: 16, cooldownMs: 1150, count: 1, area: 0, pierce: 99, projectileSpeed: 380, boomerangOutMs: 430, projectileLifeMs: 2400 },
+      { damage: 16, cooldownMs: 1150, count: 1, area: 0, pierce: 4, projectileSpeed: 380, boomerangOutMs: 430, projectileLifeMs: 2400 },
       { damage: 4 }, 8, { 6: { count: 2 } }
     )
   },
@@ -179,7 +179,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   tempete_boulons: { id: 'tempete_boulons', name: 'Tempête de boulons', kind: 'projectile', maxLevel: 1,
     levels: [{ damage: 26, cooldownMs: 360, count: 3, area: 0, pierce: 0, bounces: 6, projectileSpeed: 560, projectileLifeMs: 1900 }] },
   cle_choc: { id: 'cle_choc', name: 'Clé à choc', kind: 'projectile', maxLevel: 1,
-    levels: [{ damage: 40, cooldownMs: 650, count: 2, area: 0, pierce: 99, projectileSpeed: 440, boomerangOutMs: 520, projectileLifeMs: 3000 }] },
+    levels: [{ damage: 40, cooldownMs: 650, count: 2, area: 0, pierce: 5, projectileSpeed: 440, boomerangOutMs: 520, projectileLifeMs: 3000 }] },
   canon_mousse: { id: 'canon_mousse', name: 'Canon à mousse', kind: 'cone', maxLevel: 1,
     levels: [{ damage: 18, cooldownMs: 620, count: 1, area: 190, pierce: 99, slowMult: 0.35, slowMs: 2200 }] },
   transpalette: { id: 'transpalette', name: 'Transpallette automatisée', kind: 'projectile', maxLevel: 1,

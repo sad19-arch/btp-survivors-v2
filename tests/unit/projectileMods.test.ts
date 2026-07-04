@@ -218,6 +218,60 @@ describe('boomerang (boomerangOutMs)', () => {
     expect(vel?.x).toBe(200) // inchangé
     expect(vel?.y).toBe(0)
   })
+
+  it('un ennemi sur la trajectoire est touché à l\'aller ET au retour (double coup)', () => {
+    // Scénario : owner à x=0, boomerang lancé vers +x, ennemi à x=100.
+    // L'ennemi doit encaisser un hit sur l'aller (pass 1) et un second sur le retour (pass 2).
+    // pierce=1 : peut traverser 2 ennemis par passage, donc le projectile n'est pas
+    // consommé au premier impact.
+    const w = new World()
+    // Owner loin du boomerang pour que le retour ne despawn pas trop vite.
+    spawnPlayer(w, -500, 0, 1)
+
+    const proj = spawnProjectile(w, 100, 0, 200, 0, {
+      ownerId: 1,
+      boomerangOutMs: 1, // s'inverse quasi immédiatement (dès le 1er tick)
+      pierce: 1
+    })
+    const en = spawnEnemy(w, 100, 0, 100) // HP=100
+
+    // ── Aller ──────────────────────────────────────────────────────────────
+    // Collision : projectile à (100,0), ennemi à (100,0) → hit aller
+    collisionSystem(w, 16, buildGrid(w))
+
+    const hpApresAller = w.get(en, 'health')?.hp ?? 999
+    expect(hpApresAller).toBe(90) // touché une première fois (damage=10)
+    expect(w.alive(proj)).toBe(true) // pierce=1 → projectile continue
+
+    // ── Inversion ──────────────────────────────────────────────────────────
+    // boomerangSystem vide hitIds (undefined ici, donc no-op) et passe returning=true
+    boomerangSystem(w, 10) // 10ms > boomerangOutMs=1 → inversion
+
+    const projComp = w.get(proj, 'projectile')
+    expect(projComp?.returning).toBe(true)
+
+    // Replacer manuellement le projectile sur l'ennemi pour simuler le retour
+    const ppos = w.get(proj, 'position')
+    if (ppos !== undefined) {
+      ppos.x = 100
+      ppos.y = 0
+    }
+    // Réorienter vers l'owner (phase retour)
+    const vel = w.get(proj, 'velocity')
+    if (vel !== undefined) {
+      vel.x = -200
+      vel.y = 0
+    }
+
+    // ── Retour ─────────────────────────────────────────────────────────────
+    // Collision : projectile revient sur l'ennemi → doit le toucher à nouveau
+    collisionSystem(w, 16, buildGrid(w))
+
+    const hpApresRetour = w.get(en, 'health')?.hp ?? 999
+    expect(hpApresRetour).toBe(80) // second hit (total 2×10=20 dégâts)
+    // Le projectile est maintenant despawné (pierce=1 épuisé après 2 hits)
+    expect(w.alive(proj)).toBe(false)
+  })
 })
 
 // ──────────────────────────────────────────────────────────────
