@@ -207,35 +207,92 @@ export class GameScene extends Phaser.Scene {
       this.spawnConeVfx(p.x, p.y, p.radius, p.dirX, p.dirY)
       return
     }
-    this.spawnVfx('vfx_shockwave', p.x, p.y, 0.4, Math.max(1.5, (p.radius * 2) / 90), 320)
+    // Marteau : onde de choc + scale-pop + léger screen-shake (coup lourd).
+    const toScale = Math.max(1.5, (p.radius * 2) / 90)
+    this.spawnVfx('vfx_shockwave', p.x, p.y, 0.2, toScale, 320)
+    // Flash central jaune bref (pixel-pop).
+    this.spawnPixelPop(p.x, p.y, PALETTE_HEX.jauneSecurite, 14, 220)
+    // Screen-shake léger — coup lourd mais pas nausée.
+    this.cameras.main.shake(90, 0.004)
   }
   /**
    * Balayage du pied-de-biche : arc épais (croissant, pas un cercle complet)
    * qui pivote sur ~40° en s'estompant — lecture "coup de balayage", distincte
-   * de l'onde ronde du marteau. Primitive Graphics, aucune texture chargée.
+   * de l'onde ronde du marteau. Double-tracé (cœur blanc + contour jaune) +
+   * scale-pop (naît petit → pleine taille) + particules éjectées le long de l'arc.
+   * Primitive Graphics, aucune texture chargée.
    */
   private spawnSweepArc(x: number, y: number, radius: number): void {
-    const g = this.add.graphics().setPosition(x, y).setDepth(5)
     const arcRadius = radius * 0.6
     const span = Phaser.Math.DegToRad(120)
     const startAngle = -Phaser.Math.DegToRad(90) - span / 2
-    g.lineStyle(7, PALETTE_HEX.jauneSecurite, 1)
-    g.beginPath()
-    g.arc(0, 0, arcRadius, startAngle, startAngle + span)
-    g.strokePath()
+
+    // Cœur blanc (plus fin, éclatant) — dessous.
+    const gInner = this.add.graphics().setPosition(x, y).setDepth(5).setScale(0.3)
+    gInner.lineStyle(12, PALETTE_HEX.blanc, 0.85)
+    gInner.beginPath()
+    gInner.arc(0, 0, arcRadius, startAngle, startAngle + span)
+    gInner.strokePath()
     this.tweens.add({
-      targets: g,
+      targets: gInner,
       rotation: Phaser.Math.DegToRad(40),
+      scaleX: 1,
+      scaleY: 1,
       alpha: 0,
-      duration: 220,
+      duration: 260,
       ease: 'Quad.easeOut',
-      onComplete: () => g.destroy()
+      onComplete: () => gInner.destroy()
     })
+
+    // Contour jaune (épais) — dessus, légèrement décalé en temps (scale-pop décalé).
+    const gOuter = this.add.graphics().setPosition(x, y).setDepth(5).setScale(0.3)
+    gOuter.lineStyle(7, PALETTE_HEX.jauneSecurite, 1)
+    gOuter.beginPath()
+    gOuter.arc(0, 0, arcRadius, startAngle, startAngle + span)
+    gOuter.strokePath()
+    this.tweens.add({
+      targets: gOuter,
+      rotation: Phaser.Math.DegToRad(40),
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 0,
+      duration: 240,
+      ease: 'Quad.easeOut',
+      onComplete: () => gOuter.destroy()
+    })
+
+    // Flash central (scale-pop) — marque le point d'impact.
+    this.spawnPixelPop(x, y, PALETTE_HEX.jauneSecurite, 10, 180)
+
+    // Particules éjectées en éventail le long de l'arc.
+    const particleCount = 5
+    for (let i = 0; i < particleCount; i++) {
+      const angle = startAngle + (span / (particleCount - 1)) * i
+      const dist = arcRadius * (0.7 + Math.random() * 0.4)
+      const px = x + Math.cos(angle) * dist
+      const py = y + Math.sin(angle) * dist
+      const speedX = Math.cos(angle) * (28 + Math.random() * 22)
+      const speedY = Math.sin(angle) * (28 + Math.random() * 22)
+      const par = this.add.rectangle(px, py, 4, 4, PALETTE_HEX.jauneSecurite).setDepth(6)
+      this.tweens.add({
+        targets: par,
+        x: px + speedX,
+        y: py + speedY,
+        alpha: 0,
+        scaleX: 0.2,
+        scaleY: 0.2,
+        duration: 220 + Math.random() * 80,
+        ease: 'Quad.easeOut',
+        onComplete: () => par.destroy()
+      })
+    }
   }
   /**
-   * VFX du cône d'extincteur : secteur rempli (arc) orienté vers la cible,
-   * teinte blanc-mousse, fondu ~260 ms — même schéma que `spawnSweepArc`.
-   * Si la direction est absente (garde-fou), oriente vers le haut.
+   * VFX du cône d'extincteur : 2 secteurs superposés qui s'élargissent en fondu
+   * (densité et dynamisme) + petites particules « mousse » (carrés blancs) projetées
+   * vers la cible. DA-safe : palette blanc/vert léger, pas de glow.
+   * Les Graphics sont positionnés à l'origine (pas de setPosition) donc toutes les
+   * coordonnées passées aux primitives sont absolues (monde), pas relatives.
    */
   private spawnConeVfx(x: number, y: number, radius: number, dirX?: number, dirY?: number): void {
     const dx = dirX ?? 0
@@ -243,58 +300,148 @@ export class GameScene extends Phaser.Scene {
     const centerAngle = Math.atan2(dy, dx)
     const startAngle = centerAngle - CONE_HALF_ANGLE
     const endAngle = centerAngle + CONE_HALF_ANGLE
-    const g = this.add.graphics().setDepth(5)
-    g.fillStyle(0xe8f4e8, 0.55)
-    g.beginPath()
-    g.moveTo(x, y)
-    g.arc(x, y, radius, startAngle, endAngle, false)
-    g.closePath()
-    g.fillPath()
+
+    // Couche 1 : secteur vert-mousse large — naît petit (scale-pop), s'élargit.
+    const g1 = this.add.graphics().setDepth(5).setPosition(x, y).setScale(0.3)
+    g1.fillStyle(0xe8f4e8, 0.65)
+    g1.beginPath()
+    g1.moveTo(0, 0)
+    g1.arc(0, 0, radius, startAngle, endAngle, false)
+    g1.closePath()
+    g1.fillPath()
     this.tweens.add({
-      targets: g,
+      targets: g1,
+      scaleX: 1,
+      scaleY: 1,
       alpha: 0,
-      duration: 260,
+      duration: 280,
       ease: 'Quad.easeOut',
-      onComplete: () => g.destroy()
+      onComplete: () => g1.destroy()
     })
+
+    // Couche 2 : secteur blanc légèrement plus étroit — cœur lumineux, disparaît vite.
+    const innerSpan = CONE_HALF_ANGLE * 0.7
+    const g2 = this.add.graphics().setDepth(6).setPosition(x, y).setScale(0.4)
+    g2.fillStyle(PALETTE_HEX.blanc, 0.42)
+    g2.beginPath()
+    g2.moveTo(0, 0)
+    g2.arc(0, 0, radius, centerAngle - innerSpan, centerAngle + innerSpan, false)
+    g2.closePath()
+    g2.fillPath()
+    this.tweens.add({
+      targets: g2,
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 0,
+      duration: 200,
+      ease: 'Quad.easeOut',
+      onComplete: () => g2.destroy()
+    })
+
+    // Particules « mousse » : petits carrés blancs projetés dans le cône.
+    const particleCount = 7
+    for (let i = 0; i < particleCount; i++) {
+      const spread = (Math.random() * 2 - 1) * CONE_HALF_ANGLE
+      const angle = centerAngle + spread
+      const dist = radius * (0.3 + Math.random() * 0.7)
+      const px = x + Math.cos(angle) * dist
+      const py = y + Math.sin(angle) * dist
+      const speed = 25 + Math.random() * 30
+      const par = this.add.rectangle(px, py, 3, 3, PALETTE_HEX.blanc).setDepth(7).setAlpha(0.85)
+      this.tweens.add({
+        targets: par,
+        x: px + Math.cos(angle) * speed,
+        y: py + Math.sin(angle) * speed,
+        alpha: 0,
+        scaleX: 0.1,
+        scaleY: 0.1,
+        duration: 230 + Math.random() * 100,
+        ease: 'Quad.easeOut',
+        onComplete: () => par.destroy()
+      })
+    }
   }
 
   /**
-   * Coup du court-circuit : éclair en zigzag qui tombe sur la cible + petit
-   * flash d'impact. Le jitter latéral utilise Math.random() — cosmétique pur,
-   * rendu uniquement, sans effet sur l'état de sim (déterminisme préservé).
+   * Coup du court-circuit : éclair en zigzag qui tombe sur la cible + 2-3 fourches
+   * secondaires + flash d'impact scale-pop. Tracé double (cœur blanc + halo cyan)
+   * pour un rendu « électrique » pixel-art. Le jitter latéral utilise Math.random()
+   * — cosmétique pur, rendu uniquement, sans effet sur l'état de sim (déterminisme préservé).
    */
   private spawnStrikeBolt(x: number, y: number, radius: number): void {
-    const g = this.add.graphics().setDepth(5)
-    const start = { x, y: y - radius * 0.9 }
-    const segments = 5
-    const rest: { x: number; y: number }[] = []
-    for (let i = 1; i < segments; i++) {
-      const t = i / segments
-      const jitter = (Math.random() * 2 - 1) * radius * 0.15
-      rest.push({ x: x + jitter, y: y - radius * 0.9 * (1 - t) })
+    const segments = 6
+    const startY = y - radius * 0.9
+
+    // Génère les points du zigzag principal.
+    const buildZigzag = (jitterScale: number): { x: number; y: number }[] => {
+      const pts: { x: number; y: number }[] = [{ x, y: startY }]
+      for (let i = 1; i < segments; i++) {
+        const t = i / segments
+        const jitter = (Math.random() * 2 - 1) * radius * jitterScale
+        pts.push({ x: x + jitter, y: startY + radius * 0.9 * t })
+      }
+      pts.push({ x, y })
+      return pts
     }
-    rest.push({ x, y })
-    const drawBolt = (): void => {
+
+    const drawPath = (g: Phaser.GameObjects.Graphics, pts: { x: number; y: number }[]): void => {
       g.beginPath()
-      g.moveTo(start.x, start.y)
-      for (const pt of rest) {
-        g.lineTo(pt.x, pt.y)
+      g.moveTo(pts[0]?.x ?? x, pts[0]?.y ?? startY)
+      for (let i = 1; i < pts.length; i++) {
+        g.lineTo(pts[i]?.x ?? x, pts[i]?.y ?? y)
       }
       g.strokePath()
     }
-    g.lineStyle(3, PALETTE_HEX.cyanAccent, 1)
-    drawBolt()
-    g.lineStyle(1, PALETTE_HEX.blanc, 0.9)
-    drawBolt()
-    this.spawnFlash(x, y)
+
+    const mainPts = buildZigzag(0.18)
+
+    // Éclair principal : halo cyan épais + cœur blanc fin.
+    const gMain = this.add.graphics().setDepth(5)
+    gMain.lineStyle(6, PALETTE_HEX.cyanAccent, 0.9)
+    drawPath(gMain, mainPts)
+    gMain.lineStyle(2, PALETTE_HEX.blanc, 1)
+    drawPath(gMain, mainPts)
     this.tweens.add({
-      targets: g,
+      targets: gMain,
       alpha: 0,
-      duration: 160,
+      duration: 180,
       ease: 'Quad.easeOut',
-      onComplete: () => g.destroy()
+      onComplete: () => gMain.destroy()
     })
+
+    // 2 fourches secondaires courtes depuis un point aléatoire du zigzag.
+    const forkCount = 2
+    for (let f = 0; f < forkCount; f++) {
+      const forkIdx = 1 + Math.floor(Math.random() * (segments - 2))
+      const forkPt = mainPts[forkIdx]
+      if (forkPt === undefined) {
+        continue
+      }
+      const forkAngle = Math.PI * (0.3 + Math.random() * 0.4) * (Math.random() < 0.5 ? 1 : -1)
+      const forkLen = radius * (0.25 + Math.random() * 0.2)
+      const gFork = this.add.graphics().setDepth(5)
+      gFork.lineStyle(3, PALETTE_HEX.cyanAccent, 0.75)
+      gFork.beginPath()
+      gFork.moveTo(forkPt.x, forkPt.y)
+      gFork.lineTo(forkPt.x + Math.cos(forkAngle) * forkLen, forkPt.y + Math.sin(forkAngle) * forkLen)
+      gFork.strokePath()
+      gFork.lineStyle(1, PALETTE_HEX.blanc, 0.7)
+      gFork.beginPath()
+      gFork.moveTo(forkPt.x, forkPt.y)
+      gFork.lineTo(forkPt.x + Math.cos(forkAngle) * forkLen, forkPt.y + Math.sin(forkAngle) * forkLen)
+      gFork.strokePath()
+      this.tweens.add({
+        targets: gFork,
+        alpha: 0,
+        duration: 130,
+        ease: 'Quad.easeOut',
+        onComplete: () => gFork.destroy()
+      })
+    }
+
+    // Flash d'impact scale-pop (plus gros que le flash standard).
+    this.spawnPixelPop(x, y, PALETTE_HEX.cyanAccent, 16, 200)
+    this.spawnFlash(x, y)
   }
   /** Libération d'un prisonnier : étincelles + bulle « Merci ! » au-dessus de l'ouvrier. */
   private readonly onPrisonerFreed = (e: Event): void => {
@@ -306,7 +453,8 @@ export class GameScene extends Phaser.Scene {
    * Évolution d'arme (coffre ramassé + conditions réunies) : grand halo au sol
    * sur le joueur qui a réellement ramassé le coffre (`EvolvedEvent.playerId`),
    * réutilise l'asset de montée de niveau (agrandi) — pas de nouvel asset. Le
-   * bandeau/son sont gérés ailleurs (overlay/audio).
+   * bandeau/son sont gérés ailleurs (overlay/audio). Screen-shake légèrement plus
+   * fort que le marteau (évolution = événement majeur du run).
    */
   private readonly onEvolved = (e: Event): void => {
     const playerId = (e as EvolvedEvent).playerId
@@ -314,7 +462,17 @@ export class GameScene extends Phaser.Scene {
     if (p === undefined) {
       return
     }
-    this.spawnVfx('vfx_levelup', p.x, p.y, 0.5, 2.5, 600)
+    this.spawnVfx('vfx_levelup', p.x, p.y, 0.2, 2.8, 650)
+    // Sparkle supplémentaire en anneau (6 points) pour bien marquer l'évolution.
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2
+      const delay = i * 35
+      this.time.delayedCall(delay, () => {
+        this.spawnVfx('vfx_sparkle', p.x + Math.cos(a) * 48, p.y + Math.sin(a) * 48, 0.3, 1.4, 420)
+      })
+    }
+    // Screen-shake plus fort que le marteau (événement majeur du run).
+    this.cameras.main.shake(160, 0.007)
   }
 
   constructor() {
@@ -451,6 +609,47 @@ export class GameScene extends Phaser.Scene {
       ease: 'Quad.easeOut',
       onComplete: () => flash.destroy()
     })
+  }
+
+  /**
+   * Pop pixel carré coloré (scale-pop DA-safe) : naît petit, grossit,
+   * disparaît — pur hit-feel arcade 16-bit. Utilisé par sweep, strike, marteau.
+   */
+  private spawnPixelPop(x: number, y: number, color: number, size: number, durationMs: number): void {
+    const sq = this.add.rectangle(x, y, size, size, color).setDepth(6).setScale(0.2)
+    this.tweens.add({
+      targets: sq,
+      scale: 1,
+      alpha: 0,
+      duration: durationMs,
+      ease: 'Quad.easeOut',
+      onComplete: () => sq.destroy()
+    })
+  }
+
+  /**
+   * Bulles de goudron : petits carrés sombres qui montent et disparaissent,
+   * donnant vie à l'apparition d'une flaque de goudron. Cosmétique pur.
+   */
+  private spawnTarBubbles(x: number, y: number, radius: number): void {
+    const count = 5
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2
+      const dist = Math.random() * radius * 0.7
+      const bx = x + Math.cos(angle) * dist
+      const by = y + Math.sin(angle) * dist
+      const size = 2 + Math.floor(Math.random() * 3)
+      const bubble = this.add.rectangle(bx, by, size, size, PALETTE_HEX.brunSombre).setDepth(0).setAlpha(0.9)
+      this.tweens.add({
+        targets: bubble,
+        y: by - 12 - Math.random() * 10,
+        alpha: 0,
+        duration: 350 + Math.random() * 200,
+        delay: Math.random() * 150,
+        ease: 'Quad.easeOut',
+        onComplete: () => bubble.destroy()
+      })
+    }
   }
 
   /** Bulle « Merci ! » (sprite pré-cuit) montant au-dessus d'un ouvrier libéré. */
@@ -879,8 +1078,11 @@ export class GameScene extends Phaser.Scene {
         seenHaz.add(h.id)
         let hs = this.hazardSprites.get(h.id)
         if (hs === undefined) {
-          hs = this.add.image(h.x, h.y, 'vfx_goudron').setDepth(-2).setAlpha(0.85)
+          hs = this.add.image(h.x, h.y, 'vfx_goudron').setDepth(-2).setAlpha(0)
           this.hazardSprites.set(h.id, hs)
+          // Apparition : fondu d'entrée + quelques bulles sombres montantes.
+          this.tweens.add({ targets: hs, alpha: 0.85, duration: 250, ease: 'Quad.easeOut' })
+          this.spawnTarBubbles(h.x, h.y, h.radius)
         }
         hs.setPosition(h.x, h.y).setScale((h.radius * 2) / hs.width)
       } else {
@@ -1003,11 +1205,13 @@ export class GameScene extends Phaser.Scene {
         sprite.setFrame(walkFrame(row, this.time.now))
       }
     }
-    // Retire les sprites des ennemis disparus (mort → poussière de béton + éclair blanc).
+    // Retire les sprites des ennemis disparus (mort → poussière de béton + éclair blanc + scale-pop).
     for (const [id, sprite] of this.enemySprites) {
       if (!seen.has(id)) {
-        this.spawnVfx('vfx_dust', sprite.x, sprite.y, 0.4, 1.6, 380)
+        this.spawnVfx('vfx_dust', sprite.x, sprite.y, 0.2, 1.8, 380)
         this.spawnFlash(sprite.x, sprite.y)
+        // Pixel-pop orange (impact satisfaction) — DA-safe.
+        this.spawnPixelPop(sprite.x, sprite.y, PALETTE_HEX.orangeDanger, 8, 160)
         if (sprite instanceof Phaser.GameObjects.Sprite) {
           this.pool.release(sprite)
         } else {
