@@ -148,8 +148,8 @@ export const WEAPONS: Record<string, WeaponDef> = {
   extincteur: {
     id: 'extincteur', name: 'Extincteur', kind: 'cone', maxLevel: 8,
     levels: buildLevels(
-      { damage: 6, cooldownMs: 1000, count: 1, area: 130, pierce: 99, slowMult: 0.5, slowMs: 1500 },
-      { damage: 2, area: 8 }, 8
+      { damage: 6, cooldownMs: 1300, count: 1, area: 110, pierce: 99, slowMult: 0.5, slowMs: 700 },
+      { damage: 2, area: 7 }, 8
     )
   },
   brouette: {

@@ -45,6 +45,15 @@ export function enemyAiSystem(world: World): void {
     }
     vel.x = (dx / len) * enemy.speed
     vel.y = (dy / len) * enemy.speed
+
+    // Applique le ralentissement si l'ennemi porte un composant `slow`.
+    // Le composant a déjà été décrémenté et potentiellement retiré par
+    // `slowSystem` (appelé avant `enemyAiSystem` dans simulation.step).
+    const slow = world.get(e, 'slow')
+    if (slow !== undefined) {
+      vel.x *= slow.mult
+      vel.y *= slow.mult
+    }
   }
 }
 

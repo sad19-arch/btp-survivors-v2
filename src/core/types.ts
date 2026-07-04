@@ -147,6 +147,18 @@ export interface PrisonerComp {
   freed: boolean
 }
 
+/**
+ * Effet de ralentissement posé sur un ennemi (premier effet de contrôle du jeu).
+ * Posé par les armes de kind `cone` (extincteur, canon_mousse).
+ * Retiré par `slowSystem` quand `remainingMs` atteint 0.
+ */
+export interface SlowComp {
+  /** Multiplicateur de vélocité appliqué par `enemyAiSystem` (< 1 = ralenti). */
+  mult: number
+  /** Durée restante du ralentissement, en ms. */
+  remainingMs: number
+}
+
 /** Une arme équipée, son niveau et son cooldown courant. */
 export interface WeaponSlot {
   id: string
@@ -193,6 +205,11 @@ export interface Components {
   revive: ReviveComp
   /** Flaque de goudron au sol (kind `hazard`) : dégâts par tick. */
   hazard: HazardComp
+  /**
+   * Ralentissement actif sur un ennemi (posé par les armes de kind `cone`).
+   * Absent = pas de slow courant.
+   */
+  slow: SlowComp
 }
 
 export type ComponentKey = keyof Components

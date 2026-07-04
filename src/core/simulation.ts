@@ -18,6 +18,7 @@ import { movementSystem } from './systems/movement'
 import { tetherSystem } from './systems/tether'
 import { worldBoundsSystem } from './systems/bounds'
 import { enemyAiSystem } from './systems/enemyAi'
+import { slowSystem } from './systems/slow'
 import { spawnBoss, spawnWave } from './systems/spawn'
 import { weaponSystem } from './systems/weapon'
 import { collisionSystem } from './systems/collision'
@@ -493,6 +494,7 @@ export class Simulation {
     // `collisionSystem` — deux instantanés distincts, chacun exact pour son système.
     this.rebuildEnemyGrid()
     weaponSystem(this.world, dtMs, pulses, fired, this.rng, this.enemyGrid)
+    slowSystem(this.world, dtMs)
     enemyAiSystem(this.world)
     tetherSystem(this.world, MODE_PLAYER_COUNT[this.mode] ?? 1, TETHER.maxRadius)
     movementSystem(this.world, dtMs)

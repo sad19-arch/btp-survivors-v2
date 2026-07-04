@@ -6,7 +6,7 @@ import type { EffectiveStats } from '@content/effectiveStats'
 import { WEAPONS, weaponStatsAtLevel } from '@content/weapons'
 import { effectiveWeaponStats } from '@content/effectiveStats'
 import { BASE_STATS } from '@content/passives'
-import { HITBOX } from '@content/config'
+import { CONE_HALF_ANGLE, HITBOX } from '@content/config'
 import { Rng } from '../rng'
 import type { SpatialGrid } from '../spatialGrid'
 
@@ -71,6 +71,9 @@ export function weaponSystem(
           break
         case 'hazard':
           tickHazard(world, slot, def, eff, pos, player.playerId, dtMs)
+          break
+        case 'cone':
+          tickCone(slot, eff, pos, dtMs, world, def.kind, pulses, grid)
           break
       }
     }
@@ -433,6 +436,138 @@ function tickHazard(
     })
   }
 }
+
+// --- cone (extincteur) -----------------------------------------------------
+
+/**
+ * Émet un cône frontal vers l'ennemi vivant le plus proche.
+ *
+ * Algorithme déterministe :
+ *  1. Direction `d` = vers l'ennemi le plus proche (`findNearestEnemy`).
+ *     Si aucun ennemi → cooldown gelé à 0, on attend.
+ *  2. Pour chaque ennemi dans `grid.queryCircle(px, py, area+HITBOX.enemy)` :
+ *     - dans le rayon (distance ≤ area+HITBOX.enemy)
+ *     - ET dans l'angle (`angleBetween(d, enemyDir) ≤ CONE_HALF_ANGLE`)
+ *     → dégâts + poser/rafraîchir `slow { mult, remainingMs }` (garde le
+ *       plus fort = mult le plus BAS, et le remainingMs le plus long).
+ *  3. Émet un `AuraPulse` de kind `'cone'` (dir + portée) pour le VFX.
+ *
+ * Déterministe : aucun aléa (angle + distance) ; l'AoE touche TOUS les
+ * ennemis dans le cône → l'ordre d'itération n'affecte pas l'ensemble.
+ */
+function tickCone(
+  slot: CooldownSlot,
+  eff: EffectiveStats,
+  pos: Vec2,
+  dtMs: number,
+  world: World,
+  kind: string,
+  pulses?: AuraPulse[],
+  grid?: SpatialGrid
+): void {
+  slot.cooldownLeftMs -= dtMs
+  if (slot.cooldownLeftMs > 0) {
+    return
+  }
+
+  // Direction du cône = vers l'ennemi le plus proche.
+  const target = findNearestEnemy(world, pos, Infinity)
+  if (target === null) {
+    slot.cooldownLeftMs = 0 // prêt à tirer dès qu'une cible entre en portée
+    return
+  }
+  slot.cooldownLeftMs = eff.cooldownMs
+
+  const tdx = target.x - pos.x
+  const tdy = target.y - pos.y
+  const tlen = Math.hypot(tdx, tdy)
+  // Direction unitaire du cône.
+  const dirX = tlen === 0 ? 1 : tdx / tlen
+  const dirY = tlen === 0 ? 0 : tdy / tlen
+
+  const reach = eff.area + HITBOX.enemy
+
+  // Récupère les candidats via la grille spatiale (ou repli linéaire).
+  const slowMult = eff.slowMult ?? 1
+  const slowMs = eff.slowMs ?? 0
+
+  if (grid !== undefined) {
+    coneScratch.length = 0
+    grid.queryCircle(pos.x, pos.y, reach, coneScratch)
+    for (const en of coneScratch) {
+      applyConeDamage(world, en, pos, reach, dirX, dirY, eff.damage, slowMult, slowMs)
+    }
+  } else {
+    for (const en of world.query('enemy', 'position', 'health')) {
+      applyConeDamage(world, en, pos, reach, dirX, dirY, eff.damage, slowMult, slowMs)
+    }
+  }
+
+  // VFX : pulse de kind 'cone' avec la portée (le rendu peut l'orienter grâce à l'événement).
+  pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind })
+}
+
+/**
+ * Applique les dégâts cône + slow à un candidat ennemi si :
+ *   - il est vivant (hp > 0)
+ *   - dans le rayon (distance ≤ reach)
+ *   - dans l'angle (cos entre dir et enemyDir ≥ cos(CONE_HALF_ANGLE))
+ *
+ * Rafraîchissement du slow : garde le plus fort (mult le plus BAS) et le
+ * plus long (remainingMs le plus élevé).
+ */
+function applyConeDamage(
+  world: World,
+  en: number,
+  pos: Vec2,
+  reach: number,
+  dirX: number,
+  dirY: number,
+  damage: number,
+  slowMult: number,
+  slowMs: number
+): void {
+  const epos = world.get(en, 'position')
+  const eh = world.get(en, 'health')
+  if (epos === undefined || eh === undefined || eh.hp <= 0) {
+    return
+  }
+
+  // Test rayon.
+  const dx = epos.x - pos.x
+  const dy = epos.y - pos.y
+  const dist2 = dx * dx + dy * dy
+  if (dist2 > reach * reach) {
+    return
+  }
+
+  // Test angle : cos(angle) = dot(dir, enemyDir).
+  // Si l'ennemi est exactement sur le joueur → direction nulle → dans le cône (garde-fou).
+  const dist = Math.sqrt(dist2)
+  const inCone =
+    dist === 0 ||
+    dirX * (dx / dist) + dirY * (dy / dist) >= Math.cos(CONE_HALF_ANGLE)
+  if (!inCone) {
+    return
+  }
+
+  // Dégâts.
+  eh.hp -= damage
+
+  // Pose ou rafraîchit le slow (garde le plus fort + le plus long).
+  if (slowMs > 0) {
+    const existing = world.get(en, 'slow')
+    if (existing === undefined) {
+      world.add(en, 'slow', { mult: slowMult, remainingMs: slowMs })
+    } else {
+      existing.mult = Math.min(existing.mult, slowMult)
+      existing.remainingMs = Math.max(existing.remainingMs, slowMs)
+    }
+  }
+}
+
+// Scratch réutilisé par tickCone avec grille (évite une allocation par tir).
+const coneScratch: number[] = []
 
 // --- commun ---------------------------------------------------------------
 

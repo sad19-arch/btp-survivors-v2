@@ -19,6 +19,18 @@ export interface EffectiveStats {
    * `undefined` si l'arme n'est pas de kind hazard.
    */
   tickMs: number | undefined
+  /**
+   * Multiplicateur de vélocité appliqué aux ennemis touchés par une arme de kind `cone`.
+   * Non scalé (l'intensité du ralentissement est indépendante des passifs).
+   * `undefined` si l'arme ne ralentit pas.
+   */
+  slowMult: number | undefined
+  /**
+   * Durée du ralentissement infligé par une arme de kind `cone`, en ms.
+   * Non scalé.
+   * `undefined` si l'arme ne ralentit pas.
+   */
+  slowMs: number | undefined
 }
 
 const MIN_COOLDOWN_MS = 60
@@ -38,6 +50,10 @@ export function effectiveWeaponStats(lvl: WeaponLevel, s: PlayerStats): Effectiv
     bounces: lvl.bounces ?? 0,
     boomerangOutMs: lvl.boomerangOutMs !== undefined ? lvl.boomerangOutMs * s.duration : undefined,
     projectileRadius: (lvl.projectileRadius ?? 0) * s.area,
-    tickMs: lvl.tickMs
+    tickMs: lvl.tickMs,
+    // Ralentissement : non scalé par les passifs (l'intensité / la durée du slow
+    // sont des propriétés intrinsèques de l'arme, pas des stats joueur).
+    slowMult: lvl.slowMult,
+    slowMs: lvl.slowMs
   }
 }

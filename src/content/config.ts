@@ -206,3 +206,11 @@ export const INTRO = {
   /** Durée du préambule pendant lequel la sim est gelée, en ms. */
   durationMs: 2000
 } as const
+
+/**
+ * Demi-angle du cône des armes de kind `cone` (extincteur, canon_mousse), en radians.
+ * Le cône total fait `2 × CONE_HALF_ANGLE` (≈ 57° au total pour 0.5 rad).
+ * Un ennemi est dans le cône si l'angle entre la direction du cône et la direction
+ * joueur→ennemi est ≤ CONE_HALF_ANGLE.
+ */
+export const CONE_HALF_ANGLE = 0.5 as const
