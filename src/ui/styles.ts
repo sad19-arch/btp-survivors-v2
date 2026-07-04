@@ -145,6 +145,13 @@ const CSS = `
 }
 #ui-root .card__name { color: ${PALETTE.jauneSecurite}; font-size: 16px; font-weight: bold; text-align: center; }
 #ui-root .card__hint { color: ${PALETTE.blanc}; font-size: 13px; text-transform: none; letter-spacing: 0; }
+#ui-root .card--weapon { border-color: ${PALETTE.orangeDanger}; }
+#ui-root .card--passive { border-color: ${PALETTE.cyanAccent}; }
+#ui-root .card__pips { display: flex; gap: 2px; align-items: center; flex-wrap: wrap; }
+#ui-root .pip { display: inline-block; width: 8px; height: 8px; background: ${PALETTE.brunSombre}; border: 1px solid ${PALETTE.contour}; }
+#ui-root .pip.pip--on { background: ${PALETTE.jauneSecurite}; border-color: ${PALETTE.contour}; }
+#ui-root .card__lvltext { color: ${PALETTE.blanc}; font-size: 11px; margin-left: 4px; text-transform: none; letter-spacing: 0; }
+#ui-root .card__desc { color: ${PALETTE.blanc}; font-size: 12px; text-transform: none; letter-spacing: 0; line-height: 1.3; }
 #ui-root .stats { display: flex; flex-direction: column; gap: 4px; font-size: 16px; }
 #ui-root .hint-line { color: ${PALETTE.solSable}; font-size: 12px; }
 #ui-root .unlock-line { color: ${PALETTE.jauneSecurite}; font-size: 12px; font-weight: bold; }

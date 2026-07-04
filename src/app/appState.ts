@@ -1,4 +1,5 @@
 import type { GameState, PlayerState } from '@core/types'
+import type { CardKind } from '@core/systems/cards'
 
 /** Écran applicatif courant (dérivé de l'état de la simulation + surcouche Options). */
 export type Screen =
@@ -16,6 +17,7 @@ export interface InventoryEntry {
   id: string
   name: string
   level: number
+  maxLevel?: number
 }
 
 /** Inventaire résolu d'un joueur (armes + passifs), pour l'affichage HUD. */
@@ -38,6 +40,14 @@ export interface MenuItemView {
   label: string
   /** Détail optionnel (ex. effet d'une carte d'upgrade). */
   hint: string | null
+  /** Ligne d'explication de l'effet (cartes d'upgrade). */
+  description?: string
+  /** Niveau courant de l'arme/passif (cartes d'upgrade). */
+  currentLevel?: number
+  /** Niveau maximum de l'arme/passif (cartes d'upgrade). */
+  maxLevel?: number
+  /** Type de carte (arme ou passif). */
+  kind?: CardKind
 }
 
 /** Le menu actif (null en jeu). */

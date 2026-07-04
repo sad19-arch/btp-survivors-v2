@@ -26,6 +26,9 @@ export interface Card {
   id: string
   name: string
   hint: string
+  description: string
+  currentLevel: number
+  maxLevel: number
 }
 
 export interface Inventory {
@@ -61,7 +64,10 @@ export function eligibleCards(inv: Inventory): Card[] {
         kind: 'weapon-up',
         id,
         name: def.name,
-        hint: `Niv. ${level} → ${level + 1}`
+        hint: `Niv. ${level} → ${level + 1}`,
+        description: def.description,
+        currentLevel: level,
+        maxLevel: def.maxLevel
       })
     }
   }
@@ -77,7 +83,10 @@ export function eligibleCards(inv: Inventory): Card[] {
             kind: 'weapon-new',
             id: baseId,
             name: def.name,
-            hint: 'Nouveau'
+            hint: 'Nouveau',
+            description: def.description,
+            currentLevel: 0,
+            maxLevel: def.maxLevel
           })
         }
       }
@@ -93,7 +102,10 @@ export function eligibleCards(inv: Inventory): Card[] {
         kind: 'passive-up',
         id,
         name: def.name,
-        hint: `Niv. ${level} → ${level + 1}`
+        hint: `Niv. ${level} → ${level + 1}`,
+        description: def.description,
+        currentLevel: level,
+        maxLevel: def.maxLevel
       })
     }
   }
@@ -109,7 +121,10 @@ export function eligibleCards(inv: Inventory): Card[] {
             kind: 'passive-new',
             id: passiveId,
             name: def.name,
-            hint: 'Nouveau'
+            hint: 'Nouveau',
+            description: def.description,
+            currentLevel: 0,
+            maxLevel: def.maxLevel
           })
         }
       }

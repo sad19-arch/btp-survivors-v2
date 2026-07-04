@@ -1,6 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { WEAPONS } from '@content/weapons'
 
+describe('WEAPONS — champ description (garde-fou)', () => {
+  it('toutes les armes ont une description non vide', () => {
+    for (const [id, def] of Object.entries(WEAPONS)) {
+      expect(def.description, `description manquante pour ${id}`).toBeDefined()
+      expect(def.description.trim(), `description vide pour ${id}`).not.toBe('')
+    }
+  })
+})
+
 const BASE = ['goudron', 'boulons', 'cle_molette', 'extincteur', 'brouette']
 const EVO = ['coulee_bitume', 'tempete_boulons', 'cle_choc', 'canon_mousse', 'transpalette']
 

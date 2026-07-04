@@ -38,9 +38,9 @@ test('l’écran titre s’affiche et se navigue', async ({ page }) => {
   await expect(page.locator('.hud')).toContainText('Niv. 1')
 
   // L'inventaire (armes/passifs) est visible en jeu : l'arme de départ apparaît,
-  // avec un marqueur de niveau (« Nv. »).
+  // avec un marqueur de niveau (format level/maxLevel, ex. « 1/8 »).
   await expect(page.locator('.inv__tile').first()).toBeVisible()
-  await expect(page.locator('.inv')).toContainText('Nv.')
+  await expect(page.locator('.inv__lvl').first()).toContainText('/')
 
   // L'icône pixel (lot B3) de l'arme de départ se charge RÉELLEMENT : l'<img>
   // n'a pas été retiré au profit du monogramme, et sa largeur naturelle est > 0.

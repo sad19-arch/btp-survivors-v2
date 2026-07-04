@@ -319,7 +319,7 @@ export class Overlay {
       'div',
       { className: 'inv__tile' },
       icon(entry.id, entry.name, 'inv__icon', 'inv__img', 'inv__mono'),
-      h('div', { className: 'inv__lvl', text: `Nv.${entry.level}` })
+      h('div', { className: 'inv__lvl', text: `${entry.level}/${entry.maxLevel ?? entry.level}` })
     )
   }
 
@@ -430,16 +430,47 @@ export class Overlay {
     )
   }
 
+  private levelPips(current: number, max: number): HTMLElement {
+    const pips: HTMLElement[] = []
+    for (let i = 0; i < max; i++) {
+      pips.push(h('span', { className: i < current ? 'pip pip--on' : 'pip' }))
+    }
+    return h(
+      'div',
+      { className: 'card__pips' },
+      ...pips,
+      h('span', { className: 'card__lvltext', text: `${current}/${max}` })
+    )
+  }
+
   private card(item: MenuItemView, focused: boolean, index: number): HTMLElement {
+    const kindClass =
+      item.kind?.startsWith('weapon') === true
+        ? 'card--weapon'
+        : item.kind?.startsWith('passive') === true
+          ? 'card--passive'
+          : ''
+    const classNames = ['card', kindClass, focused ? 'card--focus' : ''].filter(Boolean).join(' ')
+    const children: HTMLElement[] = [
+      this.cardIcon(item),
+      h('div', { className: 'card__name', text: item.label })
+    ]
+    if (item.maxLevel !== undefined) {
+      children.push(h('div', { className: 'card__hint', text: item.hint ?? '' }))
+      children.push(this.levelPips(item.currentLevel ?? 0, item.maxLevel))
+    } else {
+      children.push(h('div', { className: 'card__hint', text: item.hint ?? '' }))
+    }
+    if (item.description !== undefined && item.description !== '') {
+      children.push(h('div', { className: 'card__desc', text: item.description }))
+    }
     return h(
       'div',
       {
-        className: focused ? 'card card--focus' : 'card',
+        className: classNames,
         onClick: this.onSelect === undefined ? undefined : () => { this.onSelect?.(index) }
       },
-      this.cardIcon(item),
-      h('div', { className: 'card__name', text: item.label }),
-      h('div', { className: 'card__hint', text: item.hint ?? '' })
+      ...children
     )
   }
 

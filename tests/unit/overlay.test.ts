@@ -88,7 +88,8 @@ describe('Overlay — inventaire HUD (armes/passifs + niveaux)', () => {
     const expectedPassives = s.players[0]?.inventory.passives.length ?? 0
     const tiles = root.querySelectorAll('.inv__tile')
     expect(tiles.length).toBe(expected + expectedPassives)
-    expect(root.querySelector('.inv')?.textContent).toContain('Nv.')
+    // Format : level/maxLevel (ex. "1/8") — plus 'Nv.' depuis la refonte cartes.
+    expect(root.querySelector('.inv__lvl')?.textContent).toMatch(/\d+\/\d+/)
   })
 
   it('le fallback monogramme ne plante pas (pas de vraie image en happy-dom)', () => {

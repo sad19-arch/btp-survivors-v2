@@ -18,7 +18,7 @@ import { PASSIVES } from '@content/passives'
 import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
-import type { AppViewState, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
+import type { AppViewState, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
 
 export interface AppOptions {
   seed: number
@@ -604,7 +604,15 @@ export class App {
     if (pending === null) {
       return []
     }
-    return pending.choices.map((c) => ({ id: c.id, label: c.name, hint: c.hint }))
+    return pending.choices.map((c) => ({
+      id: c.id,
+      label: c.name,
+      hint: c.hint,
+      description: c.description,
+      currentLevel: c.currentLevel,
+      maxLevel: c.maxLevel,
+      kind: c.kind
+    }))
   }
 
   private menu(screen: Screen): MenuView | null {
@@ -738,15 +746,29 @@ function emptyState(seed: number, stageId: ConstructionPhaseId): GameState {
  * contre un id de contenu inconnu (replie sur l'id brut, jamais de `!`).
  */
 function buildInventory(p: PlayerState): InventoryView {
-  const weapons = p.weapons.map((id, i) => ({
-    id,
-    name: WEAPONS[id]?.name ?? id,
-    level: p.weaponLevels[i] ?? 1
-  }))
-  const passives = p.passives.map(({ id, level }) => ({
-    id,
-    name: PASSIVES[id]?.name ?? id,
-    level
-  }))
+  const weapons = p.weapons.map((id, i) => {
+    const def = WEAPONS[id]
+    const entry: InventoryEntry = {
+      id,
+      name: def?.name ?? id,
+      level: p.weaponLevels[i] ?? 1
+    }
+    if (def !== undefined) {
+      entry.maxLevel = def.maxLevel
+    }
+    return entry
+  })
+  const passives = p.passives.map(({ id, level }) => {
+    const def = PASSIVES[id]
+    const entry: InventoryEntry = {
+      id,
+      name: def?.name ?? id,
+      level
+    }
+    if (def !== undefined) {
+      entry.maxLevel = def.maxLevel
+    }
+    return entry
+  })
   return { weapons, passives }
 }
