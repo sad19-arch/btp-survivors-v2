@@ -132,6 +132,7 @@ export class App {
    */
   start(mode: GameMode = this.mode, characters: readonly string[] = this.selectedCharacters): void {
     this.bumpState()
+    const wasStarted = this.started // RE-démarrage ? (partie déjà en cours)
     this.mode = mode
     this.selectedCharacters = [...characters] // persiste pour restart/stage suivant/setSeed
     this.sim = new Simulation({ seed: this.seed, mode, phaseId: this.selectedPhase, characters })
@@ -165,7 +166,13 @@ export class App {
     })
     this.introMsLeft = this.introEnabled ? INTRO.durationMs : 0
     this.started = true
-    this.runId++ // nouvelle partie → le rendu repart propre (cf. `runId`)
+    // Bump SEULEMENT sur un RE-démarrage (game over→restart, stage suivant,
+    // setSeed) : le rendu repart alors d'une scène propre (cf. `runId`, fuite
+    // T6). La 1re partie depuis le titre n'a rien accumulé — y déclencher un
+    // scene.restart interromprait le chargement à la volée du skin de perso.
+    if (wasStarted) {
+      this.runId++
+    }
     this.refreshFocus()
   }
 

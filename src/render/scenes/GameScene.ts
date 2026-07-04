@@ -14,7 +14,7 @@ import { SpritePool } from '@render/spritePool'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
 import type { PlayerState, PrisonerState, PickupKind } from '@core/types'
-import { PALETTE_HEX } from '@ui/palette'
+import { PALETTE_HEX, PALETTE } from '@ui/palette'
 import { playerColor } from '@content/players'
 import { characterDef } from '@content/characters'
 import type { AppViewState } from '@/app/appState'
@@ -778,14 +778,14 @@ export class GameScene extends Phaser.Scene {
           fontSize: '20px',
           fontStyle: 'bold',
           color: col.hex,
-          stroke: '#101014',
+          stroke: PALETTE.contour,
           strokeThickness: 4
         })
         .setOrigin(0.5)
         .setDepth(50)
       const chevron = this.add
         .triangle(p.x, p.y - 44, 0, 0, 12, 0, 6, 8, col.num)
-        .setStrokeStyle(2, 0x101014)
+        .setStrokeStyle(2, PALETTE_HEX.contour)
         .setDepth(50)
       label = { text, chevron }
       this.playerLabels.set(p.id, label)
