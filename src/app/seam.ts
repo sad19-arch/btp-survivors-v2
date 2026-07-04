@@ -40,6 +40,13 @@ export interface GameSeam {
   debugSpawnBoss(role: 'mid' | 'final'): void
   /** [Debug] Fait apparaître `n` ennemis autour des joueurs (stress test horde). */
   debugSpawnEnemies(n: number): void
+  /**
+   * [Debug] Sonde de rendu (posée par la GameScene) : pour chaque joueur, la clé de
+   * texture de son sprite, ou `null` si c'est un cercle de repli (feuille absente).
+   * Permet de tester que le bon SKIN est rendu — invisible au `getState`, qui ignore
+   * le rendu. Absente tant que la scène n'est pas montée / en mode allégé.
+   */
+  debugRenderInfo?(): { id: number; texture: string | null }[]
 }
 
 declare global {

@@ -2,24 +2,31 @@ import { PLAYER_BASE } from './config'
 
 /**
  * Personnages jouables (contenu pur, data-driven). Thème chantier : chaque
- * perso est associé à une arme de départ distincte.
+ * perso a une feuille de sprite dédiée (skin) et une arme de départ.
  *
- * Fondation (cette tranche) : TOUS les persos réutilisent la feuille de
- * sprite partagée `'player'` (placeholder = `player_j1.png`). Les feuilles
- * dédiées par personnage (ex. `char_soudeur.png`) arrivent en phase C —
- * `sheet` existe déjà pour ne pas re-toucher ce module à ce moment-là.
+ * `sheet` = clé de feuille (= nom de fichier sans extension : `player_soudeur`
+ * → `public/player_soudeur.png`, feuille 192 4×4 `down/right/up/left`). L'ouvrier
+ * réutilise la feuille de référence `player` (`player_j1.png`).
  *
- * `stats` est une divergence de stats future (ignorée pour l'instant = swap
- * pur d'arme de départ). Non branché dans la sim tant que les tâches 2-4 du
- * plan Persos-B ne l'ont pas câblé.
+ * `renderScale` (render-only) ajuste l'échelle du sprite pour matcher la hauteur
+ * affichée du héros de référence (~83px) : chaque skin PixelLab a une figure de
+ * hauteur native légèrement différente dans la case 192. Lu par `GameScene`
+ * (repli `PLAYER_SCALE`) ; JAMAIS par le core (déterminisme préservé).
+ *
+ * Armes partagées (⃰) : 5 armes de base existent pour 10 persos → 2 persos par
+ * arme en attendant la phase A (5 armes de plus). Swap d'arme unique alors.
+ *
+ * `stats` est une divergence de stats future (ignorée pour l'instant = swap pur).
  */
 export interface CharacterDef {
   id: string
   name: string
-  /** Clé de feuille de sprite (placeholder 'player' pour tous jusqu'à la phase C). */
+  /** Clé de feuille de sprite (= nom de fichier PNG sans extension). */
   sheet: string
   /** Arme de base au démarrage (id ∈ WEAPONS). */
   startingWeapon: string
+  /** Échelle de rendu du sprite (render-only ; défaut = PLAYER_SCALE côté scène). */
+  renderScale?: number
   /** Divergence de stats future (ignorée pour l'instant = swap pur). */
   stats?: Partial<typeof PLAYER_BASE>
 }
@@ -39,12 +46,33 @@ const FALLBACK_CHARACTER: CharacterDef = {
 }
 
 export const CHARACTERS: Readonly<Record<string, CharacterDef>> = {
+  // Les 5 métiers à arme de base distincte d'abord (armes variées en tête du
+  // sélecteur), puis les 5 variantes à arme partagée (⃰) et le chien.
   ouvrier: FALLBACK_CHARACTER,
-  soudeur: { id: 'soudeur', name: 'Soudeur', sheet: 'player', startingWeapon: 'scie' },
-  macon: { id: 'macon', name: 'Maçon', sheet: 'player', startingWeapon: 'marteau' },
-  terrassier: { id: 'terrassier', name: 'Terrassier', sheet: 'player', startingWeapon: 'pied_de_biche' },
-  electricien: { id: 'electricien', name: 'Électricien', sheet: 'player', startingWeapon: 'court_circuit' }
+  soudeur: { id: 'soudeur', name: 'Soudeur', sheet: 'player_soudeur', startingWeapon: 'scie', renderScale: 0.572 },
+  macon: { id: 'macon', name: 'Maçon', sheet: 'player_macon', startingWeapon: 'marteau', renderScale: 0.615 },
+  terrassier: { id: 'terrassier', name: 'Terrassier', sheet: 'player_terrassier', startingWeapon: 'pied_de_biche', renderScale: 0.576 },
+  electricien: { id: 'electricien', name: 'Électricien', sheet: 'player_electricien', startingWeapon: 'court_circuit', renderScale: 0.576 },
+  ouvriere: { id: 'ouvriere', name: 'Ouvrière', sheet: 'player_ouvriere', startingWeapon: 'cloueur', renderScale: 0.589 },
+  charpentier: { id: 'charpentier', name: 'Charpentier', sheet: 'player_charpentier', startingWeapon: 'marteau', renderScale: 0.557 },
+  grutier: { id: 'grutier', name: 'Grutier', sheet: 'player_grutier', startingWeapon: 'pied_de_biche', renderScale: 0.576 },
+  plombier: { id: 'plombier', name: 'Plombier', sheet: 'player_plombier', startingWeapon: 'court_circuit', renderScale: 0.55 },
+  samoyede: { id: 'samoyede', name: 'Samoyède', sheet: 'player_samoyede', startingWeapon: 'scie', renderScale: 0.95 }
 }
+
+/** Ordre stable du roster (sélecteur) — array explicite plutôt que `Object.keys`. */
+export const CHARACTER_IDS: readonly string[] = [
+  'ouvrier',
+  'soudeur',
+  'macon',
+  'terrassier',
+  'electricien',
+  'ouvriere',
+  'charpentier',
+  'grutier',
+  'plombier',
+  'samoyede'
+]
 
 /** Renvoie le CharacterDef (fallback DEFAULT si id inconnu). */
 export function characterDef(id: string): CharacterDef {

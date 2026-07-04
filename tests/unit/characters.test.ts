@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CHARACTERS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
+import { CHARACTERS, CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { WEAPONS } from '@content/weapons'
 
 /**
@@ -30,5 +30,24 @@ describe('Personnages — cohérence du contenu', () => {
     const fallback = characterDef('unknown-xyz')
     expect(fallback.id).toBe('ouvrier')
     expect(fallback.id).toBe(DEFAULT_CHARACTER_ID)
+  })
+
+  it('CHARACTER_IDS (ordre du sélecteur) correspond EXACTEMENT aux clés de CHARACTERS', () => {
+    // Invariant : un perso ajouté à CHARACTERS mais oublié dans CHARACTER_IDS
+    // (ou l'inverse) disparaît du sélecteur — on le verrouille.
+    expect([...CHARACTER_IDS].sort()).toEqual(Object.keys(CHARACTERS).sort())
+    expect(CHARACTER_IDS.length).toBe(new Set(CHARACTER_IDS).size) // pas de doublon
+  })
+
+  it("le champ `id` de chaque personnage correspond à sa clé dans CHARACTERS", () => {
+    for (const [key, character] of Object.entries(CHARACTERS)) {
+      expect(character.id, `clé ${key}`).toBe(key)
+    }
+  })
+
+  it('chaque personnage a une feuille de sprite non vide', () => {
+    for (const character of Object.values(CHARACTERS)) {
+      expect(character.sheet.length, character.id).toBeGreaterThan(0)
+    }
   })
 })

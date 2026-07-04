@@ -102,6 +102,8 @@ export class GameScene extends Phaser.Scene {
   private sceneData!: GameSceneData
   /** stageId dont les assets sont actuellement chargés (pour détecter un changement). */
   private loadedStageId = ''
+  /** Vrai pendant un chargement dynamique de feuille(s) de perso (évite d'en re-lancer). */
+  private loadingSheets = false
   /** Config de rendu du stage courant (sol/décalques/props/skins d'ennemis). */
   private stage!: StageRender
   private keyboardInput: KeyboardInput | null = null
@@ -304,12 +306,13 @@ export class GameScene extends Phaser.Scene {
         frameWidth: FINAL_BOSS_SKIN.frame,
         frameHeight: FINAL_BOSS_SKIN.frame
       })
+      // Feuilles dédiées des personnages (phase C) : NON préchargées ici. `preload`
+      // s'exécute au boot (avant la sélection) puis seulement au changement de stage —
+      // les joueurs (donc leurs persos) n'y sont pas encore connus. Et précharger tout
+      // le roster (9 feuilles 768×768) sature la mémoire GPU (crash worker WebGL en test).
+      // → chargées à la volée par `ensureCharacterSheets()` au démarrage de la run, pour
+      // les seuls persos réellement en jeu. `player` (ouvrier/défaut) reste dans SHARED_SHEETS.
       // Feuille d'attente + variantes dorées du héros (clins d'œil ; repli si absentes).
-      // Tous les persos du roster (`@content/characters`) pointent sur `sheet: 'player'`
-      // (placeholder) aujourd'hui, déjà chargée via SHARED_SHEETS ci-dessus. La phase C
-      // ajoutera des feuilles dédiées `char_<id>.png` par personnage + une boucle de
-      // préchargement sur `Object.values(CHARACTERS)` ici — `walkTextureKey`/`idleTextureKey`
-      // résolvent déjà par `characterId` et n'auront pas besoin d'être re-touchées.
       this.load.spritesheet('player_idle', 'player_idle.png', { frameWidth: 192, frameHeight: 192 })
       this.load.spritesheet('player_gold', 'player_j1_gold.png', { frameWidth: 192, frameHeight: 192 })
       this.load.spritesheet('player_idle_gold', 'player_idle_gold.png', { frameWidth: 192, frameHeight: 192 })
@@ -444,6 +447,36 @@ export class GameScene extends Phaser.Scene {
    * Aujourd'hui tous les persos partagent `sheet: 'player'` (placeholder) ; la phase C
    * ajoutera des feuilles `char_<id>.png` par perso — ce switch les servira sans y retoucher.
    */
+  /**
+   * Charge à la volée (loader Phaser en cours de partie) les feuilles des persos
+   * réellement EN JEU dont la texture manque encore — hormis `player` (préchargée).
+   * Appelé au 1er rendu d'une run : évite de précharger tout le roster au boot
+   * (mémoire GPU) tout en garantissant le bon skin dès que le loader a fini.
+   */
+  private ensureCharacterSheets(players: readonly { characterId: string }[]): void {
+    if (this.loadingSheets || this.lite) {
+      return
+    }
+    const toLoad: string[] = []
+    for (const p of players) {
+      const sheet = characterDef(p.characterId).sheet
+      if (sheet !== 'player' && !this.textures.exists(sheet) && !toLoad.includes(sheet)) {
+        toLoad.push(sheet)
+      }
+    }
+    if (toLoad.length === 0) {
+      return
+    }
+    for (const sheet of toLoad) {
+      this.load.spritesheet(sheet, `${sheet}.png`, { frameWidth: 192, frameHeight: 192 })
+    }
+    this.loadingSheets = true
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      this.loadingSheets = false
+    })
+    this.load.start()
+  }
+
   private walkTextureKey(characterId: string): string {
     const base = characterDef(characterId).sheet
     return this.goldSkin && base === 'player' && this.textures.exists('player_gold') ? 'player_gold' : base
@@ -561,6 +594,14 @@ export class GameScene extends Phaser.Scene {
 
     if (this.seam !== null) {
       this.seam.ready = true
+      // Sonde de rendu (test-only) : permet d'asserter que le bon skin est rendu.
+      this.seam.debugRenderInfo = (): { id: number; texture: string | null }[] => {
+        const info: { id: number; texture: string | null }[] = []
+        for (const [id, sprite] of this.playerSprites) {
+          info.push({ id, texture: sprite instanceof Phaser.GameObjects.Sprite ? sprite.texture.key : null })
+        }
+        return info.sort((a, b) => a.id - b.id)
+      }
     }
   }
 
@@ -725,9 +766,17 @@ export class GameScene extends Phaser.Scene {
       let sprite = this.playerSprites.get(p.id)
       if (sprite === undefined) {
         const key = this.walkTextureKey(p.characterId)
-        sprite = this.textures.exists(key)
-          ? this.add.sprite(p.x, p.y, key).setScale(PLAYER_SCALE)
-          : this.add.circle(p.x, p.y, PLAYER_RADIUS, PLAYER_COLOR)
+        if (this.textures.exists(key)) {
+          sprite = this.add.sprite(p.x, p.y, key).setScale(characterDef(p.characterId).renderScale ?? PLAYER_SCALE)
+        } else if (this.lite || characterDef(p.characterId).sheet === 'player') {
+          // Feuille de référence (ouvrier, préchargée) absente → mode allégé : cercle.
+          sprite = this.add.circle(p.x, p.y, PLAYER_RADIUS, PLAYER_COLOR)
+        } else {
+          // Feuille dédiée du perso pas encore en cache → chargement à la volée, puis
+          // on ATTEND (aucun cercle mis en cache : le vrai sprite naîtra une fois chargé).
+          this.ensureCharacterSheets(state.players)
+          continue
+        }
         this.playerSprites.set(p.id, sprite)
         this.lastMoveMs.set(p.id, this.time.now)
       }

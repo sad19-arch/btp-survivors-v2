@@ -198,6 +198,21 @@ describe('App — sélection SÉQUENTIELLE de personnage (titre → characterSel
     expect(p1Label).not.toBe(p2Label)
   })
 
+  it('restart conserve le personnage choisi (pas de retour silencieux à l’ouvrier)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    app.confirm() // « Jouer » → characterSelect
+    app.nav('right') // choisit le perso d'index 1 du roster (soudeur → scie)
+    app.confirm() // lance la partie
+    const before = app.getState().players[0]
+    expect(before?.characterId).toBe('soudeur')
+    expect(before?.inventory.weapons[0]?.id).toBe('scie')
+    app.restart()
+    const after = app.getState().players[0]
+    // Le perso (et son arme) survit au restart — pas de reset vers l'ouvrier/cloueur.
+    expect(after?.characterId).toBe('soudeur')
+    expect(after?.inventory.weapons[0]?.id).toBe('scie')
+  })
+
   it('back depuis characterSelect P1 revient au titre ; depuis P2 revient à P1', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     app.nav('down')

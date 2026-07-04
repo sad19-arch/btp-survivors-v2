@@ -15,7 +15,7 @@ import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
 import { INTRO, MODE_PLAYER_COUNT, modeForCount } from '@content/config'
 import { WEAPONS } from '@content/weapons'
 import { PASSIVES } from '@content/passives'
-import { CHARACTERS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
+import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
 import type { AppViewState, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
@@ -118,10 +118,15 @@ export class App {
 
   // --- cycle de vie ---------------------------------------------------------
 
-  /** Démarre une nouvelle partie (depuis le titre, ou après la sélection de personnage). */
-  start(mode: GameMode = this.mode, characters?: readonly string[]): void {
+  /**
+   * Démarre une nouvelle partie (depuis le titre, ou après la sélection de personnage).
+   * `characters` défaut = la dernière sélection mémorisée → restart / stage suivant /
+   * setSeed conservent le(s) perso(s) choisi(s) (sinon retour silencieux à l'ouvrier).
+   */
+  start(mode: GameMode = this.mode, characters: readonly string[] = this.selectedCharacters): void {
     this.bumpState()
     this.mode = mode
+    this.selectedCharacters = [...characters] // persiste pour restart/stage suivant/setSeed
     this.sim = new Simulation({ seed: this.seed, mode, phaseId: this.selectedPhase, characters })
     // Relaie les événements de sim (ex. onde d'aura, libération) vers l'App → rendu.
     this.sim.events.addEventListener('auraPulse', (e) => {
@@ -553,9 +558,9 @@ export class App {
     ]
   }
 
-  /** Liste des ids du roster de personnages, dans l'ordre de déclaration. */
-  private rosterIds(): string[] {
-    return Object.keys(CHARACTERS)
+  /** Liste des ids du roster de personnages, dans l'ordre stable déclaré. */
+  private rosterIds(): readonly string[] {
+    return CHARACTER_IDS
   }
 
   /** Item unique du carrousel de sélection de personnage (◄ Nom — Arme ►). */
