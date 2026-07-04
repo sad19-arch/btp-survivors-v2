@@ -13,9 +13,6 @@ import { PLAYER_BASE } from './config'
  * hauteur native légèrement différente dans la case 192. Lu par `GameScene`
  * (repli `PLAYER_SCALE`) ; JAMAIS par le core (déterminisme préservé).
  *
- * Armes partagées (⃰) : 5 armes de base existent pour 10 persos → 2 persos par
- * arme en attendant la phase A (5 armes de plus). Swap d'arme unique alors.
- *
  * `stats` est une divergence de stats future (ignorée pour l'instant = swap pur).
  */
 export interface CharacterDef {
@@ -46,18 +43,16 @@ const FALLBACK_CHARACTER: CharacterDef = {
 }
 
 export const CHARACTERS: Readonly<Record<string, CharacterDef>> = {
-  // Les 5 métiers à arme de base distincte d'abord (armes variées en tête du
-  // sélecteur), puis les 5 variantes à arme partagée (⃰) et le chien.
   ouvrier: FALLBACK_CHARACTER,
   soudeur: { id: 'soudeur', name: 'Soudeur', sheet: 'player_soudeur', startingWeapon: 'scie', renderScale: 0.572 },
   macon: { id: 'macon', name: 'Maçon', sheet: 'player_macon', startingWeapon: 'marteau', renderScale: 0.615 },
   terrassier: { id: 'terrassier', name: 'Terrassier', sheet: 'player_terrassier', startingWeapon: 'pied_de_biche', renderScale: 0.576 },
   electricien: { id: 'electricien', name: 'Électricien', sheet: 'player_electricien', startingWeapon: 'court_circuit', renderScale: 0.576 },
-  ouvriere: { id: 'ouvriere', name: 'Ouvrière', sheet: 'player_ouvriere', startingWeapon: 'cloueur', renderScale: 0.589 },
-  charpentier: { id: 'charpentier', name: 'Charpentier', sheet: 'player_charpentier', startingWeapon: 'marteau', renderScale: 0.557 },
-  grutier: { id: 'grutier', name: 'Grutier', sheet: 'player_grutier', startingWeapon: 'pied_de_biche', renderScale: 0.576 },
-  plombier: { id: 'plombier', name: 'Plombier', sheet: 'player_plombier', startingWeapon: 'court_circuit', renderScale: 0.55 },
-  samoyede: { id: 'samoyede', name: 'Samoyède', sheet: 'player_samoyede', startingWeapon: 'scie', renderScale: 0.95 }
+  ouvriere: { id: 'ouvriere', name: 'Ouvrière', sheet: 'player_ouvriere', startingWeapon: 'brouette', renderScale: 0.589 },
+  charpentier: { id: 'charpentier', name: 'Charpentier', sheet: 'player_charpentier', startingWeapon: 'boulons', renderScale: 0.557 },
+  grutier: { id: 'grutier', name: 'Grutier', sheet: 'player_grutier', startingWeapon: 'goudron', renderScale: 0.576 },
+  plombier: { id: 'plombier', name: 'Plombier', sheet: 'player_plombier', startingWeapon: 'cle_molette', renderScale: 0.55 },
+  samoyede: { id: 'samoyede', name: 'Samoyède', sheet: 'player_samoyede', startingWeapon: 'extincteur', renderScale: 0.95 }
 }
 
 /** Ordre stable du roster (sélecteur) — array explicite plutôt que `Object.keys`. */

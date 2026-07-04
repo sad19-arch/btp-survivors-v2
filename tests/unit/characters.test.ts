@@ -50,4 +50,9 @@ describe('Personnages — cohérence du contenu', () => {
       expect(character.sheet.length, character.id).toBeGreaterThan(0)
     }
   })
+
+  it('les 10 startingWeapon sont TOUTES DISTINCTES (une arme unique par perso)', () => {
+    const weapons = Object.values(CHARACTERS).map((c) => c.startingWeapon)
+    expect(new Set(weapons).size, `armes = [${weapons.join(', ')}]`).toBe(weapons.length)
+  })
 })
