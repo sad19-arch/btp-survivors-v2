@@ -10,7 +10,7 @@
  * à partir d'une base + incrément par niveau + overrides ponctuels.
  */
 
-export type WeaponKind = 'projectile' | 'orbital' | 'aura' | 'sweep' | 'strike'
+export type WeaponKind = 'projectile' | 'orbital' | 'aura' | 'sweep' | 'strike' | 'hazard' | 'cone'
 
 export interface WeaponLevel {
   damage: number
@@ -23,6 +23,12 @@ export interface WeaponLevel {
   orbitRadius?: number
   orbitSpeed?: number
   orbitHitRadius?: number
+  bounces?: number
+  boomerangOutMs?: number
+  projectileRadius?: number
+  slowMult?: number
+  slowMs?: number
+  tickMs?: number
 }
 
 export interface WeaponDef {
@@ -118,6 +124,41 @@ export const WEAPONS: Record<string, WeaponDef> = {
       { 3: { count: 2 }, 6: { count: 3 } }
     )
   },
+  goudron: {
+    id: 'goudron', name: 'Goudron chaud', kind: 'hazard', maxLevel: 8,
+    levels: buildLevels(
+      { damage: 4, cooldownMs: 2200, count: 1, area: 60, pierce: 99, tickMs: 400, projectileLifeMs: 3000 },
+      { damage: 1.2, area: 4 }, 8, { 5: { count: 2 } }
+    )
+  },
+  boulons: {
+    id: 'boulons', name: 'Boulons ricochets', kind: 'projectile', maxLevel: 8,
+    levels: buildLevels(
+      { damage: 10, cooldownMs: 820, count: 1, area: 0, pierce: 0, bounces: 3, projectileSpeed: 470, projectileLifeMs: 1700 },
+      { damage: 2 }, 8, { 5: { bounces: 4 }, 7: { count: 2 } }
+    )
+  },
+  cle_molette: {
+    id: 'cle_molette', name: 'Clé à molette', kind: 'projectile', maxLevel: 8,
+    levels: buildLevels(
+      { damage: 16, cooldownMs: 1150, count: 1, area: 0, pierce: 99, projectileSpeed: 380, boomerangOutMs: 430, projectileLifeMs: 2400 },
+      { damage: 4 }, 8, { 6: { count: 2 } }
+    )
+  },
+  extincteur: {
+    id: 'extincteur', name: 'Extincteur', kind: 'cone', maxLevel: 8,
+    levels: buildLevels(
+      { damage: 6, cooldownMs: 1000, count: 1, area: 130, pierce: 99, slowMult: 0.5, slowMs: 1500 },
+      { damage: 2, area: 8 }, 8
+    )
+  },
+  brouette: {
+    id: 'brouette', name: 'Brouette', kind: 'projectile', maxLevel: 8,
+    levels: buildLevels(
+      { damage: 26, cooldownMs: 1650, count: 1, area: 0, pierce: 99, projectileSpeed: 240, projectileRadius: 26, projectileLifeMs: 2600 },
+      { damage: 6, projectileRadius: 2 }, 8
+    )
+  },
   // Évoluées (niveau unique puissant ; montent via les passifs globaux)
   mitrailleuse_clous: {
     id: 'mitrailleuse_clous',
@@ -132,7 +173,17 @@ export const WEAPONS: Record<string, WeaponDef> = {
     kind: 'strike',
     maxLevel: 1,
     levels: [{ damage: 45, cooldownMs: 380, count: 6, area: 80, pierce: 0 }]
-  }
+  },
+  coulee_bitume: { id: 'coulee_bitume', name: 'Coulée de bitume', kind: 'hazard', maxLevel: 1,
+    levels: [{ damage: 14, cooldownMs: 1500, count: 2, area: 96, pierce: 99, tickMs: 300, projectileLifeMs: 4200 }] },
+  tempete_boulons: { id: 'tempete_boulons', name: 'Tempête de boulons', kind: 'projectile', maxLevel: 1,
+    levels: [{ damage: 26, cooldownMs: 360, count: 3, area: 0, pierce: 0, bounces: 6, projectileSpeed: 560, projectileLifeMs: 1900 }] },
+  cle_choc: { id: 'cle_choc', name: 'Clé à choc', kind: 'projectile', maxLevel: 1,
+    levels: [{ damage: 40, cooldownMs: 650, count: 2, area: 0, pierce: 99, projectileSpeed: 440, boomerangOutMs: 520, projectileLifeMs: 3000 }] },
+  canon_mousse: { id: 'canon_mousse', name: 'Canon à mousse', kind: 'cone', maxLevel: 1,
+    levels: [{ damage: 18, cooldownMs: 620, count: 1, area: 190, pierce: 99, slowMult: 0.35, slowMs: 2200 }] },
+  transpalette: { id: 'transpalette', name: 'Transpallette automatisée', kind: 'projectile', maxLevel: 1,
+    levels: [{ damage: 60, cooldownMs: 1100, count: 1, area: 0, pierce: 99, projectileSpeed: 300, projectileRadius: 40, projectileLifeMs: 3200 }] }
 }
 
 const FALLBACK_LEVEL: WeaponLevel = { damage: 0, cooldownMs: 1000, count: 1, area: 0, pierce: 0 }

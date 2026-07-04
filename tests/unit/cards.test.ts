@@ -22,9 +22,9 @@ describe('cartes de level-up (pur)', () => {
     expect(new Set(a.map(c => c.kind + c.id)).size).toBe(a.length)
     expect(a.length).toBeLessThanOrEqual(4)
   })
-  it('inventaire d\'armes vide → les cartes weapon-new couvrent exactement les 5 armes de base', () => {
+  it('inventaire d\'armes vide → les cartes weapon-new couvrent exactement les 10 armes de base', () => {
     const cards = eligibleCards(inv([], []))
     const newIds = cards.filter(c => c.kind === 'weapon-new').map(c => c.id).sort()
-    expect(newIds).toEqual(['cloueur', 'court_circuit', 'marteau', 'pied_de_biche', 'scie'].sort())
+    expect(newIds).toEqual(['boulons', 'brouette', 'cle_molette', 'cloueur', 'court_circuit', 'extincteur', 'goudron', 'marteau', 'pied_de_biche', 'scie'].sort())
   })
 })
