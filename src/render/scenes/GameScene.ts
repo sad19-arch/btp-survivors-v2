@@ -57,13 +57,13 @@ const GROUP_ZOOM_FAR = 0.66
 const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; faceVel: boolean }> = {
   scie: { key: 'proj_scie', scale: 0.8, spin: true, faceVel: false },
   cloueur: { key: 'proj_cloueur', scale: 0.8, spin: false, faceVel: true },
-  // Armes Phase A (Persos) — réutilisent des sprites existants, DA finale en A2.
-  boulons: { key: 'proj_cloueur', scale: 0.7, spin: false, faceVel: true },
-  tempete_boulons: { key: 'proj_cloueur', scale: 0.7, spin: false, faceVel: true },
-  cle_molette: { key: 'proj_scie', scale: 0.8, spin: true, faceVel: false },
-  cle_choc: { key: 'proj_scie', scale: 0.8, spin: true, faceVel: false },
-  brouette: { key: 'proj_cloueur', scale: 2.4, spin: false, faceVel: true },
-  transpalette: { key: 'proj_cloueur', scale: 2.4, spin: false, faceVel: true },
+  // Armes Phase A (Persos) — sprites dédiés PixelLab (A2 lot 2).
+  boulons: { key: 'proj_boulons', scale: 0.55, spin: false, faceVel: true },
+  tempete_boulons: { key: 'proj_boulons', scale: 0.55, spin: false, faceVel: true },
+  cle_molette: { key: 'proj_cle', scale: 0.7, spin: true, faceVel: false },
+  cle_choc: { key: 'proj_cle', scale: 0.7, spin: true, faceVel: false },
+  brouette: { key: 'proj_brouette', scale: 1.0, spin: false, faceVel: true },
+  transpalette: { key: 'proj_brouette', scale: 1.2, spin: false, faceVel: true },
 }
 /** Sprites de pickups par type. */
 const PICKUP_SPRITE: Record<string, { key: string; scale: number }> = {
@@ -135,6 +135,8 @@ export class GameScene extends Phaser.Scene {
    * chaque frame — aucun objet créé/détruit par flaque (pas de fuite). Profondeur < entités.
    */
   private hazardGraphics!: Phaser.GameObjects.Graphics
+  /** Sprite de flaque de goudron par hazard (A2 lot 3) : créé à l'apparition, détruit à l'expiration. */
+  private readonly hazardSprites = new Map<number, Phaser.GameObjects.Image>()
   private readonly enemySprites = new Map<number, CharSprite>()
   private readonly projectileSprites = new Map<number, CharSprite>()
   private readonly pickupSprites = new Map<number, CharSprite>()
@@ -369,6 +371,11 @@ export class GameScene extends Phaser.Scene {
     }
     this.load.image('proj_scie', 'stage01/weapons/proj_scie.png')
     this.load.image('proj_cloueur', 'stage01/weapons/proj_cloueur.png')
+    // Projectiles dédiés phase A (A2 lot 2) + flaque de goudron (lot 3).
+    this.load.image('proj_boulons', 'stage01/weapons/proj_boulons.png')
+    this.load.image('proj_cle', 'stage01/weapons/proj_cle.png')
+    this.load.image('proj_brouette', 'stage01/weapons/proj_brouette.png')
+    this.load.image('vfx_goudron', 'stage01/vfx/vfx_goudron.png')
     this.load.image('pickup_xp', 'stage01/pickups/xp.png')
     this.load.image('pickup_health', 'stage01/pickups/health.png')
     this.load.image('pickup_magnet', 'stage01/pickups/magnet.png')
@@ -541,6 +548,8 @@ export class GameScene extends Phaser.Scene {
     this.enemySprites.clear()
     this.projectileSprites.clear()
     this.pickupSprites.clear()
+    this.hazardSprites.forEach((s) => s.destroy())
+    this.hazardSprites.clear()
     this.prisonerCages.clear()
     this.prisonerWorkers.clear()
     this.prevLevel.clear()
@@ -797,11 +806,31 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.stopFollow()
     }
 
-    // Flaques de goudron (hazards) : un seul Graphics, effacé/redessiné chaque frame.
+    // Flaques de goudron (hazards) : sprite de goudron dédié (A2 lot 3), une image
+    // par flaque (Map synchronisée : créée à l'apparition, détruite à l'expiration),
+    // à l'échelle du rayon. Repli sur un cercle Graphics si la texture est absente.
     this.hazardGraphics.clear()
+    const useTarSprite = this.textures.exists('vfx_goudron')
+    const seenHaz = new Set<number>()
     for (const h of state.hazards) {
-      this.hazardGraphics.fillStyle(0x1a1a20, 0.35)
-      this.hazardGraphics.fillCircle(h.x, h.y, h.radius)
+      if (useTarSprite) {
+        seenHaz.add(h.id)
+        let hs = this.hazardSprites.get(h.id)
+        if (hs === undefined) {
+          hs = this.add.image(h.x, h.y, 'vfx_goudron').setDepth(-2).setAlpha(0.85)
+          this.hazardSprites.set(h.id, hs)
+        }
+        hs.setPosition(h.x, h.y).setScale((h.radius * 2) / hs.width)
+      } else {
+        this.hazardGraphics.fillStyle(0x1a1a20, 0.35)
+        this.hazardGraphics.fillCircle(h.x, h.y, h.radius)
+      }
+    }
+    for (const [id, hs] of this.hazardSprites) {
+      if (!seenHaz.has(id)) {
+        hs.destroy()
+        this.hazardSprites.delete(id)
+      }
     }
 
     // Anneaux couleur (identité co-op) : jamais en solo, un seul Graphics
