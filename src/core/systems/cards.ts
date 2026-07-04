@@ -99,13 +99,12 @@ export function eligibleCards(inv: Inventory): Card[] {
   }
 
   // Cartes de découverte de passifs (passive-new)
-  // Seuls les passifs avec cardDiscoverable !== false sont proposés en tirage.
   if (inv.passives.length < INVENTORY.passives) {
     const ownedIds = new Set(inv.passives.map(p => p.id))
     for (const passiveId of Object.keys(PASSIVES)) {
       if (!ownedIds.has(passiveId)) {
         const def = PASSIVES[passiveId]
-        if (def && def.cardDiscoverable !== false) {
+        if (def) {
           cards.push({
             kind: 'passive-new',
             id: passiveId,

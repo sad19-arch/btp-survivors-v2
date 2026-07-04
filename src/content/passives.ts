@@ -10,12 +10,6 @@ export interface PlayerStats {
 export interface PassiveDef {
   id: string; name: string; description: string; maxLevel: number
   perLevel: Partial<Record<StatKey, number>>
-  /**
-   * Si `false`, ce passif n'apparaît PAS dans la piochez de cartes de découverte
-   * (il est accordé via un autre mécanisme, ex. arme de départ du personnage).
-   * Défaut : `true` (disponible en tirage libre).
-   */
-  cardDiscoverable?: boolean
 }
 
 // LIVE (consommés par au moins un système) : might, area, amount, cooldown, duration,
@@ -34,12 +28,10 @@ export const PASSIVES: Record<string, PassiveDef> = {
   cadence_chantier:    { id: 'cadence_chantier', name: 'Cadence de chantier', description: '−8 % de temps de recharge.', maxLevel: 5, perLevel: { cooldown: -0.08 } },
   casque_homologue:    { id: 'casque_homologue', name: 'Casque homologué', description: '+10 % de PV max.', maxLevel: 5, perLevel: { maxHp: 0.1 } },
   chaussures_securite: { id: 'chaussures_securite', name: 'Chaussures de sécurité', description: '+10 % de vitesse.', maxLevel: 5, perLevel: { moveSpeed: 0.1 } },
-  // Passifs phase A — catalyseurs de mobilité et de rendement.
-  // cardDiscoverable:false → accordés par le système de personnages (arme de départ),
-  // pas tirés dans la piochez de cartes classique → équilibre sim inchangé.
-  aimant_chantier:     { id: 'aimant_chantier', name: 'Aimant de chantier', description: '+15 % de rayon d\'aimantation.', maxLevel: 5, perLevel: { magnet: 0.15 }, cardDiscoverable: false },
-  batterie_18v:        { id: 'batterie_18v', name: 'Batterie 18V', description: '+12 % de durée des effets.', maxLevel: 5, perLevel: { duration: 0.12 }, cardDiscoverable: false },
-  prime_rendement:     { id: 'prime_rendement', name: 'Prime de rendement', description: '+10 % d\'XP gagnée.', maxLevel: 5, perLevel: { growth: 0.1 }, cardDiscoverable: false },
+  // Passifs phase A — catalyseurs de mobilité et de rendement (obtenables par carte).
+  aimant_chantier:     { id: 'aimant_chantier', name: 'Aimant de chantier', description: '+7 % de rayon d\'aimantation.', maxLevel: 5, perLevel: { magnet: 0.07 } },
+  batterie_18v:        { id: 'batterie_18v', name: 'Batterie 18V', description: '+12 % de durée des effets.', maxLevel: 5, perLevel: { duration: 0.12 } },
+  prime_rendement:     { id: 'prime_rendement', name: 'Prime de rendement', description: '+5 % d\'XP gagnée.', maxLevel: 5, perLevel: { growth: 0.05 } },
 }
 
 export function aggregatePassives(owned: ReadonlyArray<{ id: string; level: number }>): PlayerStats {

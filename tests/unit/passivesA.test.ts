@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { PASSIVES, aggregatePassives } from '@content/passives'
+import { eligibleCards } from '@core/systems/cards'
 import { World } from '@core/world'
 import { pickupSystem } from '@core/systems/pickup'
 import { HITBOX, PICKUP } from '@content/config'
@@ -11,9 +12,9 @@ import type { PlayerStats } from '@content/passives'
 
 describe('Passifs phase A', () => {
   it('aimant/batterie/prime existent avec les bonnes stats', () => {
-    expect(PASSIVES['aimant_chantier']?.perLevel.magnet).toBeCloseTo(0.15)
+    expect(PASSIVES['aimant_chantier']?.perLevel.magnet).toBeCloseTo(0.07)
     expect(PASSIVES['batterie_18v']?.perLevel.duration).toBeCloseTo(0.12)
-    expect(PASSIVES['prime_rendement']?.perLevel.growth).toBeCloseTo(0.1)
+    expect(PASSIVES['prime_rendement']?.perLevel.growth).toBeCloseTo(0.05)
   })
 
   it('aimant/batterie/prime ont maxLevel 5', () => {
@@ -22,16 +23,27 @@ describe('Passifs phase A', () => {
     expect(PASSIVES['prime_rendement']?.maxLevel).toBe(5)
   })
 
-  it('aggregatePassives applique magnet (aimant niv.2 → 1 + 2×0.15 = 1.30)', () => {
-    expect(aggregatePassives([{ id: 'aimant_chantier', level: 2 }]).magnet).toBeCloseTo(1.3)
+  it('aggregatePassives applique magnet (aimant niv.2 → 1 + 2×0.07 = 1.14)', () => {
+    expect(aggregatePassives([{ id: 'aimant_chantier', level: 2 }]).magnet).toBeCloseTo(1.14)
   })
 
   it('aggregatePassives sans passif → growth = 1 (défaut inchangé)', () => {
     expect(aggregatePassives([]).growth).toBe(1)
   })
 
-  it('aggregatePassives applique growth (prime niv.3 → 1 + 3×0.1 = 1.30)', () => {
-    expect(aggregatePassives([{ id: 'prime_rendement', level: 3 }]).growth).toBeCloseTo(1.3)
+  it('aggregatePassives applique growth (prime niv.3 → 1 + 3×0.05 = 1.15)', () => {
+    expect(aggregatePassives([{ id: 'prime_rendement', level: 3 }]).growth).toBeCloseTo(1.15)
+  })
+
+  it('les 3 nouveaux passifs sont proposables comme passive-new (cardDiscoverable)', () => {
+    // inventaire vide → tous les passifs doivent apparaître comme passive-new
+    const cards = eligibleCards({ weapons: [], passives: [] })
+    const passiveNewIds = cards
+      .filter(c => c.kind === 'passive-new')
+      .map(c => c.id)
+    expect(passiveNewIds).toContain('aimant_chantier')
+    expect(passiveNewIds).toContain('batterie_18v')
+    expect(passiveNewIds).toContain('prime_rendement')
   })
 })
 
