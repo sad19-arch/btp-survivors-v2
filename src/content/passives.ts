@@ -14,8 +14,8 @@ export interface PassiveDef {
 
 // LIVE (consommés par au moins un système) : might, area, amount, cooldown, duration,
 // projectileSpeed (weaponSystem/effectiveWeaponStats) ; moveSpeed, magnet, maxHp
-// (playerStats.recomputePlayerStats). RÉSERVÉS (agrégés ici mais lus par AUCUN
-// système pour l'instant) : growth, recovery.
+// (playerStats.recomputePlayerStats) ; growth (pickup : gain d'XP × growth, passif
+// « Prime de rendement »). RÉSERVÉ (agrégé ici mais lu par AUCUN système) : recovery.
 export const BASE_STATS: PlayerStats = {
   might: 1, area: 1, amount: 0, cooldown: 1, duration: 1,
   projectileSpeed: 1, moveSpeed: 1, maxHp: 1, recovery: 0, magnet: 1, growth: 1
