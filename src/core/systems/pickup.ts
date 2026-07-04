@@ -81,7 +81,10 @@ function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
     case 'chest': {
       const progress = world.get(player, 'progress')
       if (progress !== undefined) {
-        progress.xp += pickup.value
+        // Multiplicateur de gain d'XP (stat `growth`, base 1). Déterministe :
+        // Math.round(int × 1.0) === int → run par défaut byte-identique.
+        const growth = world.get(player, 'stats')?.growth ?? 1
+        progress.xp += Math.round(pickup.value * growth)
       }
       break
     }
@@ -116,7 +119,9 @@ function vacuumXpGems(world: World, player: EntityId): void {
   }
   const progress = world.get(player, 'progress')
   if (progress !== undefined) {
-    progress.xp += total
+    // Applique le bonus growth comme pour le ramassage normal (déterministe).
+    const growth = world.get(player, 'stats')?.growth ?? 1
+    progress.xp += Math.round(total * growth)
   }
   for (const g of ids) {
     world.despawn(g)
