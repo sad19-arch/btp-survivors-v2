@@ -152,13 +152,17 @@ function fireProjectiles(
     const e = world.spawn()
     world.add(e, 'position', { x: from.x, y: from.y })
     world.add(e, 'velocity', { x: dirX * speed, y: dirY * speed })
+    const hasBounces = eff.bounces > 0
+    const boomerangOutMs = eff.boomerangOutMs
     world.add(e, 'projectile', {
       type: def.id,
       damage: eff.damage,
       ownerId,
       lifeMs: life,
-      radius: HITBOX.projectile,
-      pierce: eff.pierce
+      radius: eff.projectileRadius > 0 ? eff.projectileRadius : HITBOX.projectile,
+      pierce: eff.pierce,
+      ...(hasBounces ? { bounces: eff.bounces, hitIds: [] as number[] } : {}),
+      ...(boomerangOutMs !== undefined ? { boomerangOutMs, returning: false as const } : {})
     })
   }
 }

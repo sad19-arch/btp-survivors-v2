@@ -26,6 +26,7 @@ import { pickupSystem } from './systems/pickup'
 import { rescueSystem } from './systems/rescue'
 import { reviveSystem } from './systems/revive'
 import { projectileLifetimeSystem } from './systems/projectile'
+import { boomerangSystem } from './systems/boomerang'
 import { consumeLevelUp, initialProgress } from './systems/leveling'
 import { allPlayersDead } from './systems/gameRules'
 import { recomputePlayerStats } from './systems/playerStats'
@@ -493,6 +494,7 @@ export class Simulation {
     tetherSystem(this.world, MODE_PLAYER_COUNT[this.mode] ?? 1, TETHER.maxRadius)
     movementSystem(this.world, dtMs)
     worldBoundsSystem(this.world, WORLD)
+    boomerangSystem(this.world, dtMs)
     this.rebuildEnemyGrid()
     collisionSystem(this.world, dtMs, this.enemyGrid)
     const killed = reapDeadEnemies(this.world, this.lootRng)

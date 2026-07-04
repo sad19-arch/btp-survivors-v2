@@ -90,6 +90,17 @@ export interface ProjectileComp {
   radius: number
   /** Nombre d'ennemis SUPPLÉMENTAIRES que le projectile peut encore traverser après un impact (0 = despawn au 1er impact). */
   pierce: number
+  /** Nombre de rebonds restants (ricochet). Absent ou 0 = comportement classique. */
+  bounces?: number
+  /**
+   * Temps avant inversion (boomerang), en ms. Décrémenté par `boomerangSystem`.
+   * `undefined` = pas un boomerang (champ absent). `<= 0` avec `returning=false` → déclenche l'inversion.
+   */
+  boomerangOutMs?: number
+  /** Vrai une fois l'inversion déclenchée : le projectile revient vers son owner. */
+  returning?: boolean
+  /** Liste des ids d'ennemis déjà touchés par ce projectile (pour le ricochet, éviter re-hit). */
+  hitIds?: number[]
 }
 
 /** Progrès de relève d'un joueur à terre (hp<=0), en cours de secours par un coéquipier. */

@@ -4,6 +4,15 @@ import type { PlayerStats } from './passives'
 export interface EffectiveStats {
   damage: number; cooldownMs: number; count: number; area: number; pierce: number
   projectileSpeed: number; projectileLifeMs: number; orbitRadius: number; orbitSpeed: number; orbitHitRadius: number
+  /** Nombre de rebonds (ricochet) ; 0 = aucun. */
+  bounces: number
+  /**
+   * Durée aller du boomerang (ms, scalée par `s.duration`).
+   * `undefined` si l'arme n'est pas un boomerang.
+   */
+  boomerangOutMs: number | undefined
+  /** Rayon du projectile (px, scalé par `s.area`) ; 0 = non applicable (arme sans kind projectile). */
+  projectileRadius: number
 }
 
 const MIN_COOLDOWN_MS = 60
@@ -19,6 +28,9 @@ export function effectiveWeaponStats(lvl: WeaponLevel, s: PlayerStats): Effectiv
     projectileLifeMs: (lvl.projectileLifeMs ?? 0) * s.duration,
     orbitRadius: (lvl.orbitRadius ?? 0) * s.area,
     orbitSpeed: (lvl.orbitSpeed ?? 0),
-    orbitHitRadius: (lvl.orbitHitRadius ?? 0) * s.area
+    orbitHitRadius: (lvl.orbitHitRadius ?? 0) * s.area,
+    bounces: lvl.bounces ?? 0,
+    boomerangOutMs: lvl.boomerangOutMs !== undefined ? lvl.boomerangOutMs * s.duration : undefined,
+    projectileRadius: (lvl.projectileRadius ?? 0) * s.area
   }
 }
