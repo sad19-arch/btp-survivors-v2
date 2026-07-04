@@ -65,6 +65,8 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   menu: MenuView | null
   /** Skin doré débloqué (code Konami au titre) — cosmétique, session. */
   goldSkin: boolean
+  /** Identifiant de run (incrémenté à chaque partie/restart) — le rendu s'en sert pour repartir propre. */
+  runId: number
   /** Intro de run en cours (sim gelée, micro-animation d'entrée). */
   introActive: boolean
   /** Libellé humain de la phase courante (ex. « Réseaux enterrés »). */

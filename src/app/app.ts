@@ -104,6 +104,13 @@ export class App {
   private cachedState: AppViewState | null = null
   /** Frame à laquelle `cachedState` a été calculé (-1 = jamais). */
   private cachedFrame = -1
+  /**
+   * Identifiant de run, incrémenté à CHAQUE `start()` (nouvelle partie, restart,
+   * stage suivant, setSeed). Exposé dans l'état pour que le rendu détecte un
+   * restart MÊME STAGE (où `stageId` ne change pas) et reparte d'une scène
+   * propre — sinon les sprites/VFX de la partie précédente s'accumulent (fuite).
+   */
+  private runId = 0
 
   constructor(opts: AppOptions) {
     this.seed = opts.seed
@@ -158,6 +165,7 @@ export class App {
     })
     this.introMsLeft = this.introEnabled ? INTRO.durationMs : 0
     this.started = true
+    this.runId++ // nouvelle partie → le rendu repart propre (cf. `runId`)
     this.refreshFocus()
   }
 
@@ -418,6 +426,7 @@ export class App {
       screen,
       menu: this.menu(screen),
       goldSkin: this.goldSkin,
+      runId: this.runId,
       introActive: this.introMsLeft > 0,
       stageTitle: phase?.title ?? '—',
       stageSubtitle: phase?.subtitle ?? '',

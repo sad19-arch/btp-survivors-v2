@@ -58,6 +58,13 @@ const game = new Phaser.Game({
 game.scene.add('game', GameScene, false, data)
 game.scene.add('boot', BootScene, true, data)
 
+// Diagnostic (test/dev uniquement, comme le seam) : expose le jeu Phaser pour
+// que l'e2e mesure le nombre d'objets de scène et garde contre la fuite au
+// restart (les sprites/VFX ne doivent pas s'accumuler d'une partie à l'autre).
+if (opts.test) {
+  ;(window as unknown as { __PHASER_GAME__?: Phaser.Game }).__PHASER_GAME__ = game
+}
+
 // AudioDirector : créé une fois, coupé en test/headless. Lit les niveaux via l'App.
 const audio = opts.test ? null : new AudioDirector(game.sound, app.events, () => app.getAudioLevels())
 

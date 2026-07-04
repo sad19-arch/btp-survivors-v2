@@ -117,6 +117,8 @@ export class GameScene extends Phaser.Scene {
   private sceneData!: GameSceneData
   /** stageId dont les assets sont actuellement chargés (pour détecter un changement). */
   private loadedStageId = ''
+  /** runId de la partie actuellement rendue (pour détecter un restart même stage). */
+  private loadedRunId = -1
   /** Vrai pendant un chargement dynamique de feuille(s) de perso (évite d'en re-lancer). */
   private loadingSheets = false
   /** Config de rendu du stage courant (sol/décalques/props/skins d'ennemis). */
@@ -326,6 +328,7 @@ export class GameScene extends Phaser.Scene {
     this.lite = data.lite ?? false
     this.sceneData = data
     this.loadedStageId = this.app.getState().stageId
+    this.loadedRunId = this.app.getState().runId
     this.stage = stageRender(this.loadedStageId)
   }
 
@@ -717,10 +720,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    // Changement de stage (partie lancée sur une autre phase que celle chargée) :
-    // on relance la scène pour recharger sol/props/skins du bon stage.
+    // Changement de stage OU nouvelle partie (restart même stage) : on relance la
+    // scène pour repartir d'un état propre — sol/props/skins rechargés ET surtout
+    // sprites/VFX/pool remis à zéro (sinon fuite : les objets des parties
+    // précédentes s'accumulent, cf. `runId`).
     const st = this.app.getStateForFrame(this.app.frameId)
-    if (st.screen !== 'title' && st.stageId !== this.loadedStageId) {
+    if (st.screen !== 'title' && (st.stageId !== this.loadedStageId || st.runId !== this.loadedRunId)) {
       this.scene.restart(this.sceneData)
       return
     }
