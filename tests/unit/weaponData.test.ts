@@ -19,10 +19,24 @@ describe('Armes phase A — data', () => {
       }
     }
   })
-  it('les 5 évoluées existent, maxLevel 1', () => {
+  it('les 5 évoluées existent, maxLevel 1, kind = celui de leur base, stats valides', () => {
+    // Chaque évoluée garde le kind de son arme de base (régression silencieuse sinon).
+    const EVO_KIND: Record<string, string> = {
+      coulee_bitume: 'hazard',
+      tempete_boulons: 'projectile',
+      cle_choc: 'projectile',
+      canon_mousse: 'cone',
+      transpalette: 'projectile'
+    }
     for (const id of EVO) {
-      expect(WEAPONS[id]?.maxLevel, id).toBe(1)
-      expect(WEAPONS[id]?.levels.length).toBe(1)
+      const w = WEAPONS[id]
+      expect(w, id).toBeDefined()
+      expect(w?.maxLevel, id).toBe(1)
+      expect(w?.levels.length, id).toBe(1)
+      expect(w?.kind, id).toBe(EVO_KIND[id])
+      const lvl = w?.levels[0]
+      expect(lvl?.damage, id).toBeGreaterThan(0)
+      expect(lvl?.cooldownMs, id).toBeGreaterThan(0)
     }
   })
   it('goudron=hazard, extincteur=cone, boulons/cle/brouette=projectile', () => {

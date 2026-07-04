@@ -165,4 +165,19 @@ describe('pickupSystem', () => {
     expect(world.alive(g2)).toBe(false)
     expect(world.get(player, 'progress')?.xp).toBe(13)
   })
+
+  it('en coop, l’aimant crédite chaque gemme à son joueur le plus proche (pas tout au ramasseur)', () => {
+    const world = new World()
+    const p1 = makePlayer(world, 0, 0, 100, 1) // ramasse l'aimant, à l'origine
+    const p2 = makePlayer(world, 1000, 0, 100, 2) // loin
+    const gemNearP1 = makeGem(world, 60, 0, 5) // clairement le plus proche de p1
+    const gemNearP2 = makeGem(world, 1000, 60, 9) // clairement le plus proche de p2
+    makePickup(world, COLLECT_X, 0, 'magnet', 0) // p1 ramasse l'aimant
+    pickupSystem(world, 16)
+    expect(world.alive(gemNearP1)).toBe(false)
+    expect(world.alive(gemNearP2)).toBe(false)
+    // La gemme loin (près de p2) va à p2, PAS au ramasseur p1 — équité coop.
+    expect(world.get(p1, 'progress')?.xp).toBe(5)
+    expect(world.get(p2, 'progress')?.xp).toBe(9)
+  })
 })

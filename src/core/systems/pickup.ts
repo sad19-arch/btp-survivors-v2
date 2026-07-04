@@ -96,7 +96,7 @@ function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
       break
     }
     case 'magnet': {
-      vacuumXpGems(world, player)
+      vacuumXpGems(world)
       break
     }
     case 'coffre': {
@@ -106,22 +106,38 @@ function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
   }
 }
 
-/** Aspire immédiatement toutes les gemmes d'XP restantes vers le joueur (crédite + despawn). */
-function vacuumXpGems(world: World, player: EntityId): void {
+/**
+ * Aspire immédiatement toutes les gemmes d'XP restantes (power-up aimant). Chaque
+ * gemme est créditée à son joueur VIVANT le plus proche (coop-équitable — évite
+ * qu'un seul joueur rafle toute la carte). En solo, tout revient à l'unique joueur
+ * → arithmétique identique (`Math.round(total × growth)`), run par défaut byte-identique.
+ * Puis despawn des gemmes créditées.
+ */
+function vacuumXpGems(world: World): void {
+  const byPlayer = new Map<EntityId, number>()
   const ids: EntityId[] = []
-  let total = 0
-  for (const g of world.query('pickup')) {
+  for (const g of world.query('pickup', 'position')) {
     const pk = world.get(g, 'pickup')
-    if (pk !== undefined && pk.type === 'xp') {
-      ids.push(g)
-      total += pk.value
+    if (pk === undefined || pk.type !== 'xp') {
+      continue
     }
+    const gpos = world.get(g, 'position')
+    if (gpos === undefined) {
+      continue
+    }
+    const near = nearestPlayer(world, gpos)
+    if (near === null) {
+      continue // aucun joueur vivant → laisse la gemme (pas de despawn silencieux)
+    }
+    ids.push(g)
+    byPlayer.set(near.entity, (byPlayer.get(near.entity) ?? 0) + pk.value)
   }
-  const progress = world.get(player, 'progress')
-  if (progress !== undefined) {
-    // Applique le bonus growth comme pour le ramassage normal (déterministe).
-    const growth = world.get(player, 'stats')?.growth ?? 1
-    progress.xp += Math.round(total * growth)
+  for (const [pid, total] of byPlayer) {
+    const progress = world.get(pid, 'progress')
+    if (progress !== undefined) {
+      const growth = world.get(pid, 'stats')?.growth ?? 1
+      progress.xp += Math.round(total * growth)
+    }
   }
   for (const g of ids) {
     world.despawn(g)
