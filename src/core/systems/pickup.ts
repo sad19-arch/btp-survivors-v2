@@ -96,7 +96,7 @@ function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
       break
     }
     case 'magnet': {
-      vacuumXpGems(world, player)
+      vacuumXpGems(world)
       break
     }
     case 'coffre': {
@@ -106,22 +106,39 @@ function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
   }
 }
 
-/** Aspire immédiatement toutes les gemmes d'XP restantes vers le joueur (crédite + despawn). */
-function vacuumXpGems(world: World, player: EntityId): void {
+/**
+ * Aspire immédiatement toutes les gemmes d'XP restantes : chaque gemme est
+ * créditée au joueur vivant le plus proche (distribution équitable en coop —
+ * le déclencheur ne rafle pas les gemmes des autres joueurs), avec le `growth`
+ * de CE joueur.
+ *
+ * Le total est sommé PAR joueur puis arrondi une seule fois — en solo (un seul
+ * joueur, toutes les gemmes lui reviennent) c'est byte-identique à l'ancien
+ * comportement (somme unique arrondie une fois). Pur et déterministe.
+ */
+function vacuumXpGems(world: World): void {
   const ids: EntityId[] = []
-  let total = 0
-  for (const g of world.query('pickup')) {
+  const totalByPlayer = new Map<EntityId, number>()
+  for (const g of world.query('pickup', 'position')) {
     const pk = world.get(g, 'pickup')
-    if (pk !== undefined && pk.type === 'xp') {
-      ids.push(g)
-      total += pk.value
+    const gpos = world.get(g, 'position')
+    if (pk === undefined || gpos === undefined || pk.type !== 'xp') {
+      continue
     }
+    const target = nearestPlayer(world, gpos)
+    if (target === null) {
+      continue // aucun joueur vivant : la gemme reste en place
+    }
+    ids.push(g)
+    totalByPlayer.set(target.entity, (totalByPlayer.get(target.entity) ?? 0) + pk.value)
   }
-  const progress = world.get(player, 'progress')
-  if (progress !== undefined) {
-    // Applique le bonus growth comme pour le ramassage normal (déterministe).
-    const growth = world.get(player, 'stats')?.growth ?? 1
-    progress.xp += Math.round(total * growth)
+  for (const [entity, total] of totalByPlayer) {
+    const progress = world.get(entity, 'progress')
+    if (progress !== undefined) {
+      // Applique le bonus growth comme pour le ramassage normal (déterministe).
+      const growth = world.get(entity, 'stats')?.growth ?? 1
+      progress.xp += Math.round(total * growth)
+    }
   }
   for (const g of ids) {
     world.despawn(g)
