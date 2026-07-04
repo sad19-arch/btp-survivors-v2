@@ -76,23 +76,40 @@ function addEnemy(w: World, x: number, y: number, hp = 100): EntityId {
 // --- Tests ------------------------------------------------------------------
 
 describe('weaponSystem kind hazard (goudron)', () => {
-  it('spawn une entité hazard à la position du joueur quand le cooldown est écoulé', () => {
+  it('spawn une entité hazard AUTOUR du joueur (décalée, pas sur lui) quand le cooldown est écoulé', () => {
     const w = new World()
-    addPlayerWithGoudron(w, 0)
+    addPlayerWithGoudron(w, 0) // joueur en (100,200), immobile
     weaponSystem(w, 16)
     const hazards = [...w.query('hazard', 'position')]
     expect(hazards).toHaveLength(1)
     const id = hazards[0] as EntityId
     const pos = w.get(id, 'position')
     const haz = w.get(id, 'hazard')
-    expect(pos?.x).toBe(100)
-    expect(pos?.y).toBe(200)
+    // La flaque n'est PAS centrée sur le joueur : décalée d'environ 64 px (HAZARD_OFFSET_RADIUS).
+    const dist = Math.hypot((pos?.x ?? 100) - 100, (pos?.y ?? 200) - 200)
+    expect(dist).toBeGreaterThan(40)
+    expect(dist).toBeLessThan(90)
     expect(haz?.ownerId).toBe(1)
     expect(haz?.type).toBe('goudron')
     expect(haz?.damagePerTick).toBeGreaterThan(0)
     expect(haz?.radius).toBeGreaterThan(0)
     expect(haz?.tickMs).toBeGreaterThan(0)
     expect(haz?.lifeMs).toBeGreaterThan(0)
+  })
+
+  it('oriente la flaque vers le déplacement du joueur (goudron posé devant lui)', () => {
+    const w = new World()
+    const p = addPlayerWithGoudron(w, 0) // joueur en (100,200)
+    const v = w.get(p, 'velocity')
+    if (v !== undefined) {
+      v.x = 100 // se déplace vers la droite (+x)
+      v.y = 0
+    }
+    weaponSystem(w, 16)
+    const pos = w.get([...w.query('hazard', 'position')][0] as EntityId, 'position')
+    // Flaque devant le joueur : décalée en +x, ~alignée en y.
+    expect((pos?.x ?? 100) - 100).toBeGreaterThan(40)
+    expect(Math.abs((pos?.y ?? 200) - 200)).toBeLessThan(5)
   })
 
   it('ne spawne pas de hazard si le cooldown n\'est pas écoulé', () => {
@@ -110,18 +127,19 @@ describe('weaponSystem kind hazard (goudron)', () => {
     expect(slot?.cooldownLeftMs ?? 0).toBeGreaterThan(0)
   })
 
-  it('count=2 → spawne 2 flaques avec positions légèrement différentes', () => {
+  it('count=2 → 2 flaques décalées autour du joueur, à des positions différentes', () => {
     const w = new World()
-    addPlayerWithGoudronCount2(w)
+    addPlayerWithGoudronCount2(w) // joueur en (0,0), immobile
     weaponSystem(w, 16)
     const hazards = [...w.query('hazard', 'position')]
     expect(hazards).toHaveLength(2)
-    const id0 = hazards[0] as EntityId
-    const id1 = hazards[1] as EntityId
-    const pos0 = w.get(id0, 'position')
-    const pos1 = w.get(id1, 'position')
-    // Les deux flaques doivent être à des positions différentes (offset radial).
-    expect(pos0?.x).not.toBe(pos1?.x)
+    const pos0 = w.get(hazards[0] as EntityId, 'position')
+    const pos1 = w.get(hazards[1] as EntityId, 'position')
+    // Positions distinctes (réparties autour de la direction de base)...
+    expect(pos0?.y).not.toBe(pos1?.y)
+    // ...et toutes deux décalées du centre (≈64 px), jamais sur le joueur.
+    expect(Math.hypot(pos0?.x ?? 0, pos0?.y ?? 0)).toBeGreaterThan(40)
+    expect(Math.hypot(pos1?.x ?? 0, pos1?.y ?? 0)).toBeGreaterThan(40)
   })
 })
 

@@ -70,7 +70,7 @@ export function weaponSystem(
           tickStrike(slot, eff, dtMs, world, def.kind, rng, pulses, grid)
           break
         case 'hazard':
-          tickHazard(world, slot, def, eff, pos, player.playerId, dtMs)
+          tickHazard(world, slot, def, eff, pos, player.playerId, dtMs, world.get(e, 'velocity'))
           break
         case 'cone':
           tickCone(slot, eff, pos, dtMs, world, def.kind, pulses, grid)
@@ -389,14 +389,17 @@ function despawnOrphanOrbiters(world: World): void {
 // --- hazard (goudron) ------------------------------------------------------
 
 /**
- * Pose une (ou plusieurs) flaque(s) de goudron à la position du joueur.
- * Chaque flaque est une entité avec composants `position` + `hazard` ;
- * les dégâts par tick sont gérés par `hazardSystem`.
+ * Pose une (ou plusieurs) flaque(s) de goudron AUTOUR du joueur (jamais sur lui,
+ * même à `count = 1`). Chaque flaque est une entité `position` + `hazard` ; les
+ * dégâts par tick sont gérés par `hazardSystem`.
  *
- * `count > 1` : les flaques sont réparties en cercle autour du joueur avec
- * un léger rayon d'offset (`HAZARD_OFFSET_RADIUS`) — angles déterministes.
+ * Placement : décalage radial systématique (`HAZARD_OFFSET_RADIUS`), orienté
+ * vers le DÉPLACEMENT du joueur (goudron posé devant lui) ; à l'arrêt, repli
+ * vers le bas (orientation par défaut du sprite). `count > 1` : les flaques
+ * sont réparties en cercle autour de cette direction de base. Déterministe
+ * (fonction pure du monde/vitesse — pas de `Math.random`).
  */
-const HAZARD_OFFSET_RADIUS = 30 // px d'écart radial pour count > 1
+const HAZARD_OFFSET_RADIUS = 64 // px : la flaque tombe autour du joueur, pas dessus
 
 function tickHazard(
   world: World,
@@ -405,7 +408,8 @@ function tickHazard(
   eff: EffectiveStats,
   pos: Vec2,
   ownerId: number,
-  dtMs: number
+  dtMs: number,
+  vel?: Vec2
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -418,11 +422,20 @@ function tickHazard(
   const tickMs = eff.tickMs ?? 400
   const lifeMs = eff.projectileLifeMs > 0 ? eff.projectileLifeMs : 3000
 
+  // Direction de base : vers le déplacement du joueur, sinon vers le bas.
+  let baseAngle = Math.PI / 2
+  if (vel !== undefined) {
+    const speed = Math.hypot(vel.x, vel.y)
+    if (speed > 1e-3) {
+      baseAngle = Math.atan2(vel.y, vel.x)
+    }
+  }
+
   for (let i = 0; i < count; i++) {
-    // Offset radial déterministe (angle réparti uniformément autour du joueur).
-    const angle = (Math.PI * 2 * i) / count
-    const offsetX = count > 1 ? Math.cos(angle) * HAZARD_OFFSET_RADIUS : 0
-    const offsetY = count > 1 ? Math.sin(angle) * HAZARD_OFFSET_RADIUS : 0
+    // Décalage radial déterministe autour de la direction de base.
+    const angle = baseAngle + (Math.PI * 2 * i) / count
+    const offsetX = Math.cos(angle) * HAZARD_OFFSET_RADIUS
+    const offsetY = Math.sin(angle) * HAZARD_OFFSET_RADIUS
     const e = world.spawn()
     world.add(e, 'position', { x: pos.x + offsetX, y: pos.y + offsetY })
     world.add(e, 'hazard', {
