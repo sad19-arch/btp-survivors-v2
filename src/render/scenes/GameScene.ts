@@ -5,7 +5,7 @@ import { KeyboardInput } from '@input/keyboard'
 import { GamepadInput } from '@input/gamepad'
 import { routeInput, type FrameInput } from '@input/intents'
 import { buildPlayerInputs } from '@input/players'
-import { INTRO, WORLD } from '@content/config'
+import { INTRO, WORLD, CONE_HALF_ANGLE } from '@content/config'
 import { createGround } from '@render/ground'
 import { createProps, createLandmark, createStructures, phaseSalt } from '@render/props'
 import { dirRow, walkFrame, idleFrame } from '@render/sprites'
@@ -57,6 +57,13 @@ const GROUP_ZOOM_FAR = 0.66
 const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; faceVel: boolean }> = {
   scie: { key: 'proj_scie', scale: 0.8, spin: true, faceVel: false },
   cloueur: { key: 'proj_cloueur', scale: 0.8, spin: false, faceVel: true },
+  // Armes Phase A (Persos) — réutilisent des sprites existants, DA finale en A2.
+  boulons: { key: 'proj_cloueur', scale: 0.7, spin: false, faceVel: true },
+  tempete_boulons: { key: 'proj_cloueur', scale: 0.7, spin: false, faceVel: true },
+  cle_molette: { key: 'proj_scie', scale: 0.8, spin: true, faceVel: false },
+  cle_choc: { key: 'proj_scie', scale: 0.8, spin: true, faceVel: false },
+  brouette: { key: 'proj_cloueur', scale: 2.4, spin: false, faceVel: true },
+  transpalette: { key: 'proj_cloueur', scale: 2.4, spin: false, faceVel: true },
 }
 /** Sprites de pickups par type. */
 const PICKUP_SPRITE: Record<string, { key: string; scale: number }> = {
@@ -123,6 +130,11 @@ export class GameScene extends Phaser.Scene {
    * `playerRings` (pas d'objet par joueur à gérer/détruire).
    */
   private reviveBars!: Phaser.GameObjects.Graphics
+  /**
+   * Flaques de goudron au sol (hazards) : un seul Graphics persistant effacé/redessiné
+   * chaque frame — aucun objet créé/détruit par flaque (pas de fuite). Profondeur < entités.
+   */
+  private hazardGraphics!: Phaser.GameObjects.Graphics
   private readonly enemySprites = new Map<number, CharSprite>()
   private readonly projectileSprites = new Map<number, CharSprite>()
   private readonly pickupSprites = new Map<number, CharSprite>()
@@ -169,6 +181,10 @@ export class GameScene extends Phaser.Scene {
       this.spawnStrikeBolt(p.x, p.y, p.radius)
       return
     }
+    if (p.kind === 'cone') {
+      this.spawnConeVfx(p.x, p.y, p.radius, p.dirX, p.dirY)
+      return
+    }
     this.spawnVfx('vfx_shockwave', p.x, p.y, 0.4, Math.max(1.5, (p.radius * 2) / 90), 320)
   }
   /**
@@ -194,6 +210,33 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => g.destroy()
     })
   }
+  /**
+   * VFX du cône d'extincteur : secteur rempli (arc) orienté vers la cible,
+   * teinte blanc-mousse, fondu ~260 ms — même schéma que `spawnSweepArc`.
+   * Si la direction est absente (garde-fou), oriente vers le haut.
+   */
+  private spawnConeVfx(x: number, y: number, radius: number, dirX?: number, dirY?: number): void {
+    const dx = dirX ?? 0
+    const dy = dirY ?? -1
+    const centerAngle = Math.atan2(dy, dx)
+    const startAngle = centerAngle - CONE_HALF_ANGLE
+    const endAngle = centerAngle + CONE_HALF_ANGLE
+    const g = this.add.graphics().setDepth(5)
+    g.fillStyle(0xe8f4e8, 0.55)
+    g.beginPath()
+    g.moveTo(x, y)
+    g.arc(x, y, radius, startAngle, endAngle, false)
+    g.closePath()
+    g.fillPath()
+    this.tweens.add({
+      targets: g,
+      alpha: 0,
+      duration: 260,
+      ease: 'Quad.easeOut',
+      onComplete: () => g.destroy()
+    })
+  }
+
   /**
    * Coup du court-circuit : éclair en zigzag qui tombe sur la cible + petit
    * flash d'impact. Le jitter latéral utilise Math.random() — cosmétique pur,
@@ -561,6 +604,8 @@ export class GameScene extends Phaser.Scene {
       .rectangle(WORLD.width / 2, WORLD.height / 2, WORLD.width, WORLD.height)
       .setStrokeStyle(4, 0xf5c542)
 
+    // Flaques de goudron (hazards) : sous tout (sol -10, props ~0, entités ~0..5).
+    this.hazardGraphics = this.add.graphics().setDepth(-2)
     // Anneaux couleur des joueurs (co-op) : au-dessus du sol/props (depth -10..1),
     // sous les sprites de personnages (depth par défaut 0... en pratique dessiné
     // avant eux dans l'ordre de création, mais on force -1 pour être sûr avec le pool).
@@ -750,6 +795,13 @@ export class GameScene extends Phaser.Scene {
       this.introStartMs = -1
       this.following = false
       this.cameras.main.stopFollow()
+    }
+
+    // Flaques de goudron (hazards) : un seul Graphics, effacé/redessiné chaque frame.
+    this.hazardGraphics.clear()
+    for (const h of state.hazards) {
+      this.hazardGraphics.fillStyle(0x1a1a20, 0.35)
+      this.hazardGraphics.fillCircle(h.x, h.y, h.radius)
     }
 
     // Anneaux couleur (identité co-op) : jamais en solo, un seul Graphics

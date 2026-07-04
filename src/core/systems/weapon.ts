@@ -503,8 +503,8 @@ function tickCone(
     }
   }
 
-  // VFX : pulse de kind 'cone' avec la portée (le rendu peut l'orienter grâce à l'événement).
-  pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind })
+  // VFX : pulse de kind 'cone' avec la portée et la direction (le rendu l'oriente grâce à l'événement).
+  pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind, dirX, dirY })
 }
 
 /**

@@ -11,17 +11,22 @@ export interface AuraPulse {
   x: number
   y: number
   radius: number
-  /** Sorte d'arme à l'origine de l'impulsion (`aura` | `sweep` | `strike`) — pour teinter le VFX. */
+  /** Sorte d'arme à l'origine de l'impulsion (`aura` | `sweep` | `strike` | `cone`) — pour teinter le VFX. */
   kind: string
+  /** Direction du cône (vecteur unitaire) — uniquement pour `kind === 'cone'`, undefined sinon. */
+  dirX?: number
+  dirY?: number
 }
 
-/** Émis à chaque impulsion d'une arme d'aura/sweep/strike (pour un VFX d'onde de choc). */
+/** Émis à chaque impulsion d'une arme d'aura/sweep/strike/cone (pour un VFX d'onde de choc). */
 export class AuraPulseEvent extends Event {
   constructor(
     readonly x: number,
     readonly y: number,
     readonly radius: number,
-    readonly kind: string = 'aura'
+    readonly kind: string = 'aura',
+    readonly dirX?: number,
+    readonly dirY?: number
   ) {
     super('auraPulse')
   }
