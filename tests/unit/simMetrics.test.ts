@@ -3,9 +3,9 @@ import { median, aggregate, type RunResult } from '../../tools/sim/metrics'
 
 function run(partial: Partial<RunResult>): RunResult {
   return {
-    seed: 1, bot: 'kite', samples: [], survived: false, survivalMs: 0,
+    seed: 1, bot: 'kite', samples: [], survived: false, wonTheGame: false, survivalMs: 0,
     finalLevel: 0, levelAt5min: 0, peakEnemies: 0, nanSeen: false,
-    minHp: 100, maxEnemies: 0, ...partial
+    minHp: 100, minHpPct: 100, maxEnemies: 0, ...partial
   }
 }
 

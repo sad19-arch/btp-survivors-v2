@@ -25,12 +25,13 @@ function sec(ms: number): string {
 }
 
 export function renderSummaryTable(aggs: BotAggregate[]): string {
-  const lines = ['bot      | survie méd | %survie pleine | niv@5:00 | pic ennemis']
-  lines.push('---------|------------|----------------|----------|------------')
+  const lines = ['bot      | survie méd | %survie pleine | % victoire | niv@5:00 | pic ennemis']
+  lines.push('---------|------------|----------------|------------|----------|------------')
   for (const a of aggs) {
     lines.push(
       `${a.bot.padEnd(8)} | ${sec(a.survivalMsMedian).padStart(10)} | ` +
         `${`${Math.round(a.survivedFullPct)}%`.padStart(14)} | ` +
+        `${`${Math.round(a.winPct)}%`.padStart(10)} | ` +
         `${String(Math.round(a.levelAt5minMedian)).padStart(8)} | ` +
         `${String(Math.round(a.peakEnemiesMedian)).padStart(11)}`
     )

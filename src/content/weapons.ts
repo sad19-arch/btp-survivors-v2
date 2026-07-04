@@ -73,7 +73,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     kind: 'projectile',
     maxLevel: 8,
     levels: buildLevels(
-      { damage: 8, cooldownMs: 500, count: 1, area: 0, pierce: 0, projectileSpeed: 520, projectileLifeMs: 1500 },
+      { damage: 8, cooldownMs: 560, count: 1, area: 0, pierce: 0, projectileSpeed: 520, projectileLifeMs: 1500 },
       { damage: 2 },
       8,
       { 3: { count: 2 }, 6: { count: 3 } }
@@ -133,36 +133,36 @@ export const WEAPONS: Record<string, WeaponDef> = {
   goudron: {
     id: 'goudron', name: 'Goudron chaud', description: 'Pose une flaque de goudron qui brûle les ennemis.', kind: 'hazard', maxLevel: 8,
     levels: buildLevels(
-      { damage: 4, cooldownMs: 2200, count: 1, area: 60, pierce: 99, tickMs: 400, projectileLifeMs: 3000 },
-      { damage: 1.2, area: 4 }, 8, { 5: { count: 2 } }
+      { damage: 5, cooldownMs: 1800, count: 1, area: 60, pierce: 99, tickMs: 400, projectileLifeMs: 3000 },
+      { damage: 2.2, area: 4 }, 8, { 5: { count: 2 } }
     )
   },
   boulons: {
     id: 'boulons', name: 'Boulons ricochets', description: 'Lance des boulons qui ricochent entre les ennemis.', kind: 'projectile', maxLevel: 8,
     levels: buildLevels(
-      { damage: 10, cooldownMs: 820, count: 1, area: 0, pierce: 0, bounces: 3, projectileSpeed: 470, projectileLifeMs: 1700 },
-      { damage: 2 }, 8, { 5: { bounces: 4 }, 7: { count: 2 } }
+      { damage: 12, cooldownMs: 820, count: 1, area: 0, pierce: 0, bounces: 3, projectileSpeed: 470, projectileLifeMs: 1700 },
+      { damage: 2.5 }, 8, { 3: { bounces: 4 }, 5: { bounces: 5 }, 7: { count: 2 } }
     )
   },
   cle_molette: {
     id: 'cle_molette', name: 'Clé à molette', description: 'Lance une clé boomerang qui transperce.', kind: 'projectile', maxLevel: 8,
     levels: buildLevels(
-      { damage: 16, cooldownMs: 1150, count: 1, area: 0, pierce: 4, projectileSpeed: 380, boomerangOutMs: 430, projectileLifeMs: 2400 },
-      { damage: 4 }, 8, { 6: { count: 2 } }
+      { damage: 16, cooldownMs: 980, count: 1, area: 0, pierce: 4, projectileSpeed: 380, boomerangOutMs: 430, projectileLifeMs: 2400 },
+      { damage: 5 }, 8, { 6: { count: 2 } }
     )
   },
   extincteur: {
     id: 'extincteur', name: 'Extincteur', description: 'Cône de mousse qui ralentit les ennemis.', kind: 'cone', maxLevel: 8,
     levels: buildLevels(
-      { damage: 6, cooldownMs: 1300, count: 1, area: 110, pierce: 99, slowMult: 0.5, slowMs: 700 },
-      { damage: 2, area: 7 }, 8
+      { damage: 8, cooldownMs: 1050, count: 1, area: 110, pierce: 99, slowMult: 0.5, slowMs: 700 },
+      { damage: 3, area: 7 }, 8
     )
   },
   brouette: {
     id: 'brouette', name: 'Brouette', description: 'Propulse une brouette lourde qui traverse tout.', kind: 'projectile', maxLevel: 8,
     levels: buildLevels(
-      { damage: 26, cooldownMs: 1650, count: 1, area: 0, pierce: 99, projectileSpeed: 240, projectileRadius: 26, projectileLifeMs: 2600 },
-      { damage: 6, projectileRadius: 2 }, 8
+      { damage: 26, cooldownMs: 1400, count: 1, area: 0, pierce: 99, projectileSpeed: 240, projectileRadius: 26, projectileLifeMs: 2600 },
+      { damage: 7, projectileRadius: 2 }, 8
     )
   },
   // Évoluées (niveau unique puissant ; montent via les passifs globaux)

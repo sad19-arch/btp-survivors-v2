@@ -68,11 +68,16 @@ export interface DifficultyScale {
  */
 export function difficultyScaleAt(elapsedMs: number): DifficultyScale {
   const min = Math.max(0, elapsedMs) / 60000
-  // PV : montée DOUCE pendant la puissance (fondent) puis coup de fouet après 8:30 (mur).
-  const hp = min <= 8.5 ? 0.7 + 0.12 * min : 0.7 + 0.12 * 8.5 + 1.3 * (min - 8.5)
+  // PV : montée DOUCE pendant la puissance (fondent) puis coup de fouet après 8:30
+  // (mur de fin). Pente adoucie (playtest : le jeu doit être GAGNABLE — on doit
+  // pouvoir atteindre et battre le boss final, cf. cible sim `KITE_MIN_WIN_PCT`).
+  const hp = min <= 8.5 ? 0.7 + 0.12 * min : 0.7 + 0.12 * 8.5 + 0.85 * (min - 8.5)
   return {
-    hp, // 3:00→1,06 · 6:00→1,42 · 8:30→1,72 · 11:00→5,0
-    contactDamage: 0.5 + 0.18 * min,
+    hp, // 3:00→1,06 · 6:00→1,42 · 8:30→1,72 · 11:00→3,85
+    // Contact plus punitif (découple « tuable » de « létal ») : le mur de PV
+    // adouci laisse le kite atteindre le boss, mais l'imprudent qui encaisse le
+    // contact meurt quand même — garde-fou greedy/idle.
+    contactDamage: 0.5 + 0.26 * min,
     speed: Math.min(1.2, 1.0 + 0.04 * min)
   }
 }

@@ -5,9 +5,9 @@ import type { BotAggregate } from '../../tools/sim/metrics'
 /** Profil kite PASSANT par défaut (arc 11 min, tendu mais gagnable) ; surcharger pour tester un échec. */
 function agg(partial: Partial<BotAggregate>): BotAggregate {
   return {
-    bot: 'kite', runs: 10, survivedFullPct: 20, survivalMsMedian: 320000,
+    bot: 'kite', runs: 10, survivedFullPct: 20, winPct: 30, survivalMsMedian: 320000,
     survivalMsMin: 90000, survivalMsMax: 660000, levelAt5minMedian: 11,
-    peakEnemiesMedian: 50, bucketSec: 10, hpPctCurve: [100, 80, 35, 55], enemiesCurve: [], ...partial
+    peakEnemiesMedian: 50, minHpPctMedian: 25, bucketSec: 10, hpPctCurve: [100, 80, 35, 55], enemiesCurve: [], ...partial
   }
 }
 
@@ -40,18 +40,35 @@ describe('evaluateTargets (tendu mais gagnable, arc 11 min)', () => {
     expect(rep.failures.join(' ')).toContain('kite')
   })
 
-  it('PASS quand les PV de kite plongent sous 40% (climax)', () => {
-    const rep = evaluateTargets([agg({ bot: 'kite', hpPctCurve: [100, 80, 35, 60] })])
+  it('PASS quand le PV min médian de kite plonge sous 40% (climax)', () => {
+    const rep = evaluateTargets([agg({ bot: 'kite', minHpPctMedian: 25 })])
     expect(rep.pass).toBe(true)
   })
 
-  it('FAIL quand les PV de kite ne descendent jamais sous 40% (trop sûr)', () => {
-    const rep = evaluateTargets([agg({ bot: 'kite', hpPctCurve: [100, 95, 90, 100] })])
+  it('FAIL quand le PV min médian de kite ne descend jamais sous 40% (trop sûr)', () => {
+    const rep = evaluateTargets([agg({ bot: 'kite', minHpPctMedian: 90 })])
     expect(rep.pass).toBe(false)
     expect(rep.failures.join(' ')).toContain('kite')
   })
 
-  it('FAIL si greedy survit la run pleine (imprudent = doit mourir)', () => {
+  it('FAIL si kite ne gagne JAMAIS (jeu non gagnable — cible n°1)', () => {
+    const rep = evaluateTargets([agg({ bot: 'kite', winPct: 0 })])
+    expect(rep.pass).toBe(false)
+    expect(rep.failures.join(' ')).toContain('gagnable')
+  })
+
+  it('FAIL si kite gagne trop souvent (trop facile, plus de tension)', () => {
+    const rep = evaluateTargets([agg({ bot: 'kite', winPct: 90 })])
+    expect(rep.pass).toBe(false)
+    expect(rep.failures.join(' ')).toContain('victoire')
+  })
+
+  it('PASS si greedy survit RAREMENT (build chanceux ≤ seuil) — jeu gagnable', () => {
+    const rep = evaluateTargets([agg({ bot: 'greedy', survivedFullPct: 10, survivalMsMedian: 300000 })])
+    expect(rep.pass).toBe(true)
+  })
+
+  it('FAIL si greedy survit la run pleine de façon FIABLE (imprudent = doit rester rare)', () => {
     const rep = evaluateTargets([agg({ bot: 'greedy', survivedFullPct: 100, survivalMsMedian: 660000 })])
     expect(rep.pass).toBe(false)
     expect(rep.failures.join(' ')).toContain('greedy')

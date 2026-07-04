@@ -6,18 +6,26 @@ export interface TargetReport {
 }
 
 /**
- * Cibles « tendu mais gagnable » (refonte playtest). Le kite-bot est un joueur
- * moyen ; un humain fait mieux. On vise donc :
- *  - le kite atteint le milieu/la fin (le boss ~5:00 est atteignable par un humain),
- *  - mais il NE survit PAS trivialement toute la run (sinon trop sûr),
- *  - ses PV plongent (climax), sans mort punitive au tout début,
- *  - greedy/idle meurent (imprudents) mais pas instantanément.
+ * Cibles « tendu ET GAGNABLE » (refonte playtest : le jeu doit pouvoir se
+ * gagner). Le kite-bot est un joueur moyen (choisit toujours la 1re carte) ; un
+ * humain fait mieux. On vise donc :
+ *  - le kite GAGNE une part des runs (tue le boss final) — la gagnabilité est
+ *    la cible n°1 (avant : 0 %, jeu injouable) ; mais PAS toujours (tension),
+ *  - il atteint la fin de run sans mort punitive au tout début,
+ *  - ses PV plongent (climax),
+ *  - idle (immobile) meurt toujours ; greedy (imprudent) meurt le plus souvent
+ *    mais un build chanceux peut occasionnellement passer (jeu gagnable ⇒ ce
+ *    n'est plus « toujours mourir »).
  * Oracle final = playtest humain ; ces seuils sont un garde-fou de régression.
  */
+const KITE_MIN_WIN_PCT = 12 // DOIT gagner au moins ceci (sinon jeu injouable — cible n°1)
+const KITE_MAX_WIN_PCT = 65 // mais pas trivialement toujours (tension)
 const KITE_MIN_SURVIVAL_MEDIAN_MS = 300000 // survie médiane ≥ 5:00 (atteint le boss de mi-parcours)
-const KITE_MAX_SURVIVE_FULL_PCT = 55 // ne doit PAS survivre passivement les 11 min
+const KITE_MAX_SURVIVE_FULL_PCT = 60 // ne doit PAS survivre/gagner passivement trop souvent
 const KITE_MIN_FIRST_DEATH_MS = 60000 // aucune run ne meurt avant 1:00 (départ non punitif)
 const KITE_MAX_HP_DIP_PCT = 40 // les PV médians doivent plonger sous ce seuil (climax 9-11 min)
+/** Greedy (imprudent) : peut survivre par chance mais pas de façon fiable. */
+const GREEDY_MAX_SURVIVE_FULL_PCT = 25
 /** Un bot non-skillé meurt, mais pas dans les toutes premières secondes. */
 const UNSKILLED_MIN_DEATH_MS = 45000
 
@@ -40,20 +48,32 @@ export function evaluateTargets(aggs: BotAggregate[]): TargetReport {
     if (kite.survivalMsMin < KITE_MIN_FIRST_DEATH_MS) {
       failures.push(`kite: une run meurt à ${Math.round(kite.survivalMsMin / 1000)}s (< ${KITE_MIN_FIRST_DEATH_MS / 1000}s, départ trop brutal)`)
     }
-    if (kite.hpPctCurve.length > 0) {
-      const minHpPct = Math.min(...kite.hpPctCurve)
-      if (minHpPct >= KITE_MAX_HP_DIP_PCT) {
-        failures.push(
-          `kite: HP médian jamais sous ${KITE_MAX_HP_DIP_PCT}% (creux ${Math.round(minHpPct)}%) — jeu trop sûr, pas de climax`
-        )
-      }
+    // Tension : le PV MIN par run (médiane, morts inclus) doit plonger. On mesure
+    // le min-par-run et non la courbe médiane des survivants (biais de survivant :
+    // les runs forts qui GAGNENT croisent haut — c'est la power fantasy voulue ;
+    // le climax vient des runs qui meurent, invisibles dans la médiane-survivants).
+    if (kite.minHpPctMedian >= KITE_MAX_HP_DIP_PCT) {
+      failures.push(
+        `kite: PV min médian ${Math.round(kite.minHpPctMedian)}% jamais sous ${KITE_MAX_HP_DIP_PCT}% — jeu trop sûr, pas de climax`
+      )
+    }
+    // Cible n°1 : le jeu doit être GAGNABLE (le kite tue le boss final au moins parfois).
+    if (kite.winPct < KITE_MIN_WIN_PCT) {
+      failures.push(
+        `kite: victoire ${Math.round(kite.winPct)}% < ${KITE_MIN_WIN_PCT}% (jeu non gagnable — on n'atteint/ne bat pas le boss)`
+      )
+    }
+    if (kite.winPct > KITE_MAX_WIN_PCT) {
+      failures.push(
+        `kite: victoire ${Math.round(kite.winPct)}% > ${KITE_MAX_WIN_PCT}% (trop facile à gagner, plus de tension)`
+      )
     }
   }
 
   const greedy = byBot.get('greedy')
   if (greedy !== undefined) {
-    if (greedy.survivedFullPct > 0) {
-      failures.push(`greedy: ${Math.round(greedy.survivedFullPct)}% survivent la run pleine (trop facile pour l'imprudent)`)
+    if (greedy.survivedFullPct > GREEDY_MAX_SURVIVE_FULL_PCT) {
+      failures.push(`greedy: ${Math.round(greedy.survivedFullPct)}% survivent la run pleine > ${GREEDY_MAX_SURVIVE_FULL_PCT}% (l'imprudent ne doit pas passer de façon fiable)`)
     } else if (greedy.survivalMsMedian < UNSKILLED_MIN_DEATH_MS) {
       failures.push(`greedy: mort médiane ${Math.round(greedy.survivalMsMedian / 1000)}s < ${UNSKILLED_MIN_DEATH_MS / 1000}s (punitif au démarrage)`)
     }

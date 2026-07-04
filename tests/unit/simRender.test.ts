@@ -4,9 +4,9 @@ import type { BotAggregate } from '../../tools/sim/metrics'
 
 function agg(partial: Partial<BotAggregate>): BotAggregate {
   return {
-    bot: 'kite', runs: 10, survivedFullPct: 80, survivalMsMedian: 480000,
+    bot: 'kite', runs: 10, survivedFullPct: 80, winPct: 30, survivalMsMedian: 480000,
     survivalMsMin: 300000, survivalMsMax: 480000, levelAt5minMedian: 8,
-    peakEnemiesMedian: 50, bucketSec: 10, hpPctCurve: [], enemiesCurve: [], ...partial
+    peakEnemiesMedian: 50, minHpPctMedian: 25, bucketSec: 10, hpPctCurve: [], enemiesCurve: [], ...partial
   }
 }
 
