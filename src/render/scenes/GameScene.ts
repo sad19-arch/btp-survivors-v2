@@ -13,7 +13,7 @@ import { stageRender, type StageRender, FINAL_BOSS_SKIN } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
-import type { PlayerState, PrisonerState } from '@core/types'
+import type { PlayerState, PrisonerState, PickupKind } from '@core/types'
 import { PALETTE_HEX } from '@ui/palette'
 import { playerColor } from '@content/players'
 import { characterDef } from '@content/characters'
@@ -65,12 +65,20 @@ const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; f
   brouette: { key: 'proj_brouette', scale: 1.0, spin: false, faceVel: true },
   transpalette: { key: 'proj_brouette', scale: 1.2, spin: false, faceVel: true },
 }
-/** Sprites de pickups par type. */
-const PICKUP_SPRITE: Record<string, { key: string; scale: number }> = {
+/**
+ * Sprites de pickups par type. Typé `Record<PickupKind, …>` : le compilateur
+ * EXIGE une entrée pour chaque type de pickup du cœur — ajouter un `PickupKind`
+ * sans sprite ici devient une erreur `tsc` (garde-fou : c'est l'oubli de
+ * `coffre` qui rendait le coffre d'évolution invisible, cf. playtest).
+ */
+const PICKUP_SPRITE: Record<PickupKind, { key: string; scale: number }> = {
   xp: { key: 'pickup_xp', scale: 0.5 },
   heal: { key: 'pickup_health', scale: 0.55 },
   magnet: { key: 'pickup_magnet', scale: 0.55 },
   chest: { key: 'pickup_crate', scale: 0.6 },
+  // Coffre d'évolution (boss mi-parcours) : réutilise la caisse, un cran plus
+  // gros que `chest` pour marquer le moment d'évolution.
+  coffre: { key: 'pickup_crate', scale: 0.72 },
 }
 
 export interface GameSceneData {
@@ -994,7 +1002,7 @@ export class GameScene extends Phaser.Scene {
       let sprite = this.pickupSprites.get(pk.id)
       const cfg = PICKUP_SPRITE[pk.type]
       if (sprite === undefined) {
-        if (cfg !== undefined && this.textures.exists(cfg.key)) {
+        if (this.textures.exists(cfg.key)) {
           sprite = this.pool.acquire(cfg.key, pk.x, pk.y)
           sprite.setScale(cfg.scale)
         } else {
@@ -1003,6 +1011,12 @@ export class GameScene extends Phaser.Scene {
         this.pickupSprites.set(pk.id, sprite)
       }
       sprite.setPosition(pk.x, pk.y)
+      // Coffre d'évolution : léger « respire » (scale oscillant) pour le
+      // repérer dans la horde — DA-safe (pas de glow), scale re-fixé à
+      // l'acquisition donc aucun conflit avec le pooling.
+      if (pk.type === 'coffre' && sprite instanceof Phaser.GameObjects.Sprite) {
+        sprite.setScale(cfg.scale * (1 + 0.12 * Math.sin(this.time.now / 180)))
+      }
     }
     for (const [id, sprite] of this.pickupSprites) {
       if (!seenPickup.has(id)) {
