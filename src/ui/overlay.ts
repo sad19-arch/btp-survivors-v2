@@ -1,6 +1,7 @@
 import { h, clear } from './h'
 import { injectStyles } from './styles'
 import { playerColor } from '@content/players'
+import { gamepadHudModel } from './gamepadHud'
 import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView } from '@/app/appState'
 
 /**
@@ -19,6 +20,10 @@ export class Overlay {
   private readonly bossLayer: HTMLElement
   /** Couche de l'inventaire (armes/passifs + niveaux) — lecture seule, coin dédié. */
   private readonly inventoryLayer: HTMLElement
+  /** Couche du HUD manettes (coin haut-droit) : « Manettes N/4 » + pastilles par joueur. */
+  private readonly padLayer: HTMLElement
+  /** Signature du dernier état manettes rendu — évite de reconstruire à chaque frame. */
+  private padSignature = ''
   /** Remplissage de la barre de PV de boss (mis à jour chaque frame ; null = pas de boss). */
   private bossBarFill: HTMLElement | null = null
   /** Signature (ids+niveaux) du dernier inventaire rendu — évite de reconstruire à chaque frame. */
@@ -43,7 +48,16 @@ export class Overlay {
     this.introLayer = h('div')
     this.bossLayer = h('div')
     this.inventoryLayer = h('div')
-    root.append(this.hud, this.screenLayer, this.bannerLayer, this.introLayer, this.bossLayer, this.inventoryLayer)
+    this.padLayer = h('div', { className: 'pads' })
+    root.append(
+      this.hud,
+      this.screenLayer,
+      this.bannerLayer,
+      this.introLayer,
+      this.bossLayer,
+      this.inventoryLayer,
+      this.padLayer
+    )
   }
 
   /** Met à jour l'overlay depuis l'état applicatif. */
@@ -54,6 +68,43 @@ export class Overlay {
     this.syncIntroCard(state)
     this.syncBossBar(state)
     this.syncInventory(state)
+    this.syncGamepads(state)
+  }
+
+  /**
+   * HUD manettes (coin haut-droit) : « Manettes N/4 » + 4 pastilles (une par
+   * joueur, couleur `playerColor`, allumée si la manette du slot est connectée).
+   * Source = `navigator.getGamepads()` (couche UI/DOM, jamais le cœur). Masqué
+   * pendant l'intro. Reconstruit seulement quand l'état des manettes change.
+   */
+  private syncGamepads(state: AppViewState): void {
+    const show = !state.introActive
+    const raw =
+      typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function'
+        ? Array.from(navigator.getGamepads())
+        : []
+    const model = gamepadHudModel(raw)
+    const sig = `${show ? 1 : 0}:${model.slots.map((s) => (s ? 1 : 0)).join('')}`
+    if (sig === this.padSignature) {
+      return
+    }
+    this.padSignature = sig
+    clear(this.padLayer)
+    this.padLayer.style.display = show ? 'flex' : 'none'
+    if (!show) {
+      return
+    }
+    const pips = model.slots.map((on, i) => {
+      const pip = h('div', { className: on ? 'pad__pip pad__pip--on' : 'pad__pip' })
+      if (on) {
+        pip.style.backgroundColor = playerColor(i + 1).hex
+      }
+      return pip
+    })
+    this.padLayer.append(
+      h('span', { className: 'pad__label', text: `Manettes ${model.count}/4` }),
+      h('div', { className: 'pad__pips' }, ...pips)
+    )
   }
 
   private syncHud(state: AppViewState): void {

@@ -254,6 +254,25 @@ const CSS = `
 #ui-root .stagecard__title { color: ${PALETTE.blanc}; font-size: 30px; font-weight: bold; text-shadow: 3px 3px 0 ${PALETTE.contour}; }
 #ui-root .stagecard__sub { color: ${PALETTE.solSable}; font-size: 13px; text-transform: none; letter-spacing: 0; }
 @keyframes stagecard-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+#ui-root .pads {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(43, 32, 24, 0.85);
+  border: 3px solid ${PALETTE.contour};
+  box-shadow: 4px 4px 0 ${PALETTE.contour};
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: bold;
+  text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+#ui-root .pad__label { color: ${PALETTE.blanc}; text-transform: none; letter-spacing: 0; }
+#ui-root .pad__pips { display: flex; gap: 3px; }
+#ui-root .pad__pip { width: 10px; height: 10px; background: ${PALETTE.brunSombre}; border: 2px solid ${PALETTE.contour}; box-sizing: border-box; }
+#ui-root .pad__pip.pad__pip--on { border-color: ${PALETTE.contour}; }
 #ui-root .inv {
   position: absolute;
   bottom: 10px;
