@@ -120,7 +120,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   court_circuit: {
     id: 'court_circuit',
     name: 'Court-circuit',
-    description: 'Decharge electrique qui frappe a portee.',
+    description: 'Décharge électrique qui frappe à portée.',
     kind: 'strike',
     maxLevel: 8,
     levels: buildLevels(
@@ -131,7 +131,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     )
   },
   goudron: {
-    id: 'goudron', name: 'Goudron chaud', description: 'Pose une flaque de goudron qui brule les ennemis.', kind: 'hazard', maxLevel: 8,
+    id: 'goudron', name: 'Goudron chaud', description: 'Pose une flaque de goudron qui brûle les ennemis.', kind: 'hazard', maxLevel: 8,
     levels: buildLevels(
       { damage: 4, cooldownMs: 2200, count: 1, area: 60, pierce: 99, tickMs: 400, projectileLifeMs: 3000 },
       { damage: 1.2, area: 4 }, 8, { 5: { count: 2 } }
@@ -152,7 +152,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     )
   },
   extincteur: {
-    id: 'extincteur', name: 'Extincteur', description: 'Cone de mousse qui ralentit les ennemis.', kind: 'cone', maxLevel: 8,
+    id: 'extincteur', name: 'Extincteur', description: 'Cône de mousse qui ralentit les ennemis.', kind: 'cone', maxLevel: 8,
     levels: buildLevels(
       { damage: 6, cooldownMs: 1300, count: 1, area: 110, pierce: 99, slowMult: 0.5, slowMs: 700 },
       { damage: 2, area: 7 }, 8
@@ -169,7 +169,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   mitrailleuse_clous: {
     id: 'mitrailleuse_clous',
     name: 'Mitrailleuse à clous',
-    description: 'Rafale de clous a cadence elevee qui percent les rangs.',
+    description: 'Rafale de clous à cadence élevée qui perce les rangs.',
     kind: 'projectile',
     maxLevel: 1,
     levels: [{ damage: 30, cooldownMs: 140, count: 4, area: 0, pierce: 2, projectileSpeed: 640, projectileLifeMs: 1600 }]
@@ -177,20 +177,20 @@ export const WEAPONS: Record<string, WeaponDef> = {
   haute_tension: {
     id: 'haute_tension',
     name: 'Haute tension',
-    description: 'Arc electrique massif qui frappe plusieurs ennemis a la fois.',
+    description: 'Arc électrique massif qui frappe plusieurs ennemis à la fois.',
     kind: 'strike',
     maxLevel: 1,
     levels: [{ damage: 45, cooldownMs: 380, count: 6, area: 80, pierce: 0 }]
   },
-  coulee_bitume: { id: 'coulee_bitume', name: 'Coulée de bitume', description: 'Grandes flaques de bitume brulant qui durent longtemps.', kind: 'hazard', maxLevel: 1,
+  coulee_bitume: { id: 'coulee_bitume', name: 'Coulée de bitume', description: 'Grandes flaques de bitume brûlant qui durent longtemps.', kind: 'hazard', maxLevel: 1,
     levels: [{ damage: 14, cooldownMs: 1500, count: 2, area: 96, pierce: 99, tickMs: 300, projectileLifeMs: 4200 }] },
-  tempete_boulons: { id: 'tempete_boulons', name: 'Tempête de boulons', description: 'Grele de boulons ricochants dans tous les sens.', kind: 'projectile', maxLevel: 1,
+  tempete_boulons: { id: 'tempete_boulons', name: 'Tempête de boulons', description: 'Grêle de boulons ricochant dans tous les sens.', kind: 'projectile', maxLevel: 1,
     levels: [{ damage: 26, cooldownMs: 360, count: 3, area: 0, pierce: 0, bounces: 6, projectileSpeed: 560, projectileLifeMs: 1900 }] },
-  cle_choc: { id: 'cle_choc', name: 'Clé à choc', description: 'Double boomerang de cles a choc qui transperce les ennemis.', kind: 'projectile', maxLevel: 1,
+  cle_choc: { id: 'cle_choc', name: 'Clé à choc', description: 'Double boomerang de clés à choc qui transperce les ennemis.', kind: 'projectile', maxLevel: 1,
     levels: [{ damage: 40, cooldownMs: 650, count: 2, area: 0, pierce: 5, projectileSpeed: 440, boomerangOutMs: 520, projectileLifeMs: 3000 }] },
   canon_mousse: { id: 'canon_mousse', name: 'Canon à mousse', description: 'Jet de mousse puissant qui immobilise les ennemis.', kind: 'cone', maxLevel: 1,
     levels: [{ damage: 18, cooldownMs: 620, count: 1, area: 190, pierce: 99, slowMult: 0.35, slowMs: 2200 }] },
-  transpalette: { id: 'transpalette', name: 'Transpallette automatisée', description: 'Transpalette geant qui ecrase tout sur son passage.', kind: 'projectile', maxLevel: 1,
+  transpalette: { id: 'transpalette', name: 'Transpallette automatisée', description: 'Transpalette géant qui écrase tout sur son passage.', kind: 'projectile', maxLevel: 1,
     levels: [{ damage: 60, cooldownMs: 1100, count: 1, area: 0, pierce: 99, projectileSpeed: 300, projectileRadius: 40, projectileLifeMs: 3200 }] }
 }
 
