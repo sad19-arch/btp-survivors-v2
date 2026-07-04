@@ -149,6 +149,16 @@ export class GameScene extends Phaser.Scene {
   private readonly projectileSprites = new Map<number, CharSprite>()
   private readonly pickupSprites = new Map<number, CharSprite>()
   /**
+   * Étiquette « JN » + chevron au-dessus de chaque joueur humain, pour le repérer
+   * dans une nuée d'ennemis (playtest). Un couple texte+chevron par joueur, couleur
+   * = `playerColor`, depth élevé (au-dessus des ennemis). Détruits dans
+   * `resetRunState` (pas de fuite). Affiché en solo comme en coop (J1..J4).
+   */
+  private readonly playerLabels = new Map<
+    number,
+    { text: Phaser.GameObjects.Text; chevron: Phaser.GameObjects.Triangle }
+  >()
+  /**
    * Pool de sprites pour ennemis/projectiles/pickups (horde 300-600 entités) : réutilise
    * au lieu de create/destroy. INSTANCE FRAÎCHE à chaque `create()` (scene.restart en
    * détruit une et en recrée une autre) — jamais un singleton de module.
@@ -550,12 +560,51 @@ export class GameScene extends Phaser.Scene {
     return this.textures.exists(idle) ? idle : base
   }
 
+  /**
+   * Synchronise l'étiquette « JN » + chevron au-dessus d'un joueur (repérage en
+   * nuée). Créée à la volée, suit la position, masquée si le joueur n'est pas
+   * sur le terrain. Couleur = `playerColor(id)`, contour sombre pour rester
+   * lisible sur fond chargé, depth 50 (au-dessus des ennemis/VFX).
+   */
+  private syncPlayerLabel(p: PlayerState, visible: boolean): void {
+    let label = this.playerLabels.get(p.id)
+    if (label === undefined) {
+      const col = playerColor(p.id)
+      const text = this.add
+        .text(p.x, p.y - 58, `J${p.id}`, {
+          fontFamily: 'monospace',
+          fontSize: '20px',
+          fontStyle: 'bold',
+          color: col.hex,
+          stroke: '#101014',
+          strokeThickness: 4
+        })
+        .setOrigin(0.5)
+        .setDepth(50)
+      const chevron = this.add
+        .triangle(p.x, p.y - 44, 0, 0, 12, 0, 6, 8, col.num)
+        .setStrokeStyle(2, 0x101014)
+        .setDepth(50)
+      label = { text, chevron }
+      this.playerLabels.set(p.id, label)
+    }
+    label.text.setPosition(p.x, p.y - 58)
+    label.text.setVisible(visible)
+    label.chevron.setPosition(p.x, p.y - 44)
+    label.chevron.setVisible(visible)
+  }
+
   /** Réinitialise l'état par-run (indispensable car `scene.restart` réutilise l'instance). */
   private resetRunState(): void {
     this.playerSprites.clear()
     this.enemySprites.clear()
     this.projectileSprites.clear()
     this.pickupSprites.clear()
+    this.playerLabels.forEach((l) => {
+      l.text.destroy()
+      l.chevron.destroy()
+    })
+    this.playerLabels.clear()
     this.hazardSprites.forEach((s) => s.destroy())
     this.hazardSprites.clear()
     this.prisonerCages.clear()
@@ -881,6 +930,8 @@ export class GameScene extends Phaser.Scene {
       // attente de relève, au lieu de disparaître — seul un game over le masque.
       const downedActive = p.downed && !gameOver
       sprite.setVisible(p.alive || downedActive)
+      // Étiquette « JN » + chevron : visible tant que le joueur est sur le terrain.
+      this.syncPlayerLabel(p, p.alive || downedActive)
       if (sprite instanceof Phaser.GameObjects.Sprite) {
         this.animatePlayer(sprite, p)
       }
