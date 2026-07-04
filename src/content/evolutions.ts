@@ -32,5 +32,41 @@ export const EVOLUTIONS: readonly EvolutionDef[] = [
     evolved: 'haute_tension',
     reqBaseLevel: baseMaxLevel('court_circuit'),
     reqPassiveLevel: 1
+  },
+  // Phase A — 5 nouvelles évolutions (arme max + catalyseur → arme surpuissante)
+  {
+    base: 'goudron',
+    passive: 'cadence_chantier',
+    evolved: 'coulee_bitume',
+    reqBaseLevel: baseMaxLevel('goudron'),
+    reqPassiveLevel: 1
+  },
+  {
+    base: 'boulons',
+    passive: 'aimant_chantier',
+    evolved: 'tempete_boulons',
+    reqBaseLevel: baseMaxLevel('boulons'),
+    reqPassiveLevel: 1
+  },
+  {
+    base: 'cle_molette',
+    passive: 'batterie_18v',
+    evolved: 'cle_choc',
+    reqBaseLevel: baseMaxLevel('cle_molette'),
+    reqPassiveLevel: 1
+  },
+  {
+    base: 'extincteur',
+    passive: 'casque_homologue',
+    evolved: 'canon_mousse',
+    reqBaseLevel: baseMaxLevel('extincteur'),
+    reqPassiveLevel: 1
+  },
+  {
+    base: 'brouette',
+    passive: 'prime_rendement',
+    evolved: 'transpalette',
+    reqBaseLevel: baseMaxLevel('brouette'),
+    reqPassiveLevel: 1
   }
 ] as const
