@@ -126,6 +126,40 @@ describe('Overlay — inventaire HUD (armes/passifs + niveaux)', () => {
     expect(root.querySelector('.inv__lvl')?.textContent).toMatch(/\d+\/\d+/)
   })
 
+  it('rangée passifs porte la classe inv__row--passives', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({
+      weapons: [{ id: 'scie', level: 2 }],
+      passives: [{ id: 'air_comprime', level: 1 }]
+    })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+    // La 2e rangée doit porter la classe inv__row--passives.
+    expect(root.querySelector('.inv__row--passives')).not.toBeNull()
+    // Les tuiles passifs portent inv__tile--sm (petites).
+    const smTiles = root.querySelectorAll('.inv__tile--sm')
+    const expectedPassives = app.getState().players[0]?.inventory.passives.length ?? 0
+    expect(smTiles.length).toBe(expectedPassives)
+  })
+
+  it('tuiles armes sont dans .inv__row sans --passives, tuiles passifs dans .inv__row--passives', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({
+      weapons: [{ id: 'marteau', level: 1 }, { id: 'scie', level: 1 }],
+      passives: [{ id: 'air_comprime', level: 2 }, { id: 'caisse_outils', level: 1 }]
+    })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+    // Rangée armes : .inv__row sans --passives
+    const weaponRow = root.querySelector('.inv__row:not(.inv__row--passives)')
+    expect(weaponRow).not.toBeNull()
+    expect(weaponRow?.querySelectorAll('.inv__tile').length).toBe(2)
+    // Rangée passifs : .inv__row--passives
+    const passiveRow = root.querySelector('.inv__row--passives')
+    expect(passiveRow).not.toBeNull()
+    expect(passiveRow?.querySelectorAll('.inv__tile--sm').length).toBe(2)
+  })
+
   it('le fallback monogramme ne plante pas (pas de vraie image en happy-dom)', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: true })
     const { root, overlay } = mount()

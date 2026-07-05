@@ -276,8 +276,13 @@ const CSS = `
 #ui-root .pad__pip.pad__pip--on { border-color: ${PALETTE.contour}; }
 #ui-root .inv {
   position: absolute;
-  bottom: 10px;
-  right: 10px;
+  /* Bandeau haut-gauche, aligné sur le padding-left du .hud (14px).
+     top=104px : valeur empirique pour se loger sous les 3 lignes du HUD
+     (phase+timer+PV/XP = ~90px de contenu + padding-top 10px = ~104px).
+     Ce magic-number est documenté ici ; si la hauteur du HUD change,
+     ajuster cette valeur en conséquence. */
+  top: 104px;
+  left: 14px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -286,23 +291,35 @@ const CSS = `
   box-shadow: 4px 4px 0 ${PALETTE.contour};
   padding: 6px;
 }
-#ui-root .inv__row { display: flex; gap: 6px; min-height: 32px; }
+/* Rangée armes : horizontale, tuiles 96×96 */
+#ui-root .inv__row { display: flex; flex-direction: row; gap: 8px; min-height: 96px; }
+/* Rangée passifs : horizontale, tuiles réduites (~56×56), flex-wrap si nombreux */
+#ui-root .inv__row--passives { min-height: 56px; flex-wrap: wrap; }
 #ui-root .inv__tile {
   position: relative;
-  width: 32px;
-  height: 32px;
+  width: 96px;
+  height: 96px;
   box-sizing: border-box;
 }
-#ui-root .inv__icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
-#ui-root .inv__img { width: 32px; height: 32px; image-rendering: pixelated; }
+/* Tuile petite pour la rangée passifs */
+#ui-root .inv__tile--sm {
+  width: 56px;
+  height: 56px;
+}
+#ui-root .inv__icon { width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; }
+#ui-root .inv__img { width: 96px; height: 96px; image-rendering: pixelated; }
 #ui-root .inv__mono {
-  width: 32px; height: 32px; box-sizing: border-box;
+  width: 96px; height: 96px; box-sizing: border-box;
   display: flex; align-items: center; justify-content: center;
   background: ${PALETTE.brunSombre};
   border: 2px solid ${PALETTE.contour};
   color: ${PALETTE.jauneSecurite};
-  font-size: 13px; font-weight: bold;
+  font-size: 40px; font-weight: bold;
 }
+/* Tuile petite : icône/mono réduits */
+#ui-root .inv__tile--sm .inv__icon { width: 56px; height: 56px; }
+#ui-root .inv__tile--sm .inv__img { width: 56px; height: 56px; }
+#ui-root .inv__tile--sm .inv__mono { width: 56px; height: 56px; font-size: 22px; }
 #ui-root .inv__lvl {
   position: absolute;
   bottom: -4px;
@@ -310,10 +327,10 @@ const CSS = `
   background: ${PALETTE.contour};
   border: 2px solid ${PALETTE.jauneSecurite};
   color: ${PALETTE.blanc};
-  font-size: 9px;
+  font-size: 18px;
   font-weight: bold;
   line-height: 1;
-  padding: 2px 3px;
+  padding: 3px 5px;
 }
 `
 

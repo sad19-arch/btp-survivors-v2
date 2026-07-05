@@ -358,17 +358,21 @@ export class Overlay {
       h(
         'div',
         { className: 'inv' },
-        h('div', { className: 'inv__row' }, ...inv.weapons.map((e) => this.invTile(e))),
-        h('div', { className: 'inv__row' }, ...inv.passives.map((e) => this.invTile(e)))
+        h('div', { className: 'inv__row' }, ...inv.weapons.map((e) => this.invTile(e, false))),
+        h('div', { className: 'inv__row inv__row--passives' }, ...inv.passives.map((e) => this.invTile(e, true)))
       )
     )
   }
 
-  /** Une tuile d'inventaire : icône (ou monogramme de secours) + pastille de niveau. */
-  private invTile(entry: InventoryEntry): HTMLElement {
+  /**
+   * Une tuile d'inventaire : icône (ou monogramme de secours) + pastille de niveau.
+   * @param small - true pour la rangée passifs (~56×56, classe `inv__tile--sm`)
+   */
+  private invTile(entry: InventoryEntry, small: boolean): HTMLElement {
+    const tileClass = small ? 'inv__tile inv__tile--sm' : 'inv__tile'
     return h(
       'div',
-      { className: 'inv__tile' },
+      { className: tileClass },
       icon(entry.id, entry.name, 'inv__icon', 'inv__img', 'inv__mono'),
       h('div', { className: 'inv__lvl', text: `${entry.level}/${entry.maxLevel ?? entry.level}` })
     )
