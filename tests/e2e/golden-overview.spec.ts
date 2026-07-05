@@ -39,5 +39,28 @@ test('golden overview — arène composée stage 02', async ({ page }) => {
   await page.waitForTimeout(400)
 
   await page.screenshot({ path: 'test-results/golden-stage02-overview.png' })
+
+  // Vue centrée sur le PRISONNIER pour vérifier le dégagement (pas de décor dessus).
+  const pr = await page.evaluate(() => {
+    const st = window.__GAME__?.getState()
+    const p = st?.prisoners?.[0]
+    return p !== undefined ? { x: p.x, y: p.y } : null
+  })
+  if (pr !== null) {
+    await page.evaluate((pos: { x: number; y: number }) => {
+      const g = (window as unknown as { __PHASER_GAME__?: { scene: { getScene: (k: string) => unknown } } }).__PHASER_GAME__
+      const scene = g?.scene.getScene('game') as {
+        cameras: { main: { setZoom: (z: number) => void; centerOn: (x: number, y: number) => void } }
+        decorStreamer?: { update: (cam: unknown) => void }
+      } | undefined
+      if (scene === undefined) { return }
+      const cam = scene.cameras.main
+      cam.setZoom(0.7)
+      cam.centerOn(pos.x, pos.y)
+      for (let i = 0; i < 6; i++) { scene.decorStreamer?.update(cam) }
+    }, pr)
+    await page.waitForTimeout(400)
+    await page.screenshot({ path: 'test-results/golden-stage02-prisoner.png' })
+  }
   expect(true).toBe(true)
 })
