@@ -29,7 +29,7 @@ export interface EnemyDef {
  *    (voir `difficultyScaleAt` dans spawnRamp) → la fin de run devient un mur.
  */
 type EnemyStats = Omit<EnemyDef, 'id' | 'name'>
-const BASE: EnemyStats = { hp: 18, speed: 132, contactDamage: 6, archetype: 'base', xpValue: 5 }
+const BASE: EnemyStats = { hp: 18, speed: 150, contactDamage: 6, archetype: 'base', xpValue: 5 }
 const FAST: EnemyStats = { hp: 11, speed: 210, contactDamage: 5, archetype: 'fast', xpValue: 4 }
 const TANK: EnemyStats = { hp: 60, speed: 96, contactDamage: 11, archetype: 'tank', xpValue: 12 }
 const mk = (id: string, name: string, stats: EnemyStats): EnemyDef => ({ id, name, ...stats })
