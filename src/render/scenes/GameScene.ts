@@ -939,6 +939,11 @@ export class GameScene extends Phaser.Scene {
         }
         return info.sort((a, b) => a.id - b.id)
       }
+      // Sonde du feedback de coup (test-only) : compteur chiffres actifs/total.
+      this.seam.debugFeedbackInfo = (): { active: number; spawnedTotal: number } => ({
+        active: this.damageNumbers.active,
+        spawnedTotal: this.damageNumbers.total
+      })
     }
   }
 

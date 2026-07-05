@@ -49,6 +49,12 @@ export interface GameSeam {
    * le rendu. Absente tant que la scène n'est pas montée / en mode allégé.
    */
   debugRenderInfo?(): { id: number; texture: string | null }[]
+  /**
+   * [Debug] Sonde du feedback de coup (posée par la GameScene) : compteur des chiffres
+   * de dégâts actifs et total cumulé depuis la création du pool. Permet de valider en
+   * e2e que les coups déclenchent bien des chiffres flottants. Absente en mode allégé.
+   */
+  debugFeedbackInfo?(): { active: number; spawnedTotal: number }
 }
 
 declare global {
