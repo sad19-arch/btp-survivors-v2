@@ -377,31 +377,90 @@ const FONDATIONS_RENDER: StageRender = {
   decalDensityMultiplier: 1.35 // chantier actif brut, densité forte (coulage béton)
 }
 
+const RESEAUX_ENTERRES_RENDER: StageRender = {
+  ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_stage04_${i}`, file: `stage04/ground/tile_${i}.png` })),
+  decals: [
+    { key: 'decal_stage04_trench', file: 'stage04/decals/trench.png' },
+    { key: 'decal_stage04_mud',    file: 'stage04/decals/mud.png' },
+    { key: 'decal_stage04_cables', file: 'stage04/decals/cables.png' }
+  ],
+  // Seul clutter streamé : tuyaux + gaines + tourets + regards.
+  // La mini-pelle héros est dans `structures` (placée UNE fois).
+  props: [
+    { key: 'prop_stage04_pipes',    file: 'stage04/props/pipes.png',    scale: 0.80, count: 4 },
+    { key: 'prop_stage04_trencher', file: 'stage04/props/trencher.png', scale: 0.75, count: 3 },
+    { key: 'prop_stage04_cable',    file: 'stage04/props/cable_reel.png', scale: 0.80, count: 3 },
+    { key: 'prop_stage04_regard',   file: 'stage04/props/regard.png',   scale: 0.70, count: 4 }
+  ],
+  enemies: {
+    gaine:      { key: 'enemy_stage04_base', file: 'stage04/enemies/base_walk.png', frame: 256, scale: 0.75 },
+    fileur:     { key: 'enemy_stage04_fast', file: 'stage04/enemies/fast_walk.png', frame: 256, scale: 0.65 },
+    collecteur: { key: 'enemy_stage04_tank', file: 'stage04/enemies/tank_walk.png', frame: 256, scale: 0.77 }
+  },
+  boss: { key: 'boss_stage04', file: 'stage04/boss/boss_walk.png', frame: 256, scale: 1.22 },
+  // Réseaux enterrés : croisement tuyaux-héros + mini-pelle + tranchées + électricien qui tire le câble.
+  landmark: { key: 'landmark_stage04', file: 'stage04/landmarks/pipes.png', scale: 1.5, count: 1 },
+  // Mini-pelle héros (band near, côté NE) + 4 jonctions de tranchées en fond.
+  // Ordre = ordre des angles scriptés (structureAngles).
+  structures: [
+    { key: 'struct_stage04_excavator', file: 'stage04/props/mini_excavator.png',       scale: 1.1, count: 1, band: 'near' },
+    { key: 'struct_stage04_trench',    file: 'stage04/structures/trench_junction.png',  scale: 0.85, count: 4, band: 'mid'  }
+  ],
+  ambient: { key: 'npc_stage04', file: 'stage04/npc/electricien_work.png', frame: 256, scale: 0.71, framePeriodMs: 280 },
+  // ── Composition scriptée stage 04 (réseaux enterrés) ─────────────────────────
+  // Géographie : mini-pelle (idx0) côté NE proche, 4 jonctions de tranchées
+  // distribuées autour (NO, S, ESE, ONO). Landmark (croisement tuyaux) au Nord.
+  // PNJ électricien près de la mini-pelle NE (câble tiré vers la tranchée).
+  geometry: {
+    // structureAngles[i] → structure i, dans l'ordre de `structures[]` :
+    //   0 = mini_excavator (NE, ~50°)
+    //   1-4 = trench_junction : NO (140°), S (265°), ESE (340°), ONO (110°)
+    structureAngles: [50, 140, 265, 340, 110],
+    landmarkAngle: 80,   // croisement tuyaux-héros au Nord-Est (légèrement N)
+    ambientAngle:  55    // électricien près de la mini-pelle NE
+  },
+  // Zones métier : 3 secteurs complémentaires
+  zones: [
+    // Secteur Pose tuyaux (NE) — dense en tuyaux + câbles autour de la pelle
+    {
+      angleCenter: 50,
+      angleSpread: 60,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [0, 1],  // pipes + trencher (gaine rouge)
+      dominantDecalIndices: [0, 2], // trench + cables
+      density: 1.8
+    },
+    // Secteur Tirage câbles (SO) — tourets + regards + ornières boueuses
+    {
+      angleCenter: 225,
+      angleSpread: 65,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [2, 3],  // cable_reel + regard
+      dominantDecalIndices: [1, 2], // mud + cables
+      density: 1.5
+    },
+    // Tranchée principale (SE-E) — gaines + regards + tranchée
+    {
+      angleCenter: 310,
+      angleSpread: 55,
+      distMin: 320,
+      distMax: 720,
+      dominantPropIndices: [1, 3],  // trencher + regard
+      dominantDecalIndices: [0],    // trench
+      density: 1.3
+    }
+  ],
+  baseTileIndex: 2,            // tuile gravier/tranchée de base (index 2 — moins boue que 0)
+  decalDensityMultiplier: 1.15 // chantier actif, densité moyenne (réseaux en cours de pose)
+}
+
 export const STAGE_RENDER: Record<string, StageRender> = {
   terrain_vierge: TERRAIN_VIERGE_RENDER,
   terrassement: TERRASSEMENT_RENDER,
   fondations: FONDATIONS_RENDER,
-  reseaux_enterres: makeStage(
-    'stage04',
-    ['gaine', 'fileur', 'collecteur'],
-    [
-      ['mini_excavator', 0.78, 1],
-      ['trencher', 0.8, 1],
-      ['pipes', 0.8, 3],
-      ['cable_reel', 0.7, 3]
-    ],
-    ['trench', 'mud'],
-    [0.75, 0.65, 0.77],
-    1.22,
-    {
-      // Réseaux enterrés : réseaux de tranchées/tuyaux partout + électricien qui tire un câble.
-      landmark: { key: 'landmark_stage04', file: 'stage04/landmarks/pipes.png', scale: 1.5, count: 1 },
-      structures: [
-        { key: 'struct_stage04_trench', file: 'stage04/structures/trench_junction.png', scale: 0.8, count: 4, band: 'mid' }
-      ],
-      ambient: { key: 'npc_stage04', file: 'stage04/npc/electricien_work.png', frame: 256, scale: 0.71, framePeriodMs: 280 }
-    }
-  ),
+  reseaux_enterres: RESEAUX_ENTERRES_RENDER,
   gros_oeuvre: makeStage(
     'stage05',
     ['parpaing', 'truelle', 'banche'],
