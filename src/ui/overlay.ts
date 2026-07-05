@@ -515,6 +515,9 @@ export class Overlay {
     if (item.description !== undefined && item.description !== '') {
       children.push(h('div', { className: 'card__desc', text: item.description }))
     }
+    if (item.delta !== undefined && item.delta !== '') {
+      children.push(h('div', { className: 'card__delta', text: item.delta }))
+    }
     return h(
       'div',
       {

@@ -152,6 +152,7 @@ const CSS = `
 #ui-root .pip.pip--on { background: ${PALETTE.jauneSecurite}; border-color: ${PALETTE.contour}; }
 #ui-root .card__lvltext { color: ${PALETTE.blanc}; font-size: 11px; margin-left: 4px; text-transform: none; letter-spacing: 0; }
 #ui-root .card__desc { color: ${PALETTE.blanc}; font-size: 12px; text-transform: none; letter-spacing: 0; line-height: 1.3; }
+#ui-root .card__delta { color: ${PALETTE.vertBonus}; font-size: 12px; font-weight: bold; text-transform: none; letter-spacing: 0; line-height: 1.3; }
 #ui-root .stats { display: flex; flex-direction: column; gap: 4px; font-size: 16px; }
 #ui-root .hint-line { color: ${PALETTE.solSable}; font-size: 12px; }
 #ui-root .unlock-line { color: ${PALETTE.jauneSecurite}; font-size: 12px; font-weight: bold; }

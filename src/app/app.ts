@@ -14,7 +14,8 @@ import { FocusModel } from '@ui/focusModel'
 import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
 import { INTRO, MODE_PLAYER_COUNT, modeForCount } from '@content/config'
 import { WEAPONS } from '@content/weapons'
-import { PASSIVES } from '@content/passives'
+import { PASSIVES, aggregatePassives } from '@content/passives'
+import { describeWeaponLevelDelta } from '@content/weaponDelta'
 import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
@@ -621,19 +622,32 @@ export class App {
   }
 
   private upgradeItems(): MenuItemView[] {
-    const pending = this.sim?.getState().pendingLevelUp ?? null
+    const simState = this.sim?.getState() ?? null
+    const pending = simState?.pendingLevelUp ?? null
     if (pending === null) {
       return []
     }
-    return pending.choices.map((c) => ({
-      id: c.id,
-      label: c.name,
-      hint: c.hint,
-      description: c.description,
-      currentLevel: c.currentLevel,
-      maxLevel: c.maxLevel,
-      kind: c.kind
-    }))
+    // Résoudre les stats passifs du joueur concerné par le level-up.
+    const player = simState?.players.find((p) => p.id === pending.playerId)
+    const playerStats = aggregatePassives(player?.passives ?? [])
+    return pending.choices.map((c) => {
+      const item: MenuItemView = {
+        id: c.id,
+        label: c.name,
+        hint: c.hint,
+        description: c.description,
+        currentLevel: c.currentLevel,
+        maxLevel: c.maxLevel,
+        kind: c.kind
+      }
+      if (c.kind === 'weapon-up') {
+        const delta = describeWeaponLevelDelta(c.id, c.currentLevel, c.currentLevel + 1, playerStats)
+        if (delta !== '') {
+          item.delta = delta
+        }
+      }
+      return item
+    })
   }
 
   private menu(screen: Screen): MenuView | null {

@@ -48,6 +48,8 @@ export interface MenuItemView {
   maxLevel?: number
   /** Type de carte (arme ou passif). */
   kind?: CardKind
+  /** Fragment FR décrivant le gain du niveau (ex. « +2 dégâts · +1 projectile »). */
+  delta?: string
 }
 
 /** Le menu actif (null en jeu). */

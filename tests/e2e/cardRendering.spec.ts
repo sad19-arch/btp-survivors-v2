@@ -51,3 +51,47 @@ test('cartes de level-up : couleur, description et pips visibles', async ({ page
   const allPips = page.locator('.pip')
   expect(await allPips.count()).toBeGreaterThan(0)
 })
+
+test('carte weapon-up affiche .card__delta non vide', async ({ page }) => {
+  await page.goto('/?autostart=solo&seed=1&test=1&lite=1')
+  await page.waitForFunction(() => window.__GAME__?.ready === true)
+
+  // Pré-charger des armes pour maximiser les weapon-up au tirage.
+  await page.evaluate(() => {
+    const g = window.__GAME__
+    if (g === undefined) { return }
+    g.debugGrant({
+      weapons: [
+        { id: 'scie', level: 1 },
+        { id: 'marteau', level: 1 },
+        { id: 'pied_de_biche', level: 1 },
+        { id: 'court_circuit', level: 1 },
+        { id: 'boulons', level: 1 }
+      ]
+    })
+    // Boucler sur plusieurs level-ups jusqu'à tomber sur une carte weapon-up.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      g.debugAddXp(10_000)
+      for (let t = 0; t < 10_000 && g.getState().screen !== 'upgrade'; t += 100) {
+        g.advanceTime(100)
+      }
+      if (g.getState().screen === 'upgrade') {
+        const items = g.getState().menu?.items ?? []
+        const hasWeaponUp = items.some((i: { kind?: string }) => i.kind === 'weapon-up')
+        if (hasWeaponUp) { break }
+        g.chooseUpgrade(0)
+        for (let t = 0; t < 1000; t += 100) { g.advanceTime(100) }
+      }
+    }
+  })
+
+  // Attendre que l'écran upgrade soit affiché.
+  await page.waitForSelector('.card', { timeout: 5000 })
+
+  // Au moins une carte doit avoir .card__delta visible et non vide.
+  await page.waitForSelector('.card__delta', { timeout: 5000 })
+  const deltaElements = page.locator('.card__delta')
+  expect(await deltaElements.count()).toBeGreaterThan(0)
+  const firstDelta = await deltaElements.first().textContent()
+  expect(firstDelta?.trim().length ?? 0).toBeGreaterThan(0)
+})

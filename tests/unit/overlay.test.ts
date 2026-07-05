@@ -69,6 +69,40 @@ describe('Overlay (DOM)', () => {
     overlay.sync(app.getState())
     expect(root.querySelectorAll('.card').length).toBe(4)
   })
+
+  it('.card__delta présent et non vide sur une carte weapon-up', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    // Donner de nombreuses armes pour garantir weapon-up au tirage.
+    app.debugGrant({
+      weapons: [
+        { id: 'scie', level: 1 },
+        { id: 'marteau', level: 1 },
+        { id: 'pied_de_biche', level: 1 },
+        { id: 'court_circuit', level: 1 },
+        { id: 'boulons', level: 1 }
+      ]
+    })
+    // Boucler sur plusieurs level-ups jusqu'à avoir au moins une carte weapon-up visible.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      app.debugAddXp(10_000)
+      for (let t = 0; t < 10_000 && app.getState().screen !== 'upgrade'; t += 100) {
+        app.advanceTime(100)
+      }
+      if (app.getState().screen === 'upgrade') {
+        const items = app.getState().menu?.items ?? []
+        const hasWeaponUp = items.some((i) => i.kind === 'weapon-up')
+        if (hasWeaponUp) { break }
+        app.confirm()
+        for (let t = 0; t < 1000; t += 100) { app.advanceTime(100) }
+      }
+    }
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+    // Au moins une carte doit avoir .card__delta non vide.
+    const deltas = root.querySelectorAll('.card__delta')
+    expect(deltas.length).toBeGreaterThan(0)
+    expect(deltas[0]?.textContent?.trim().length ?? 0).toBeGreaterThan(0)
+  })
 })
 
 describe('Overlay — inventaire HUD (armes/passifs + niveaux)', () => {
