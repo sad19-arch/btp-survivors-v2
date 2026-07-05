@@ -16,6 +16,18 @@ export function pickUpgradeVoice(count: number): string {
   return pool[count % pool.length] ?? pool[0] ?? 'voice_choose_your_destiny'
 }
 
+/**
+ * B4 — Décision de throttle pour le ding de gemme XP.
+ * Fonction PURE exportée pour les tests Vitest.
+ * Retourne `true` si le ding peut être joué (délai écoulé depuis le dernier).
+ * @param lastMs  Horodatage du dernier ding joué (-Infinity si jamais joué).
+ * @param nowMs   Horodatage courant.
+ * @param throttleMs  Délai minimal entre deux dings (ms).
+ */
+export function canPlayXpDing(lastMs: number, nowMs: number, throttleMs: number): boolean {
+  return nowMs - lastMs >= throttleMs
+}
+
 /** Clés de musique qui ne doivent PAS boucler (lecture unique, ex. jingle court). */
 const NON_LOOPING_MUSIC = new Set<MusicKey>([MUSIC.gameover])
 
@@ -37,6 +49,14 @@ const VOICE_LEVEL = 1.0 // la voix passe au volume plein du canal SFX (annonces 
 const MUSIC_DUCK = 0.28 // pendant une voix, la musique tombe à ~28 % (annonceur au-dessus)
 const AMB_DUCK = 0.15 // et l'ambiance quasi muette (~15 %) pour dégager la voix
 const WEAPON_THROTTLE_MS = 55 // délai min entre deux SFX d'une MÊME arme (anti-double)
+/** Délai min entre deux dings de gemme XP (anti-saturation horde). */
+const GEM_DING_THROTTLE_MS = 50
+/**
+ * Vecteur ZzFX du "ding" de ramassage de gemme XP.
+ * Sinus court, haute fréquence, slide montant → son cristallin et distinct.
+ * Paramètres : [volume, randomness, freq, attack, sustain, release, shape, shapeCurve, slide].
+ */
+const GEM_DING_ZZFX: readonly number[] = [0.28, 0.01, 1400, 0, 0, 0.1, 0, 1.6, 0.12]
 
 /** Écrans où l'ambiance de chantier tourne (nappe de fond). */
 const GAMEPLAY_SCREENS = new Set(['game', 'upgrade', 'paused'])
@@ -89,7 +109,8 @@ export class AudioDirector {
     on('pickupCollected', (e) => {
       const kind = (e as PickupCollectedEvent).kind
       if (kind === 'xp') {
-        this.playCue('collect')
+        // B4 : ding zzfx cristallin throttlé 50ms (remplace le cue collect générique).
+        this.playXpDing()
       } else {
         this.playCue('bonus')
         this.playVoice(VOICE.bonus)
@@ -156,6 +177,27 @@ export class AudioDirector {
     }
     this.lastSfx.set(`w_${id}`, now)
     playZzfx(this.audioCtx, gain, weaponZzfx(id))
+  }
+
+  /**
+   * B4 — Ding de ramassage de gemme XP (zzfx procédural, throttlé à 50ms).
+   * Son cristallin distinct du pool `collect` — inaudible si audio verrouillé ou muet.
+   */
+  private playXpDing(): void {
+    if (this.audioCtx === null || this.isLocked()) {
+      return
+    }
+    const gain = sfxGain(this.settings)
+    if (gain <= 0) {
+      return
+    }
+    const now = performance.now()
+    const last = this.lastSfx.get('xp_ding') ?? -Infinity
+    if (!canPlayXpDing(last, now, GEM_DING_THROTTLE_MS)) {
+      return
+    }
+    this.lastSfx.set('xp_ding', now)
+    playZzfx(this.audioCtx, gain * 0.7, GEM_DING_ZZFX)
   }
 
   /** Joue une réplique de voix (canal unique : coupe la précédente, pas de chevauchement). */

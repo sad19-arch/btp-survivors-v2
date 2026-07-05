@@ -65,8 +65,9 @@ const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; f
   tempete_boulons: { key: 'proj_boulons', scale: 0.55, spin: false, faceVel: true },
   cle_molette: { key: 'proj_cle', scale: 0.7, spin: true, faceVel: false },
   cle_choc: { key: 'proj_cle', scale: 0.7, spin: true, faceVel: false },
-  brouette: { key: 'proj_brouette', scale: 1.0, spin: false, faceVel: true },
-  transpalette: { key: 'proj_brouette', scale: 1.2, spin: false, faceVel: true },
+  // B3 : réutilise l'icône de carte brouette (plus reconnaissable qu'un bloc de granit).
+  brouette: { key: 'icon_brouette', scale: 0.45, spin: false, faceVel: true },
+  transpalette: { key: 'icon_brouette', scale: 0.55, spin: false, faceVel: true },
 }
 /**
  * Sprites de pickups par type. Typé `Record<PickupKind, …>` : le compilateur
@@ -75,7 +76,8 @@ const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; f
  * `coffre` qui rendait le coffre d'évolution invisible, cf. playtest).
  */
 const PICKUP_SPRITE: Record<PickupKind, { key: string; scale: number }> = {
-  xp: { key: 'pickup_xp', scale: 0.5 },
+  // B4 : gemmes plus grosses (visuel seul, hitbox core inchangée).
+  xp: { key: 'pickup_xp', scale: 0.8 },
   heal: { key: 'pickup_health', scale: 0.55 },
   magnet: { key: 'pickup_magnet', scale: 0.55 },
   chest: { key: 'pickup_crate', scale: 0.6 },
@@ -187,6 +189,12 @@ export class GameScene extends Phaser.Scene {
   private decorStreamerFrame = 0
   private readonly projectileSprites = new Map<number, CharSprite>()
   private readonly pickupSprites = new Map<number, CharSprite>()
+  /**
+   * B4 — Epoch du dernier scintillement pixel par gemme XP (id → index de période).
+   * Permet de ne spawner qu'un seul carré par période (~900ms) quelle que soit la cadence.
+   * Nettoyé en même temps que `pickupSprites` (id disparu = supprimé des deux).
+   */
+  private readonly xpSparkleEpoch = new Map<number, number>()
   /**
    * Étiquette « JN » + chevron au-dessus de chaque joueur humain, pour le repérer
    * dans une nuée d'ennemis (playtest). Un couple texte+chevron par joueur, couleur
@@ -614,6 +622,8 @@ export class GameScene extends Phaser.Scene {
     this.load.image('proj_boulons', 'stage01/weapons/proj_boulons.png')
     this.load.image('proj_cle', 'stage01/weapons/proj_cle.png')
     this.load.image('proj_brouette', 'stage01/weapons/proj_brouette.png')
+    // B3 : icône de carte brouette réutilisée comme sprite de projectile (plus lisible).
+    this.load.image('icon_brouette', 'stage01/ui/icon_brouette_64.png')
     this.load.image('vfx_goudron', 'stage01/vfx/vfx_goudron.png')
     this.load.image('pickup_xp', 'stage01/pickups/xp.png')
     this.load.image('pickup_health', 'stage01/pickups/health.png')
@@ -862,6 +872,7 @@ export class GameScene extends Phaser.Scene {
     this.enemySprites.clear()
     this.projectileSprites.clear()
     this.pickupSprites.clear()
+    this.xpSparkleEpoch.clear()
     this.playerLabels.forEach((l) => {
       l.text.destroy()
       l.chevron.destroy()
@@ -1414,6 +1425,20 @@ export class GameScene extends Phaser.Scene {
       if (pk.type === 'coffre' && sprite instanceof Phaser.GameObjects.Sprite) {
         sprite.setScale(cfg.scale * (1 + 0.12 * Math.sin(this.time.now / 180)))
       }
+      // B4 — Gemme XP : pulse d'échelle (shiny) + scintillement pixel discret.
+      if (pk.type === 'xp' && sprite instanceof Phaser.GameObjects.Sprite) {
+        // Pulse sinusoïdal léger (±10 %) : chaque gemme a une phase décalée par son id.
+        const phase = (pk.id * 1.3) % (Math.PI * 2)
+        sprite.setScale(cfg.scale * (1 + 0.1 * Math.sin(this.time.now / 220 + phase)))
+        // Scintillement pixel : un carré vert-bonus UNE FOIS par période (~900ms, staggeré par id).
+        const sparkPeriod = 900
+        const sparkOffset = (pk.id * 337) % sparkPeriod
+        const epoch = Math.floor((this.time.now + sparkOffset) / sparkPeriod)
+        if (this.xpSparkleEpoch.get(pk.id) !== epoch) {
+          this.xpSparkleEpoch.set(pk.id, epoch)
+          this.spawnPixelPop(pk.x, pk.y, PALETTE_HEX.vertBonus, 5, 180)
+        }
+      }
     }
     for (const [id, sprite] of this.pickupSprites) {
       if (!seenPickup.has(id)) {
@@ -1424,6 +1449,8 @@ export class GameScene extends Phaser.Scene {
           sprite.destroy()
         }
         this.pickupSprites.delete(id)
+        // Nettoyage de l'epoch de scintillement (évite une fuite sur les gemmes collectées).
+        this.xpSparkleEpoch.delete(id)
       }
     }
 
