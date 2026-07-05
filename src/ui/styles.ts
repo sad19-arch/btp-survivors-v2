@@ -233,9 +233,9 @@ const CSS = `
 #ui-root .bossbar--final { border-color: ${PALETTE.orangeDanger}; }
 #ui-root .bossbar--final .bossbar__name { color: ${PALETTE.orangeDanger}; }
 #ui-root .bossbar--final .bossbar__fill { background: ${PALETTE.orangeDanger}; }
-#ui-root .hud__stage { font-size: 14px; }
+#ui-root .hud__stage { font-size: 16px; }
 #ui-root .hud__stagenum { color: ${PALETTE.jauneSecurite}; }
-#ui-root .hud__stagename { color: ${PALETTE.blanc}; }
+#ui-root .hud__stagename { color: ${PALETTE.blanc}; font-size: 18px; text-shadow: 2px 2px 0 ${PALETTE.contour}; }
 #ui-root .stagecard {
   position: absolute;
   top: 34%;
@@ -243,17 +243,17 @@ const CSS = `
   transform: translateX(-50%);
   background: ${PALETTE.brunSombre};
   border: 4px solid ${PALETTE.contour};
-  box-shadow: 6px 6px 0 ${PALETTE.contour};
-  padding: 18px 34px;
+  box-shadow: 8px 8px 0 ${PALETTE.contour};
+  padding: 24px 48px;
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   animation: stagecard-in 0.35s ease-out;
 }
-#ui-root .stagecard__num { color: ${PALETTE.jauneSecurite}; font-size: 15px; font-weight: bold; }
-#ui-root .stagecard__title { color: ${PALETTE.blanc}; font-size: 30px; font-weight: bold; text-shadow: 3px 3px 0 ${PALETTE.contour}; }
-#ui-root .stagecard__sub { color: ${PALETTE.solSable}; font-size: 13px; text-transform: none; letter-spacing: 0; }
+#ui-root .stagecard__num { color: ${PALETTE.jauneSecurite}; font-size: 18px; font-weight: bold; letter-spacing: 2px; }
+#ui-root .stagecard__title { color: ${PALETTE.blanc}; font-size: 52px; font-weight: bold; text-shadow: 4px 4px 0 ${PALETTE.contour}; letter-spacing: 1px; }
+#ui-root .stagecard__sub { color: ${PALETTE.solSable}; font-size: 15px; text-transform: none; letter-spacing: 0; }
 @keyframes stagecard-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 #ui-root .pads {
   position: absolute;
