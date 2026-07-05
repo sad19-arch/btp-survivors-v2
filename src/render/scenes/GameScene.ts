@@ -101,6 +101,14 @@ const PICKUP_COLOR = 0x3ddc84
 const PICKUP_RADIUS = 5
 /** Clamp du delta réel pour éviter la spirale de la mort après un gel d'onglet. */
 const MAX_FRAME_MS = 100
+/**
+ * Nombre maximum de chiffres de dégâts + pops d'impact ALLOUANTS émis par frame.
+ * Au-delà de ce plafond, les émissions sont silencieusement ignorées (le hit-flash
+ * tint, lui, n'est PAS capé — il n'alloue rien).
+ * Valeur choisie : 16 — visible en masse lors d'AOE normale, mais 200 chiffres
+ * superposés en horde ne serait que du bruit illisible + un pic d'allocations.
+ */
+export const FEEDBACK_MAX_PER_FRAME = 16
 
 /** Sprite de personnage : feuille pixel-art si l'asset existe, sinon cercle de repli. */
 type CharSprite = Phaser.GameObjects.Sprite | Phaser.GameObjects.Arc
@@ -939,10 +947,11 @@ export class GameScene extends Phaser.Scene {
         }
         return info.sort((a, b) => a.id - b.id)
       }
-      // Sonde du feedback de coup (test-only) : compteur chiffres actifs/total.
-      this.seam.debugFeedbackInfo = (): { active: number; spawnedTotal: number } => ({
+      // Sonde du feedback de coup (test-only) : compteur chiffres actifs/total + cap.
+      this.seam.debugFeedbackInfo = (): { active: number; spawnedTotal: number; maxPerFrame: number } => ({
         active: this.damageNumbers.active,
-        spawnedTotal: this.damageNumbers.total
+        spawnedTotal: this.damageNumbers.total,
+        maxPerFrame: FEEDBACK_MAX_PER_FRAME
       })
     }
   }
@@ -1212,6 +1221,9 @@ export class GameScene extends Phaser.Scene {
     // de mettre à jour prevEnemyHp pour que chaque frame compare à la frame précédente.
     const hitEvents = computeHitEvents(this.prevEnemyHp, state.enemies)
     const hitById = new Map(hitEvents.map((e) => [e.id, e.amount]))
+    // Compteur d'allocations de feedback (chiffres + pops) pour ce passage de sync.
+    // Remis à 0 ici — avant la boucle — pour borner le pic par frame.
+    let feedbackEmittedThisFrame = 0
     for (const en of state.enemies) {
       seen.add(en.id)
       let sprite = this.enemySprites.get(en.id)
@@ -1241,14 +1253,19 @@ export class GameScene extends Phaser.Scene {
       const hitAmount = hitById.get(en.id)
       if (hitAmount !== undefined) {
         // Hit-flash blanc ~60ms (DA 16-bit, palette blanc uniquement).
+        // NON capé : setTintFill n'alloue rien — tout ennemi touché doit réagir.
         const until = hitFlashUntil(this.time.now, hitAmount, 60)
         if (until !== undefined) {
           this.enemyFlashUntil.set(en.id, until)
         }
-        // Chiffre de dégâts flottant (poolé).
-        this.damageNumbers.spawn(en.x, en.y, hitAmount, en.isElite, en.isBoss)
-        // Pop d'impact orange (distinct du pop de mort size=8/160ms).
-        this.spawnPixelPop(en.x, en.y, PALETTE_HEX.orangeDanger, 6, 120)
+        // Chiffre de dégâts flottant (poolé) + pop d'impact : CAPÉS à
+        // FEEDBACK_MAX_PER_FRAME — 200 chiffres superposés = bruit illisible
+        // + pic d'allocations inutile (horde AOE : marteau niveau 8+, 300 ennemis).
+        if (feedbackEmittedThisFrame < FEEDBACK_MAX_PER_FRAME) {
+          this.damageNumbers.spawn(en.x, en.y, hitAmount, en.isElite, en.isBoss)
+          this.spawnPixelPop(en.x, en.y, PALETTE_HEX.orangeDanger, 6, 120)
+          feedbackEmittedThisFrame++
+        }
       }
       // Applique la teinte flash blanc si dans la fenêtre, sinon efface.
       const flashUntil = this.enemyFlashUntil.get(en.id)

@@ -51,10 +51,11 @@ export interface GameSeam {
   debugRenderInfo?(): { id: number; texture: string | null }[]
   /**
    * [Debug] Sonde du feedback de coup (posée par la GameScene) : compteur des chiffres
-   * de dégâts actifs et total cumulé depuis la création du pool. Permet de valider en
-   * e2e que les coups déclenchent bien des chiffres flottants. Absente en mode allégé.
+   * de dégâts actifs et total cumulé depuis la création du pool, et cap par frame.
+   * Permet de valider en e2e que les coups déclenchent bien des chiffres flottants
+   * et que le cap borne les émissions en horde AOE. Absente en mode allégé.
    */
-  debugFeedbackInfo?(): { active: number; spawnedTotal: number }
+  debugFeedbackInfo?(): { active: number; spawnedTotal: number; maxPerFrame: number }
 }
 
 declare global {

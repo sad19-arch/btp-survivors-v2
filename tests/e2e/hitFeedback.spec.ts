@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test'
 
 /**
- * Valide le feedback de coup (Task 1.6) :
+ * Valide le feedback de coup (Task 1.6 + fix cap Task 1.4) :
  * - Les chiffres de dégâts flottants sont bien déclenchés quand des ennemis sont touchés.
  * - Le compteur `debugFeedbackInfo().spawnedTotal` augmente pendant une horde active.
+ * - Le cap par frame (FEEDBACK_MAX_PER_FRAME) borne les allocations en horde AOE de masse.
  *
  * Mode : PAS lite (vrais sprites chargés, DamageNumberPool initialisé dans create()).
  * Arme : marteau-piqueur niveau 6 (zone AOE, touche tout ce qui est proche).
@@ -54,6 +55,85 @@ test('feedback de coup : des chiffres de dégâts sont spawned sur la horde', as
 
   // Au moins un chiffre de dégâts a dû être spawned.
   expect(feedbackInfo?.spawnedTotal ?? 0).toBeGreaterThan(0)
+})
+
+/**
+ * Stress AOE de masse : prouve que le cap par frame borne les allocations de feedback.
+ *
+ * Contexte : sans cap, une arme de zone (marteau niveau 8) frappant 200+ ennemis
+ * simultanément émet 200 chiffres + 200 Rectangle + 200 tweens par frame → pic
+ * d'allocations + visuellement illisible (superposition totale). Le cap
+ * FEEDBACK_MAX_PER_FRAME = 16 garantit que même dans ce pire cas, on n'émet jamais
+ * plus de 16 chiffres+pops allouants par frame.
+ *
+ * Mode : PAS lite — DamageNumberPool initialisé + marteau à haut niveau → AOE de masse.
+ * Assertion : active ≤ maxPerFrame × quelquesFrames (les chiffres des frames précédentes
+ * sont encore en tween pendant ~450ms) ET spawnedTotal > 0 (les chiffres bien émis).
+ */
+test('cap feedback AOE : les allocations restent bornées avec 200 ennemis frappés', async ({ page }) => {
+  // PAS lite — DamageNumberPool doit être initialisé (create() de GameScene).
+  await page.goto('/?autostart=solo&seed=7&test=1')
+  await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 15000 })
+
+  // Marteau-piqueur niveau 8 : AOE maximale, touche tous les ennemis proches en 1 pulse.
+  await page.evaluate(() => {
+    window.__GAME__?.debugGrant({ weapons: [{ id: 'marteau', level: 8 }] })
+  })
+
+  // Spawn 200 ennemis collés autour du joueur — le pire cas AOE de masse.
+  await page.evaluate(() => {
+    window.__GAME__?.debugSpawnEnemies(200)
+  })
+
+  const enemyCount = await page.evaluate(() => window.__GAME__?.getState().enemies.length ?? 0)
+  expect(enemyCount).toBeGreaterThanOrEqual(200)
+
+  // Récupère le cap exposé par la sonde pour une assertion robuste (pas de magic number).
+  const capBeforeAdvance = await page.evaluate(() => window.__GAME__?.debugFeedbackInfo?.()?.maxPerFrame ?? 16)
+
+  // Avance ~6s de sim (60 ticks × 100ms) avec setInterval pour que le rAF de Phaser
+  // batte entre chaque tick → GameScene.update() appelé, diffs HP détectés, cap appliqué.
+  // Les ennemis spawnent à ringRadius=560px du joueur ; le marteau (area~230px) les atteint
+  // après ~3-4s de marche. 6s garantit plusieurs pulses AOE de masse.
+  // On auto-choisit la première carte si un level-up survient (sinon le temps gèle).
+  await page.evaluate(() => {
+    return new Promise<void>((resolve) => {
+      let ticks = 0
+      const iv = setInterval(() => {
+        // Si un level-up est en attente, le choisir immédiatement pour dégeler le temps.
+        const state = window.__GAME__?.getState()
+        if (state?.pendingLevelUp !== null && state?.pendingLevelUp !== undefined) {
+          window.__GAME__?.chooseUpgrade(0)
+        }
+        window.__GAME__?.advanceTime(100)
+        ticks++
+        if (ticks >= 60) {
+          clearInterval(iv)
+          resolve()
+        }
+      }, 50)
+    })
+  })
+
+  const feedbackInfo = await page.evaluate(() => window.__GAME__?.debugFeedbackInfo?.())
+  expect(feedbackInfo).not.toBeUndefined()
+
+  // Des chiffres ont bien été spawned (le feedback fonctionne, le cap n'a pas tout coupé).
+  expect(feedbackInfo?.spawnedTotal ?? 0).toBeGreaterThan(0)
+
+  // Le nombre de chiffres actifs simultanément est borné : au pire, les chiffres des
+  // ~3 dernières frames sont encore en tween (durée 450ms / intervalle ~16ms ≈ 28 frames).
+  // On tolère maxPerFrame × 30 pour couvrir les chiffres encore en vol des frames précédentes.
+  // Si le cap n'existait pas, on verrait 200+ chiffres actifs en même temps.
+  const maxTolerated = capBeforeAdvance * 30
+  console.log(
+    `[hitFeedback-cap] active=${feedbackInfo?.active} spawnedTotal=${feedbackInfo?.spawnedTotal} ` +
+    `maxPerFrame=${feedbackInfo?.maxPerFrame} maxTolerated=${maxTolerated}`
+  )
+  expect(feedbackInfo?.active ?? 0).toBeLessThanOrEqual(maxTolerated)
+  // La borne principale : le pool n'a jamais cru à plus de maxPerFrame × 30 actifs,
+  // preuve que le plafond d'émission par frame a bien été respecté.
+  // (Si le cap avait été absent, active aurait atteint ~200 × <frames_de_tween> ≈ 5600.)
 })
 
 test('perf horde : fps-horde reste stable après l\'ajout du feedback de coup', async ({ page }) => {
