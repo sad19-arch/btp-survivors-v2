@@ -12,6 +12,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { chunkPlacements, chunkHash, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
+import { resolvePlacement, type ExclusionCircle } from '@render/props'
 import type { DecorZone } from '@render/stages'
 
 const W = 10240
@@ -190,5 +191,86 @@ describe('chunkHash — non-régression', () => {
     // Valeur de référence calculée une fois et gelée.
     const ref = chunkHash(42, 3, 5)
     expect(chunkHash(42, 3, 5)).toBe(ref)
+  })
+})
+
+// ── resolvePlacement (anti-chevauchement déterministe) ────────────────────────
+
+/** Mulberry32 minimal — même implémentation que props.ts (dupliqué pour le test). */
+function makeMulberry32(seed: number): () => number {
+  let t = seed >>> 0
+  return () => {
+    t = (t + 0x6d2b79f5) >>> 0
+    let r = Math.imul(t ^ (t >>> 15), 1 | t)
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) >>> 0
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+const WW = 10240
+const WH = 7680
+const CWX = WW / 2
+const CWY = WH / 2
+
+describe('resolvePlacement — déterminisme', () => {
+  it('même entrées → même position (seed identique)', () => {
+    const ex: ExclusionCircle[] = [{ x: CWX, y: CWY, r: 300 }]
+    const rng1 = makeMulberry32(999)
+    const rng2 = makeMulberry32(999)
+    const a = resolvePlacement(45, 400, 600, CWX, CWY, WW, WH, 40, ex, [], 80, rng1)
+    const b = resolvePlacement(45, 400, 600, CWX, CWY, WW, WH, 40, ex, [], 80, rng2)
+    expect(a.x).toBe(b.x)
+    expect(a.y).toBe(b.y)
+  })
+})
+
+describe('resolvePlacement — dégagement respecté quand possible', () => {
+  it('résultat hors du cercle d\'exclusion (zone libre)', () => {
+    // Aucune exclusion sauf le centre — un angle de 90° (Nord) doit placer l'item
+    // bien au-delà du centre, donc à > 300 px du centre + 80 px (itemRadius).
+    const ex: ExclusionCircle[] = [{ x: CWX, y: CWY, r: 300 }]
+    const rng = makeMulberry32(42)
+    const pos = resolvePlacement(90, 400, 600, CWX, CWY, WW, WH, 40, ex, [], 80, rng)
+    const distFromCenter = Math.hypot(pos.x - CWX, pos.y - CWY)
+    // L'item (rayon 80) ne doit pas empiéter sur l'exclusion (rayon 300) :
+    // dist_centres >= 300 + 80 = 380.
+    expect(distFromCenter).toBeGreaterThanOrEqual(380)
+  })
+
+  it('résultat loin d\'une exclusion de prisonnier (quand c\'est géométriquement possible)', () => {
+    // Prisonnier à (CWX, CWY + 800) — angle 270° (Sud), dist 800 px.
+    // Placement de la structure à angle 0° (Est) dans la bande 400-600 px :
+    // aucun candidat ne peut être à moins de ~565 px du prisonnier
+    // (distance pythagorique min ≈ sqrt(400²+800²) ≈ 894 px) → dégagement toujours OK.
+    const prisonerX = CWX
+    const prisonerY = CWY + 800
+    const ex: ExclusionCircle[] = [
+      { x: CWX, y: CWY, r: 300 },
+      { x: prisonerX, y: prisonerY, r: 80 }
+    ]
+    const rng = makeMulberry32(77)
+    // Angle 0° (Est) : structure bien écartée du prisonnier au Sud.
+    const pos = resolvePlacement(0, 400, 600, CWX, CWY, WW, WH, 40, ex, [], 80, rng)
+    const distFromPrisoner = Math.hypot(pos.x - prisonerX, pos.y - prisonerY)
+    // Dégagement min : 80 (prisonnier) + 80 (item) = 160.
+    // Ici la géométrie garantit > 800 px — on teste juste le seuil minimum.
+    expect(distFromPrisoner).toBeGreaterThanOrEqual(160)
+  })
+})
+
+describe('resolvePlacement — 2 items co-scriptés ne se chevauchent pas', () => {
+  it('deux items au même angle finissent à des distances distinctes (placed utilisé)', () => {
+    const ex: ExclusionCircle[] = [{ x: CWX, y: CWY, r: 300 }]
+    const placed: ExclusionCircle[] = []
+    const rng1 = makeMulberry32(1337)
+    // Pose le 1er item.
+    const pos1 = resolvePlacement(45, 350, 550, CWX, CWY, WW, WH, 40, ex, placed, 80, rng1)
+    placed.push({ x: pos1.x, y: pos1.y, r: 80 })
+    // Pose le 2e item au même angle avec un RNG différent (mais dans la même bande).
+    const rng2 = makeMulberry32(1337)
+    const pos2 = resolvePlacement(45, 350, 550, CWX, CWY, WW, WH, 40, ex, placed, 80, rng2)
+    // Les deux centres doivent être séparés d'au moins 160 px (rayon1 + rayon2).
+    const distBetween = Math.hypot(pos2.x - pos1.x, pos2.y - pos1.y)
+    expect(distBetween).toBeGreaterThanOrEqual(160)
   })
 })

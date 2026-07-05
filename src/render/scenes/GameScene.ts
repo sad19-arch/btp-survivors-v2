@@ -7,7 +7,7 @@ import { routeInput, type FrameInput } from '@input/intents'
 import { buildPlayerInputs } from '@input/players'
 import { INTRO, WORLD, CONE_HALF_ANGLE } from '@content/config'
 import { createGround } from '@render/ground'
-import { createLandmark, createStructures, phaseSalt } from '@render/props'
+import { createLandmark, createStructures, phaseSalt, resolvePlacement, type ExclusionCircle } from '@render/props'
 import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { dirRow, walkFrame, idleFrame } from '@render/sprites'
 import { stageRender, type StageRender, FINAL_BOSS_SKIN } from '@render/stages'
@@ -942,6 +942,26 @@ export class GameScene extends Phaser.Scene {
     this.decorStreamer = new DecorStreamer(this, WORLD.width, WORLD.height, streamerOpts)
     // NB : createProps est retiré (remplacé par le DecorStreamer).
     // Les landmark/structures (nombre fixe, ancrés près du centre) restent inchangés.
+
+    // ── Anti-chevauchement déterministe ────────────────────────────────────────
+    // Ordre : centre (fixe) → prisonniers (fixes) → structures → landmark → PNJ.
+    // Chaque couche évite les précédentes et accumule ses positions dans `placed`
+    // pour que les suivantes les ignorent aussi.
+    //
+    // Rayon du centre : CENTER_CLEAR interne de props.ts (260 px) ;
+    // on passe ici le rayon d'affichage large (300 px) pour conserver la marge
+    // de lisibilité du spawn.
+    const exclusions: ExclusionCircle[] = [
+      { x: WORLD.width / 2, y: WORLD.height / 2, r: 300 }
+    ]
+    // Prisonniers : lus depuis l'état sim (peuplés avant create() via sim.reset()).
+    // Rayon 80 px = cage (~40 px) + marge de lisibilité (40 px).
+    for (const pr of this.app.getState().prisoners) {
+      exclusions.push({ x: pr.x, y: pr.y, r: 80 })
+    }
+    // Liste mutable dans laquelle chaque fonction AJOUTE les positions posées.
+    const placed: ExclusionCircle[] = []
+
     // Grandes structures qui remplissent l'arène (l'étape de chantier partout, hors centre).
     const stageGeometry = this.stage.geometry
     if (this.stage.structures !== undefined) {
@@ -951,26 +971,56 @@ export class GameScene extends Phaser.Scene {
         WORLD.height,
         this.stage.structures.map((s) => ({ key: s.key, scale: s.scale, count: s.count, band: s.band })),
         stageSeed,
-        stageGeometry
+        stageGeometry,
+        exclusions,
+        placed
       )
     }
     // Landmark HERO de la phase — grand, en périphérie, décor.
     const lm = this.stage.landmark
     if (lm !== undefined) {
-      createLandmark(this, WORLD.width, WORLD.height, { key: lm.key, scale: lm.scale, count: lm.count }, stageSeed, stageGeometry)
+      createLandmark(
+        this, WORLD.width, WORLD.height,
+        { key: lm.key, scale: lm.scale, count: lm.count },
+        stageSeed, stageGeometry,
+        exclusions, placed
+      )
     }
     // PNJ d'ambiance non-hostile (geste métier) à un spot seedé hors du centre — « vie » du chantier.
     // T4 : si geometry.ambientAngle est défini, le PNJ est placé dans ce secteur (angle fixe),
     // ce qui l'ancre près du landmark/zone de travail de la phase.
+    // Anti-chevauchement : le PNJ évite tout ce qui est dans exclusions + placed.
     const amb = this.stage.ambient
     if (amb !== undefined && this.textures.exists(amb.key)) {
-      const ang =
+      // Rayon forfaitaire du PNJ : demi-frame compact (64 px) × scale.
+      const ambRadius = Math.round(amb.scale * 64)
+      // Détermine l'angle scripté (ou par formule seedée, pas Math.random).
+      const ambAngleDeg =
         stageGeometry?.ambientAngle !== undefined
-          ? (stageGeometry.ambientAngle * Math.PI) / 180
-          : (((stageSeed * 2654435761) >>> 0) % 1000) / 1000 * Math.PI * 2
-      const ax = WORLD.width / 2 + Math.cos(ang) * 470
-      const ay = WORLD.height / 2 + Math.sin(ang) * 470
-      this.ambientSprite = this.add.sprite(ax, ay, amb.key).setScale(amb.scale).setDepth(1)
+          ? stageGeometry.ambientAngle
+          : (((stageSeed * 2654435761) >>> 0) % 1000) / 1000 * 360
+      // Bande de distance du PNJ ambiance (original ~470 px).
+      const AMB_DIST_MIN = 420
+      const AMB_DIST_MAX = 520
+      // Dart-throwing déterministe : même RNG mulberry32 seedé depuis stageSeed,
+      // sel distinct (0xab7c1234) pour ne pas dépendre de la séquence des structures/landmark.
+      const ambRng = (() => {
+        let t = ((stageSeed ^ 0xab7c1234) >>> 0)
+        return () => {
+          t = (t + 0x6d2b79f5) >>> 0
+          let r = Math.imul(t ^ (t >>> 15), 1 | t)
+          r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) >>> 0
+          return ((r ^ (r >>> 14)) >>> 0) / 4294967296
+        }
+      })()
+      const pos = resolvePlacement(
+        ambAngleDeg,
+        AMB_DIST_MIN, AMB_DIST_MAX,
+        WORLD.width / 2, WORLD.height / 2,
+        WORLD.width, WORLD.height, 40,
+        exclusions, placed, ambRadius, ambRng
+      )
+      this.ambientSprite = this.add.sprite(pos.x, pos.y, amb.key).setScale(amb.scale).setDepth(1)
     }
     this.add
       .rectangle(WORLD.width / 2, WORLD.height / 2, WORLD.width, WORLD.height)
