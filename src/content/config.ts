@@ -73,6 +73,26 @@ export const PICKUP_DROPS = {
   chest: { chance: 0, value: 35 }
 } as const
 
+/**
+ * Directeur de coffres d'évolution.
+ *
+ * Contrôle l'économie de coffres : apparition périodique + drop sur mort d'élite.
+ * Plafon `maxActive` garantit que jamais plus de N coffres ne coexistent.
+ *
+ * Ces valeurs sont tunables séparément de `PICKUP_DROPS` (coffres d'évolution,
+ * pas simples bonus de loot) — la décision est déterministe via un RNG dédié.
+ */
+export const CHEST = {
+  /** Intervalle (ms) entre deux apparitions périodiques de coffre. */
+  intervalMs: 55000,
+  /** Probabilité qu'un ennemi élite lâche un coffre à sa mort (0..1). */
+  eliteDropChance: 0.35,
+  /** Nombre maximum de coffres actifs simultanément (inclut le coffre mini-boss). */
+  maxActive: 5,
+  /** Rayon d'apparition (px) autour du joueur vivant le plus proche. */
+  spawnRadius: 260
+} as const
+
 /** Nombre de joueurs selon le mode. */
 export const MODE_PLAYER_COUNT: Record<GameMode, number> = {
   solo: 1,
