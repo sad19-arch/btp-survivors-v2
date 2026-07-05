@@ -12,6 +12,7 @@ import { dirRow, walkFrame, idleFrame } from '@render/sprites'
 import { stageRender, type StageRender, FINAL_BOSS_SKIN } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { computeHitEvents } from '@render/hitDiff'
+import { hitFlashUntil, DamageNumberPool } from '@render/damageNumbers'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
 import type { PlayerState, PrisonerState, PickupKind } from '@core/types'
@@ -155,6 +156,17 @@ export class GameScene extends Phaser.Scene {
    * Vidé dans `resetRunState`. Ids disparus nettoyés dans la boucle de release.
    */
   private readonly prevEnemyHp = new Map<number, number>()
+  /**
+   * Instant (this.time.now) jusqu'auquel l'ennemi doit rester en teinte flash blanc.
+   * ~60ms par coup — feedback court et non intrusif (DA 16-bit).
+   * Vidé dans `resetRunState`.
+   */
+  private readonly enemyFlashUntil = new Map<number, number>()
+  /**
+   * Pool de chiffres de dégâts flottants (poolé — pas de new Text par hit).
+   * Initialisé dans `create()`, instance fraîche par scène.
+   */
+  private damageNumbers!: DamageNumberPool
   private readonly projectileSprites = new Map<number, CharSprite>()
   private readonly pickupSprites = new Map<number, CharSprite>()
   /**
@@ -822,6 +834,7 @@ export class GameScene extends Phaser.Scene {
     this.prevHp.clear()
     this.damageFlashUntil.clear()
     this.prevEnemyHp.clear()
+    this.enemyFlashUntil.clear()
     this.lastMoveMs.clear()
     this.following = false
     this.introStartMs = -1
@@ -835,6 +848,9 @@ export class GameScene extends Phaser.Scene {
     // Nouvelle instance à chaque (re)création de scène — les anciens sprites poolés
     // sont détruits par Phaser au shutdown, un pool réutilisé les rendrait fantômes.
     this.pool = new SpritePool(this)
+    // Pool de chiffres de dégâts : instance fraîche par scene (les Text Phaser sont
+    // détruits au shutdown ; un pool réutilisé les rendrait fantômes).
+    this.damageNumbers = new DamageNumberPool(this)
     // Sol : base tuilée seedée + décalques épars (rendu pur, aucune logique).
     // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
     const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
@@ -1216,6 +1232,33 @@ export class GameScene extends Phaser.Scene {
         const row = leader !== undefined ? dirRow(leader.x - en.x, leader.y - en.y) : 0
         sprite.setFrame(walkFrame(row, this.time.now))
       }
+      // ── Feedback de coup (hit-feel) ────────────────────────────────────
+      const hitAmount = hitById.get(en.id)
+      if (hitAmount !== undefined) {
+        // Hit-flash blanc ~60ms (DA 16-bit, palette blanc uniquement).
+        const until = hitFlashUntil(this.time.now, hitAmount, 60)
+        if (until !== undefined) {
+          this.enemyFlashUntil.set(en.id, until)
+        }
+        // Chiffre de dégâts flottant (poolé).
+        this.damageNumbers.spawn(en.x, en.y, hitAmount, en.isElite, en.isBoss)
+        // Pop d'impact orange (distinct du pop de mort size=8/160ms).
+        this.spawnPixelPop(en.x, en.y, PALETTE_HEX.orangeDanger, 6, 120)
+      }
+      // Applique la teinte flash blanc si dans la fenêtre, sinon efface.
+      const flashUntil = this.enemyFlashUntil.get(en.id)
+      if (flashUntil !== undefined) {
+        if (this.time.now < flashUntil) {
+          if (sprite instanceof Phaser.GameObjects.Sprite) {
+            sprite.setTintFill(PALETTE_HEX.blanc)
+          }
+        } else {
+          if (sprite instanceof Phaser.GameObjects.Sprite) {
+            sprite.clearTint()
+          }
+          this.enemyFlashUntil.delete(en.id)
+        }
+      }
       // Mémorise les HP courants pour la comparaison de la prochaine frame.
       this.prevEnemyHp.set(en.id, en.hp)
     }
@@ -1232,12 +1275,11 @@ export class GameScene extends Phaser.Scene {
           sprite.destroy()
         }
         this.enemySprites.delete(id)
-        // Nettoie les ids disparus de prevEnemyHp pour éviter les fuites mémoire.
+        // Nettoie les ids disparus pour éviter les fuites mémoire.
         this.prevEnemyHp.delete(id)
+        this.enemyFlashUntil.delete(id)
       }
     }
-    // hitById sera consommé par les tasks 1.2-1.4 dans cette même frame.
-    void hitById
 
     const seenProj = new Set<number>()
     for (const pr of state.projectiles) {
