@@ -40,6 +40,8 @@ export interface GameSeam {
   debugSpawnBoss(role: 'mid' | 'final'): void
   /** [Debug] Fait apparaître `n` ennemis autour des joueurs (stress test horde). */
   debugSpawnEnemies(n: number): void
+  /** [Debug] Audition d'un SFX d'arme (procédural) par ID d'arme. */
+  debugPlayWeaponSfx(id: string): void
   /**
    * [Debug] Sonde de rendu (posée par la GameScene) : pour chaque joueur, la clé de
    * texture de son sprite, ou `null` si c'est un cercle de repli (feuille absente).
@@ -110,6 +112,9 @@ export function createSeam(app: App): GameSeam {
     },
     debugSpawnEnemies: (n: number) => {
       app.debugSpawnEnemies(n)
+    },
+    debugPlayWeaponSfx: (id: string) => {
+      app.debugPlayWeaponSfx(id)
     }
   }
 }

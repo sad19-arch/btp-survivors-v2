@@ -53,9 +53,10 @@ export function weaponSystem(
       }
       const lvl = weaponStatsAtLevel(def, slot.level)
       const eff = effectiveWeaponStats(lvl, stats)
+      const cdBefore = slot.cooldownLeftMs
       switch (def.kind) {
         case 'projectile':
-          tickProjectile(world, slot, def, eff, pos, player, dtMs, fired)
+          tickProjectile(world, slot, def, eff, pos, player, dtMs)
           break
         case 'aura':
           tickAura(slot, eff, pos, dtMs, world, def.kind, pulses, grid)
@@ -76,6 +77,12 @@ export function weaponSystem(
           tickCone(slot, eff, pos, dtMs, world, def.kind, pulses, grid)
           break
       }
+      // Une arme qui vient de TIRER ce pas a rechargé son cooldown (valeur > celle
+      // d'avant le tick) → on émet weaponFired(id) pour l'audio (SFX par arme).
+      // Orbital (scie) exclu : arme continue → ronronnement en boucle côté rendu.
+      if (def.kind !== 'orbital' && slot.cooldownLeftMs > cdBefore) {
+        fired?.push(def.id)
+      }
     }
   }
 }
@@ -93,8 +100,7 @@ function tickProjectile(
   eff: EffectiveStats,
   pos: Vec2,
   player: PlayerComp,
-  dtMs: number,
-  fired?: string[]
+  dtMs: number
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -106,7 +112,6 @@ function tickProjectile(
     return
   }
   fireProjectiles(world, pos, target, def, eff, player.playerId)
-  fired?.push(def.id)
   slot.cooldownLeftMs = eff.cooldownMs
 }
 

@@ -378,6 +378,11 @@ export class App {
     this.refreshFocus()
   }
 
+  /** [Debug/seam] Audition d'un SFX d'arme (procédural) : rejoue weaponFired(id) → zzfx. */
+  debugPlayWeaponSfx(id: string): void {
+    this.events.dispatchEvent(new WeaponFiredEvent(id))
+  }
+
   /** [Debug/seam] Fait apparaître un coffre d'évolution sur la position d'un joueur (1 par défaut). */
   debugSpawnChestOnPlayer(playerId = 1): void {
     this.bumpState()
