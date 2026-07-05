@@ -1,10 +1,23 @@
 import type Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
 import type { WeaponFiredEvent, PickupCollectedEvent, BossSpawnedEvent } from '@core/events'
-import { SFX, VOICE, voiceStage, musicForState, AMB, type MusicKey } from './manifest'
+import { SFX, VOICE, voiceStage, musicForState, MUSIC, AMB, type MusicKey } from './manifest'
 import { musicGain, sfxGain, duckedGain, type AudioLevels } from './settings'
-import { playZzfx, createWhirLoop, type ZzfxLoop } from './zzfx'
+import { playZzfx } from './zzfx'
 import { weaponZzfx } from './weaponSfx'
+
+/**
+ * Retourne la clé de voix à jouer au Nième level-up (compteur 0-based).
+ * Alterne entre les deux clips du pool `VOICE.upgrade` selon la parité.
+ * Fonction PURE — pas de `Math.random`, testable en Vitest.
+ */
+export function pickUpgradeVoice(count: number): string {
+  const pool = VOICE.upgrade
+  return pool[count % pool.length] ?? pool[0] ?? 'voice_choose_your_destiny'
+}
+
+/** Clés de musique qui ne doivent PAS boucler (lecture unique, ex. jingle court). */
+const NON_LOOPING_MUSIC = new Set<MusicKey>([MUSIC.gameover])
 
 /** Instance de son loopée (sous-ensemble commun WebAudio/HTML5, découplé de Phaser). */
 interface SoundInstance {
@@ -24,7 +37,6 @@ const VOICE_LEVEL = 1.0 // la voix passe au volume plein du canal SFX (annonces 
 const MUSIC_DUCK = 0.28 // pendant une voix, la musique tombe à ~28 % (annonceur au-dessus)
 const AMB_DUCK = 0.15 // et l'ambiance quasi muette (~15 %) pour dégager la voix
 const WEAPON_THROTTLE_MS = 55 // délai min entre deux SFX d'une MÊME arme (anti-double)
-const SAW_LOOP_LEVEL = 0.28 // volume du ronronnement de scie (× gain SFX)
 
 /** Écrans où l'ambiance de chantier tourne (nappe de fond). */
 const GAMEPLAY_SCREENS = new Set(['game', 'upgrade', 'paused'])
@@ -49,10 +61,10 @@ export class AudioDirector {
   private readonly lastSfx = new Map<string, number>()
   private prevScreen = ''
   private presentsPlayed = false
+  /** Compteur de level-ups, pour l'alternance des voix (pair/impair). */
+  private upgradeVoiceCount = 0
   /** Contexte WebAudio partagé (celui de Phaser) pour les SFX procéduraux zzfx ; null si HTML5. */
   private readonly audioCtx: AudioContext | null
-  /** Ronronnement continu de la scie (créé à la demande, coupé hors gameplay). */
-  private sawLoop: ZzfxLoop | null = null
 
   constructor(sound: Phaser.Sound.BaseSoundManager, events: EventTarget, getSettings: () => AudioLevels) {
     this.sound = sound
@@ -72,7 +84,7 @@ export class AudioDirector {
     on('playerHurt', () => { this.playCue('playerHurt') })
     on('levelUp', () => { this.playCue('levelUp') })
     // SFX procédural PAR ARME (zzfx) : chaque arme discrète émet weaponFired(id).
-    // La scie (continue) est exclue à la source → gérée en boucle (updateSawLoop).
+    // La scie reste silencieuse (pas de boucle de ronronnement — trop insupportable).
     on('weaponFired', (e) => { this.playWeaponSfx((e as WeaponFiredEvent).kind) })
     on('pickupCollected', (e) => {
       const kind = (e as PickupCollectedEvent).kind
@@ -127,8 +139,7 @@ export class AudioDirector {
 
   /**
    * SFX procédural (zzfx) d'une arme, par ID, throttlé et au gain SFX courant
-   * (0/mute → rien). Variation par tir intrinsèque à zzfx (`randomness`). La scie
-   * est exclue (son continu géré par `updateSawLoop`).
+   * (0/mute → rien). Variation par tir intrinsèque à zzfx (`randomness`).
    */
   private playWeaponSfx(id: string): void {
     if (this.audioCtx === null || this.isLocked()) {
@@ -208,32 +219,6 @@ export class AudioDirector {
     }
     this.rampMusic()
     this.rampAmbience(state.screen)
-    this.updateSawLoop(state)
-  }
-
-  /**
-   * Ronronnement continu de la scie orbitale : actif tant qu'un joueur VIVANT a
-   * la scie en jeu (écran gameplay). Volume rampé sur le gain SFX ; coupé hors
-   * gameplay ou au mute. Un seul oscillateur, arrêté proprement (pas de fuite).
-   */
-  private updateSawLoop(state: AppViewState): void {
-    if (this.audioCtx === null) {
-      return
-    }
-    const wantSaw =
-      GAMEPLAY_SCREENS.has(state.screen) &&
-      state.players.some((p) => p.alive && p.inventory.weapons.some((w) => w.id === 'scie'))
-    if (!wantSaw) {
-      if (this.sawLoop !== null) {
-        this.sawLoop.stop()
-        this.sawLoop = null
-      }
-      return
-    }
-    if (this.sawLoop === null) {
-      this.sawLoop = createWhirLoop(this.audioCtx)
-    }
-    this.sawLoop.setVolume(this.isLocked() ? 0 : sfxGain(this.settings) * SAW_LOOP_LEVEL)
   }
 
   private onScreenEnter(state: AppViewState): void {
@@ -249,11 +234,12 @@ export class AudioDirector {
         this.playVoice(flawless ? VOICE.flawless : VOICE.victory)
         break
       }
-      case 'upgrade':
-        if (Math.random() < 0.5) {
-          this.playVoice(VOICE.upgrade) // « Choose your destiny » / « Keep going », par intermittence
-        }
+      case 'upgrade': {
+        // Joue systématiquement une voix à chaque level-up, en alternant les deux clips.
+        const key = pickUpgradeVoice(this.upgradeVoiceCount++)
+        this.playVoice([key])
         break
+      }
       case 'game':
         if (RUN_START_FROM.has(this.prevScreen)) {
           this.playVoice([voiceStage(state.stageOrder), ...VOICE.runStart])
@@ -275,7 +261,9 @@ export class AudioDirector {
     }
     this.currentKey = next
     if (next !== null && this.hasAudio(next)) {
-      const snd = this.sound.add(next, { loop: true, volume: 0 }) as unknown as SoundInstance
+      // La musique de game-over est un jingle court : une seule lecture (pas de boucle).
+      const loop = !NON_LOOPING_MUSIC.has(next)
+      const snd = this.sound.add(next, { loop, volume: 0 }) as unknown as SoundInstance
       snd.play()
       this.current = snd
     }
