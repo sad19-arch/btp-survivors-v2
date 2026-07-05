@@ -28,6 +28,22 @@ export function canPlayXpDing(lastMs: number, nowMs: number, throttleMs: number)
   return nowMs - lastMs >= throttleMs
 }
 
+/**
+ * B5 — Fanfare de coffre/évolution (ZzFX procédural).
+ * Accord majeur ascendant court : 3 notes courtes + sustain grave → son de victoire arcade 16-bit.
+ * Paramètres : [volume, randomness, freq, attack, sustain, release, shape, shapeCurve, slide, ...].
+ * Jouée en rafale (3 notes décalées) depuis `playChestFanfare`.
+ * Exportée pour tests Vitest si nécessaire.
+ */
+export const CHEST_FANFARE_NOTES: readonly (readonly number[])[] = [
+  // Note 1 : do5 court (262 Hz × 2 = 523 Hz), triangle vif
+  [0.55, 0.01, 523, 0.005, 0, 0.07, 1, 1.2, 0.05],
+  // Note 2 : mi5 (659 Hz), légère slide montante
+  [0.55, 0.01, 659, 0.005, 0, 0.08, 1, 1.2, 0.08],
+  // Note 3 : sol5 (784 Hz) + sustain → fanfare
+  [0.65, 0.01, 784, 0.005, 0.04, 0.18, 1, 1.3, 0.03]
+] as const
+
 /** Clés de musique qui ne doivent PAS boucler (lecture unique, ex. jingle court). */
 const NON_LOOPING_MUSIC = new Set<MusicKey>([MUSIC.gameover])
 
@@ -125,8 +141,9 @@ export class AudioDirector {
     // (Plus de SFX générique sur `auraPulse` : aura/sweep/strike/cône sonnent
     // désormais par ARME via `weaponFired`/zzfx. L'auraPulse reste pour les VFX.)
     on('prisonerFreed', () => { this.playCue('prisonerFreed'); this.playVoice(VOICE.thankyou) })
-    // Fanfare d'évolution (coffre ramassé + conditions réunies) : cue existant + voix triomphante.
-    on('evolved', () => { this.playCue('bonus'); this.playVoice(VOICE.bonus) })
+    // B5 — Fanfare d'évolution (coffre ramassé + conditions réunies) : fanfare zzfx en accord
+    // majeur + voix triomphante. Remplace le cue 'bonus' générique par une fanfare dédiée.
+    on('evolved', () => { this.playChestFanfare(); this.playVoice(VOICE.bonus) })
     on('upgradePick', () => { this.playCue('upgradePick') })
     on('menuMove', () => { this.playCue('menuMove') })
     on('menuConfirm', () => { this.playCue('menuConfirm') })
@@ -177,6 +194,32 @@ export class AudioDirector {
     }
     this.lastSfx.set(`w_${id}`, now)
     playZzfx(this.audioCtx, gain, weaponZzfx(id))
+  }
+
+  /**
+   * B5 — Fanfare de coffre/évolution (zzfx procédural).
+   * Joue 3 notes en accord majeur ascendant décalées dans le temps (~40ms entre chaque).
+   * Inaudible si audio verrouillé, contexte nul, ou gain nul.
+   */
+  private playChestFanfare(): void {
+    if (this.audioCtx === null || this.isLocked()) {
+      return
+    }
+    const ctx = this.audioCtx
+    const gain = sfxGain(this.settings)
+    if (gain <= 0) {
+      return
+    }
+    CHEST_FANFARE_NOTES.forEach((note, i) => {
+      const delayMs = i * 90
+      if (delayMs === 0) {
+        playZzfx(ctx, gain, note)
+      } else {
+        window.setTimeout(() => {
+          playZzfx(ctx, gain, note)
+        }, delayMs)
+      }
+    })
   }
 
   /**

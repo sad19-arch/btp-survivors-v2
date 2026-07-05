@@ -26,6 +26,10 @@ export class Overlay {
   private padSignature = ''
   /** Remplissage de la barre de PV de boss (mis à jour chaque frame ; null = pas de boss). */
   private bossBarFill: HTMLElement | null = null
+  /** Couche du panneau jackpot (coffre d'évolution ramassé) — B5. */
+  private readonly jackpotLayer: HTMLElement
+  /** Timer de fermeture automatique du panneau jackpot. */
+  private jackpotTimer: number | null = null
   /** Signature (ids+niveaux) du dernier inventaire rendu — évite de reconstruire à chaque frame. */
   private inventorySignature = ''
   private signature = ''
@@ -49,6 +53,7 @@ export class Overlay {
     this.bossLayer = h('div')
     this.inventoryLayer = h('div')
     this.padLayer = h('div', { className: 'pads' })
+    this.jackpotLayer = h('div')
     root.append(
       this.hud,
       this.screenLayer,
@@ -56,7 +61,8 @@ export class Overlay {
       this.introLayer,
       this.bossLayer,
       this.inventoryLayer,
-      this.padLayer
+      this.padLayer,
+      this.jackpotLayer
     )
   }
 
@@ -280,6 +286,90 @@ export class Overlay {
    */
   showEvolutionBanner(name: string): void {
     this.showBanner(`Évolution — ${name}`, 'banner banner--evolution')
+  }
+
+  /**
+   * B5 — Panneau « jackpot » (machine à sous arcade) déclenché à la prise d'un
+   * coffre d'évolution. Affiche une roulette pixel qui défile (~1.1s) et s'arrête
+   * sur le nom de l'arme évoluée, avec un flash final.
+   *
+   * Purement cosmétique : l'évolution est déjà appliquée par la sim au moment de
+   * l'appel. Le panneau se ferme automatiquement après `totalMs` ms.
+   * Ne bloque aucune interaction, ne perturbe pas le déterminisme.
+   *
+   * @param weaponName  Nom de l'arme évoluée (résolu côté `main.ts` via `WEAPONS`).
+   * @param onDone      Callback optionnel appelé à la fermeture du panneau.
+   */
+  showJackpot(weaponName: string, onDone?: () => void): void {
+    // Annuler un éventuel jackpot en cours.
+    if (this.jackpotTimer !== null) {
+      window.clearTimeout(this.jackpotTimer)
+      this.jackpotTimer = null
+    }
+    clear(this.jackpotLayer)
+
+    // Liste d'items défilants (mots-clés chantier + nom final).
+    const reelItems = [
+      'Niveau max', 'Passif actif', 'Coffre ouvert', 'Combinaison',
+      weaponName, 'Niveau max', 'Passif actif', weaponName
+    ]
+
+    // Durées (ms).
+    const reelDurationMs = 900  // durée de défilement
+    const flashDelayMs = 950     // flash après arrêt
+    const totalMs = 1500         // durée totale avant fermeture
+
+    const itemH = 48 // hauteur d'un item en px (sync CSS .jackpot__item height)
+    const winnerIndex = reelItems.length - 1 // dernier item = le vrai nom
+
+    const reel = h('div', { className: 'jackpot__reel' })
+    reelItems.forEach((label, i) => {
+      reel.append(h('div', {
+        className: i === winnerIndex ? 'jackpot__item jackpot__item--winner' : 'jackpot__item',
+        text: label
+      }))
+    })
+
+    // Position initiale : tout en haut (item 0 visible).
+    reel.style.transform = 'translateY(0px)'
+
+    const window_ = h('div', { className: 'jackpot__window' }, reel)
+    const panel = h(
+      'div',
+      { className: 'jackpot' },
+      h('div', { className: 'jackpot__title', text: 'Evolution' }),
+      window_
+    )
+    this.jackpotLayer.append(panel)
+
+    // Animation de défilement CSS via requestAnimationFrame : décélération cubic-ease.
+    const targetY = -(winnerIndex * itemH)
+    const startTime = performance.now()
+
+    const animate = (now: number): void => {
+      const elapsed = now - startTime
+      const t = Math.min(elapsed / reelDurationMs, 1)
+      // Ease-out cubic : rapide au début, ralentit à la fin.
+      const ease = 1 - (1 - t) ** 3
+      const y = targetY * ease
+      reel.style.transform = `translateY(${Math.round(y)}px)`
+      if (t < 1) {
+        requestAnimationFrame(animate)
+      }
+    }
+    requestAnimationFrame(animate)
+
+    // Flash pixel du panneau après arrêt (DA-safe : animation CSS steps).
+    window.setTimeout(() => {
+      panel.classList.add('jackpot--flash')
+    }, flashDelayMs)
+
+    // Fermeture automatique.
+    this.jackpotTimer = window.setTimeout(() => {
+      clear(this.jackpotLayer)
+      this.jackpotTimer = null
+      onDone?.()
+    }, totalMs)
   }
 
   private showBanner(text: string, className: string): void {

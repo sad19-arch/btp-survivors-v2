@@ -337,6 +337,108 @@ const CSS = `
   line-height: 1;
   padding: 3px 5px;
 }
+/* B5 — Panneau jackpot « machine à sous » (coffre d'évolution ramassé).
+   DA-safe : panneaux pixel, palette palette.ts, coins carrés, ombre décalée,
+   pas d'emoji/glow/gradient/coins-arrondis. Couche indépendante, pointer-events:none. */
+#ui-root .jackpot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: ${PALETTE.brunSombre};
+  border: 4px solid ${PALETTE.jauneSecurite};
+  box-shadow: 8px 8px 0 ${PALETTE.contour};
+  padding: 20px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-width: 280px;
+  pointer-events: none;
+  z-index: 20;
+}
+#ui-root .jackpot__title {
+  color: ${PALETTE.jauneSecurite};
+  font-size: 20px;
+  font-weight: bold;
+  text-shadow: 3px 3px 0 ${PALETTE.contour};
+  letter-spacing: 2px;
+}
+/* Fenêtre de la roulette : cadre pixel noir, masque les items en défilement. */
+#ui-root .jackpot__window {
+  width: 220px;
+  height: 48px;
+  overflow: hidden;
+  border: 3px solid ${PALETTE.contour};
+  box-shadow: 3px 3px 0 ${PALETTE.contour};
+  background: ${PALETTE.contour};
+  position: relative;
+}
+/* Bande de défilement de la roulette (liste d'items défilants). */
+#ui-root .jackpot__reel {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  will-change: transform;
+}
+/* Un item dans la roulette. */
+#ui-root .jackpot__item {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: bold;
+  color: ${PALETTE.blanc};
+  text-shadow: 2px 2px 0 ${PALETTE.contour};
+  border-bottom: 2px solid ${PALETTE.brunSombre};
+  padding: 0 8px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+/* Item surligné (résultat final de la roulette). */
+#ui-root .jackpot__item--winner {
+  color: ${PALETTE.jauneSecurite};
+  background: ${PALETTE.brunSombre};
+  border-bottom-color: ${PALETTE.jauneSecurite};
+}
+/* Lignes de repère des bords de la fenêtre (pixel-art, pas de glow). */
+#ui-root .jackpot__window::before,
+#ui-root .jackpot__window::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  height: 3px;
+  background: ${PALETTE.orangeDanger};
+  z-index: 2;
+  pointer-events: none;
+}
+#ui-root .jackpot__window::before { top: 0; }
+#ui-root .jackpot__window::after { bottom: 0; }
+/* Flash final sur le panneau jackpot. */
+@keyframes jackpot-flash {
+  0%   { border-color: ${PALETTE.jauneSecurite}; box-shadow: 8px 8px 0 ${PALETTE.contour}; }
+  20%  { border-color: ${PALETTE.vertBonus}; box-shadow: 8px 8px 0 ${PALETTE.contour}, 0 0 0 4px ${PALETTE.vertBonus}; }
+  40%  { border-color: ${PALETTE.jauneSecurite}; box-shadow: 8px 8px 0 ${PALETTE.contour}; }
+  60%  { border-color: ${PALETTE.vertBonus}; box-shadow: 8px 8px 0 ${PALETTE.contour}, 0 0 0 4px ${PALETTE.vertBonus}; }
+  80%  { border-color: ${PALETTE.jauneSecurite}; box-shadow: 8px 8px 0 ${PALETTE.contour}; }
+  100% { border-color: ${PALETTE.jauneSecurite}; box-shadow: 8px 8px 0 ${PALETTE.contour}; }
+}
+#ui-root .jackpot--flash {
+  animation: jackpot-flash 0.5s steps(2, end);
+}
+/* Entrée du panneau jackpot (slide pixel). */
+@keyframes jackpot-in {
+  from { opacity: 0; transform: translate(-50%, calc(-50% - 10px)); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+#ui-root .jackpot { animation: jackpot-in 0.18s ease-out; }
 `
 
 let injected = false

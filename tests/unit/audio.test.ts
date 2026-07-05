@@ -96,27 +96,31 @@ describe('audio — SFX de tir couvre toute arme projectile (pas seulement cloue
   })
 })
 
-describe('audio — évolution (arme évoluée) déclenche un cue', () => {
+describe('audio — évolution (arme évoluée) déclenche voix triomphante', () => {
   /** Fake minimal du sous-ensemble de `BaseSoundManager` que l'AudioDirector consomme. */
-  function fakeSoundManager(): { manager: Phaser.Sound.BaseSoundManager; played: string[] } {
-    const played: string[] = []
+  function fakeSoundManager(): { manager: Phaser.Sound.BaseSoundManager; addedKeys: string[] } {
+    const addedKeys: string[] = []
     const manager = {
       locked: false,
-      play: (key: string) => { played.push(key); return true },
-      add: () => ({ play: () => true, stop: () => true, destroy: () => {}, once: () => {}, volume: 0, isPlaying: false }),
+      play: () => true,
+      add: (key: string) => { addedKeys.push(key); return { play: () => true, stop: () => true, destroy: () => {}, once: () => {}, volume: 0, isPlaying: false } },
       game: { cache: { audio: { exists: () => true } } }
     } as unknown as Phaser.Sound.BaseSoundManager
-    return { manager, played }
+    return { manager, addedKeys }
   }
 
-  it("un EvolvedEvent dispatché sur le bus déclenche le cue 'bonus'", () => {
+  it('un EvolvedEvent dispatché sur le bus déclenche la voix bonus (fanfare zzfx + triomphe)', () => {
+    // B5 : evolved → playChestFanfare (zzfx procédural, sans cue Phaser) + playVoice(VOICE.bonus).
+    // Le cue 'bonus' n'est plus joué directement (remplacé par la fanfare zzfx) ;
+    // la voix VOICE.bonus (voice_bonus) est toujours lancée via `add()`.
     const events = new EventTarget()
-    const { manager, played } = fakeSoundManager()
+    const { manager, addedKeys } = fakeSoundManager()
     const settings: AudioLevels = { master: 1, music: 1, sfx: 1, muted: false }
     const director = new AudioDirector(manager, events, () => settings)
     expect(director).toBeInstanceOf(AudioDirector) // construit pour son effet de bord (bindEvents s'abonne au bus)
     events.dispatchEvent(new EvolvedEvent('mitrailleuse_clous', 1))
-    expect(played.some((k) => SFX['bonus']?.keys.includes(k))).toBe(true)
+    // La voix bonus est ajoutée via add() (canal voix unique).
+    expect(addedKeys.some((k) => VOICE.bonus.includes(k))).toBe(true)
   })
 })
 

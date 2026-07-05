@@ -196,6 +196,11 @@ export class GameScene extends Phaser.Scene {
    */
   private readonly xpSparkleEpoch = new Map<number, number>()
   /**
+   * B5 — Epoch de scintillement des coffres d'évolution (pixel-pop jaune périodique).
+   * Même principe que xpSparkleEpoch : un seul pixel-pop par période (~700ms).
+   */
+  private readonly chestSparkleEpoch = new Map<number, number>()
+  /**
    * Étiquette « JN » + chevron au-dessus de chaque joueur humain, pour le repérer
    * dans une nuée d'ennemis (playtest). Un couple texte+chevron par joueur, couleur
    * = `playerColor`, depth élevé (au-dessus des ennemis). Détruits dans
@@ -873,6 +878,7 @@ export class GameScene extends Phaser.Scene {
     this.projectileSprites.clear()
     this.pickupSprites.clear()
     this.xpSparkleEpoch.clear()
+    this.chestSparkleEpoch.clear()
     this.playerLabels.forEach((l) => {
       l.text.destroy()
       l.chevron.destroy()
@@ -1419,11 +1425,20 @@ export class GameScene extends Phaser.Scene {
         this.pickupSprites.set(pk.id, sprite)
       }
       sprite.setPosition(pk.x, pk.y)
-      // Coffre d'évolution : léger « respire » (scale oscillant) pour le
-      // repérer dans la horde — DA-safe (pas de glow), scale re-fixé à
-      // l'acquisition donc aucun conflit avec le pooling.
+      // B5 — Coffre d'évolution : pulse de scale amplifié (±22 %) + scintillement
+      // pixel jaune périodique (~700ms) pour le repérer dans la nuée.
+      // DA-safe (pas de glow moderne, palette uniquement, pixel-pop carré).
       if (pk.type === 'coffre' && sprite instanceof Phaser.GameObjects.Sprite) {
-        sprite.setScale(cfg.scale * (1 + 0.12 * Math.sin(this.time.now / 180)))
+        // Rebond/pulse sinusoïdal plus prononcé que l'ancien ±12 %.
+        sprite.setScale(cfg.scale * (1 + 0.22 * Math.abs(Math.sin(this.time.now / 200))))
+        // Scintillement pixel jaune sécurité, décalé par id (pas de synchronisation).
+        const chestPeriod = 700
+        const chestOffset = (pk.id * 211) % chestPeriod
+        const chestEpoch = Math.floor((this.time.now + chestOffset) / chestPeriod)
+        if (this.chestSparkleEpoch.get(pk.id) !== chestEpoch) {
+          this.chestSparkleEpoch.set(pk.id, chestEpoch)
+          this.spawnPixelPop(pk.x, pk.y, PALETTE_HEX.jauneSecurite, 10, 240)
+        }
       }
       // B4 — Gemme XP : pulse d'échelle (shiny) + scintillement pixel discret.
       if (pk.type === 'xp' && sprite instanceof Phaser.GameObjects.Sprite) {
@@ -1449,8 +1464,9 @@ export class GameScene extends Phaser.Scene {
           sprite.destroy()
         }
         this.pickupSprites.delete(id)
-        // Nettoyage de l'epoch de scintillement (évite une fuite sur les gemmes collectées).
+        // Nettoyage des epochs de scintillement (évite une fuite sur les pickups collectés).
         this.xpSparkleEpoch.delete(id)
+        this.chestSparkleEpoch.delete(id)
       }
     }
 
