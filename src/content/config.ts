@@ -181,7 +181,14 @@ export const MINI_BOSS = {
    * faire entrer À L'ÉCRAN → le combat de climax est vu et engagé, pas un spawn
    * hors-champ que le joueur fond à distance sans le remarquer.
    */
-  spawnRadius: 320
+  spawnRadius: 320,
+  /**
+   * Multiplicateur de PV du mini-boss (× la def `contremaitre`). Le mini-boss de
+   * 5:00 est volontairement CORIACE (ne plus le fondre en 2 s une fois les armes
+   * montées/évoluées) ; comme il ne bloque PAS la victoire (sa mort = coffre), un
+   * bot non-évolué qui ne le tue pas survit quand même autour.
+   */
+  hpMult: 1.0
 } as const
 
 /**
@@ -192,7 +199,13 @@ export const FINAL_BOSS = {
   /** Instant d'apparition, en ms de temps de jeu (~10:30). */
   atMs: 630_000,
   /** Rayon d'apparition du boss (px), même logique que MINI_BOSS : à l'écran. */
-  spawnRadius: 320
+  spawnRadius: 320,
+  /**
+   * Multiplicateur de PV du boss FINAL (× la def `contremaitre`). Plus bas que le
+   * mini-boss : la VICTOIRE dépend de le tuer → il doit rester battable même par
+   * un build de mi-parcours (cible sim `KITE_MIN_WIN_PCT`).
+   */
+  hpMult: 0.67
 } as const
 
 /**

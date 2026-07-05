@@ -365,7 +365,8 @@ export class Simulation {
       return
     }
     const radius = role === 'mid' ? MINI_BOSS.spawnRadius : FINAL_BOSS.spawnRadius
-    const bossScale = { hp: coopHpFactor(this.playerCount()), contactDamage: 1, speed: 1 }
+    const hpMult = role === 'mid' ? MINI_BOSS.hpMult : FINAL_BOSS.hpMult
+    const bossScale = { hp: coopHpFactor(this.playerCount()) * hpMult, contactDamage: 1, speed: 1 }
     spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), radius, role, bossScale)
     this.events.dispatchEvent(new BossSpawnedEvent(role))
     if (role === 'mid') {
@@ -677,7 +678,7 @@ export class Simulation {
     }
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
-      const bossScale = { hp: coopHpFactor(this.playerCount()), contactDamage: 1, speed: 1 }
+      const bossScale = { hp: coopHpFactor(this.playerCount()) * MINI_BOSS.hpMult, contactDamage: 1, speed: 1 }
       spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), MINI_BOSS.spawnRadius, 'mid', bossScale)
       this.events.dispatchEvent(new BossSpawnedEvent('mid'))
     }
@@ -691,7 +692,7 @@ export class Simulation {
     }
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
-      const bossScale = { hp: coopHpFactor(this.playerCount()), contactDamage: 1, speed: 1 }
+      const bossScale = { hp: coopHpFactor(this.playerCount()) * FINAL_BOSS.hpMult, contactDamage: 1, speed: 1 }
       spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), FINAL_BOSS.spawnRadius, 'final', bossScale)
       this.events.dispatchEvent(new BossSpawnedEvent('final'))
     }
