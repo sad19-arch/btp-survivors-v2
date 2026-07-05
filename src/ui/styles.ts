@@ -132,7 +132,6 @@ const CSS = `
   flex-direction: column;
   gap: 10px;
 }
-#ui-root .card--focus { border-color: ${PALETTE.jauneSecurite}; box-shadow: 5px 5px 0 ${PALETTE.contour}; }
 #ui-root .card__icon { width: 56px; height: 56px; align-self: center; display: flex; align-items: center; justify-content: center; }
 #ui-root .card__img { width: 56px; height: 56px; image-rendering: pixelated; }
 #ui-root .card__mono {
@@ -147,6 +146,12 @@ const CSS = `
 #ui-root .card__hint { color: ${PALETTE.blanc}; font-size: 13px; text-transform: none; letter-spacing: 0; }
 #ui-root .card--weapon { border-color: ${PALETTE.orangeDanger}; }
 #ui-root .card--passive { border-color: ${PALETTE.cyanAccent}; }
+/* Focus : défini APRÈS les couleurs de type (weapon/passive) pour prendre la priorité.
+   Les règles card--weapon / card--passive ont la même spécificité que card--focus ;
+   la règle déclarée en dernier gagne — le focus jaune doit toujours être visible. */
+#ui-root .card--focus,
+#ui-root .card--weapon.card--focus,
+#ui-root .card--passive.card--focus { border-color: ${PALETTE.jauneSecurite}; box-shadow: 5px 5px 0 ${PALETTE.contour}; }
 #ui-root .card__pips { display: flex; gap: 2px; align-items: center; flex-wrap: wrap; }
 #ui-root .pip { display: inline-block; width: 8px; height: 8px; background: ${PALETTE.brunSombre}; border: 1px solid ${PALETTE.contour}; }
 #ui-root .pip.pip--on { background: ${PALETTE.jauneSecurite}; border-color: ${PALETTE.contour}; }
