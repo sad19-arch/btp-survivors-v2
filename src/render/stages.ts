@@ -30,7 +30,7 @@ export interface StageEnemySprite {
 }
 
 /** Bande de placement d'une structure (anneau autour du centre du monde). */
-export type StageStructureBand = 'mid' | 'periphery'
+export type StageStructureBand = 'near' | 'mid' | 'periphery'
 
 /**
  * Grande pièce structurelle qui remplit l'arène (l'étape de chantier VISIBLE partout).
@@ -182,12 +182,11 @@ const TERRASSEMENT_RENDER: StageRender = {
     { key: 'decal_s2_tracks', file: 'stage02/decals/tracks.png' },
     { key: 'decal_s2_puddle', file: 'stage02/decals/puddle.png' }
   ],
+  // SEUL prop streamé = les tas de terre (clutter réparti). Les gros ENGINS sont
+  // des `structures` scriptées (placées UNE fois) — sinon la formule de densité du
+  // streamer les réplique ~1 par chunk (pelleteuses partout = « vrac »).
   props: [
-    { key: 'prop_s2_excavator', file: 'stage02/props/excavator.png', scale: 0.8, count: 1 },
-    { key: 'prop_s2_truck', file: 'stage02/props/dump_truck.png', scale: 0.72, count: 1 },
-    { key: 'prop_s2_roller', file: 'stage02/props/road_roller.png', scale: 0.85, count: 1 },
-    { key: 'prop_s2_dozer', file: 'stage02/props/bulldozer.png', scale: 0.85, count: 1 },
-    { key: 'prop_s2_dirt', file: 'stage02/props/dirt_large.png', scale: 0.8, count: 4 }
+    { key: 'prop_s2_dirt', file: 'stage02/props/dirt_large.png', scale: 0.85, count: 5 }
   ],
   enemies: {
     boueux: { key: 'enemy_s2_boueux', file: 'stage02/enemies/boueux_walk.png', frame: 256, scale: 0.74 },
@@ -197,8 +196,14 @@ const TERRASSEMENT_RENDER: StageRender = {
   boss: { key: 'boss_s2_terrassement', file: 'stage02/boss/boss_walk.png', frame: 256, scale: 1.27 },
   // Terrassement : grandes fouilles excavées partout + chef de chantier qui montre le plan.
   landmark: { key: 'landmark_stage02', file: 'stage02/landmarks/pit.png', scale: 1.4, count: 1 },
+  // Engins-héros PLACÉS UNE FOIS, gros, proches de l'anneau de jeu (band 'near')
+  // + 3 fosses en fond. Ordre = ordre des angles scriptés (structureAngles).
   structures: [
-    { key: 'struct_stage02_pit', file: 'stage02/structures/pit_big.png', scale: 0.8, count: 5, band: 'mid' }
+    { key: 'prop_s2_excavator', file: 'stage02/props/excavator.png', scale: 1.2, count: 1, band: 'near' },
+    { key: 'prop_s2_truck', file: 'stage02/props/dump_truck.png', scale: 1.05, count: 1, band: 'near' },
+    { key: 'prop_s2_roller', file: 'stage02/props/road_roller.png', scale: 1.0, count: 1, band: 'mid' },
+    { key: 'prop_s2_dozer', file: 'stage02/props/bulldozer.png', scale: 1.0, count: 1, band: 'mid' },
+    { key: 'struct_stage02_pit', file: 'stage02/structures/pit_big.png', scale: 0.85, count: 3, band: 'mid' }
   ],
   ambient: { key: 'npc_stage02', file: 'stage02/npc/chef_work.png', frame: 256, scale: 0.71, framePeriodMs: 340 },
   // ── Composition scriptée stage 02 (terrassement) ──────────────────────────────
@@ -210,41 +215,43 @@ const TERRASSEMENT_RENDER: StageRender = {
     // Angles en degrés : 0=Est, 90=Nord (convention sin/cos standard en Phaser +y↓)
     // structureAngles[i] → structure i (pit_big ×5) : angle en degrés
     // 5 fosses en arc Nord-Est (−60°..+60° autour de 45° = NE) pour concentrer l'excavation
-    structureAngles: [30, 60, 10, 80, 50],
-    landmarkAngle: 45,      // NE : la grande fosse hero est au Nord-Est
-    ambientAngle: 30        // PNJ chef près du landmark NE
+    // 7 instances dans l'ordre des `structures` : pelleteuse NE, benne SE,
+    // compacteur O, bulldozer OSO, puis 3 fosses (N, ENE, SO).
+    structureAngles: [50, 310, 175, 215, 25, 95, 250],
+    landmarkAngle: 70,      // grande fosse hero au Nord
+    ambientAngle: 55        // chef de chantier près de la pelleteuse NE
   },
   // Zones métier : 3 secteurs complémentaires
   zones: [
-    // Secteur Excavation (NE) — dense, dominé par les fosses/ornières
+    // Secteur Excavation (NE) — dense en ornières + tas de terre autour des engins
     {
-      angleCenter: 45,
-      angleSpread: 60,
-      distMin: 200,
-      distMax: 900,
-      dominantPropIndices: [0, 4],    // excavator + dirt_large
-      dominantDecalIndices: [0],      // tracks
+      angleCenter: 50,
+      angleSpread: 55,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [0],       // tas de terre (seul prop)
+      dominantDecalIndices: [0],      // tracks (ornières)
       density: 1.8
     },
-    // Secteur Déblais (SE) — camion benne + tas de terre
+    // Secteur Déblais (SE) — tas de terre + flaques boueuses
     {
-      angleCenter: 315,
-      angleSpread: 60,
-      distMin: 200,
-      distMax: 900,
-      dominantPropIndices: [1, 4],    // dump_truck + dirt_large
-      dominantDecalIndices: [1],      // puddle
-      density: 1.4
+      angleCenter: 310,
+      angleSpread: 55,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [0],       // tas de terre
+      dominantDecalIndices: [1],      // puddle (flaques)
+      density: 1.5
     },
-    // Passage d'engins (Ouest) — compacteur + bulldozer
+    // Passage d'engins (Ouest) — ornières marquées
     {
       angleCenter: 180,
-      angleSpread: 70,
-      distMin: 180,
-      distMax: 800,
-      dominantPropIndices: [2, 3],    // roller + dozer
+      angleSpread: 60,
+      distMin: 320,
+      distMax: 720,
+      dominantPropIndices: [0],
       dominantDecalIndices: [0],      // tracks
-      density: 1.2
+      density: 1.3
     }
   ],
   baseTileIndex: 0,           // tuile boue de base (index 0)

@@ -123,7 +123,7 @@ export function phaseSalt(phaseId: string): number {
 }
 
 /** Bande de placement d'une structure : anneau de distance au centre du monde. */
-export type StructureBand = 'mid' | 'periphery'
+export type StructureBand = 'near' | 'mid' | 'periphery'
 
 /** Une grande pièce structurelle qui remplit l'arène (dérive de PropDef + bande). */
 export interface StructureDef extends PropDef {
@@ -134,6 +134,9 @@ export interface StructureDef extends PropDef {
 const CENTER_CLEAR = 260
 
 const BANDS: Record<StructureBand, readonly [number, number]> = {
+  // « near » : juste au bord du rayon central dégagé → l'élément-héro est PRÉSENT
+  // dans l'anneau de jeu (visible en permanence), pas seulement à l'horizon.
+  near: [320, 500],
   mid: [CENTER_CLEAR, 720],
   periphery: [560, 820]
 }
