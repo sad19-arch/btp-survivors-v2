@@ -918,41 +918,56 @@ export class GameScene extends Phaser.Scene {
     // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
     const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
     // Base du sol (TileSprite seul — décalques gérés par le DecorStreamer).
-    createGround(
-      this,
-      WORLD.width,
-      WORLD.height,
-      { tileKeys: this.stage.ground.map((g) => g.key) }
-    )
+    const groundAssets: { tileKeys: string[]; baseTileIndex?: number } = {
+      tileKeys: this.stage.ground.map((g) => g.key)
+    }
+    if (this.stage.baseTileIndex !== undefined) {
+      groundAssets.baseTileIndex = this.stage.baseTileIndex
+    }
+    createGround(this, WORLD.width, WORLD.height, groundAssets)
     // Streamer de décor : décalques + props streamés autour de la caméra par chunks de
     // DEFAULT_CHUNK_SIZE px. Coût constant (~16 chunks actifs) quel que soit le monde.
-    this.decorStreamer = new DecorStreamer(this, WORLD.width, WORLD.height, {
+    const streamerOpts: import('@render/decorStreamer').DecorStreamerOpts = {
       chunkSize: DEFAULT_CHUNK_SIZE,
       seed: stageSeed,
       decals: this.stage.decals.map((d) => d.key),
       props: this.stage.props.map((p) => ({ key: p.key, scale: p.scale, count: p.count }))
-    })
+    }
+    if (this.stage.zones !== undefined) {
+      streamerOpts.zones = this.stage.zones
+    }
+    if (this.stage.decalDensityMultiplier !== undefined) {
+      streamerOpts.decalDensityMultiplier = this.stage.decalDensityMultiplier
+    }
+    this.decorStreamer = new DecorStreamer(this, WORLD.width, WORLD.height, streamerOpts)
     // NB : createProps est retiré (remplacé par le DecorStreamer).
     // Les landmark/structures (nombre fixe, ancrés près du centre) restent inchangés.
     // Grandes structures qui remplissent l'arène (l'étape de chantier partout, hors centre).
+    const stageGeometry = this.stage.geometry
     if (this.stage.structures !== undefined) {
       createStructures(
         this,
         WORLD.width,
         WORLD.height,
         this.stage.structures.map((s) => ({ key: s.key, scale: s.scale, count: s.count, band: s.band })),
-        stageSeed
+        stageSeed,
+        stageGeometry
       )
     }
     // Landmark HERO de la phase — grand, en périphérie, décor.
     const lm = this.stage.landmark
     if (lm !== undefined) {
-      createLandmark(this, WORLD.width, WORLD.height, { key: lm.key, scale: lm.scale, count: lm.count }, stageSeed)
+      createLandmark(this, WORLD.width, WORLD.height, { key: lm.key, scale: lm.scale, count: lm.count }, stageSeed, stageGeometry)
     }
     // PNJ d'ambiance non-hostile (geste métier) à un spot seedé hors du centre — « vie » du chantier.
+    // T4 : si geometry.ambientAngle est défini, le PNJ est placé dans ce secteur (angle fixe),
+    // ce qui l'ancre près du landmark/zone de travail de la phase.
     const amb = this.stage.ambient
     if (amb !== undefined && this.textures.exists(amb.key)) {
-      const ang = (((stageSeed * 2654435761) >>> 0) % 1000) / 1000 * Math.PI * 2
+      const ang =
+        stageGeometry?.ambientAngle !== undefined
+          ? (stageGeometry.ambientAngle * Math.PI) / 180
+          : (((stageSeed * 2654435761) >>> 0) % 1000) / 1000 * Math.PI * 2
       const ax = WORLD.width / 2 + Math.cos(ang) * 470
       const ay = WORLD.height / 2 + Math.sin(ang) * 470
       this.ambientSprite = this.add.sprite(ax, ay, amb.key).setScale(amb.scale).setDepth(1)

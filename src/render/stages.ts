@@ -44,6 +44,42 @@ export interface StageStructure {
   band: StageStructureBand
 }
 
+/**
+ * Géographie scriptée d'un stage : angles fixes (en degrés) pour les éléments-héros.
+ * Optionnel — si absent, le placement reste aléatoire (comportement actuel).
+ * Angles mesurés depuis le centre du monde, 0° = droite (Est), sens trigonométrique.
+ */
+export interface StageGeometry {
+  /** Angle (°) de chaque structure, dans l'ordre de `structures[]`. */
+  structureAngles?: number[]
+  /** Angle (°) du landmark principal. */
+  landmarkAngle?: number
+  /** Angle (°) du PNJ d'ambiance (secteur où il apparaît). */
+  ambientAngle?: number
+}
+
+/**
+ * Zone de clustering thématique pour les décalques/props d'un stage.
+ * Les points tombant dans la zone reçoivent une densité multipliée et
+ * un choix prioritaire parmi les indices dominants.
+ */
+export interface DecorZone {
+  /** Angle central de la zone (°, 0 = Est, sens trigo). */
+  angleCenter: number
+  /** Demi-ouverture angulaire de la zone (°). */
+  angleSpread: number
+  /** Distance minimale au centre (px). */
+  distMin: number
+  /** Distance maximale au centre (px). */
+  distMax: number
+  /** Indices de props prioritaires dans cette zone (ordre de `StageRender.props`). Optionnel. */
+  dominantPropIndices?: number[]
+  /** Indices de décalques prioritaires dans cette zone (ordre de `StageRender.decals`). Optionnel. */
+  dominantDecalIndices?: number[]
+  /** Multiplicateur de densité dans cette zone (1.0 = neutre, >1 = plus dense). */
+  density: number
+}
+
 export interface StageRender {
   ground: StageKeyFile[]
   decals: StageKeyFile[]
@@ -58,6 +94,14 @@ export interface StageRender {
   structures?: StageStructure[]
   /** PNJ d'ambiance non-hostile (feuille perso, geste métier) — la « vie » du chantier. */
   ambient?: StageAmbient
+  /** Géographie scriptée (angles fixes) — optionnel, repli aléatoire si absent. */
+  geometry?: StageGeometry
+  /** Zones de clustering thématique — optionnel, repli uniforme si absent. */
+  zones?: DecorZone[]
+  /** Indice de la tuile de base du sol (dans `ground[]`, défaut 0). */
+  baseTileIndex?: number
+  /** Multiplicateur de densité des décalques (défaut 1.0 — brut > fini). */
+  decalDensityMultiplier?: number
 }
 
 /** PNJ d'ambiance : skin perso + période d'animation optionnelle (vitesse du geste). */
@@ -66,11 +110,15 @@ export interface StageAmbient extends StageEnemySprite {
   framePeriodMs?: number
 }
 
-/** Ajouts optionnels d'ambiance d'un stage (landmark + structures + PNJ). */
+/** Ajouts optionnels d'ambiance d'un stage (landmark + structures + PNJ + composition). */
 export interface StageExtra {
   landmark?: StageProp
   structures?: StageStructure[]
   ambient?: StageAmbient
+  geometry?: StageGeometry
+  zones?: DecorZone[]
+  baseTileIndex?: number
+  decalDensityMultiplier?: number
 }
 
 export const DEFAULT_STAGE = 'terrain_vierge'
@@ -152,7 +200,55 @@ const TERRASSEMENT_RENDER: StageRender = {
   structures: [
     { key: 'struct_stage02_pit', file: 'stage02/structures/pit_big.png', scale: 0.8, count: 5, band: 'mid' }
   ],
-  ambient: { key: 'npc_stage02', file: 'stage02/npc/chef_work.png', frame: 256, scale: 0.71, framePeriodMs: 340 }
+  ambient: { key: 'npc_stage02', file: 'stage02/npc/chef_work.png', frame: 256, scale: 0.71, framePeriodMs: 340 },
+  // ── Composition scriptée stage 02 (terrassement) ──────────────────────────────
+  // Géographie : pelleteuse (prop_s2_excavator=idx0) côté NE, benne (idx1) côté SE,
+  // compacteur (idx2=roller) à l'Ouest. Les 5 fosses distribuées sur le quart NE-SE
+  // (là où les engins creusent). Landmark (grande fosse) au Nord-NE. PNJ chef de
+  // chantier près du landmark, côté Nord.
+  geometry: {
+    // Angles en degrés : 0=Est, 90=Nord (convention sin/cos standard en Phaser +y↓)
+    // structureAngles[i] → structure i (pit_big ×5) : angle en degrés
+    // 5 fosses en arc Nord-Est (−60°..+60° autour de 45° = NE) pour concentrer l'excavation
+    structureAngles: [30, 60, 10, 80, 50],
+    landmarkAngle: 45,      // NE : la grande fosse hero est au Nord-Est
+    ambientAngle: 30        // PNJ chef près du landmark NE
+  },
+  // Zones métier : 3 secteurs complémentaires
+  zones: [
+    // Secteur Excavation (NE) — dense, dominé par les fosses/ornières
+    {
+      angleCenter: 45,
+      angleSpread: 60,
+      distMin: 200,
+      distMax: 900,
+      dominantPropIndices: [0, 4],    // excavator + dirt_large
+      dominantDecalIndices: [0],      // tracks
+      density: 1.8
+    },
+    // Secteur Déblais (SE) — camion benne + tas de terre
+    {
+      angleCenter: 315,
+      angleSpread: 60,
+      distMin: 200,
+      distMax: 900,
+      dominantPropIndices: [1, 4],    // dump_truck + dirt_large
+      dominantDecalIndices: [1],      // puddle
+      density: 1.4
+    },
+    // Passage d'engins (Ouest) — compacteur + bulldozer
+    {
+      angleCenter: 180,
+      angleSpread: 70,
+      distMin: 180,
+      distMax: 800,
+      dominantPropIndices: [2, 3],    // roller + dozer
+      dominantDecalIndices: [0],      // tracks
+      density: 1.2
+    }
+  ],
+  baseTileIndex: 0,           // tuile boue de base (index 0)
+  decalDensityMultiplier: 1.6 // chantier brut : beaucoup d'ornières/flaques
 }
 
 /** Spécification compacte d'un prop : [nom de fichier (sans ext), échelle, nombre]. */

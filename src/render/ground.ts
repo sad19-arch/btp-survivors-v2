@@ -3,6 +3,8 @@ import Phaser from 'phaser'
 export interface GroundAssets {
   /** Clés de texture des tuiles de base (variantes ; la 1re sert de base répétée). */
   tileKeys: readonly string[]
+  /** Indice de la tuile de base dans `tileKeys` (défaut 0). Optionnel. */
+  baseTileIndex?: number
 }
 
 /**
@@ -24,7 +26,9 @@ export function createGround(
   assets: GroundAssets
 ): void {
   // Base : une tuile répétée par un TileSprite (POT 32×32 → tuilage GPU propre).
-  const baseKey = assets.tileKeys[0]
+  // baseTileIndex permet de choisir une variante de tuile par stage (défaut 0).
+  const tileIdx = assets.baseTileIndex ?? 0
+  const baseKey = assets.tileKeys[tileIdx] ?? assets.tileKeys[0]
   if (baseKey !== undefined) {
     scene.add.tileSprite(0, 0, worldW, worldH, baseKey).setOrigin(0, 0).setDepth(-10)
   }

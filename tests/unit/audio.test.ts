@@ -120,7 +120,7 @@ describe('audio — évolution (arme évoluée) déclenche voix triomphante', ()
     expect(director).toBeInstanceOf(AudioDirector) // construit pour son effet de bord (bindEvents s'abonne au bus)
     events.dispatchEvent(new EvolvedEvent('mitrailleuse_clous', 1))
     // La voix bonus est ajoutée via add() (canal voix unique).
-    expect(addedKeys.some((k) => VOICE.bonus.includes(k))).toBe(true)
+    expect(addedKeys.some((k) => (VOICE.bonus as readonly string[]).includes(k))).toBe(true)
   })
 })
 

@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import type { StageGeometry } from '@render/stages'
 
 /** Un type de prop décoratif à disperser dans le monde. */
 export interface PropDef {
@@ -69,13 +70,17 @@ export function createProps(
  * Pose un grand LANDMARK de bâtiment (la structure à cette phase) à une position
  * seedée hors du centre — visible autour du combat, décoratif et non bloquant.
  * Sprite individuel au-dessus des props épars (depth -4). Déterministe.
+ *
+ * Si `geometry.landmarkAngle` est fourni (degrés), l'angle est fixe → la
+ * géographie du stage est reconnaissable. Sinon repli RNG.
  */
 export function createLandmark(
   scene: Phaser.Scene,
   worldW: number,
   worldH: number,
   landmark: PropDef,
-  seed = 1
+  seed = 1,
+  geometry?: StageGeometry
 ): void {
   if (!scene.textures.exists(landmark.key)) {
     return
@@ -85,7 +90,17 @@ export function createLandmark(
   const cy = worldH / 2
   for (let i = 0; i < Math.max(1, landmark.count); i++) {
     // Ancrage périphérique (~500-620 px du centre) → visible en jouant, hors du spawn.
-    const angle = rng() * Math.PI * 2
+    // Angle fixe si geometry.landmarkAngle est défini (degrés → radians) ; sinon RNG.
+    const angle =
+      geometry?.landmarkAngle !== undefined
+        ? (geometry.landmarkAngle * Math.PI) / 180
+        : rng() * Math.PI * 2
+    // Consomme un RNG même quand l'angle est fixe pour préserver la séquence RNG suivante.
+    if (geometry?.landmarkAngle === undefined) {
+      // angle already consumed rng() above
+    } else {
+      rng() // consomme une valeur pour rester cohérent avec l'ancienne séquence RNG
+    }
     const dist = 500 + rng() * 120
     const x = Math.min(worldW - 60, Math.max(60, cx + Math.cos(angle) * dist))
     const y = Math.min(worldH - 60, Math.max(60, cy + Math.sin(angle) * dist))
@@ -128,28 +143,50 @@ const BANDS: Record<StructureBand, readonly [number, number]> = {
  * des positions seedées DISTINCTES dans leur bande, hors du rayon central dégagé.
  * Sprites individuels au-dessus des props, sous le landmark hero (depth -5).
  * Purement visuel et déterministe.
+ *
+ * Si `geometry.structureAngles` est fourni, chaque structure reçoit l'angle fixe
+ * correspondant (index global sur toutes les instances de toutes les defs, pas
+ * par def). Repli RNG si absent ou si l'index dépasse le tableau.
  */
 export function createStructures(
   scene: Phaser.Scene,
   worldW: number,
   worldH: number,
   structures: readonly StructureDef[],
-  seed = 1
+  seed = 1,
+  geometry?: StageGeometry
 ): void {
   const rng = mulberry32((seed ^ 0x53a9f0b1) >>> 0)
   const cx = worldW / 2
   const cy = worldH / 2
+  let globalIdx = 0
   for (const def of structures) {
     if (!scene.textures.exists(def.key)) {
+      // Avance le RNG autant qu'il aurait été consommé pour rester déterministe.
+      for (let i = 0; i < Math.max(1, def.count); i++) {
+        rng(); rng()
+        globalIdx++
+      }
       continue
     }
     const [dmin, dmax] = BANDS[def.band]
     for (let i = 0; i < Math.max(1, def.count); i++) {
-      const angle = rng() * Math.PI * 2
+      const fixedAngleDeg = geometry?.structureAngles?.[globalIdx]
+      const angle =
+        fixedAngleDeg !== undefined
+          ? (fixedAngleDeg * Math.PI) / 180
+          : rng() * Math.PI * 2
+      // Consomme un RNG si angle fixe pour maintenir la parité de la séquence RNG.
+      if (fixedAngleDeg === undefined) {
+        // angle already consumed rng() above
+      } else {
+        rng()
+      }
       const dist = dmin + rng() * (dmax - dmin)
       const x = Math.min(worldW - 40, Math.max(40, cx + Math.cos(angle) * dist))
       const y = Math.min(worldH - 40, Math.max(40, cy + Math.sin(angle) * dist))
       scene.add.image(x, y, def.key).setScale(def.scale).setDepth(-5)
+      globalIdx++
     }
   }
 }

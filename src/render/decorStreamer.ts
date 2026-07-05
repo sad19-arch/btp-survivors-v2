@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import type { PropDef } from '@render/props'
+import type { DecorZone } from '@render/stages'
 
 /**
  * Taille par défaut d'un chunk de streaming (px). Doit être un multiple commun
@@ -99,6 +100,36 @@ export function chunksForView(
 }
 
 /**
+ * Détermine si un point (x, y) mondial tombe dans une `DecorZone`.
+ * Retourne la zone si oui, null sinon. Fonction PURE (pas de RNG).
+ */
+function pointInZone(
+  x: number,
+  y: number,
+  worldCx: number,
+  worldCy: number,
+  zones: readonly DecorZone[]
+): DecorZone | null {
+  const dx = x - worldCx
+  const dy = y - worldCy
+  const dist = Math.sqrt(dx * dx + dy * dy)
+  // Angle en degrés (0=Est, croissant sens horaire en +y↓)
+  const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI
+  for (const z of zones) {
+    if (dist < z.distMin || dist > z.distMax) {
+      continue
+    }
+    // Différence angulaire (normalisée dans [−180,180])
+    let diff = ((angleDeg - z.angleCenter) % 360 + 360) % 360
+    if (diff > 180) { diff -= 360 }
+    if (Math.abs(diff) <= z.angleSpread) {
+      return z
+    }
+  }
+  return null
+}
+
+/**
  * Calcule les placements de décalques et de props pour un chunk donné.
  * Retourne deux tableaux de positions — AUCUN objet Phaser créé ici.
  * Fonction PURE, testable sans Phaser.
@@ -111,6 +142,7 @@ export function chunksForView(
  * @param worldH    Hauteur totale du monde.
  * @param decalCount Nombre de textures décalques disponibles.
  * @param propCounts Nombre d'exemplaires par PropDef (dans l'ordre).
+ * @param opts      Options de composition optionnelles (zones, densité).
  */
 export function chunkPlacements(
   seed: number,
@@ -120,7 +152,11 @@ export function chunkPlacements(
   worldW: number,
   worldH: number,
   decalCount: number,
-  propCounts: readonly number[]
+  propCounts: readonly number[],
+  opts?: {
+    zones?: readonly DecorZone[]
+    decalDensityMultiplier?: number
+  }
 ): {
   decals: Array<{ decalIndex: number; x: number; y: number }>
   props: Array<Array<{ x: number; y: number }>>
@@ -139,18 +175,37 @@ export function chunkPlacements(
   const worldCy = worldH / 2
   const excl2 = CENTER_EXCLUSION_RADIUS * CENTER_EXCLUSION_RADIUS
 
+  const zones = opts?.zones
+  const densityMul = opts?.decalDensityMultiplier ?? 1.0
+
   // ── Décalques ──────────────────────────────────────────────────────────────
   const decalResult: Array<{ decalIndex: number; x: number; y: number }> = []
   if (decalCount > 0) {
-    const decalTotal = Math.max(0, Math.round(chunkArea / (260 * 260)))
+    const decalTotal = Math.max(0, Math.round(chunkArea / (260 * 260) * densityMul))
     for (let i = 0; i < decalTotal; i++) {
-      const decalIndex = Math.floor(rng() * decalCount)
       const x = x0 + rng() * chunkW
       const y = y0 + rng() * chunkH
       const dx = x - worldCx
       const dy = y - worldCy
       if (dx * dx + dy * dy < excl2) {
+        // Consomme le RNG du choix d'indice pour rester déterministe malgré le skip.
+        rng()
         continue
+      }
+      // Choisir l'indice : priorité aux décalques dominants de la zone si applicable.
+      let decalIndex: number
+      const zone = zones !== undefined ? pointInZone(x, y, worldCx, worldCy, zones) : null
+      const dominant = zone?.dominantDecalIndices
+      if (dominant !== undefined && dominant.length > 0) {
+        // 70 % de chance de choisir un indice dominant, 30 % uniforme.
+        const r = rng()
+        if (r < 0.7) {
+          decalIndex = dominant[Math.floor(rng() * dominant.length)] ?? 0
+        } else {
+          decalIndex = Math.floor(rng() * decalCount)
+        }
+      } else {
+        decalIndex = Math.floor(rng() * decalCount)
       }
       decalResult.push({ decalIndex, x, y })
     }
@@ -158,7 +213,7 @@ export function chunkPlacements(
 
   // ── Props ──────────────────────────────────────────────────────────────────
   const refArea = 1600 * 1200
-  const propResult: Array<Array<{ x: number; y: number }>> = propCounts.map((baseCount) => {
+  const propResult: Array<Array<{ x: number; y: number }>> = propCounts.map((baseCount, propIdx) => {
     const count = Math.max(0, Math.round(baseCount * chunkArea / refArea))
     const positions: Array<{ x: number; y: number }> = []
     for (let i = 0; i < count; i++) {
@@ -179,9 +234,22 @@ export function chunkPlacements(
       // approximatif, et les appels RNG déjà consommés gardent le déterminisme.
       const fdx = px - worldCx
       const fdy = py - worldCy
-      if (fdx * fdx + fdy * fdy >= excl2) {
-        positions.push({ x: px, y: py })
+      if (fdx * fdx + fdy * fdy < excl2) {
+        continue
       }
+      // Si zones définies et que ce prop n'est pas dominant dans la zone de ce point,
+      // on réduit la probabilité de le placer (50 % de chance de skip).
+      if (zones !== undefined && zones.length > 0) {
+        const zone = pointInZone(px, py, worldCx, worldCy, zones)
+        if (zone !== null) {
+          const isDominant = zone.dominantPropIndices?.includes(propIdx) ?? false
+          // Dans une zone : les props dominants passent toujours ; les autres ont 40 % de chance.
+          if (!isDominant && rng() > 0.4) {
+            continue
+          }
+        }
+      }
+      positions.push({ x: px, y: py })
     }
     return positions
   })
@@ -194,6 +262,12 @@ export interface DecorStreamerOpts {
   seed: number
   decals: readonly string[]
   props: readonly PropDef[]
+  /** Zones de clustering thématique (optionnel — repli uniforme si absent). */
+  zones?: readonly DecorZone[]
+  /** Multiplicateur de densité des décalques (défaut 1.0). */
+  decalDensityMultiplier?: number
+  /** Positions fixes des structures (pour biais d'ancrage des décalques — T4). */
+  structureAnchors?: readonly { x: number; y: number }[]
 }
 
 /**
@@ -283,6 +357,13 @@ export class DecorStreamer {
     const cx = parseInt(parts[0] ?? '0', 10)
     const cy = parseInt(parts[1] ?? '0', 10)
 
+    const placementOpts: { zones?: readonly DecorZone[]; decalDensityMultiplier?: number } = {}
+    if (this.opts.zones !== undefined) {
+      placementOpts.zones = this.opts.zones
+    }
+    if (this.opts.decalDensityMultiplier !== undefined) {
+      placementOpts.decalDensityMultiplier = this.opts.decalDensityMultiplier
+    }
     const { decals: decalPlacements, props: propPlacements } = chunkPlacements(
       this.opts.seed,
       cx,
@@ -291,7 +372,8 @@ export class DecorStreamer {
       this.worldW,
       this.worldH,
       this.opts.decals.length,
-      this.opts.props.map((p) => p.count)
+      this.opts.props.map((p) => p.count),
+      placementOpts
     )
 
     const objs: Phaser.GameObjects.GameObject[] = []
