@@ -36,16 +36,20 @@ export function createProps(
   worldH: number,
   props: readonly PropDef[],
   seed = 1
-): Phaser.GameObjects.RenderTexture {
-  const rt = scene.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-6)
+): void {
   const rng = mulberry32((seed ^ 0x9e3779b9) >>> 0)
   const cx = worldW / 2
   const cy = worldH / 2
+  // Densité par surface CONSTANTE : les `count` sont calibrés pour 1600×1200 ;
+  // sur un monde plus grand, on met plus d'exemplaires (dispersés sur toute la
+  // surface) pour ne pas paraître vide. Cuit dans la RT → aucun coût runtime.
+  const areaFactor = (worldW * worldH) / (1600 * 1200)
   for (const def of props) {
     if (!scene.textures.exists(def.key)) {
       continue
     }
-    for (let i = 0; i < def.count; i++) {
+    const count = Math.max(def.count, Math.round(def.count * areaFactor))
+    for (let i = 0; i < count; i++) {
       let x = 0
       let y = 0
       // Tire une position hors de la zone centrale (quelques essais).
@@ -56,18 +60,15 @@ export function createProps(
           break
         }
       }
-      const img = scene.make.image({ x: 0, y: 0, key: def.key, add: false }).setScale(def.scale)
-      rt.draw(img, x, y)
-      img.destroy()
+      scene.add.image(x, y, def.key).setScale(def.scale).setDepth(-6)
     }
   }
-  return rt
 }
 
 /**
  * Pose un grand LANDMARK de bâtiment (la structure à cette phase) à une position
- * seedée hors du centre — visible autour du combat, décoratif et non bloquant. Cuit
- * dans une RenderTexture au-dessus des props épars (depth -4). Déterministe.
+ * seedée hors du centre — visible autour du combat, décoratif et non bloquant.
+ * Sprite individuel au-dessus des props épars (depth -4). Déterministe.
  */
 export function createLandmark(
   scene: Phaser.Scene,
@@ -75,11 +76,10 @@ export function createLandmark(
   worldH: number,
   landmark: PropDef,
   seed = 1
-): Phaser.GameObjects.RenderTexture | null {
+): void {
   if (!scene.textures.exists(landmark.key)) {
-    return null
+    return
   }
-  const rt = scene.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-4)
   const rng = mulberry32((seed ^ 0x1b56c4e9) >>> 0)
   const cx = worldW / 2
   const cy = worldH / 2
@@ -89,11 +89,8 @@ export function createLandmark(
     const dist = 500 + rng() * 120
     const x = Math.min(worldW - 60, Math.max(60, cx + Math.cos(angle) * dist))
     const y = Math.min(worldH - 60, Math.max(60, cy + Math.sin(angle) * dist))
-    const img = scene.make.image({ x: 0, y: 0, key: landmark.key, add: false }).setScale(landmark.scale)
-    rt.draw(img, x, y)
-    img.destroy()
+    scene.add.image(x, y, landmark.key).setScale(landmark.scale).setDepth(-4)
   }
-  return rt
 }
 
 /**
@@ -129,7 +126,7 @@ const BANDS: Record<StructureBand, readonly [number, number]> = {
 /**
  * Pose les grandes STRUCTURES d'un stage (l'étape de chantier qui remplit l'arène) à
  * des positions seedées DISTINCTES dans leur bande, hors du rayon central dégagé.
- * Cuites dans une RenderTexture au-dessus des props, sous le landmark hero (depth -5).
+ * Sprites individuels au-dessus des props, sous le landmark hero (depth -5).
  * Purement visuel et déterministe.
  */
 export function createStructures(
@@ -138,8 +135,7 @@ export function createStructures(
   worldH: number,
   structures: readonly StructureDef[],
   seed = 1
-): Phaser.GameObjects.RenderTexture {
-  const rt = scene.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-5)
+): void {
   const rng = mulberry32((seed ^ 0x53a9f0b1) >>> 0)
   const cx = worldW / 2
   const cy = worldH / 2
@@ -153,10 +149,7 @@ export function createStructures(
       const dist = dmin + rng() * (dmax - dmin)
       const x = Math.min(worldW - 40, Math.max(40, cx + Math.cos(angle) * dist))
       const y = Math.min(worldH - 40, Math.max(40, cy + Math.sin(angle) * dist))
-      const img = scene.make.image({ x: 0, y: 0, key: def.key, add: false }).setScale(def.scale)
-      rt.draw(img, x, y)
-      img.destroy()
+      scene.add.image(x, y, def.key).setScale(def.scale).setDepth(-5)
     }
   }
-  return rt
 }

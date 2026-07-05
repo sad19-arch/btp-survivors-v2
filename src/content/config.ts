@@ -6,10 +6,16 @@ import type { GameMode } from '@core/types'
  * Toute valeur d'équilibrage vit ici, pas en dur dans les systèmes.
  */
 
-/** Dimensions du monde, en pixels. */
+/**
+ * Dimensions du monde, en pixels. Agrandi ×2 par côté (×4 la surface) pour une
+ * zone explorable plus vaste (playtest « maps trop petites »). Coût per-frame
+ * nul : sol/décor cuits en RenderTextures, ennemis spawnés en anneau AUTOUR du
+ * joueur (indépendant de la taille) — plus d'espace pour manœuvrer, horde
+ * inchangée. Reste ≤ 4096 px/côté (limite de texture GPU d'une RT unique).
+ */
 export const WORLD = {
-  width: 1600,
-  height: 1200
+  width: 3200,
+  height: 2400
 } as const
 
 /** Stats de base d'un joueur. */

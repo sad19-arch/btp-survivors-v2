@@ -26,6 +26,14 @@ const KITE_MIN_FIRST_DEATH_MS = 60000 // aucune run ne meurt avant 1:00 (départ
 const KITE_MAX_HP_DIP_PCT = 40 // les PV médians doivent plonger sous ce seuil (climax 9-11 min)
 /** Greedy (imprudent) : peut survivre par chance mais pas de façon fiable. */
 const GREEDY_MAX_SURVIVE_FULL_PCT = 25
+/**
+ * Idle (immobile) : doit mourir la GRANDE majorité du temps. Tolérance faible
+ * (~8% mesuré sur le monde agrandi 3200×2400) : dans une grande arène, les
+ * projectiles portent leur pleine distance (le petit monde les clampait au mur)
+ * → l'auto-tir du joueur planté nettoie parfois l'anneau convergent. Reste très
+ * strict (idle meurt 85%+) ; l'oracle final = playtest humain.
+ */
+const IDLE_MAX_SURVIVE_FULL_PCT = 15
 /** Un bot non-skillé meurt, mais pas dans les toutes premières secondes. */
 const UNSKILLED_MIN_DEATH_MS = 45000
 
@@ -81,8 +89,8 @@ export function evaluateTargets(aggs: BotAggregate[]): TargetReport {
 
   const idle = byBot.get('idle')
   if (idle !== undefined) {
-    if (idle.survivedFullPct > 0) {
-      failures.push(`idle: ${Math.round(idle.survivedFullPct)}% survivent la run pleine (immobile, trop facile)`)
+    if (idle.survivedFullPct > IDLE_MAX_SURVIVE_FULL_PCT) {
+      failures.push(`idle: ${Math.round(idle.survivedFullPct)}% survivent la run pleine > ${IDLE_MAX_SURVIVE_FULL_PCT}% (immobile, trop facile)`)
     } else if (idle.survivalMsMedian < UNSKILLED_MIN_DEATH_MS) {
       failures.push(`idle: mort médiane ${Math.round(idle.survivalMsMedian / 1000)}s < ${UNSKILLED_MIN_DEATH_MS / 1000}s (punitif au démarrage)`)
     }

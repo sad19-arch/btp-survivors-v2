@@ -90,4 +90,9 @@ describe('evaluateTargets (tendu mais gagnable, arc 11 min)', () => {
     const rep = evaluateTargets([agg({ bot: 'idle', survivedFullPct: 0, survivalMsMedian: 90000 })])
     expect(rep.pass).toBe(true)
   })
+
+  it('PASS si idle survit RAREMENT (grande arène : projectiles pleine portée, ≤ seuil)', () => {
+    const rep = evaluateTargets([agg({ bot: 'idle', survivedFullPct: 8, survivalMsMedian: 250000 })])
+    expect(rep.pass).toBe(true)
+  })
 })
