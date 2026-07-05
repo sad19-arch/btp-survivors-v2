@@ -173,7 +173,15 @@ export function chunkPlacements(
           break
         }
       }
-      positions.push({ x: px, y: py })
+      // Si les 12 tentatives sont retombées dans le rayon d'exclusion (possible
+      // pour le chunk central), on NE pose PAS le prop plutôt que d'encombrer le
+      // spawn — symétrique du `continue` des décalques. Le count cible est
+      // approximatif, et les appels RNG déjà consommés gardent le déterminisme.
+      const fdx = px - worldCx
+      const fdy = py - worldCy
+      if (fdx * fdx + fdy * fdy >= excl2) {
+        positions.push({ x: px, y: py })
+      }
     }
     return positions
   })
