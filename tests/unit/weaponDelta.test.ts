@@ -49,8 +49,8 @@ describe('describeWeaponLevelDelta', () => {
 
   it('scie 3→4 contient « lame » / « orbitale » (override count passe à 3 au niv 4)', () => {
     const delta = describeWeaponLevelDelta('scie', 3, 4, noPassives)
-    // scie a un override count à niv 4 (3 lames)
-    expect(delta).toMatch(/lame|orbitale|projectile/i)
+    // scie a un override count à niv 4 (2→3 lames) → libellé orbital dédié
+    expect(delta).toContain('lame orbitale')
   })
 
   it('le fragment +dégâts ne dépasse pas le seuil anti-bruit sur un delta < 0.5', () => {

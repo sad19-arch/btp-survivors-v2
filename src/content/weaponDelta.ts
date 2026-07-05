@@ -9,10 +9,10 @@
  * - fromLevel===0 ⇒ '' (pas de delta à afficher au niveau initial).
  */
 
-import { WEAPONS, weaponStatsAtLevel } from './weapons'
-import { effectiveWeaponStats } from './effectiveStats'
-import type { EffectiveStats } from './effectiveStats'
-import type { PlayerStats } from './passives'
+import { WEAPONS, weaponStatsAtLevel } from '@content/weapons'
+import { effectiveWeaponStats } from '@content/effectiveStats'
+import type { EffectiveStats } from '@content/effectiveStats'
+import type { PlayerStats } from '@content/passives'
 
 // ---------------------------------------------------------------------------
 // Mapping centralisé clé → fragment FR
@@ -32,6 +32,11 @@ const FRAGMENTS: Partial<Record<FragmentKey, FragmentDef>> = {
     priority: 1,
     describe(a, b) {
       const delta = Math.round(b) - Math.round(a)
+      // On n'affiche que les GAINS. Certaines armes régressent en count entre
+      // deux paliers (override non propagé par buildLevels : cloueur count 2 au
+      // niv 3 → 1 au niv 4) ; on masque ce downgrade plutôt que d'alarmer le
+      // joueur. Ces régressions sont un bug de données à corriger en phase de
+      // tuning (hors du périmètre « feedback d'abord »).
       if (delta <= 0) { return '' }
       return delta === 1 ? '+1 projectile' : `+${delta} projectiles`
     }
