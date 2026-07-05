@@ -237,7 +237,13 @@ export class GameScene extends Phaser.Scene {
       return
     }
     if (p.kind === 'strike') {
-      this.spawnStrikeBolt(p.x, p.y, p.radius)
+      // Récupère la position du joueur 1 (en vie de préférence) pour tracer
+      // l'arc électrique JOUEUR → CIBLE plutôt qu'un éclair localisé sur l'ennemi.
+      const st = this.app.getStateForFrame(this.app.frameId)
+      const shooter = st.players.find((pl) => pl.alive) ?? st.players[0]
+      const fromX = shooter?.x ?? p.x
+      const fromY = shooter?.y ?? p.y
+      this.spawnStrikeBolt(fromX, fromY, p.x, p.y)
       return
     }
     if (p.kind === 'cone') {
@@ -400,48 +406,65 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Coup du court-circuit : éclair en zigzag qui tombe sur la cible + 2-3 fourches
-   * secondaires + flash d'impact scale-pop. Tracé double (cœur blanc + halo cyan)
-   * pour un rendu « électrique » pixel-art. Le jitter latéral utilise Math.random()
-   * — cosmétique pur, rendu uniquement, sans effet sur l'état de sim (déterminisme préservé).
+   * Arc électrique (court-circuit) : tracé en zigzag brisé du JOUEUR (`fromX/fromY`)
+   * jusqu'à la CIBLE (`toX/toY`) + 2 fourches secondaires + flash d'impact.
+   * Tracé double (halo cyan épais + cœur blanc fin) — rendu « foudre » pixel-art.
+   * Durée ~140 ms. Le jitter latéral utilise Math.random() — cosmétique pur, rendu
+   * uniquement, sans effet sur l'état de sim (déterminisme préservé).
+   *
+   * Remplace l'ancien éclair localisé sur l'ennemi : l'arc JOUEUR → ENNEMI rend
+   * la décharge lisible d'un coup d'œil (on voit clairement qui est frappé et par quoi).
    */
-  private spawnStrikeBolt(x: number, y: number, radius: number): void {
-    const segments = 6
-    const startY = y - radius * 0.9
+  private spawnStrikeBolt(fromX: number, fromY: number, toX: number, toY: number): void {
+    const segments = 7
+    const dx = toX - fromX
+    const dy = toY - fromY
+    const len = Math.sqrt(dx * dx + dy * dy) || 1
+    // Vecteur perpendiculaire normalisé (pour le jitter latéral).
+    const perpX = -dy / len
+    const perpY = dx / len
+    // Amplitude du jitter latéral : ~12 % de la longueur de l'arc, plafonné à 60px.
+    const jitterAmp = Math.min(len * 0.12, 60)
 
-    // Génère les points du zigzag principal.
-    const buildZigzag = (jitterScale: number): { x: number; y: number }[] => {
-      const pts: { x: number; y: number }[] = [{ x, y: startY }]
+    // Génère les points du zigzag principal (interpolation linéaire + jitter perp).
+    const buildZigzag = (scale: number): { x: number; y: number }[] => {
+      const pts: { x: number; y: number }[] = [{ x: fromX, y: fromY }]
       for (let i = 1; i < segments; i++) {
         const t = i / segments
-        const jitter = (Math.random() * 2 - 1) * radius * jitterScale
-        pts.push({ x: x + jitter, y: startY + radius * 0.9 * t })
+        const jitter = (Math.random() * 2 - 1) * jitterAmp * scale
+        pts.push({
+          x: fromX + dx * t + perpX * jitter,
+          y: fromY + dy * t + perpY * jitter
+        })
       }
-      pts.push({ x, y })
+      pts.push({ x: toX, y: toY })
       return pts
     }
 
     const drawPath = (g: Phaser.GameObjects.Graphics, pts: { x: number; y: number }[]): void => {
+      if (pts.length === 0) {
+        return
+      }
       g.beginPath()
-      g.moveTo(pts[0]?.x ?? x, pts[0]?.y ?? startY)
+      g.moveTo(pts[0]?.x ?? fromX, pts[0]?.y ?? fromY)
       for (let i = 1; i < pts.length; i++) {
-        g.lineTo(pts[i]?.x ?? x, pts[i]?.y ?? y)
+        g.lineTo(pts[i]?.x ?? toX, pts[i]?.y ?? toY)
       }
       g.strokePath()
     }
 
-    const mainPts = buildZigzag(0.18)
+    const mainPts = buildZigzag(1)
 
     // Éclair principal : halo cyan épais + cœur blanc fin.
     const gMain = this.add.graphics().setDepth(5)
-    gMain.lineStyle(6, PALETTE_HEX.cyanAccent, 0.9)
+    gMain.lineStyle(5, PALETTE_HEX.cyanAccent, 0.92)
     drawPath(gMain, mainPts)
     gMain.lineStyle(2, PALETTE_HEX.blanc, 1)
     drawPath(gMain, mainPts)
     this.tweens.add({
       targets: gMain,
       alpha: 0,
-      duration: 180,
+      duration: 140,
       ease: 'Quad.easeOut',
       onComplete: () => gMain.destroy()
     })
@@ -454,15 +477,15 @@ export class GameScene extends Phaser.Scene {
       if (forkPt === undefined) {
         continue
       }
-      const forkAngle = Math.PI * (0.3 + Math.random() * 0.4) * (Math.random() < 0.5 ? 1 : -1)
-      const forkLen = radius * (0.25 + Math.random() * 0.2)
+      const forkAngle = Math.atan2(dy, dx) + Math.PI * (0.25 + Math.random() * 0.5) * (Math.random() < 0.5 ? 1 : -1)
+      const forkLen = len * (0.12 + Math.random() * 0.12)
       const gFork = this.add.graphics().setDepth(5)
-      gFork.lineStyle(3, PALETTE_HEX.cyanAccent, 0.75)
+      gFork.lineStyle(3, PALETTE_HEX.cyanAccent, 0.7)
       gFork.beginPath()
       gFork.moveTo(forkPt.x, forkPt.y)
       gFork.lineTo(forkPt.x + Math.cos(forkAngle) * forkLen, forkPt.y + Math.sin(forkAngle) * forkLen)
       gFork.strokePath()
-      gFork.lineStyle(1, PALETTE_HEX.blanc, 0.7)
+      gFork.lineStyle(1, PALETTE_HEX.blanc, 0.65)
       gFork.beginPath()
       gFork.moveTo(forkPt.x, forkPt.y)
       gFork.lineTo(forkPt.x + Math.cos(forkAngle) * forkLen, forkPt.y + Math.sin(forkAngle) * forkLen)
@@ -470,15 +493,15 @@ export class GameScene extends Phaser.Scene {
       this.tweens.add({
         targets: gFork,
         alpha: 0,
-        duration: 130,
+        duration: 110,
         ease: 'Quad.easeOut',
         onComplete: () => gFork.destroy()
       })
     }
 
-    // Flash d'impact scale-pop (plus gros que le flash standard).
-    this.spawnPixelPop(x, y, PALETTE_HEX.cyanAccent, 16, 200)
-    this.spawnFlash(x, y)
+    // Flash d'impact à la cible (scale-pop cyan + flash blanc).
+    this.spawnPixelPop(toX, toY, PALETTE_HEX.cyanAccent, 16, 200)
+    this.spawnFlash(toX, toY)
   }
   /** Libération d'un prisonnier : étincelles + bulle « Merci ! » au-dessus de l'ouvrier. */
   private readonly onPrisonerFreed = (e: Event): void => {
