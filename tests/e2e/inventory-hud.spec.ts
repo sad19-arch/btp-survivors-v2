@@ -32,33 +32,54 @@ test('inventaire HUD : visible et positionné sous les barres HP/XP', async ({ p
     })
   })
 
-  // Avancer un peu le temps pour que le rendu Phaser + l'overlay s'actualisent.
+  // Avancer 2500ms pour dépasser l'intro (durationMs=2000) et laisser l'overlay
+  // se mettre à jour (introActive → false, HUD et inventaire deviennent visibles).
   await page.evaluate(() => {
-    window.__GAME__?.advanceTime(500)
+    window.__GAME__?.advanceTime(2500)
   })
 
-  // Vérifier que l'état est bien en jeu.
-  const screen = await page.evaluate(() => window.__GAME__?.getState().screen)
-  expect(screen).toBe('game')
+  // Vérifier que l'état est bien en jeu et hors intro.
+  const gameState = await page.evaluate(() => window.__GAME__?.getState())
+  expect(gameState?.screen).toBe('game')
+  expect(gameState?.introActive).toBe(false)
+
+  // Attendre que le HUD soit rendu (les barres HP/XP sont visibles hors intro).
+  await page.waitForSelector('.hud__bar--hp', { timeout: 5000 })
 
   // L'inventaire doit être présent et visible.
   await page.waitForSelector('.inv', { timeout: 5000 })
   const inv = page.locator('.inv')
   await expect(inv).toBeVisible()
 
-  // Récupérer les bounding boxes de .inv et des barres HP/XP.
-  const invBox = await inv.boundingBox()
-  expect(invBox).not.toBeNull()
+  // Lire les bounding boxes via JavaScript en un seul appel atomique pour éviter
+  // les races avec les rAF qui reconstruisent le HUD chaque frame.
+  interface Boxes {
+    inv: { x: number; y: number; width: number; height: number } | null
+    hp: { x: number; y: number; width: number; height: number } | null
+    xp: { x: number; y: number; width: number; height: number } | null
+  }
+  const boxes = await page.evaluate((): Boxes => {
+    const rect = (sel: string) => {
+      const el = document.querySelector(sel)
+      if (el === null) { return null }
+      const r = el.getBoundingClientRect()
+      return { x: r.x, y: r.y, width: r.width, height: r.height }
+    }
+    return {
+      inv: rect('.inv'),
+      hp: rect('.hud__bar--hp'),
+      xp: rect('.hud__bar--xp')
+    }
+  })
 
-  // La barre HP est dans .hud__bar--hp, la barre XP dans .hud__bar--xp.
-  const hpBar = page.locator('.hud__bar--hp')
-  const xpBar = page.locator('.hud__bar--xp')
-  const hpBox = await hpBar.boundingBox()
-  const xpBox = await xpBar.boundingBox()
+  // Les barres et le bandeau doivent exister.
+  expect(boxes.inv).not.toBeNull()
+  expect(boxes.hp).not.toBeNull()
+  expect(boxes.xp).not.toBeNull()
 
-  // Les barres doivent exister.
-  expect(hpBox).not.toBeNull()
-  expect(xpBox).not.toBeNull()
+  const invBox = boxes.inv
+  const hpBox = boxes.hp
+  const xpBox = boxes.xp
 
   if (invBox !== null && hpBox !== null && xpBox !== null) {
     // Le bord supérieur de .inv doit être SOUS le bord inférieur des barres HP et XP.
@@ -87,7 +108,8 @@ test('inventaire HUD : tuiles armes et passifs présentes avec niveaux', async (
       weapons: [{ id: 'marteau', level: 4 }],
       passives: [{ id: 'air_comprime', level: 1 }]
     })
-    window.__GAME__?.advanceTime(300)
+    // Avancer 2500ms pour passer l'intro (2000ms) et rendre l'inventaire visible.
+    window.__GAME__?.advanceTime(2500)
   })
 
   await page.waitForSelector('.inv', { timeout: 5000 })
