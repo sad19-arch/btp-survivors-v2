@@ -7,14 +7,18 @@ import {
   LevelUpEvent,
   WeaponFiredEvent,
   PickupCollectedEvent,
-  BossSpawnedEvent
+  BossSpawnedEvent,
+  EvolvedEvent
 } from '@core/events'
 import { FocusModel } from '@ui/focusModel'
 import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
-import { INTRO } from '@content/config'
+import { INTRO, MODE_PLAYER_COUNT, modeForCount } from '@content/config'
+import { WEAPONS } from '@content/weapons'
+import { PASSIVES } from '@content/passives'
+import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
-import type { GameMode, GameState, PlayerInput } from '@core/types'
-import type { AppViewState, MenuItemView, MenuView, NavDir, Screen } from './appState'
+import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
+import type { AppViewState, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
 
 export interface AppOptions {
   seed: number
@@ -69,6 +73,8 @@ export class App {
   private mode: GameMode
   /** Phase sélectionnée au titre (départ : URL `?level=` ou terrain vierge). */
   private selectedPhase: ConstructionPhaseId
+  /** Nombre de joueurs sélectionné au titre (départ : dérivé du mode de boot, ex. `?autostart=coop4`). */
+  private selectedPlayers: number
   private started = false
   private readonly focus = new FocusModel()
   private focusKey = ''
@@ -82,13 +88,35 @@ export class App {
   private introMsLeft = 0
   /** Écran Options ouvert (surcouche au-dessus du titre / pause). */
   private optionsOpen = false
+  /** Sélection de personnage en cours (ouverte par « Jouer » au titre, avant le lancement de la partie). */
+  private charSelectOpen = false
+  /** Joueur (1-based) en train de choisir son personnage. */
+  private charSelectPlayer = 1
+  /** Personnages choisis jusqu'ici (index = playerId-1), passés à `start()` une fois complets. */
+  private selectedCharacters: string[] = []
+  /** Index courant dans la liste de roster (curseur du carrousel), remis à 0 à chaque joueur. */
+  private charCursor = 0
   /** Niveaux audio (possédés ici pour l'UI Options ; l'AudioDirector les lit). */
   private audioLevels: AudioLevels = loadAudioSettings()
+  /** Compteur de frame, bumpé en fin d'`advanceTime` — clé du cache `getStateForFrame`. */
+  private frame = 0
+  /** Cache du dernier `AppViewState` calculé, partagé par rendu/overlay/audio sur une frame. */
+  private cachedState: AppViewState | null = null
+  /** Frame à laquelle `cachedState` a été calculé (-1 = jamais). */
+  private cachedFrame = -1
+  /**
+   * Identifiant de run, incrémenté à CHAQUE `start()` (nouvelle partie, restart,
+   * stage suivant, setSeed). Exposé dans l'état pour que le rendu détecte un
+   * restart MÊME STAGE (où `stageId` ne change pas) et reparte d'une scène
+   * propre — sinon les sprites/VFX de la partie précédente s'accumulent (fuite).
+   */
+  private runId = 0
 
   constructor(opts: AppOptions) {
     this.seed = opts.seed
     this.mode = opts.mode
     this.selectedPhase = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
+    this.selectedPlayers = MODE_PLAYER_COUNT[opts.mode] ?? 1
     this.introEnabled = opts.intro ?? false
     if (opts.autostart) {
       this.start(opts.mode)
@@ -97,14 +125,21 @@ export class App {
 
   // --- cycle de vie ---------------------------------------------------------
 
-  /** Démarre une nouvelle partie (depuis le titre). */
-  start(mode: GameMode = this.mode): void {
+  /**
+   * Démarre une nouvelle partie (depuis le titre, ou après la sélection de personnage).
+   * `characters` défaut = la dernière sélection mémorisée → restart / stage suivant /
+   * setSeed conservent le(s) perso(s) choisi(s) (sinon retour silencieux à l'ouvrier).
+   */
+  start(mode: GameMode = this.mode, characters: readonly string[] = this.selectedCharacters): void {
+    this.bumpState()
+    const wasStarted = this.started // RE-démarrage ? (partie déjà en cours)
     this.mode = mode
-    this.sim = new Simulation({ seed: this.seed, mode, phaseId: this.selectedPhase })
+    this.selectedCharacters = [...characters] // persiste pour restart/stage suivant/setSeed
+    this.sim = new Simulation({ seed: this.seed, mode, phaseId: this.selectedPhase, characters })
     // Relaie les événements de sim (ex. onde d'aura, libération) vers l'App → rendu.
     this.sim.events.addEventListener('auraPulse', (e) => {
       const p = e as AuraPulseEvent
-      this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius))
+      this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius, p.kind))
     })
     this.sim.events.addEventListener('prisonerFreed', (e) => {
       const p = e as PrisonerFreedEvent
@@ -122,14 +157,28 @@ export class App {
     this.sim.events.addEventListener('pickupCollected', (e) => {
       this.events.dispatchEvent(new PickupCollectedEvent((e as PickupCollectedEvent).kind))
     })
-    this.sim.events.addEventListener('bossSpawned', () => { this.events.dispatchEvent(new BossSpawnedEvent()) })
+    this.sim.events.addEventListener('bossSpawned', (e) => {
+      this.events.dispatchEvent(new BossSpawnedEvent((e as BossSpawnedEvent).role))
+    })
+    this.sim.events.addEventListener('evolved', (e) => {
+      const ev = e as EvolvedEvent
+      this.events.dispatchEvent(new EvolvedEvent(ev.weaponId, ev.playerId))
+    })
     this.introMsLeft = this.introEnabled ? INTRO.durationMs : 0
     this.started = true
+    // Bump SEULEMENT sur un RE-démarrage (game over→restart, stage suivant,
+    // setSeed) : le rendu repart alors d'une scène propre (cf. `runId`, fuite
+    // T6). La 1re partie depuis le titre n'a rien accumulé — y déclencher un
+    // scene.restart interromprait le chargement à la volée du skin de perso.
+    if (wasStarted) {
+      this.runId++
+    }
     this.refreshFocus()
   }
 
   /** Change la seed ; relance la partie en cours le cas échéant. */
   setSeed(seed: number): void {
+    this.bumpState()
     this.seed = seed
     if (this.started) {
       this.start(this.mode)
@@ -138,6 +187,7 @@ export class App {
 
   /** Relance une partie neuve (même seed). */
   restart(): void {
+    this.bumpState()
     this.start(this.mode)
   }
 
@@ -147,13 +197,26 @@ export class App {
     if (this.introMsLeft > 0) {
       this.introMsLeft = Math.max(0, this.introMsLeft - ms)
       this.refreshFocus()
+      this.bumpState()
       return
     }
     this.sim?.advanceTime(ms)
     this.refreshFocus()
+    this.bumpState()
+  }
+
+  /** Identifiant de frame courant (bumpé à chaque mutation d'état observable) — clé de `getStateForFrame`. */
+  get frameId(): number {
+    return this.frame
+  }
+
+  /** Incrémente le compteur de version d'état — à appeler en tête de toute méthode publique mutatrice. */
+  private bumpState(): void {
+    this.frame++
   }
 
   setInput(playerId: number, input: PlayerInput): void {
+    this.bumpState()
     this.sim?.setInput(playerId, input)
   }
 
@@ -161,14 +224,27 @@ export class App {
 
   /** Déplace le curseur dans le menu actif. */
   nav(dir: NavDir): void {
+    this.bumpState()
     this.recordCombo(dir)
     this.refreshFocus()
     if (this.menuItems().length === 0) {
       return
     }
+    // Sélecteur de joueurs au titre : gauche/droite changent le nombre (pas le focus).
+    if (this.screen === 'title' && this.focus.current() === 'players' && (dir === 'left' || dir === 'right')) {
+      this.cyclePlayers(dir === 'right' ? 1 : -1)
+      this.emitUi('menuMove')
+      return
+    }
     // Sélecteur de niveau au titre : gauche/droite changent la phase (pas le focus).
     if (this.screen === 'title' && this.focus.current() === 'stage' && (dir === 'left' || dir === 'right')) {
       this.cycleStage(dir === 'right' ? 1 : -1)
+      this.emitUi('menuMove')
+      return
+    }
+    // Carrousel de personnage : gauche/droite changent le perso (pas le focus, un seul item).
+    if (this.screen === 'characterSelect' && this.focus.current() === 'char' && (dir === 'left' || dir === 'right')) {
+      this.cycleCharacter(dir === 'right' ? 1 : -1)
       this.emitUi('menuMove')
       return
     }
@@ -186,6 +262,7 @@ export class App {
 
   /** Sélectionne+valide un item par index (clic souris) — passe par le focus + `activate`. */
   clickItem(index: number): void {
+    this.bumpState()
     this.refreshFocus()
     const items = this.menuItems()
     if (items[index] === undefined) {
@@ -197,6 +274,7 @@ export class App {
 
   /** Valide l'item focalisé du menu actif. */
   confirm(): void {
+    this.bumpState()
     // Au titre, la touche « valider » peut compléter le code Konami : on la consomme alors.
     if (this.recordCombo('confirm')) {
       return
@@ -211,6 +289,7 @@ export class App {
 
   /** Retour / annulation, selon l'écran. */
   back(): void {
+    this.bumpState()
     this.recordCombo('back')
     if (this.optionsOpen) {
       this.optionsOpen = false
@@ -228,6 +307,15 @@ export class App {
       case 'gameover':
         this.started = false
         break
+      case 'characterSelect':
+        if (this.charSelectPlayer > 1) {
+          this.charSelectPlayer--
+          this.selectedCharacters.pop()
+          this.charCursor = 0
+        } else {
+          this.charSelectOpen = false
+        }
+        break
       default:
         break // titre / upgrade : pas de retour
     }
@@ -237,18 +325,21 @@ export class App {
 
   /** Met en pause (depuis le jeu). */
   pause(): void {
+    this.bumpState()
     this.sim?.pause()
     this.refreshFocus()
   }
 
   /** Reprend (depuis la pause). */
   resume(): void {
+    this.bumpState()
     this.sim?.resume()
     this.refreshFocus()
   }
 
   /** Bascule pause/reprise (touche dédiée). */
   togglePause(): void {
+    this.bumpState()
     if (this.screen === 'game') {
       this.sim?.pause()
     } else if (this.screen === 'paused') {
@@ -259,8 +350,57 @@ export class App {
 
   /** Choisit une carte d'upgrade par index (API directe pour le seam). */
   chooseUpgrade(index: number): void {
+    this.bumpState()
     this.sim?.chooseUpgrade(index)
     this.refreshFocus()
+  }
+
+  // --- helpers de debug (test-only — passe-plat vers Simulation pour le seam) ---
+
+  /**
+   * [Debug/seam] Octroie directement des armes/passifs à un joueur (1 par
+   * défaut). Réservé aux tests et au seam de debug (`window.__GAME__`) —
+   * jamais en jeu normal.
+   */
+  debugGrant(
+    opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] },
+    playerId = 1
+  ): void {
+    this.bumpState()
+    this.sim?.debugGrant(opts, playerId)
+    this.refreshFocus()
+  }
+
+  /** [Debug/seam] Ajoute de l'XP au joueur 1 (force un level-up déterministe). */
+  debugAddXp(amount: number): void {
+    this.bumpState()
+    this.sim?.debugAddXp(amount)
+    this.refreshFocus()
+  }
+
+  /** [Debug/seam] Audition d'un SFX d'arme (procédural) : rejoue weaponFired(id) → zzfx. */
+  debugPlayWeaponSfx(id: string): void {
+    this.events.dispatchEvent(new WeaponFiredEvent(id))
+  }
+
+  /** [Debug/seam] Fait apparaître un coffre d'évolution sur la position d'un joueur (1 par défaut). */
+  debugSpawnChestOnPlayer(playerId = 1): void {
+    this.bumpState()
+    this.sim?.debugSpawnChestOnPlayer(playerId)
+    this.refreshFocus()
+  }
+
+  /** [Debug/seam] Fait apparaître immédiatement le boss du rôle demandé (`mid`/`final`). */
+  debugSpawnBoss(role: 'mid' | 'final'): void {
+    this.bumpState()
+    this.sim?.debugSpawnBoss(role)
+    this.refreshFocus()
+  }
+
+  /** [Debug/seam] Fait apparaître `n` ennemis autour des joueurs (stress test horde). */
+  debugSpawnEnemies(n: number): void {
+    this.bumpState()
+    this.sim?.debugSpawnEnemies(n)
   }
 
   // --- état exposé ----------------------------------------------------------
@@ -294,14 +434,33 @@ export class App {
     return {
       ...base,
       scene: base.scene,
+      players: base.players.map((p) => ({ ...p, inventory: buildInventory(p) })),
       screen,
       menu: this.menu(screen),
       goldSkin: this.goldSkin,
+      runId: this.runId,
       introActive: this.introMsLeft > 0,
       stageTitle: phase?.title ?? '—',
       stageSubtitle: phase?.subtitle ?? '',
-      stageOrder: phase?.order ?? 0
+      stageOrder: phase?.order ?? 0,
+      characterSelect: this.charSelectOpen
+        ? { player: this.charSelectPlayer, total: this.selectedPlayers }
+        : null
     }
+  }
+
+  /**
+   * Variante mise en cache de `getState()`, clée sur un numéro de frame : plusieurs
+   * appels avec le même `frame` renvoient la MÊME référence (rendu/overlay/audio
+   * mutualisent un seul `AppViewState`). `getState()` reste inchangé (toujours frais).
+   */
+  getStateForFrame(frame: number): AppViewState {
+    if (frame === this.cachedFrame && this.cachedState !== null) {
+      return this.cachedState
+    }
+    this.cachedState = this.getState()
+    this.cachedFrame = frame
+    return this.cachedState
   }
 
   renderToText(): string {
@@ -321,6 +480,9 @@ export class App {
   private get screen(): Screen {
     if (this.optionsOpen) {
       return 'options'
+    }
+    if (this.charSelectOpen && !this.started) {
+      return 'characterSelect'
     }
     if (!this.started || this.sim === null) {
       return 'title'
@@ -346,6 +508,8 @@ export class App {
     switch (this.screen) {
       case 'title':
         return this.titleItems()
+      case 'characterSelect':
+        return this.characterSelectItems()
       case 'paused':
         return PAUSE_ITEMS
       case 'gameover':
@@ -403,15 +567,42 @@ export class App {
     return items
   }
 
-  /** Items du titre : Jouer, sélecteur de niveau (◄/►), Options, Crédits. */
+  /** Items du titre : Jouer, sélecteur de joueurs (◄/►), sélecteur de niveau (◄/►), Options, Crédits. */
   private titleItems(): MenuItemView[] {
     const phase = ORDERED_PHASES.find((p) => p.id === this.selectedPhase)
     return [
       { id: 'jouer', label: 'Jouer', hint: null },
+      { id: 'players', label: `◄ Joueurs : ${this.selectedPlayers} ►`, hint: 'Gauche/Droite pour changer' },
       { id: 'stage', label: `◄ Niveau ${phase?.order ?? 1}/10 : ${phase?.title ?? '—'} ►`, hint: 'Gauche/Droite pour changer' },
       { id: 'options', label: 'Options', hint: null },
       { id: 'credits', label: 'Crédits', hint: null }
     ]
+  }
+
+  /** Liste des ids du roster de personnages, dans l'ordre stable déclaré. */
+  private rosterIds(): readonly string[] {
+    return CHARACTER_IDS
+  }
+
+  /** Item unique du carrousel de sélection de personnage (◄ Nom — Arme ►). */
+  private characterSelectItems(): MenuItemView[] {
+    const ids = this.rosterIds()
+    const char = characterDef(ids[this.charCursor] ?? DEFAULT_CHARACTER_ID)
+    const weaponName = WEAPONS[char.startingWeapon]?.name ?? char.startingWeapon
+    return [
+      { id: 'char', label: `◄ ${char.name} — ${weaponName} ►`, hint: 'Gauche/Droite • A: valider' }
+    ]
+  }
+
+  /** Décale le curseur de roster de `step` (cycle) — carrousel de sélection de personnage. */
+  private cycleCharacter(step: number): void {
+    const ids = this.rosterIds()
+    const n = ids.length
+    if (n === 0) {
+      return
+    }
+    this.charCursor = (((this.charCursor + step) % n) + n) % n
+    this.refreshFocus()
   }
 
   /** Décale la phase sélectionnée de `step` (cycle) — sélecteur de niveau du titre. */
@@ -423,12 +614,26 @@ export class App {
     this.refreshFocus()
   }
 
+  /** Change le nombre de joueurs sélectionné de `step`, borné à [1,4] (pas de cycle) — sélecteur du titre. */
+  private cyclePlayers(step: number): void {
+    this.selectedPlayers = Math.min(4, Math.max(1, this.selectedPlayers + step))
+    this.refreshFocus()
+  }
+
   private upgradeItems(): MenuItemView[] {
     const pending = this.sim?.getState().pendingLevelUp ?? null
     if (pending === null) {
       return []
     }
-    return pending.choices.map((c) => ({ id: c.id, label: c.name, hint: c.description }))
+    return pending.choices.map((c) => ({
+      id: c.id,
+      label: c.name,
+      hint: c.hint,
+      description: c.description,
+      currentLevel: c.currentLevel,
+      maxLevel: c.maxLevel,
+      kind: c.kind
+    }))
   }
 
   private menu(screen: Screen): MenuView | null {
@@ -478,11 +683,31 @@ export class App {
     }
     if (screen === 'title') {
       if (id === 'jouer') {
-        this.start(this.mode)
+        this.charSelectOpen = true
+        this.charSelectPlayer = 1
+        this.selectedCharacters = []
+        this.charCursor = 0
+      } else if (id === 'players') {
+        this.cyclePlayers(1)
       } else if (id === 'stage') {
         this.cycleStage()
       } else if (id === 'options') {
         this.optionsOpen = true
+      }
+      this.refreshFocus()
+      return
+    }
+    if (screen === 'characterSelect') {
+      if (id === 'char') {
+        const chosen = this.rosterIds()[this.charCursor] ?? DEFAULT_CHARACTER_ID
+        this.selectedCharacters[this.charSelectPlayer - 1] = chosen
+        if (this.charSelectPlayer < this.selectedPlayers) {
+          this.charSelectPlayer++
+          this.charCursor = 0
+        } else {
+          this.charSelectOpen = false
+          this.start(modeForCount(this.selectedPlayers), this.selectedCharacters)
+        }
       }
       this.refreshFocus()
       return
@@ -531,6 +756,40 @@ function emptyState(seed: number, stageId: ConstructionPhaseId): GameState {
     projectiles: [],
     pickups: [],
     prisoners: [],
+    hazards: [],
     pendingLevelUp: null
   }
+}
+
+/**
+ * Résout l'inventaire lisible (armes + passifs, noms + niveaux) d'un joueur à
+ * partir des ids core (`weapons`/`weaponLevels` parallèles, `passives`). Garde
+ * contre un id de contenu inconnu (replie sur l'id brut, jamais de `!`).
+ */
+function buildInventory(p: PlayerState): InventoryView {
+  const weapons = p.weapons.map((id, i) => {
+    const def = WEAPONS[id]
+    const entry: InventoryEntry = {
+      id,
+      name: def?.name ?? id,
+      level: p.weaponLevels[i] ?? 1
+    }
+    if (def !== undefined) {
+      entry.maxLevel = def.maxLevel
+    }
+    return entry
+  })
+  const passives = p.passives.map(({ id, level }) => {
+    const def = PASSIVES[id]
+    const entry: InventoryEntry = {
+      id,
+      name: def?.name ?? id,
+      level
+    }
+    if (def !== undefined) {
+      entry.maxLevel = def.maxLevel
+    }
+    return entry
+  })
+  return { weapons, passives }
 }

@@ -83,6 +83,19 @@ const GROUND_KEEPER: StageEnemySprite = {
   scale: 1.35
 }
 
+/**
+ * Skin PARTAGÉ du boss FINAL (contremaître maudit) — distinct des mini-boss
+ * par-stage (`STAGE_RENDER[...].boss`). Une seule feuille pour tous les stages
+ * (le boss final est le même partout) ; échelle plus imposante que les
+ * mid-boss (~0.7-1.41) pour marquer l'enjeu.
+ */
+export const FINAL_BOSS_SKIN: StageEnemySprite = {
+  key: 'boss_final',
+  file: 'stage01/boss/boss_final_cursed_foreman_walk.png',
+  frame: 256,
+  scale: 1.3
+}
+
 const TERRAIN_VIERGE_RENDER: StageRender = {
   ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_${i}`, file: `stage01/ground/tile_${i}.png` })),
   decals: [

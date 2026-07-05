@@ -1,8 +1,10 @@
 import type Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
-import type { WeaponFiredEvent, PickupCollectedEvent } from '@core/events'
+import type { WeaponFiredEvent, PickupCollectedEvent, BossSpawnedEvent } from '@core/events'
 import { SFX, VOICE, voiceStage, musicForState, AMB, type MusicKey } from './manifest'
 import { musicGain, sfxGain, duckedGain, type AudioLevels } from './settings'
+import { playZzfx, createWhirLoop, type ZzfxLoop } from './zzfx'
+import { weaponZzfx } from './weaponSfx'
 
 /** Instance de son loopée (sous-ensemble commun WebAudio/HTML5, découplé de Phaser). */
 interface SoundInstance {
@@ -21,6 +23,8 @@ const AMB_LEVEL = 0.5 // l'ambiance joue à ~50 % du volume musique (nappe discr
 const VOICE_LEVEL = 1.0 // la voix passe au volume plein du canal SFX (annonces claires)
 const MUSIC_DUCK = 0.28 // pendant une voix, la musique tombe à ~28 % (annonceur au-dessus)
 const AMB_DUCK = 0.15 // et l'ambiance quasi muette (~15 %) pour dégager la voix
+const WEAPON_THROTTLE_MS = 55 // délai min entre deux SFX d'une MÊME arme (anti-double)
+const SAW_LOOP_LEVEL = 0.28 // volume du ronronnement de scie (× gain SFX)
 
 /** Écrans où l'ambiance de chantier tourne (nappe de fond). */
 const GAMEPLAY_SCREENS = new Set(['game', 'upgrade', 'paused'])
@@ -45,11 +49,17 @@ export class AudioDirector {
   private readonly lastSfx = new Map<string, number>()
   private prevScreen = ''
   private presentsPlayed = false
+  /** Contexte WebAudio partagé (celui de Phaser) pour les SFX procéduraux zzfx ; null si HTML5. */
+  private readonly audioCtx: AudioContext | null
+  /** Ronronnement continu de la scie (créé à la demande, coupé hors gameplay). */
+  private sawLoop: ZzfxLoop | null = null
 
   constructor(sound: Phaser.Sound.BaseSoundManager, events: EventTarget, getSettings: () => AudioLevels) {
     this.sound = sound
     this.getSettings = getSettings
     this.settings = getSettings()
+    // Réutilise le contexte WebAudio de Phaser (unifie unlock/suspend) — pas de 2e AudioContext.
+    this.audioCtx = (sound as unknown as { context?: AudioContext }).context ?? null
     events.addEventListener('audioSettings', () => { this.settings = this.getSettings() })
     this.bindEvents(events)
   }
@@ -61,11 +71,9 @@ export class AudioDirector {
     on('enemyKilled', () => { this.playCue('enemyKilled') })
     on('playerHurt', () => { this.playCue('playerHurt') })
     on('levelUp', () => { this.playCue('levelUp') })
-    on('weaponFired', (e) => {
-      if ((e as WeaponFiredEvent).kind === 'cloueur') {
-        this.playCue('weapon_cloueur')
-      }
-    })
+    // SFX procédural PAR ARME (zzfx) : chaque arme discrète émet weaponFired(id).
+    // La scie (continue) est exclue à la source → gérée en boucle (updateSawLoop).
+    on('weaponFired', (e) => { this.playWeaponSfx((e as WeaponFiredEvent).kind) })
     on('pickupCollected', (e) => {
       const kind = (e as PickupCollectedEvent).kind
       if (kind === 'xp') {
@@ -75,16 +83,25 @@ export class AudioDirector {
         this.playVoice(VOICE.bonus)
       }
     })
-    on('bossSpawned', () => { this.playCue('bossSpawned'); this.playVoice(VOICE.boss) })
-    on('auraPulse', () => { this.playCue('auraPulse') })
+    on('bossSpawned', (e) => {
+      this.playCue('bossSpawned')
+      // Le boss final a une réplique dédiée (plus forte) — le mid-boss garde le pool générique.
+      const role = (e as BossSpawnedEvent).role
+      this.playVoice(role === 'final' ? VOICE.bossFinal : VOICE.boss)
+    })
+    // (Plus de SFX générique sur `auraPulse` : aura/sweep/strike/cône sonnent
+    // désormais par ARME via `weaponFired`/zzfx. L'auraPulse reste pour les VFX.)
     on('prisonerFreed', () => { this.playCue('prisonerFreed'); this.playVoice(VOICE.thankyou) })
+    // Fanfare d'évolution (coffre ramassé + conditions réunies) : cue existant + voix triomphante.
+    on('evolved', () => { this.playCue('bonus'); this.playVoice(VOICE.bonus) })
     on('upgradePick', () => { this.playCue('upgradePick') })
     on('menuMove', () => { this.playCue('menuMove') })
     on('menuConfirm', () => { this.playCue('menuConfirm') })
     on('menuBack', () => { this.playCue('menuBack') })
   }
 
-  private playCue(name: string): void {
+  /** `rateMul` : multiplicateur de hauteur additionnel (ex. varier une même cue par sorte d'arme). */
+  private playCue(name: string, rateMul = 1): void {
     if (this.isLocked()) {
       return
     }
@@ -105,7 +122,29 @@ export class AudioDirector {
       return
     }
     const jitter = cue.rateJitter !== undefined ? (Math.random() * 2 - 1) * cue.rateJitter : 0
-    this.sound.play(key, { volume: cue.volume * sfxGain(this.settings), rate: (cue.rate ?? 1) * (1 + jitter) })
+    this.sound.play(key, { volume: cue.volume * sfxGain(this.settings), rate: (cue.rate ?? 1) * rateMul * (1 + jitter) })
+  }
+
+  /**
+   * SFX procédural (zzfx) d'une arme, par ID, throttlé et au gain SFX courant
+   * (0/mute → rien). Variation par tir intrinsèque à zzfx (`randomness`). La scie
+   * est exclue (son continu géré par `updateSawLoop`).
+   */
+  private playWeaponSfx(id: string): void {
+    if (this.audioCtx === null || this.isLocked()) {
+      return
+    }
+    const gain = sfxGain(this.settings)
+    if (gain <= 0) {
+      return
+    }
+    const now = performance.now()
+    const last = this.lastSfx.get(`w_${id}`) ?? -1e9
+    if (now - last < WEAPON_THROTTLE_MS) {
+      return
+    }
+    this.lastSfx.set(`w_${id}`, now)
+    playZzfx(this.audioCtx, gain, weaponZzfx(id))
   }
 
   /** Joue une réplique de voix (canal unique : coupe la précédente, pas de chevauchement). */
@@ -169,6 +208,32 @@ export class AudioDirector {
     }
     this.rampMusic()
     this.rampAmbience(state.screen)
+    this.updateSawLoop(state)
+  }
+
+  /**
+   * Ronronnement continu de la scie orbitale : actif tant qu'un joueur VIVANT a
+   * la scie en jeu (écran gameplay). Volume rampé sur le gain SFX ; coupé hors
+   * gameplay ou au mute. Un seul oscillateur, arrêté proprement (pas de fuite).
+   */
+  private updateSawLoop(state: AppViewState): void {
+    if (this.audioCtx === null) {
+      return
+    }
+    const wantSaw =
+      GAMEPLAY_SCREENS.has(state.screen) &&
+      state.players.some((p) => p.alive && p.inventory.weapons.some((w) => w.id === 'scie'))
+    if (!wantSaw) {
+      if (this.sawLoop !== null) {
+        this.sawLoop.stop()
+        this.sawLoop = null
+      }
+      return
+    }
+    if (this.sawLoop === null) {
+      this.sawLoop = createWhirLoop(this.audioCtx)
+    }
+    this.sawLoop.setVolume(this.isLocked() ? 0 : sfxGain(this.settings) * SAW_LOOP_LEVEL)
   }
 
   private onScreenEnter(state: AppViewState): void {

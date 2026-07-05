@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { musicForState, MUSIC, SFX, VOICE, voiceStage, SFX_FILES, MUSIC_FILES, VOICE_FILES } from '@/audio/manifest'
 import { clamp01, musicGain, sfxGain, duckedGain, type AudioLevels } from '@/audio/settings'
 import { Simulation } from '@core/simulation'
+import { WEAPONS } from '@content/weapons'
+import { AudioDirector } from '@/audio/audioDirector'
+import { EvolvedEvent, BossSpawnedEvent } from '@core/events'
 
 describe('audio — musique par état (pure)', () => {
   const g = (screen: string, stageId: string, bossPresent = false): string | null =>
@@ -81,6 +84,77 @@ describe('audio — réglages (gains)', () => {
     expect(duckedGain(0.44, false, 0.28)).toBeCloseTo(0.44) // pas de voix → plein
     expect(duckedGain(0.44, true, 0.28)).toBeCloseTo(0.1232) // voix → ducké à 28 %
     expect(duckedGain(0, true, 0.28)).toBe(0) // base nulle (muet) reste nulle
+  })
+})
+
+describe('audio — SFX de tir couvre toute arme projectile (pas seulement cloueur)', () => {
+  it('cloueur ET son évolution mitrailleuse_clous sont de type projectile', () => {
+    // AudioDirector.weaponFired joue le SFX de tir pour WEAPONS[kind]?.kind === 'projectile' —
+    // vérifie ici que l'évoluée qualifie bien (sinon elle tirerait en silence).
+    expect(WEAPONS['cloueur']?.kind).toBe('projectile')
+    expect(WEAPONS['mitrailleuse_clous']?.kind).toBe('projectile')
+  })
+})
+
+describe('audio — évolution (arme évoluée) déclenche un cue', () => {
+  /** Fake minimal du sous-ensemble de `BaseSoundManager` que l'AudioDirector consomme. */
+  function fakeSoundManager(): { manager: Phaser.Sound.BaseSoundManager; played: string[] } {
+    const played: string[] = []
+    const manager = {
+      locked: false,
+      play: (key: string) => { played.push(key); return true },
+      add: () => ({ play: () => true, stop: () => true, destroy: () => {}, once: () => {}, volume: 0, isPlaying: false }),
+      game: { cache: { audio: { exists: () => true } } }
+    } as unknown as Phaser.Sound.BaseSoundManager
+    return { manager, played }
+  }
+
+  it("un EvolvedEvent dispatché sur le bus déclenche le cue 'bonus'", () => {
+    const events = new EventTarget()
+    const { manager, played } = fakeSoundManager()
+    const settings: AudioLevels = { master: 1, music: 1, sfx: 1, muted: false }
+    const director = new AudioDirector(manager, events, () => settings)
+    expect(director).toBeInstanceOf(AudioDirector) // construit pour son effet de bord (bindEvents s'abonne au bus)
+    events.dispatchEvent(new EvolvedEvent('mitrailleuse_clous', 1))
+    expect(played.some((k) => SFX['bonus']?.keys.includes(k))).toBe(true)
+  })
+})
+
+describe('audio — le boss final déclenche une réplique dédiée (distincte du mid-boss)', () => {
+  /** Fake minimal du sous-ensemble de `BaseSoundManager` que l'AudioDirector consomme. */
+  function fakeSoundManager(): { manager: Phaser.Sound.BaseSoundManager; addedKeys: string[] } {
+    const addedKeys: string[] = []
+    const manager = {
+      locked: false,
+      play: () => true,
+      add: (key: string) => {
+        addedKeys.push(key)
+        return { play: () => true, stop: () => true, destroy: () => {}, once: () => {}, volume: 0, isPlaying: false }
+      },
+      game: { cache: { audio: { exists: () => true } } }
+    } as unknown as Phaser.Sound.BaseSoundManager
+    return { manager, addedKeys }
+  }
+
+  it("BossSpawnedEvent('final') joue la réplique VOICE.bossFinal (voice_final_wave)", () => {
+    const events = new EventTarget()
+    const { manager, addedKeys } = fakeSoundManager()
+    const settings: AudioLevels = { master: 1, music: 1, sfx: 1, muted: false }
+    const director = new AudioDirector(manager, events, () => settings)
+    expect(director).toBeInstanceOf(AudioDirector)
+    events.dispatchEvent(new BossSpawnedEvent('final'))
+    expect(addedKeys).toContain('voice_final_wave')
+  })
+
+  it("BossSpawnedEvent('mid') joue une réplique du pool VOICE.boss (pas nécessairement final)", () => {
+    const events = new EventTarget()
+    const { manager, addedKeys } = fakeSoundManager()
+    const settings: AudioLevels = { master: 1, music: 1, sfx: 1, muted: false }
+    const director = new AudioDirector(manager, events, () => settings)
+    expect(director).toBeInstanceOf(AudioDirector)
+    events.dispatchEvent(new BossSpawnedEvent('mid'))
+    expect(addedKeys.length).toBe(1)
+    expect(VOICE.boss).toContain(addedKeys[0])
   })
 })
 

@@ -8,19 +8,31 @@ export type NavAction = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' | 
 export interface FrameInput {
   move: Vec2
   pressed: NavAction[]
+  /** Bouton d'action MAINTENU cette frame (pas un front) — ex. relever un coéquipier à terre. */
+  action: boolean
 }
 
 /**
- * Route les entrées d'une frame vers l'App (logique pure, testable) :
- *  - le déplacement va toujours au joueur (ignoré hors jeu) ;
- *  - les actions ponctuelles pilotent la navigation des écrans.
+ * Route les entrées d'une frame par joueur vers l'App (logique pure, testable) :
+ *  - chaque joueur déplace son propre personnage (ignoré hors jeu) ;
+ *  - les actions ponctuelles de TOUS les joueurs pilotent la navigation des
+ *    écrans partagés (menu unique, pas de notion de « joueur focus »).
  *
  * L'App décide contextuellement (en jeu, `nav/confirm` sont sans effet ;
  * `back` met en pause, etc.), ce qui garde ce routeur sans condition d'écran.
  */
-export function routeInput(app: App, frame: FrameInput): void {
-  app.setInput(1, { move: frame.move, attack: false })
-  for (const action of frame.pressed) {
+export function routeInput(app: App, perPlayer: ReadonlyMap<number, FrameInput>): void {
+  for (const [playerId, frame] of perPlayer) {
+    app.setInput(playerId, { move: frame.move, attack: false, action: frame.action })
+  }
+
+  const actions = new Set<NavAction>()
+  for (const frame of perPlayer.values()) {
+    for (const action of frame.pressed) {
+      actions.add(action)
+    }
+  }
+  for (const action of actions) {
     switch (action) {
       case 'up':
       case 'down':

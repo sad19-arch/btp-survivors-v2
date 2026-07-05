@@ -26,6 +26,29 @@ export interface GameSeam {
   restart(): void
   chooseUpgrade(index: number): void
   events: EventTarget
+  // --- helpers de debug (test-only : fast-forward pour Playwright/e2e) ---
+  /** [Debug] Octroie directement des armes/passifs à un joueur (1 par défaut). */
+  debugGrant(
+    opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] },
+    playerId?: number
+  ): void
+  /** [Debug] Ajoute de l'XP au joueur 1 (force un level-up déterministe). */
+  debugAddXp(amount: number): void
+  /** [Debug] Fait apparaître un coffre d'évolution sur la position d'un joueur (1 par défaut). */
+  debugSpawnChestOnPlayer(playerId?: number): void
+  /** [Debug] Fait apparaître immédiatement le boss du rôle demandé (`mid`/`final`). */
+  debugSpawnBoss(role: 'mid' | 'final'): void
+  /** [Debug] Fait apparaître `n` ennemis autour des joueurs (stress test horde). */
+  debugSpawnEnemies(n: number): void
+  /** [Debug] Audition d'un SFX d'arme (procédural) par ID d'arme. */
+  debugPlayWeaponSfx(id: string): void
+  /**
+   * [Debug] Sonde de rendu (posée par la GameScene) : pour chaque joueur, la clé de
+   * texture de son sprite, ou `null` si c'est un cercle de repli (feuille absente).
+   * Permet de tester que le bon SKIN est rendu — invisible au `getState`, qui ignore
+   * le rendu. Absente tant que la scène n'est pas montée / en mode allégé.
+   */
+  debugRenderInfo?(): { id: number; texture: string | null }[]
 }
 
 declare global {
@@ -73,7 +96,26 @@ export function createSeam(app: App): GameSeam {
     chooseUpgrade: (index: number) => {
       app.chooseUpgrade(index)
     },
-    events: app.events
+    events: app.events,
+    // --- helpers de debug (test-only) ---
+    debugGrant: (opts, playerId = 1) => {
+      app.debugGrant(opts, playerId)
+    },
+    debugAddXp: (amount: number) => {
+      app.debugAddXp(amount)
+    },
+    debugSpawnChestOnPlayer: (playerId = 1) => {
+      app.debugSpawnChestOnPlayer(playerId)
+    },
+    debugSpawnBoss: (role: 'mid' | 'final') => {
+      app.debugSpawnBoss(role)
+    },
+    debugSpawnEnemies: (n: number) => {
+      app.debugSpawnEnemies(n)
+    },
+    debugPlayWeaponSfx: (id: string) => {
+      app.debugPlayWeaponSfx(id)
+    }
   }
 }
 

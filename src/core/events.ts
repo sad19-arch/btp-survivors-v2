@@ -6,19 +6,27 @@
  * comme navigateur.
  */
 
-/** Données d'une pulsation d'aura (onde de choc du marteau). */
+/** Données d'une pulsation d'aura (onde de choc du marteau/pied-de-biche/court-circuit). */
 export interface AuraPulse {
   x: number
   y: number
   radius: number
+  /** Sorte d'arme à l'origine de l'impulsion (`aura` | `sweep` | `strike` | `cone`) — pour teinter le VFX. */
+  kind: string
+  /** Direction du cône (vecteur unitaire) — uniquement pour `kind === 'cone'`, undefined sinon. */
+  dirX?: number
+  dirY?: number
 }
 
-/** Émis à chaque impulsion d'une arme d'aura (pour un VFX d'onde de choc). */
+/** Émis à chaque impulsion d'une arme d'aura/sweep/strike/cone (pour un VFX d'onde de choc). */
 export class AuraPulseEvent extends Event {
   constructor(
     readonly x: number,
     readonly y: number,
-    readonly radius: number
+    readonly radius: number,
+    readonly kind: string = 'aura',
+    readonly dirX?: number,
+    readonly dirY?: number
   ) {
     super('auraPulse')
   }
@@ -75,7 +83,14 @@ export class PickupCollectedEvent extends Event {
 
 /** Le boss vient d'apparaître (pour SFX + bascule musique). */
 export class BossSpawnedEvent extends Event {
-  constructor() {
+  constructor(readonly role: 'mid' | 'final') {
     super('bossSpawned')
+  }
+}
+
+/** Une arme vient d'évoluer (coffre ramassé + conditions réunies), pour le joueur `playerId` (le ramasseur réel du coffre). */
+export class EvolvedEvent extends Event {
+  constructor(readonly weaponId: string, readonly playerId: number) {
+    super('evolved')
   }
 }

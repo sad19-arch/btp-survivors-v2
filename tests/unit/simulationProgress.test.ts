@@ -45,7 +45,7 @@ describe('Simulation — progression de bout en bout', () => {
 
     expect(s.pendingLevelUp).not.toBeNull()
     expect(s.pendingLevelUp?.playerId).toBe(1)
-    expect(s.pendingLevelUp?.choices.length).toBe(3)
+    expect(s.pendingLevelUp?.choices.length).toBe(4)
     expect(s.scene).toBe('game')
     expect(s.players[0]?.level).toBeGreaterThanOrEqual(2)
   })
@@ -66,12 +66,12 @@ describe('Simulation — progression de bout en bout', () => {
     expect(sim.getState().elapsedMs).toBeGreaterThan(frozenAt)
   })
 
-  it('choisir une carte +vie augmente le HP max du joueur', () => {
+  it('choisir la carte « Casque homologué » augmente le HP max du joueur', () => {
     const sim = new Simulation({ seed: 123, mode: 'solo' })
     const s = runUntilLevelUp(sim, 120_000, 100)
     const before = sim.getState().players[0]?.maxHp ?? 0
-    // Choisit la carte 'vie_max' si proposée, sinon la première (test robuste).
-    const idx = s.pendingLevelUp?.choices.findIndex((c) => c.id === 'vie_max') ?? -1
+    // Choisit la carte 'casque_homologue' (passif +PV max) si proposée, sinon la première (test robuste).
+    const idx = s.pendingLevelUp?.choices.findIndex((c) => c.id === 'casque_homologue') ?? -1
     sim.chooseUpgrade(idx >= 0 ? idx : 0)
     const after = sim.getState().players[0]?.maxHp ?? 0
     if (idx >= 0) {

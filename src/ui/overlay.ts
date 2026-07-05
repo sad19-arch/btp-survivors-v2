@@ -1,6 +1,8 @@
 import { h, clear } from './h'
 import { injectStyles } from './styles'
-import type { AppViewState, MenuItemView } from '@/app/appState'
+import { playerColor } from '@content/players'
+import { gamepadHudModel } from './gamepadHud'
+import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView } from '@/app/appState'
 
 /**
  * Overlay DOM des écrans (Titre / Pause / Upgrade / Game Over) + HUD. Observe
@@ -16,8 +18,16 @@ export class Overlay {
   private readonly introLayer: HTMLElement
   /** Couche de la barre de PV de boss (haut-centre, tant qu'un boss est en vie). */
   private readonly bossLayer: HTMLElement
+  /** Couche de l'inventaire (armes/passifs + niveaux) — lecture seule, coin dédié. */
+  private readonly inventoryLayer: HTMLElement
+  /** Couche du HUD manettes (coin haut-droit) : « Manettes N/4 » + pastilles par joueur. */
+  private readonly padLayer: HTMLElement
+  /** Signature du dernier état manettes rendu — évite de reconstruire à chaque frame. */
+  private padSignature = ''
   /** Remplissage de la barre de PV de boss (mis à jour chaque frame ; null = pas de boss). */
   private bossBarFill: HTMLElement | null = null
+  /** Signature (ids+niveaux) du dernier inventaire rendu — évite de reconstruire à chaque frame. */
+  private inventorySignature = ''
   private signature = ''
   /** Suivi inter-frames pour déclencher le bandeau (départ de run / arrivée boss). */
   private prevInGame = false
@@ -37,7 +47,17 @@ export class Overlay {
     this.bannerLayer = h('div')
     this.introLayer = h('div')
     this.bossLayer = h('div')
-    root.append(this.hud, this.screenLayer, this.bannerLayer, this.introLayer, this.bossLayer)
+    this.inventoryLayer = h('div')
+    this.padLayer = h('div', { className: 'pads' })
+    root.append(
+      this.hud,
+      this.screenLayer,
+      this.bannerLayer,
+      this.introLayer,
+      this.bossLayer,
+      this.inventoryLayer,
+      this.padLayer
+    )
   }
 
   /** Met à jour l'overlay depuis l'état applicatif. */
@@ -47,6 +67,44 @@ export class Overlay {
     this.syncBanner(state)
     this.syncIntroCard(state)
     this.syncBossBar(state)
+    this.syncInventory(state)
+    this.syncGamepads(state)
+  }
+
+  /**
+   * HUD manettes (coin haut-droit) : « Manettes N/4 » + 4 pastilles (une par
+   * joueur, couleur `playerColor`, allumée si la manette du slot est connectée).
+   * Source = `navigator.getGamepads()` (couche UI/DOM, jamais le cœur). Masqué
+   * pendant l'intro. Reconstruit seulement quand l'état des manettes change.
+   */
+  private syncGamepads(state: AppViewState): void {
+    const show = !state.introActive
+    const raw =
+      typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function'
+        ? Array.from(navigator.getGamepads())
+        : []
+    const model = gamepadHudModel(raw)
+    const sig = `${show ? 1 : 0}:${model.slots.map((s) => (s ? 1 : 0)).join('')}`
+    if (sig === this.padSignature) {
+      return
+    }
+    this.padSignature = sig
+    clear(this.padLayer)
+    this.padLayer.style.display = show ? 'flex' : 'none'
+    if (!show) {
+      return
+    }
+    const pips = model.slots.map((on, i) => {
+      const pip = h('div', { className: on ? 'pad__pip pad__pip--on' : 'pad__pip' })
+      if (on) {
+        pip.style.backgroundColor = playerColor(i + 1).hex
+      }
+      return pip
+    })
+    this.padLayer.append(
+      h('span', { className: 'pad__label', text: `Manettes ${model.count}/4` }),
+      h('div', { className: 'pad__pips' }, ...pips)
+    )
   }
 
   private syncHud(state: AppViewState): void {
@@ -89,6 +147,34 @@ export class Overlay {
         this.bar(xp / threshold, 'hud__bar--xp')
       )
     )
+    // Co-op (>1 joueur) : bandeau de mini-HUD par joueur (pastille couleur + PV + niveau).
+    // Solo (1 joueur) : rien de plus — le HUD ci-dessus reste visuellement inchangé.
+    if (state.players.length > 1) {
+      this.hud.append(
+        h(
+          'div',
+          { className: 'hud__players' },
+          ...state.players.map((player) => this.playerCard(player))
+        )
+      )
+    }
+  }
+
+  /** Mini-HUD d'un joueur (co-op) : pastille couleur + id + PV + niveau, atténué si mort. */
+  private playerCard(player: AppPlayerState): HTMLElement {
+    const color = playerColor(player.id)
+    const swatch = h('div', { className: 'hud__pswatch' })
+    swatch.style.backgroundColor = color.hex
+    return h(
+      'div',
+      { className: player.alive ? 'hud__pcard' : 'hud__pcard hud__pcard--dead' },
+      swatch,
+      h('div', { className: 'hud__pinfo' },
+        h('span', { className: 'hud__pid', text: `J${player.id}` }),
+        h('span', { className: 'hud__php', text: `PV ${Math.ceil(player.hp)}/${Math.round(player.maxHp)}` }),
+        h('span', { className: 'hud__plvl', text: `Nv ${player.level}` })
+      )
+    )
   }
 
   private syncScreen(state: AppViewState): void {
@@ -101,6 +187,9 @@ export class Overlay {
     switch (state.screen) {
       case 'title':
         this.screenLayer.append(this.titlePanel(state))
+        break
+      case 'characterSelect':
+        this.screenLayer.append(this.characterSelectPanel(state))
         break
       case 'paused':
         this.screenLayer.append(this.menuPanel('Pause', null, state))
@@ -139,6 +228,25 @@ export class Overlay {
     return h('div', { className: 'screen' }, panel)
   }
 
+  /** Panneau de sélection de personnage : un joueur à la fois, carrousel ◄ Nom — Arme ►. */
+  private characterSelectPanel(state: AppViewState): HTMLElement {
+    const sel = state.characterSelect
+    const player = sel?.player ?? 1
+    const total = sel?.total ?? 1
+    const color = playerColor(player)
+    const header = h('h1', { className: 'panel__title', text: `Joueur ${player}/${total}` })
+    header.style.color = color.hex
+    const panel = h(
+      'div',
+      { className: 'panel' },
+      header,
+      h('p', { className: 'panel__subtitle', text: 'Choisis ton personnage' }),
+      this.menuList(state),
+      h('p', { className: 'hint-line', text: 'Gauche/Droite pour changer • Valider: A / Entrée' })
+    )
+    return h('div', { className: 'screen' }, panel)
+  }
+
   /**
    * Bandeau transitoire « ZONE À SÉCURISER → » (clin d'œil beat'em up). Déclenché
    * au vrai départ de run (après l'intro) et à l'arrivée d'un boss. Géré ici, hors
@@ -146,17 +254,32 @@ export class Overlay {
    */
   private syncBanner(state: AppViewState): void {
     const inGame = state.screen === 'game' && !state.introActive
-    const hasBoss = state.enemies.some((e) => e.isBoss)
+    const boss = state.enemies.find((e) => e.isBoss)
+    const hasBoss = boss !== undefined
     const startedRun = inGame && !this.prevInGame && state.elapsedMs < 500
     const bossArrived = inGame && hasBoss && !this.prevHadBoss
     // L'arrivée du boss a son propre bandeau (rouge, nom du boss) → alerte claire.
+    // Le boss FINAL a un bandeau distinct (nom + classe) — c'est un palier plus dangereux.
     if (bossArrived) {
-      this.showBanner('Alerte — Contremaître', 'banner banner--boss')
+      if (boss.bossRole === 'final') {
+        this.showBanner('DANGER — CONTREMAÎTRE MAUDIT', 'banner banner--boss-final')
+      } else {
+        this.showBanner('Alerte — Contremaître', 'banner banner--boss')
+      }
     } else if (startedRun) {
       this.showBanner('Zone à sécuriser →', 'banner')
     }
     this.prevInGame = inGame
     this.prevHadBoss = hasBoss
+  }
+
+  /**
+   * Bandeau « ÉVOLUTION — <nom> » (coffre ramassé + conditions réunies). Appelé
+   * depuis la composition root (`main.ts`) qui résout le nom via `WEAPONS` —
+   * l'Overlay reste sans dépendance à `src/content`.
+   */
+  showEvolutionBanner(name: string): void {
+    this.showBanner(`Évolution — ${name}`, 'banner banner--evolution')
   }
 
   private showBanner(text: string, className: string): void {
@@ -190,11 +313,12 @@ export class Overlay {
     if (this.bossBarFill === null) {
       clear(this.bossLayer)
       const fill = h('div', { className: 'bossbar__fill' })
+      const isFinal = boss.bossRole === 'final'
       this.bossLayer.append(
         h(
           'div',
-          { className: 'bossbar' },
-          h('div', { className: 'bossbar__name', text: 'Contremaître' }),
+          { className: isFinal ? 'bossbar bossbar--final' : 'bossbar' },
+          h('div', { className: 'bossbar__name', text: isFinal ? 'CONTREMAÎTRE MAUDIT' : 'Contremaître' }),
           h('div', { className: 'bossbar__track' }, fill)
         )
       )
@@ -202,6 +326,52 @@ export class Overlay {
     }
     const frac = boss.maxHp > 0 ? boss.hp / boss.maxHp : 0
     this.bossBarFill.style.width = `${Math.round(Math.max(0, Math.min(1, frac)) * 100)}%`
+  }
+
+  /**
+   * Inventaire du joueur 1 (armes + passifs, icône + niveau) — lecture seule,
+   * coin dédié pour ne pas couvrir PV/XP/barre de boss. Visible en run (jeu/pause/
+   * upgrade), masqué pendant l'intro. Reconstruit seulement quand la signature
+   * (ids+niveaux) change (l'inventaire évolue rarement).
+   */
+  private syncInventory(state: AppViewState): void {
+    const inRun =
+      (state.screen === 'game' || state.screen === 'paused' || state.screen === 'upgrade') && !state.introActive
+    if (!inRun) {
+      if (this.inventorySignature !== '') {
+        clear(this.inventoryLayer)
+        this.inventorySignature = ''
+      }
+      return
+    }
+    const inv = state.players[0]?.inventory ?? { weapons: [], passives: [] }
+    const sig = [...inv.weapons, ...inv.passives].map((e) => `${e.id}:${e.level}`).join(',')
+    if (sig === this.inventorySignature) {
+      return
+    }
+    this.inventorySignature = sig
+    clear(this.inventoryLayer)
+    if (inv.weapons.length === 0 && inv.passives.length === 0) {
+      return
+    }
+    this.inventoryLayer.append(
+      h(
+        'div',
+        { className: 'inv' },
+        h('div', { className: 'inv__row' }, ...inv.weapons.map((e) => this.invTile(e))),
+        h('div', { className: 'inv__row' }, ...inv.passives.map((e) => this.invTile(e)))
+      )
+    )
+  }
+
+  /** Une tuile d'inventaire : icône (ou monogramme de secours) + pastille de niveau. */
+  private invTile(entry: InventoryEntry): HTMLElement {
+    return h(
+      'div',
+      { className: 'inv__tile' },
+      icon(entry.id, entry.name, 'inv__icon', 'inv__img', 'inv__mono'),
+      h('div', { className: 'inv__lvl', text: `${entry.level}/${entry.maxLevel ?? entry.level}` })
+    )
   }
 
   /**
@@ -311,20 +481,58 @@ export class Overlay {
     )
   }
 
+  private levelPips(current: number, max: number): HTMLElement {
+    const pips: HTMLElement[] = []
+    for (let i = 0; i < max; i++) {
+      pips.push(h('span', { className: i < current ? 'pip pip--on' : 'pip' }))
+    }
+    return h(
+      'div',
+      { className: 'card__pips' },
+      ...pips,
+      h('span', { className: 'card__lvltext', text: `${current}/${max}` })
+    )
+  }
+
   private card(item: MenuItemView, focused: boolean, index: number): HTMLElement {
+    const kindClass =
+      item.kind?.startsWith('weapon') === true
+        ? 'card--weapon'
+        : item.kind?.startsWith('passive') === true
+          ? 'card--passive'
+          : ''
+    const classNames = ['card', kindClass, focused ? 'card--focus' : ''].filter(Boolean).join(' ')
+    const children: HTMLElement[] = [
+      this.cardIcon(item),
+      h('div', { className: 'card__name', text: item.label })
+    ]
+    if (item.maxLevel !== undefined) {
+      children.push(h('div', { className: 'card__hint', text: item.hint ?? '' }))
+      children.push(this.levelPips(item.currentLevel ?? 0, item.maxLevel))
+    } else {
+      children.push(h('div', { className: 'card__hint', text: item.hint ?? '' }))
+    }
+    if (item.description !== undefined && item.description !== '') {
+      children.push(h('div', { className: 'card__desc', text: item.description }))
+    }
     return h(
       'div',
       {
-        className: focused ? 'card card--focus' : 'card',
+        className: classNames,
         onClick: this.onSelect === undefined ? undefined : () => { this.onSelect?.(index) }
       },
-      h('img', {
-        className: 'card__icon',
-        attrs: { src: `${import.meta.env.BASE_URL}stage01/ui/icon_${item.id}.png`, alt: '' }
-      }),
-      h('div', { className: 'card__name', text: item.label }),
-      h('div', { className: 'card__hint', text: item.hint ?? '' })
+      ...children
     )
+  }
+
+  /**
+   * Icône de carte : tente `icon_<id>.png` (pixel-art dédié à venir en passe DA) ;
+   * en l'absence de fichier (armes/passifs sans icône propre pour l'instant), bascule
+   * sur un MONOGRAMME lisible (initiales) plutôt qu'une image cassée. Forward-compatible :
+   * dès qu'une icône `icon_<id>.png` existe, elle s'affiche automatiquement.
+   */
+  private cardIcon(item: MenuItemView): HTMLElement {
+    return icon(item.id, item.label, 'card__icon', 'card__img', 'card__mono')
   }
 
   /** Barre de progression (remplissage proportionnel), pour le HUD. */
@@ -360,7 +568,13 @@ export class Overlay {
       state.screen === 'gameover' || state.screen === 'victory' ? `${state.elapsedMs}|${state.score}` : ''
     // Le déblocage du casque doré change le panneau titre → l'inclure dans la signature.
     const titlePart = state.screen === 'title' && state.goldSkin ? 'gold' : ''
-    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}`
+    // Sélection de personnage : le joueur actif (couleur du header) ne fait pas partie du
+    // menu (item unique 'char') → inclure explicitement pour re-rendre au changement de joueur.
+    const charSelectPart =
+      state.screen === 'characterSelect' && state.characterSelect !== null
+        ? `p${state.characterSelect.player}/${state.characterSelect.total}`
+        : ''
+    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}|${charSelectPart}`
   }
 }
 
@@ -370,4 +584,35 @@ function formatTime(ms: number): string {
   const m = Math.floor(total / 60)
   const s = total % 60
   return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+const MONOGRAM_STOPWORDS = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'a', 'au', 'aux', 'et'])
+
+/** Monogramme d'une carte : initiales des 2 premiers mots significatifs, en capitales (icône de secours). */
+function monogram(label: string): string {
+  const all = label.split(/[\s-]+/).filter((w) => w.length > 0)
+  const significant = all.filter((w) => !MONOGRAM_STOPWORDS.has(w.toLowerCase()))
+  const words = significant.length > 0 ? significant : all
+  return words.slice(0, 2).map((w) => w.charAt(0)).join('').toUpperCase()
+}
+
+/**
+ * Icône générique (carte d'upgrade ou tuile d'inventaire) : tente
+ * `icon_<id>_64.png` (pixel-art PixelLab, lot B3) ; bascule sur un MONOGRAMME
+ * (initiales du libellé) si le fichier n'existe pas encore (ex. armes évoluées
+ * sans icône dédiée). Factorisé entre `cardIcon` (upgrade) et `invTile`
+ * (inventaire HUD) — mêmes règles, classes CSS différentes selon le contexte.
+ */
+function icon(id: string, label: string, boxClass: string, imgClass: string, monoClass: string): HTMLElement {
+  const box = h('div', { className: boxClass })
+  const img = h('img', {
+    className: imgClass,
+    attrs: { src: `${import.meta.env.BASE_URL}stage01/ui/icon_${id}_64.png`, alt: '' }
+  })
+  img.addEventListener('error', () => {
+    img.remove()
+    box.append(h('div', { className: monoClass, text: monogram(label) }))
+  })
+  box.append(img)
+  return box
 }

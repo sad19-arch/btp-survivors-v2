@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { World } from '@core/world'
 import { Rng } from '@core/rng'
-import { spawnWave } from '@core/systems/spawn'
+import { spawnWave, spawnBoss } from '@core/systems/spawn'
 import { PHASES, ConstructionPhaseId, phasePoolIds } from '@content/phases'
+import { ENEMIES, MINI_BOSS_ID } from '@content/enemies'
 import { SPAWN } from '@content/config'
 import type { ConstructionPhase } from '@content/phases'
 
@@ -47,5 +48,21 @@ describe('spawnWave (déterministe)', () => {
       })
     }
     expect(snapshot()).toEqual(snapshot())
+  })
+
+  it('spawnBoss pose isBoss + bossRole', () => {
+    const w = new World()
+    const def = ENEMIES[MINI_BOSS_ID]
+    if (def === undefined) {
+      throw new Error('def mini-boss manquante')
+    }
+    spawnBoss(w, def, { x: 800, y: 600 }, 0, 320, 'mid')
+    const [e] = [...w.query('enemy')]
+    if (e === undefined) {
+      throw new Error('aucun ennemi spawné')
+    }
+    const comp = w.get(e, 'enemy')
+    expect(comp?.isBoss).toBe(true)
+    expect(comp?.bossRole).toBe('mid')
   })
 })

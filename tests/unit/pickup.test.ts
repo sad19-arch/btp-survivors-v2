@@ -5,13 +5,13 @@ import { PICKUP } from '@content/config'
 import { HITBOX } from '@content/config'
 
 /** Crée un joueur de test avec un rayon d'aimantation donné. */
-function makePlayer(world: World, x: number, y: number, pickupRadius: number): number {
+function makePlayer(world: World, x: number, y: number, pickupRadius: number, playerId = 1): number {
   const e = world.spawn()
   world.add(e, 'position', { x, y })
   world.add(e, 'velocity', { x: 0, y: 0 })
   world.add(e, 'health', { hp: 100, maxHp: 100 })
   world.add(e, 'player', {
-    playerId: 1,
+    playerId,
     speed: 200,
     vigilance: 100,
     damageMult: 1,
@@ -122,6 +122,37 @@ describe('pickupSystem', () => {
     expect(world.get(player, 'progress')?.xp).toBe(60)
   })
 
+  it("crédite le coffre 'coffre' au ramasseur réel (playerId) via chestCollectors, pas un joueur codé en dur", () => {
+    const world = new World()
+    // Joueur 1 loin du coffre : ne doit pas être crédité.
+    makePlayer(world, 2000, 2000, 100, 1)
+    // Joueur 2 au contact du coffre : le ramasseur réel.
+    makePlayer(world, 0, 0, 100, 2)
+    const gem = world.spawn()
+    world.add(gem, 'position', { x: COLLECT_X, y: 0 })
+    world.add(gem, 'pickup', { type: 'coffre', value: 0 })
+    const chestCollectors: number[] = []
+    pickupSystem(world, 16, undefined, chestCollectors)
+    expect(chestCollectors).toEqual([2])
+  })
+
+  it('un coffre par joueur dans la même frame → un entry par ramasseur, dans l’ordre de collecte', () => {
+    const world = new World()
+    const p1 = makePlayer(world, 0, 0, 100, 1)
+    const p2 = makePlayer(world, 1000, 0, 100, 2)
+    const gem1 = world.spawn()
+    world.add(gem1, 'position', { x: COLLECT_X, y: 0 })
+    world.add(gem1, 'pickup', { type: 'coffre', value: 0 })
+    const gem2 = world.spawn()
+    world.add(gem2, 'position', { x: 1000 + COLLECT_X, y: 0 })
+    world.add(gem2, 'pickup', { type: 'coffre', value: 0 })
+    const chestCollectors: number[] = []
+    pickupSystem(world, 16, undefined, chestCollectors)
+    expect(chestCollectors.sort()).toEqual([1, 2])
+    expect(world.alive(p1)).toBe(true)
+    expect(world.alive(p2)).toBe(true)
+  })
+
   it('l’aimant aspire toutes les gemmes d’XP restantes', () => {
     const world = new World()
     const player = makePlayer(world, 0, 0, 100)
@@ -133,5 +164,20 @@ describe('pickupSystem', () => {
     expect(world.alive(g1)).toBe(false)
     expect(world.alive(g2)).toBe(false)
     expect(world.get(player, 'progress')?.xp).toBe(13)
+  })
+
+  it('en coop, l’aimant crédite chaque gemme à son joueur le plus proche (pas tout au ramasseur)', () => {
+    const world = new World()
+    const p1 = makePlayer(world, 0, 0, 100, 1) // ramasse l'aimant, à l'origine
+    const p2 = makePlayer(world, 1000, 0, 100, 2) // loin
+    const gemNearP1 = makeGem(world, 60, 0, 5) // clairement le plus proche de p1
+    const gemNearP2 = makeGem(world, 1000, 60, 9) // clairement le plus proche de p2
+    makePickup(world, COLLECT_X, 0, 'magnet', 0) // p1 ramasse l'aimant
+    pickupSystem(world, 16)
+    expect(world.alive(gemNearP1)).toBe(false)
+    expect(world.alive(gemNearP2)).toBe(false)
+    // La gemme loin (près de p2) va à p2, PAS au ramasseur p1 — équité coop.
+    expect(world.get(p1, 'progress')?.xp).toBe(5)
+    expect(world.get(p2, 'progress')?.xp).toBe(9)
   })
 })

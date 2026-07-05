@@ -16,7 +16,7 @@ describe('Overlay (DOM)', () => {
 
     expect(root.querySelector('.panel__title')?.textContent).toBe('BTP Survivors')
     const items = root.querySelectorAll('.menu__item')
-    expect(items.length).toBe(4) // Jouer, Niveau (sélecteur), Options, Crédits
+    expect(items.length).toBe(5) // Jouer, Joueurs (sélecteur), Niveau (sélecteur), Options, Crédits
     expect(root.querySelectorAll('.menu__item--focus').length).toBe(1)
     expect(items[0]?.classList.contains('menu__item--focus')).toBe(true)
   })
@@ -40,7 +40,7 @@ describe('Overlay (DOM)', () => {
     expect(hud?.textContent).toContain('Niv. 1')
   })
 
-  it('affiche 3 cartes sur l’écran d’upgrade', () => {
+  it('affiche 4 cartes sur l’écran d’upgrade', () => {
     const app = new App({ seed: 123, mode: 'solo', autostart: true })
     // Aspire les gemmes jusqu'au level-up.
     let t = 0
@@ -67,6 +67,124 @@ describe('Overlay (DOM)', () => {
     }
     const { root, overlay } = mount()
     overlay.sync(app.getState())
-    expect(root.querySelectorAll('.card').length).toBe(3)
+    expect(root.querySelectorAll('.card').length).toBe(4)
+  })
+})
+
+describe('Overlay — inventaire HUD (armes/passifs + niveaux)', () => {
+  it('affiche une tuile par arme/passif possédé, avec le niveau', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({
+      weapons: [{ id: 'scie', level: 3 }],
+      passives: [{ id: 'air_comprime', level: 2 }]
+    })
+    const { root, overlay } = mount()
+    // happy-dom n'a pas de vrai décodeur d'image → l'event `error` ne se déclenche
+    // pas forcément tout seul ; on vérifie juste que sync() ne plante pas et que
+    // les tuiles existent (le fallback monogramme est couvert par un sync direct).
+    overlay.sync(app.getState())
+    const s = app.getState()
+    const expected = s.players[0]?.inventory.weapons.length ?? 0
+    const expectedPassives = s.players[0]?.inventory.passives.length ?? 0
+    const tiles = root.querySelectorAll('.inv__tile')
+    expect(tiles.length).toBe(expected + expectedPassives)
+    // Format : level/maxLevel (ex. "1/8") — plus 'Nv.' depuis la refonte cartes.
+    expect(root.querySelector('.inv__lvl')?.textContent).toMatch(/\d+\/\d+/)
+  })
+
+  it('le fallback monogramme ne plante pas (pas de vraie image en happy-dom)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    expect(() => overlay.sync(app.getState())).not.toThrow()
+    // Force l'échec de chargement de chaque <img> (comme un navigateur réel sans le fichier).
+    root.querySelectorAll<HTMLImageElement>('.inv__img').forEach((img) => {
+      img.dispatchEvent(new Event('error'))
+    })
+    expect(root.querySelectorAll('.inv__mono').length).toBeGreaterThan(0)
+  })
+
+  it("masque l'inventaire hors écran de jeu (titre)", () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+    expect(root.querySelectorAll('.inv__tile').length).toBe(0)
+  })
+})
+
+describe('Overlay — identité du boss (mid vs final)', () => {
+  it('boss final → barre "CONTREMAÎTRE MAUDIT" + bandeau .banner--boss-final', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugSpawnBoss('final')
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+
+    const name = root.querySelector('.bossbar__name')
+    expect(name?.textContent).toContain('MAUDIT')
+    expect(root.querySelector('.banner--boss-final')).not.toBeNull()
+  })
+
+  it('boss mid → barre "Contremaître" (sans MAUDIT) + bandeau .banner--boss (pas final)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugSpawnBoss('mid')
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+
+    const name = root.querySelector('.bossbar__name')
+    expect(name?.textContent).toBe('Contremaître')
+    expect(name?.textContent).not.toContain('MAUDIT')
+    expect(root.querySelector('.banner--boss')).not.toBeNull()
+    expect(root.querySelector('.banner--boss-final')).toBeNull()
+  })
+})
+
+describe('Overlay — bandeau d’évolution', () => {
+  it('showEvolutionBanner insère un .banner--evolution avec le nom de l’arme', () => {
+    const { root, overlay } = mount()
+    overlay.showEvolutionBanner('Mitrailleuse à clous')
+    const banner = root.querySelector('.banner--evolution')
+    expect(banner).not.toBeNull()
+    expect(banner?.textContent).toContain('Mitrailleuse à clous')
+  })
+})
+
+describe('Overlay — HUD multi-joueur (co-op)', () => {
+  it('3 joueurs → 3 mini-HUD, PV/niveau par joueur, couleurs distinctes', () => {
+    const app = new App({ seed: 1, mode: 'coop3', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+
+    const state = app.getState()
+    expect(state.players.length).toBe(3)
+
+    const cards = root.querySelectorAll<HTMLElement>('.hud__pcard')
+    expect(cards.length).toBe(3)
+
+    cards.forEach((card, i) => {
+      const p = state.players[i]
+      expect(p).toBeDefined()
+      expect(card.textContent).toContain(`J${p?.id}`)
+      expect(card.textContent).toContain(`PV ${Math.ceil(p?.hp ?? 0)}`)
+      expect(card.textContent).toContain(`Nv ${p?.level ?? 1}`)
+    })
+
+    const colors = Array.from(cards).map(
+      (card) => card.querySelector<HTMLElement>('.hud__pswatch')?.style.backgroundColor
+    )
+    expect(new Set(colors).size).toBe(colors.length) // toutes distinctes
+  })
+
+  it('solo (1 joueur) → pas de bandeau .hud__players, HUD inchangé', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+
+    expect(root.querySelector('.hud__players')).toBeNull()
+    expect(root.querySelectorAll('.hud__pcard').length).toBe(0)
+
+    const hud = root.querySelector<HTMLElement>('.hud')
+    expect(hud?.style.display).toBe('flex')
+    expect(hud?.textContent).toContain('Niv. 1')
+    expect(hud?.textContent).toContain('PV ')
+    expect(hud?.textContent).toContain('XP ')
   })
 })

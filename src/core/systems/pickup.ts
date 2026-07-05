@@ -8,7 +8,12 @@ import { HITBOX, PICKUP } from '@content/config'
  *
  * Pur et déterministe (pas d'aléa). Les pickups hors rayon restent immobiles.
  */
-export function pickupSystem(world: World, dtMs: number, collected?: PickupKind[]): void {
+export function pickupSystem(
+  world: World,
+  dtMs: number,
+  collected?: PickupKind[],
+  chestCollectors?: number[]
+): void {
   const dt = dtMs / 1000
   const collectDist = HITBOX.player + PICKUP.collectRadius
 
@@ -17,6 +22,18 @@ export function pickupSystem(world: World, dtMs: number, collected?: PickupKind[
     const pickup = world.get(gem, 'pickup')
     if (gpos === undefined || pickup === undefined) {
       continue
+    }
+
+    // Durée de vie : décrémente AVANT le early-continue "pas de joueur" ci-dessous,
+    // sinon les gemmes loin de tout joueur ne s'éteignent jamais (accumulation
+    // non bornée de la horde). Seuls les pickups avec `lifeMs` fini expirent
+    // (coffre/heal/magnet n'ont pas de `lifeMs` -> persistants).
+    if (pickup.lifeMs !== undefined) {
+      pickup.lifeMs -= dtMs
+      if (pickup.lifeMs <= 0) {
+        world.despawn(gem)
+        continue
+      }
     }
 
     const target = nearestPlayer(world, gpos)
@@ -31,6 +48,12 @@ export function pickupSystem(world: World, dtMs: number, collected?: PickupKind[
     if (dist <= collectDist) {
       applyPickup(world, target.entity, pickup)
       collected?.push(pickup.type)
+      if (pickup.type === 'coffre') {
+        const playerId = world.get(target.entity, 'player')?.playerId
+        if (playerId !== undefined) {
+          chestCollectors?.push(playerId)
+        }
+      }
       world.despawn(gem)
       continue
     }
@@ -43,14 +66,25 @@ export function pickupSystem(world: World, dtMs: number, collected?: PickupKind[
   }
 }
 
-/** Applique l'effet d'un pickup au joueur qui le ramasse. Déterministe. */
+/**
+ * Applique l'effet d'un pickup au joueur qui le ramasse. Déterministe.
+ *
+ * NB distinction des deux types « coffre » du butin :
+ * - `'chest'` : lot d'XP bonus dormant (chance de drop = 0 pour l'instant, cf. `PICKUP_DROPS`).
+ * - `'coffre'` : coffre d'évolution — ne donne AUCUN effet direct ici ; c'est
+ *   `simulation.step` qui, en voyant `'coffre'` dans `collected`, appelle
+ *   `tryEvolve` puis dispatch `EvolvedEvent` (ou soigne en bonus de repli).
+ */
 function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
   switch (pickup.type) {
     case 'xp':
     case 'chest': {
       const progress = world.get(player, 'progress')
       if (progress !== undefined) {
-        progress.xp += pickup.value
+        // Multiplicateur de gain d'XP (stat `growth`, base 1). Déterministe :
+        // Math.round(int × 1.0) === int → run par défaut byte-identique.
+        const growth = world.get(player, 'stats')?.growth ?? 1
+        progress.xp += Math.round(pickup.value * growth)
       }
       break
     }
@@ -62,26 +96,48 @@ function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
       break
     }
     case 'magnet': {
-      vacuumXpGems(world, player)
+      vacuumXpGems(world)
+      break
+    }
+    case 'coffre': {
+      // Aucun effet direct : la sim gère l'évolution (ou le bonus de repli).
       break
     }
   }
 }
 
-/** Aspire immédiatement toutes les gemmes d'XP restantes vers le joueur (crédite + despawn). */
-function vacuumXpGems(world: World, player: EntityId): void {
+/**
+ * Aspire immédiatement toutes les gemmes d'XP restantes (power-up aimant). Chaque
+ * gemme est créditée à son joueur VIVANT le plus proche (coop-équitable — évite
+ * qu'un seul joueur rafle toute la carte). En solo, tout revient à l'unique joueur
+ * → arithmétique identique (`Math.round(total × growth)`), run par défaut byte-identique.
+ * Puis despawn des gemmes créditées.
+ */
+function vacuumXpGems(world: World): void {
+  const byPlayer = new Map<EntityId, number>()
   const ids: EntityId[] = []
-  let total = 0
-  for (const g of world.query('pickup')) {
+  for (const g of world.query('pickup', 'position')) {
     const pk = world.get(g, 'pickup')
-    if (pk !== undefined && pk.type === 'xp') {
-      ids.push(g)
-      total += pk.value
+    if (pk === undefined || pk.type !== 'xp') {
+      continue
     }
+    const gpos = world.get(g, 'position')
+    if (gpos === undefined) {
+      continue
+    }
+    const near = nearestPlayer(world, gpos)
+    if (near === null) {
+      continue // aucun joueur vivant → laisse la gemme (pas de despawn silencieux)
+    }
+    ids.push(g)
+    byPlayer.set(near.entity, (byPlayer.get(near.entity) ?? 0) + pk.value)
   }
-  const progress = world.get(player, 'progress')
-  if (progress !== undefined) {
-    progress.xp += total
+  for (const [pid, total] of byPlayer) {
+    const progress = world.get(pid, 'progress')
+    if (progress !== undefined) {
+      const growth = world.get(pid, 'stats')?.growth ?? 1
+      progress.xp += Math.round(total * growth)
+    }
   }
   for (const g of ids) {
     world.despawn(g)

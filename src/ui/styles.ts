@@ -42,6 +42,38 @@ const CSS = `
 #ui-root .hud__bar-fill { height: 100%; }
 #ui-root .hud__bar--hp .hud__bar-fill { background: ${PALETTE.vertBonus}; }
 #ui-root .hud__bar--xp .hud__bar-fill { background: ${PALETTE.cyanAccent}; }
+#ui-root .hud__players {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  margin-top: 2px;
+}
+#ui-root .hud__pcard {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: ${PALETTE.brunSombre};
+  border: 2px solid ${PALETTE.contour};
+  box-shadow: 3px 3px 0 ${PALETTE.contour};
+  padding: 4px 6px;
+}
+#ui-root .hud__pcard--dead { opacity: 0.45; }
+#ui-root .hud__pswatch {
+  width: 12px;
+  height: 12px;
+  border: 2px solid ${PALETTE.contour};
+  flex-shrink: 0;
+}
+#ui-root .hud__pinfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+#ui-root .hud__pid { color: ${PALETTE.jauneSecurite}; font-weight: bold; }
+#ui-root .hud__php { color: ${PALETTE.vertBonus}; }
+#ui-root .hud__plvl { color: ${PALETTE.blanc}; }
 #ui-root .screen {
   position: absolute;
   inset: 0;
@@ -101,9 +133,25 @@ const CSS = `
   gap: 10px;
 }
 #ui-root .card--focus { border-color: ${PALETTE.jauneSecurite}; box-shadow: 5px 5px 0 ${PALETTE.contour}; }
-#ui-root .card__icon { width: 56px; height: 56px; align-self: center; image-rendering: pixelated; }
+#ui-root .card__icon { width: 56px; height: 56px; align-self: center; display: flex; align-items: center; justify-content: center; }
+#ui-root .card__img { width: 56px; height: 56px; image-rendering: pixelated; }
+#ui-root .card__mono {
+  width: 56px; height: 56px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  background: ${PALETTE.brunSombre};
+  border: 2px solid ${PALETTE.contour};
+  color: ${PALETTE.jauneSecurite};
+  font-size: 22px; font-weight: bold;
+}
 #ui-root .card__name { color: ${PALETTE.jauneSecurite}; font-size: 16px; font-weight: bold; text-align: center; }
 #ui-root .card__hint { color: ${PALETTE.blanc}; font-size: 13px; text-transform: none; letter-spacing: 0; }
+#ui-root .card--weapon { border-color: ${PALETTE.orangeDanger}; }
+#ui-root .card--passive { border-color: ${PALETTE.cyanAccent}; }
+#ui-root .card__pips { display: flex; gap: 2px; align-items: center; flex-wrap: wrap; }
+#ui-root .pip { display: inline-block; width: 8px; height: 8px; background: ${PALETTE.brunSombre}; border: 1px solid ${PALETTE.contour}; }
+#ui-root .pip.pip--on { background: ${PALETTE.jauneSecurite}; border-color: ${PALETTE.contour}; }
+#ui-root .card__lvltext { color: ${PALETTE.blanc}; font-size: 11px; margin-left: 4px; text-transform: none; letter-spacing: 0; }
+#ui-root .card__desc { color: ${PALETTE.blanc}; font-size: 12px; text-transform: none; letter-spacing: 0; line-height: 1.3; }
 #ui-root .stats { display: flex; flex-direction: column; gap: 4px; font-size: 16px; }
 #ui-root .hint-line { color: ${PALETTE.solSable}; font-size: 12px; }
 #ui-root .unlock-line { color: ${PALETTE.jauneSecurite}; font-size: 12px; font-weight: bold; }
@@ -130,6 +178,29 @@ const CSS = `
   color: ${PALETTE.blanc};
   font-size: 26px;
   text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+#ui-root .banner--boss-final {
+  top: 30%;
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  background: ${PALETTE.contour};
+  color: ${PALETTE.orangeDanger};
+  border-color: ${PALETTE.orangeDanger};
+  font-size: 26px;
+  text-shadow: 2px 2px 0 ${PALETTE.rougeAlerte};
+}
+#ui-root .banner--evolution {
+  top: 30%;
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  background: ${PALETTE.vertBonus};
+  color: ${PALETTE.contour};
+  border-color: ${PALETTE.jauneSecurite};
+  font-size: 24px;
+  text-shadow: none;
+  animation: none;
 }
 #ui-root .bossbar {
   position: absolute;
@@ -158,6 +229,9 @@ const CSS = `
   border: 2px solid ${PALETTE.contour};
 }
 #ui-root .bossbar__fill { height: 100%; background: ${PALETTE.rougeAlerte}; }
+#ui-root .bossbar--final { border-color: ${PALETTE.orangeDanger}; }
+#ui-root .bossbar--final .bossbar__name { color: ${PALETTE.orangeDanger}; }
+#ui-root .bossbar--final .bossbar__fill { background: ${PALETTE.orangeDanger}; }
 #ui-root .hud__stage { font-size: 14px; }
 #ui-root .hud__stagenum { color: ${PALETTE.jauneSecurite}; }
 #ui-root .hud__stagename { color: ${PALETTE.blanc}; }
@@ -180,6 +254,66 @@ const CSS = `
 #ui-root .stagecard__title { color: ${PALETTE.blanc}; font-size: 30px; font-weight: bold; text-shadow: 3px 3px 0 ${PALETTE.contour}; }
 #ui-root .stagecard__sub { color: ${PALETTE.solSable}; font-size: 13px; text-transform: none; letter-spacing: 0; }
 @keyframes stagecard-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+#ui-root .pads {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(43, 32, 24, 0.85);
+  border: 3px solid ${PALETTE.contour};
+  box-shadow: 4px 4px 0 ${PALETTE.contour};
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: bold;
+  text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+#ui-root .pad__label { color: ${PALETTE.blanc}; text-transform: none; letter-spacing: 0; }
+#ui-root .pad__pips { display: flex; gap: 3px; }
+#ui-root .pad__pip { width: 10px; height: 10px; background: ${PALETTE.brunSombre}; border: 2px solid ${PALETTE.contour}; box-sizing: border-box; }
+#ui-root .pad__pip.pad__pip--on { border-color: ${PALETTE.contour}; }
+#ui-root .inv {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(43, 32, 24, 0.85);
+  border: 3px solid ${PALETTE.contour};
+  box-shadow: 4px 4px 0 ${PALETTE.contour};
+  padding: 6px;
+}
+#ui-root .inv__row { display: flex; gap: 6px; min-height: 32px; }
+#ui-root .inv__tile {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  box-sizing: border-box;
+}
+#ui-root .inv__icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
+#ui-root .inv__img { width: 32px; height: 32px; image-rendering: pixelated; }
+#ui-root .inv__mono {
+  width: 32px; height: 32px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  background: ${PALETTE.brunSombre};
+  border: 2px solid ${PALETTE.contour};
+  color: ${PALETTE.jauneSecurite};
+  font-size: 13px; font-weight: bold;
+}
+#ui-root .inv__lvl {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  background: ${PALETTE.contour};
+  border: 2px solid ${PALETTE.jauneSecurite};
+  color: ${PALETTE.blanc};
+  font-size: 9px;
+  font-weight: bold;
+  line-height: 1;
+  padding: 2px 3px;
+}
 `
 
 let injected = false

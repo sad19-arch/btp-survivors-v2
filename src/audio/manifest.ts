@@ -107,6 +107,8 @@ export const VOICE = {
   intro: ['voice_presents'],
   runStart: ['voice_ready', 'voice_fight'],
   boss: ['voice_boss', 'voice_prepare_yourself_for_an_epic_battle', 'voice_final_wave'],
+  /** Réplique dédiée au boss FINAL (distincte du mid-boss) — clé existante, déjà préchargée. */
+  bossFinal: ['voice_final_wave'],
   bonus: ['voice_bonus'],
   thankyou: ['voice_thankyou'],
   upgrade: ['voice_choose_your_destiny', 'voice_keep_going'],

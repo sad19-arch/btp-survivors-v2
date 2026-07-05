@@ -17,15 +17,23 @@ export function runOne(seed: number, bot: BotName, opts: Partial<RunOptions> = {
 
   const samples: Sample[] = []
   let minHp = Infinity
+  let minHpPct = 100
   let maxEnemies = 0
   let nanSeen = false
   let survived = true
+  let won = false
   let survivalMs = targetMs
 
   for (let t = 0; t < targetMs; t += stepMs) {
     const s = sim.getState()
     if (s.scene === 'gameover') {
       survived = false
+      survivalMs = s.elapsedMs
+      break
+    }
+    if (s.scene === 'won') {
+      // Boss final tué → victoire (le run s'arrête, il a « gagné »).
+      won = true
       survivalMs = s.elapsedMs
       break
     }
@@ -39,6 +47,9 @@ export function runOne(seed: number, bot: BotName, opts: Partial<RunOptions> = {
         nanSeen = true
       }
       minHp = Math.min(minHp, p.hp)
+      if (p.maxHp > 0) {
+        minHpPct = Math.min(minHpPct, (p.hp / p.maxHp) * 100)
+      }
       if (t % sampleEveryMs === 0) {
         samples.push({
           tSec: Math.round(t / 1000),
@@ -62,12 +73,14 @@ export function runOne(seed: number, bot: BotName, opts: Partial<RunOptions> = {
     bot,
     samples,
     survived,
+    wonTheGame: won || final.scene === 'won',
     survivalMs,
     finalLevel: fp?.level ?? 0,
     levelAt5min: at5min[at5min.length - 1]?.level ?? fp?.level ?? 0,
     peakEnemies: maxEnemies,
     nanSeen,
     minHp: minHp === Infinity ? 0 : minHp,
+    minHpPct,
     maxEnemies
   }
 }

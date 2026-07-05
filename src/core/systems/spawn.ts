@@ -59,7 +59,9 @@ export function spawnBoss(
   def: EnemyDef,
   center: Vec2,
   angle: number,
-  radius: number = SPAWN.ringRadius
+  radius: number = SPAWN.ringRadius,
+  role?: 'mid' | 'final',
+  scale: DifficultyScale = NO_SCALE
 ): void {
   spawnEnemy(
     world,
@@ -68,12 +70,21 @@ export function spawnBoss(
       x: center.x + Math.cos(angle) * radius,
       y: center.y + Math.sin(angle) * radius
     },
-    true
+    true,
+    scale,
+    role
   )
 }
 
 /** Fabrique une entité ennemie à partir d'une définition, avec renforcement temporel. */
-function spawnEnemy(world: World, def: EnemyDef, pos: Vec2, isBoss = false, scale: DifficultyScale = NO_SCALE): void {
+function spawnEnemy(
+  world: World,
+  def: EnemyDef,
+  pos: Vec2,
+  isBoss = false,
+  scale: DifficultyScale = NO_SCALE,
+  bossRole?: 'mid' | 'final'
+): void {
   const hp = Math.round(def.hp * scale.hp)
   const e = world.spawn()
   world.add(e, 'position', { x: pos.x, y: pos.y })
@@ -84,6 +95,7 @@ function spawnEnemy(world: World, def: EnemyDef, pos: Vec2, isBoss = false, scal
     speed: def.speed * scale.speed,
     isElite: def.archetype === 'elite',
     isBoss,
+    ...(bossRole !== undefined ? { bossRole } : {}),
     contactDamage: def.contactDamage * scale.contactDamage,
     xpValue: def.xpValue
   })

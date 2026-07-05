@@ -7,6 +7,8 @@ import { AudioDirector } from '@/audio/audioDirector'
 import { parseBootOptions } from './bootOptions'
 import { phaseIdFromLevel } from '@content/phases'
 import { createSeam, installSeam } from './seam'
+import type { EvolvedEvent } from '@core/events'
+import { WEAPONS } from '@content/weapons'
 
 /**
  * Point d'entrée (couche rendu). Lit les options de boot, instancie l'App (qui
@@ -56,6 +58,13 @@ const game = new Phaser.Game({
 game.scene.add('game', GameScene, false, data)
 game.scene.add('boot', BootScene, true, data)
 
+// Diagnostic (test/dev uniquement, comme le seam) : expose le jeu Phaser pour
+// que l'e2e mesure le nombre d'objets de scène et garde contre la fuite au
+// restart (les sprites/VFX ne doivent pas s'accumuler d'une partie à l'autre).
+if (opts.test) {
+  ;(window as unknown as { __PHASER_GAME__?: Phaser.Game }).__PHASER_GAME__ = game
+}
+
 // AudioDirector : créé une fois, coupé en test/headless. Lit les niveaux via l'App.
 const audio = opts.test ? null : new AudioDirector(game.sound, app.events, () => app.getAudioLevels())
 
@@ -64,8 +73,14 @@ const uiRoot = document.getElementById('ui-root')
 if (uiRoot !== null) {
   // Clic souris sur un item de menu → sélection+validation via l'App.
   const overlay = new Overlay(uiRoot, (i) => app.clickItem(i))
+  // Bandeau d'évolution : résout le nom via WEAPONS ici (composition root) pour
+  // garder l'Overlay libre de toute dépendance à `src/content`.
+  app.events.addEventListener('evolved', (e) => {
+    const weaponId = (e as EvolvedEvent).weaponId
+    overlay.showEvolutionBanner(WEAPONS[weaponId]?.name ?? weaponId)
+  })
   const tick = (): void => {
-    const state = app.getState()
+    const state = app.getStateForFrame(app.frameId)
     overlay.sync(state)
     audio?.observe(state) // musique par écran/phase/boss (crossfade)
     window.requestAnimationFrame(tick)

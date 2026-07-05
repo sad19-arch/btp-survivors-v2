@@ -1,18 +1,10 @@
 import Phaser from 'phaser'
 
-/** Taille d'une tuile de sol, en px. */
-const TILE_PX = 32
-
 export interface GroundAssets {
-  /** Clés de texture des tuiles de base (variantes). */
+  /** Clés de texture des tuiles de base (variantes ; la 1re sert de base répétée). */
   tileKeys: readonly string[]
   /** Clés de texture des décalques épars. */
   decalKeys: readonly string[]
-}
-
-/** Hash déterministe d'une coordonnée de cellule → variante de tuile. */
-function hash32(a: number, b: number): number {
-  return (Math.imul(a, 73856093) ^ Math.imul(b, 19349663)) >>> 0
 }
 
 /** PRNG seedé (mulberry32) — placement des décalques reproductible. */
@@ -27,10 +19,14 @@ function mulberry32(seed: number): () => number {
 }
 
 /**
- * Dessine le sol dans une RenderTexture statique placée SOUS les entités :
- * base tuilée (variante tirée par cellule via hash déterministe des coords)
- * + décalques épars (PRNG seedé, posés hors grille). Purement visuel et
- * reproductible — n'affecte pas la simulation.
+ * Rend le sol SOUS les entités, en **coût indépendant de la taille du monde** :
+ *  - base = un `TileSprite` GPU (une tuile 32×32, puissance de 2, répétée par le
+ *    GPU sur tout le monde) → 1 objet, aucune RenderTexture, aucun draw par
+ *    cellule, quelle que soit la taille du monde ;
+ *  - variété = décalques épars (flaques, cailloux…) posés en sprites individuels
+ *    par-dessus (quelques centaines, culés hors écran).
+ * Aucune texture pleine-taille → un monde 4× plus grand ne coûte ni mémoire ni
+ * cuisson en plus. Purement visuel et reproductible (PRNG seedé).
  */
 export function createGround(
   scene: Phaser.Scene,
@@ -38,25 +34,14 @@ export function createGround(
   worldH: number,
   assets: GroundAssets,
   seed = 1
-): Phaser.GameObjects.RenderTexture {
-  const rt = scene.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-10)
-
-  // 1) Base : une variante par cellule (hash déterministe).
-  const cols = Math.ceil(worldW / TILE_PX)
-  const rows = Math.ceil(worldH / TILE_PX)
-  const tiles = assets.tileKeys
-  if (tiles.length > 0) {
-    for (let cy = 0; cy < rows; cy++) {
-      for (let cx = 0; cx < cols; cx++) {
-        const key = tiles[hash32(cx, cy) % tiles.length]
-        if (key !== undefined) {
-          rt.draw(key, cx * TILE_PX, cy * TILE_PX)
-        }
-      }
-    }
+): void {
+  // 1) Base : une tuile répétée par un TileSprite (POT 32×32 → tuilage GPU propre).
+  const baseKey = assets.tileKeys[0]
+  if (baseKey !== undefined) {
+    scene.add.tileSprite(0, 0, worldW, worldH, baseKey).setOrigin(0, 0).setDepth(-10)
   }
 
-  // 2) Décalques épars (densité ~ 1 pour 260×260 px).
+  // 2) Décalques épars (densité ~ 1 pour 260×260 px) — sprites individuels.
   const decals = assets.decalKeys
   if (decals.length > 0) {
     const rng = mulberry32(seed)
@@ -71,9 +56,7 @@ export function createGround(
       const h = frame?.height ?? 0
       const x = Math.floor(rng() * Math.max(1, worldW - w))
       const y = Math.floor(rng() * Math.max(1, worldH - h))
-      rt.draw(key, x, y)
+      scene.add.image(x, y, key).setOrigin(0, 0).setDepth(-9)
     }
   }
-
-  return rt
 }

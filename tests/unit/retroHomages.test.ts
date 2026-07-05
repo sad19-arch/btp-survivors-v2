@@ -51,7 +51,9 @@ describe('Clin d’œil — code Konami (casque doré)', () => {
   it('le skin doré persiste une fois la partie lancée', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     playKonami(app)
-    app.confirm() // « Jouer »
+    app.confirm() // « Jouer » → ouvre la sélection de personnage
+    expect(app.getState().screen).toBe('characterSelect')
+    app.confirm() // valide le perso par défaut (solo) → lance la partie
     expect(app.getState().screen).toBe('game')
     expect(app.getState().goldSkin).toBe(true)
   })

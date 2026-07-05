@@ -6,10 +6,16 @@ import type { GameMode } from '@core/types'
  * Toute valeur d'équilibrage vit ici, pas en dur dans les systèmes.
  */
 
-/** Dimensions du monde, en pixels. */
+/**
+ * Dimensions du monde, en pixels. Agrandi ×2 par côté (×4 la surface) pour une
+ * zone explorable plus vaste (playtest « maps trop petites »). Coût per-frame
+ * nul : sol/décor cuits en RenderTextures, ennemis spawnés en anneau AUTOUR du
+ * joueur (indépendant de la taille) — plus d'espace pour manœuvrer, horde
+ * inchangée. Reste ≤ 4096 px/côté (limite de texture GPU d'une RT unique).
+ */
 export const WORLD = {
-  width: 1600,
-  height: 1200
+  width: 3200,
+  height: 2400
 } as const
 
 /** Stats de base d'un joueur. */
@@ -28,7 +34,7 @@ export const PROGRESSION = {
   /** Facteur multiplicatif du seuil à chaque niveau. */
   growth: 1.15,
   /** Nombre de cartes proposées à chaque montée de niveau. */
-  choices: 3
+  choices: 4
 } as const
 
 /** Paramètres des pickups. */
@@ -36,7 +42,13 @@ export const PICKUP = {
   /** Vitesse d'aimantation vers le joueur, en px/seconde. */
   magnetSpeed: 420,
   /** Rayon de collecte (en plus du rayon joueur), en px. */
-  collectRadius: 10
+  collectRadius: 10,
+  /**
+   * Durée de vie (ms) d'une gemme d'XP non ramassée avant qu'elle disparaisse.
+   * Borne l'accumulation de gemmes loin du joueur (horde). `coffre`/`heal`/
+   * `magnet` n'ont PAS de durée de vie (persistants).
+   */
+  gemLifeMs: 20000
 } as const
 
 /**
@@ -64,6 +76,47 @@ export const MODE_PLAYER_COUNT: Record<GameMode, number> = {
   coop4: 4
 }
 
+/**
+ * Facteur de renforcement des PV ennemis/boss par joueur supplémentaire (co-op).
+ * `coopHpFactor(n) = 1 + (n-1) * COOP_HP_K` : n=1→1.0 (solo inchangé), n=2→1.5,
+ * n=3→2.0, n=4→2.5. Ne s'applique qu'aux PV (pas aux dégâts de contact ni à la
+ * vitesse) — cf. Plan « Fin de CO-2 » tâche 3.
+ */
+export const COOP_HP_K = 0.5
+
+/** Multiplicateur de PV à appliquer selon le nombre de joueurs (borné à 1 min). */
+export function coopHpFactor(playerCount: number): number {
+  return 1 + (Math.max(1, playerCount) - 1) * COOP_HP_K
+}
+
+/**
+ * Dérive le `GameMode` de boot à partir d'un nombre de joueurs (sélecteur titre).
+ * Hors plage [1,4] : bornée à la valeur valide la plus proche (garde défensive).
+ */
+export function modeForCount(n: number): GameMode {
+  const clamped = Math.min(4, Math.max(1, Math.round(n)))
+  switch (clamped) {
+    case 1:
+      return 'solo'
+    case 2:
+      return 'coop'
+    case 3:
+      return 'coop3'
+    default:
+      return 'coop4'
+  }
+}
+
+/**
+ * Laisse souple coop (« tether ») : au-delà de ce rayon (px) autour du
+ * centroïde du groupe, la composante radiale sortante de la vélocité d'un
+ * joueur est annulée (pas un ressort, juste un mur souple). No-op en solo
+ * (`playerCount<=1`), cf. `tetherSystem`.
+ */
+export const TETHER = {
+  maxRadius: 450
+} as const
+
 /** Rayons de collision (px), par catégorie d'entité. */
 export const HITBOX = {
   player: 16,
@@ -73,6 +126,9 @@ export const HITBOX = {
 
 /** Armes de départ du joueur (slice 1). */
 export const STARTING_WEAPONS: readonly string[] = ['cloueur']
+
+/** Capacité d'inventaire du joueur (armes / passifs simultanés). */
+export const INVENTORY = { weapons: 6, passives: 6 } as const
 
 /**
  * Paramètres de spawn (géométrie & perf). La cadence et la quantité d'ennemis
@@ -84,10 +140,14 @@ export const SPAWN = {
    *  Resserré (700→560) pour laisser moins de temps de réaction et favoriser la nasse. */
   ringRadius: 560,
   /** Plafond d'ennemis simultanés (perf). */
-  maxActive: 200
+  maxActive: 300
 } as const
 
-/** Mini-boss (PRD : apparition à 5:00). */
+/**
+ * Boss de mi-parcours (PRD : apparition à 5:00). Rôle `mid` : NE déclenche PAS
+ * la victoire — sa mort lâche un coffre d'évolution (cf. reap.ts) qui rend une
+ * évolution atteignable EN COURS DE RUN, avant le boss final.
+ */
 export const MINI_BOSS = {
   /** Instant d'apparition, en ms de temps de jeu. */
   atMs: 5 * 60_000,
@@ -96,6 +156,17 @@ export const MINI_BOSS = {
    * faire entrer À L'ÉCRAN → le combat de climax est vu et engagé, pas un spawn
    * hors-champ que le joueur fond à distance sans le remarquer.
    */
+  spawnRadius: 320
+} as const
+
+/**
+ * Boss final (rôle `final`). Sa mort est la condition de victoire de la run
+ * (remplace l'ancienne victoire au mini-boss de 5:00 — cf. Plan B1, split de boss).
+ */
+export const FINAL_BOSS = {
+  /** Instant d'apparition, en ms de temps de jeu (~10:30). */
+  atMs: 630_000,
+  /** Rayon d'apparition du boss (px), même logique que MINI_BOSS : à l'écran. */
   spawnRadius: 320
 } as const
 
@@ -120,8 +191,32 @@ export const RESCUE = {
   fleeSpeed: 260
 } as const
 
+/**
+ * Relève co-op : un joueur à terre (hp<=0) peut être relevé par un coéquipier
+ * VIVANT qui reste à proximité en maintenant l'action. Solo : aucun coéquipier
+ * possible → no-op naturel (jamais relevé, game-over identique à aujourd'hui).
+ */
+export const REVIVE = {
+  /** Rayon de proximité (px) entre le releveur et le joueur à terre. */
+  radius: 80,
+  /** Temps (s) de maintien continu pour relever complètement. */
+  fillSeconds: 3,
+  /** Temps (s) pour que le progrès retombe à 0 une fois le maintien interrompu. */
+  decaySeconds: 2,
+  /** Fraction des PV max restaurés à la relève complète. */
+  hpFraction: 0.5
+} as const
+
 /** Intro de run (micro-animation d'entrée du héros). Purement cosmétique. */
 export const INTRO = {
   /** Durée du préambule pendant lequel la sim est gelée, en ms. */
   durationMs: 2000
 } as const
+
+/**
+ * Demi-angle du cône des armes de kind `cone` (extincteur, canon_mousse), en radians.
+ * Le cône total fait `2 × CONE_HALF_ANGLE` (≈ 57° au total pour 0.5 rad).
+ * Un ennemi est dans le cône si l'angle entre la direction du cône et la direction
+ * joueur→ennemi est ≤ CONE_HALF_ANGLE.
+ */
+export const CONE_HALF_ANGLE = 0.5 as const

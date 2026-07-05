@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { World } from '@core/world'
 import { weaponSystem } from '@core/systems/weapon'
 import type { EntityId } from '@core/types'
+import { BASE_STATS } from '@content/passives'
 
 function addPlayerWithWeapon(w: World, cooldownLeftMs: number): EntityId {
   const e = w.spawn()
@@ -9,7 +10,8 @@ function addPlayerWithWeapon(w: World, cooldownLeftMs: number): EntityId {
   w.add(e, 'velocity', { x: 0, y: 0 })
   w.add(e, 'health', { hp: 100, maxHp: 100 })
   w.add(e, 'player', { playerId: 1, speed: 200, vigilance: 100, damageMult: 1, cooldownMult: 1, pickupRadius: 90 })
-  w.add(e, 'weapons', { slots: [{ id: 'cloueur', cooldownLeftMs }] })
+  w.add(e, 'weapons', { slots: [{ id: 'cloueur', level: 1, cooldownLeftMs }] })
+  w.add(e, 'stats', { ...BASE_STATS })
   return e
 }
 
@@ -55,10 +57,10 @@ describe('weaponSystem', () => {
     expect([...w.query('projectile')]).toHaveLength(0)
   })
 
-  it('ne tire pas sans ennemi en portée', () => {
+  it('ne tire pas sans ennemi présent', () => {
     const w = new World()
     addPlayerWithWeapon(w, 0)
-    addEnemy(w, 5000, 0) // hors portée
+    // aucun ennemi dans le monde
     weaponSystem(w, 16)
     expect([...w.query('projectile')]).toHaveLength(0)
   })

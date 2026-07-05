@@ -73,12 +73,18 @@ test('le titre se navigue à la manette/clavier (via le seam) et lance la partie
   expect(title?.screen).toBe('title')
   expect(title?.menu?.items.length).toBeGreaterThanOrEqual(1)
 
-  // Navigue puis valide « Jouer ».
+  // Navigue puis valide « Jouer » → ouvre la sélection de personnage (solo, 1 joueur).
   await page.evaluate(() => {
     window.__GAME__?.nav('down')
     window.__GAME__?.nav('up')
     window.__GAME__?.confirm()
   })
+  const picking = await page.evaluate(() => window.__GAME__?.getState())
+  expect(picking?.screen).toBe('characterSelect')
+  expect(picking?.characterSelect).toEqual({ player: 1, total: 1 })
+
+  // Valide le personnage (par défaut du carrousel) → lance la partie.
+  await page.evaluate(() => window.__GAME__?.confirm())
   const game = await page.evaluate(() => window.__GAME__?.getState())
   expect(game?.screen).toBe('game')
   expect(game?.players.length).toBe(1)
@@ -127,7 +133,7 @@ test('montée de niveau → écran upgrade, le choix relance la partie', async (
 
   const up = await page.evaluate(() => window.__GAME__?.getState())
   expect(up?.screen).toBe('upgrade')
-  expect(up?.menu?.items.length).toBe(3)
+  expect(up?.menu?.items.length).toBe(4)
 
   await page.evaluate(() => window.__GAME__?.confirm())
   expect((await page.evaluate(() => window.__GAME__?.getState()))?.screen).toBe('game')
