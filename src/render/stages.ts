@@ -299,31 +299,88 @@ function makeStage(
   }
 }
 
+const FONDATIONS_RENDER: StageRender = {
+  ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_stage03_${i}`, file: `stage03/ground/tile_${i}.png` })),
+  decals: [
+    { key: 'decal_stage03_spill', file: 'stage03/decals/spill.png' },
+    { key: 'decal_stage03_crack', file: 'stage03/decals/crack.png' }
+  ],
+  // Seul clutter streamé : béton mini + ferraillage + coffrage.
+  // Les GROS ENGINS (toupies, pompe) sont dans `structures` (placés 1 fois).
+  props: [
+    { key: 'prop_stage03_concrete_mixer', file: 'stage03/props/concrete_mixer.png', scale: 0.65, count: 3 },
+    { key: 'prop_stage03_rebar',          file: 'stage03/props/rebar.png',           scale: 0.75, count: 4 },
+    { key: 'prop_stage03_formwork',       file: 'stage03/props/formwork.png',        scale: 0.80, count: 3 }
+  ],
+  enemies: {
+    gachee:      { key: 'enemy_stage03_base', file: 'stage03/enemies/base_walk.png', frame: 256, scale: 1.18 },
+    ferrailleur: { key: 'enemy_stage03_fast', file: 'stage03/enemies/fast_walk.png', frame: 256, scale: 0.62 },
+    massif:      { key: 'enemy_stage03_tank', file: 'stage03/enemies/tank_walk.png', frame: 256, scale: 0.94 }
+  },
+  boss: { key: 'boss_stage03', file: 'stage03/boss/boss_walk.png', frame: 256, scale: 1.25 },
+  // Fondations : dalle-héros + toupies + coulées de béton + ferrailleur au travail.
+  landmark: { key: 'landmark_stage03', file: 'stage03/landmarks/slab.png', scale: 1.5, count: 1 },
+  // Engins-héros placés UNE fois (toupie jaune NE, pompe orange SE)
+  // + travées de coffrage en fond. Ordre = ordre des angles scriptés.
+  structures: [
+    { key: 'struct_stage03_mixer',    file: 'stage03/props/mixer_truck.png',     scale: 1.1,  count: 1, band: 'near' },
+    { key: 'struct_stage03_pump',     file: 'stage03/props/concrete_pump.png',   scale: 1.05, count: 1, band: 'near' },
+    { key: 'struct_stage03_bay',      file: 'stage03/structures/formwork_bay.png', scale: 0.85, count: 5, band: 'mid'  }
+  ],
+  ambient: { key: 'npc_stage03', file: 'stage03/npc/ferrailleur_work.png', frame: 256, scale: 0.69, framePeriodMs: 260 },
+  // ── Composition scriptée stage 03 (fondations) ───────────────────────────────
+  // Géographie : toupie (mixer_truck=idx0) côté NE proche, pompe (idx1) côté SE proche,
+  // 5 travées de coffrage distribuées en arc Nord-Ouest (idle, décor).
+  // Landmark (grande dalle) au Nord-NE. PNJ ferrailleur près de la toupie NE.
+  geometry: {
+    // structureAngles[i] → structure i, dans l'ordre de `structures[]` :
+    //   0 = mixer_truck (NE, ~45°)   1 = concrete_pump (SE, ~315°)
+    //   2-6 = formwork_bay (arc O-SO : 160°, 200°, 240°, 100°, 280°)
+    structureAngles: [50, 315, 160, 205, 245, 100, 280],
+    landmarkAngle: 65,   // dalle-hero au Nord (légèrement Est)
+    ambientAngle:  50    // ferrailleur près de la toupie NE
+  },
+  // Zones métier : 3 secteurs complémentaires
+  zones: [
+    // Secteur Coulée (NE) — dense en ferraillage + taches béton autour des engins
+    {
+      angleCenter: 50,
+      angleSpread: 55,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [1],       // rebar (ferraillage)
+      dominantDecalIndices: [0],      // spill (taches béton)
+      density: 1.8
+    },
+    // Secteur Coffrage (SO) — travées de coffrage + fissures
+    {
+      angleCenter: 220,
+      angleSpread: 60,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [2],       // formwork (coffrage)
+      dominantDecalIndices: [1],      // crack (fissures)
+      density: 1.5
+    },
+    // Passage pompe (SE) — béton frais + ferraillage
+    {
+      angleCenter: 315,
+      angleSpread: 50,
+      distMin: 320,
+      distMax: 700,
+      dominantPropIndices: [0, 1],    // concrete_mixer + rebar
+      dominantDecalIndices: [0],      // spill
+      density: 1.4
+    }
+  ],
+  baseTileIndex: 0,            // tuile béton de base (index 0)
+  decalDensityMultiplier: 1.35 // chantier actif brut, densité forte (coulage béton)
+}
+
 export const STAGE_RENDER: Record<string, StageRender> = {
   terrain_vierge: TERRAIN_VIERGE_RENDER,
   terrassement: TERRASSEMENT_RENDER,
-  fondations: makeStage(
-    'stage03',
-    ['gachee', 'ferrailleur', 'massif'],
-    [
-      ['mixer_truck', 0.85, 1],
-      ['concrete_pump', 0.8, 1],
-      ['concrete_mixer', 0.6, 2],
-      ['rebar', 0.7, 3],
-      ['formwork', 0.8, 2]
-    ],
-    ['spill', 'crack'],
-    [1.18, 0.62, 0.94],
-    1.25,
-    {
-      // Fondations : dalle hero + travées de coffrage/ferraillage qui remplissent le chantier + ferrailleur au travail.
-      landmark: { key: 'landmark_stage03', file: 'stage03/landmarks/slab.png', scale: 1.5, count: 1 },
-      structures: [
-        { key: 'struct_stage03_formwork', file: 'stage03/structures/formwork_bay.png', scale: 0.9, count: 7, band: 'mid' }
-      ],
-      ambient: { key: 'npc_stage03', file: 'stage03/npc/ferrailleur_work.png', frame: 256, scale: 0.69, framePeriodMs: 260 }
-    }
-  ),
+  fondations: FONDATIONS_RENDER,
   reseaux_enterres: makeStage(
     'stage04',
     ['gaine', 'fileur', 'collecteur'],
