@@ -248,7 +248,7 @@ const TERRASSEMENT_RENDER: StageRender = {
     }
   ],
   baseTileIndex: 0,           // tuile boue de base (index 0)
-  decalDensityMultiplier: 1.6 // chantier brut : beaucoup d'ornières/flaques
+  decalDensityMultiplier: 1.2 // chantier brut, mais sans « papier peint » (trame trop régulière si trop dense)
 }
 
 /** Spécification compacte d'un prop : [nom de fichier (sans ext), échelle, nombre]. */
