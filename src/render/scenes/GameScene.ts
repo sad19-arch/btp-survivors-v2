@@ -7,7 +7,8 @@ import { routeInput, type FrameInput } from '@input/intents'
 import { buildPlayerInputs } from '@input/players'
 import { INTRO, WORLD, CONE_HALF_ANGLE } from '@content/config'
 import { createGround } from '@render/ground'
-import { createProps, createLandmark, createStructures, phaseSalt } from '@render/props'
+import { createLandmark, createStructures, phaseSalt } from '@render/props'
+import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { dirRow, walkFrame, idleFrame } from '@render/sprites'
 import { stageRender, type StageRender, FINAL_BOSS_SKIN } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
@@ -175,6 +176,15 @@ export class GameScene extends Phaser.Scene {
    * Initialisé dans `create()`, instance fraîche par scène.
    */
   private damageNumbers!: DamageNumberPool
+  /**
+   * Streamer de décor par chunks (décalques + props) : génère le décor autour
+   * de la caméra et détruit celui qui s'éloigne. Coût constant quelle que soit
+   * la taille du monde (~16 chunks actifs à la fois). Purement visuel.
+   * Initialisé dans `create()`, nettoyé dans `resetRunState()`.
+   */
+  private decorStreamer!: DecorStreamer
+  /** Compteur de frames depuis le dernier update du DecorStreamer (throttle toutes les 4 frames). */
+  private decorStreamerFrame = 0
   private readonly projectileSprites = new Map<number, CharSprite>()
   private readonly pickupSprites = new Map<number, CharSprite>()
   /**
@@ -848,6 +858,11 @@ export class GameScene extends Phaser.Scene {
     this.introStartMs = -1
     this.introDone = false
     this.ambientSprite = null
+    this.decorStreamerFrame = 0
+    // Nettoie les chunks streamés (si le streamer est déjà initialisé — pas au 1er appel).
+    if (this.decorStreamer !== undefined) {
+      this.decorStreamer.clear()
+    }
   }
 
   create(): void {
@@ -859,24 +874,26 @@ export class GameScene extends Phaser.Scene {
     // Pool de chiffres de dégâts : instance fraîche par scene (les Text Phaser sont
     // détruits au shutdown ; un pool réutilisé les rendrait fantômes).
     this.damageNumbers = new DamageNumberPool(this)
-    // Sol : base tuilée seedée + décalques épars (rendu pur, aucune logique).
+    // Sol : base tuilée (TileSprite, O(1)) + streamer de décalques/props par chunks.
     // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
     const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
+    // Base du sol (TileSprite seul — décalques gérés par le DecorStreamer).
     createGround(
       this,
       WORLD.width,
       WORLD.height,
-      { tileKeys: this.stage.ground.map((g) => g.key), decalKeys: this.stage.decals.map((d) => d.key) },
-      stageSeed
+      { tileKeys: this.stage.ground.map((g) => g.key) }
     )
-    // Props décoratifs dispersés (au-dessus du sol, sous les entités).
-    createProps(
-      this,
-      WORLD.width,
-      WORLD.height,
-      this.stage.props.map((p) => ({ key: p.key, scale: p.scale, count: p.count })),
-      stageSeed
-    )
+    // Streamer de décor : décalques + props streamés autour de la caméra par chunks de
+    // DEFAULT_CHUNK_SIZE px. Coût constant (~16 chunks actifs) quel que soit le monde.
+    this.decorStreamer = new DecorStreamer(this, WORLD.width, WORLD.height, {
+      chunkSize: DEFAULT_CHUNK_SIZE,
+      seed: stageSeed,
+      decals: this.stage.decals.map((d) => d.key),
+      props: this.stage.props.map((p) => ({ key: p.key, scale: p.scale, count: p.count }))
+    })
+    // NB : createProps est retiré (remplacé par le DecorStreamer).
+    // Les landmark/structures (nombre fixe, ancrés près du centre) restent inchangés.
     // Grandes structures qui remplissent l'arène (l'étape de chantier partout, hors centre).
     if (this.stage.structures !== undefined) {
       createStructures(
@@ -918,6 +935,9 @@ export class GameScene extends Phaser.Scene {
 
     this.syncSprites()
     this.updateCamera(this.app.getStateForFrame(this.app.frameId))
+    // Préchargement initial des chunks au démarrage (la caméra est positionnée,
+    // le streamer peut déjà charger la vue initiale sans attendre le 1er update()).
+    this.decorStreamer.update(this.cameras.main)
 
     // Onde de choc du marteau + libération de prisonnier + évolution d'arme : la sim émet, l'App relaie.
     this.app.events.addEventListener('auraPulse', this.onAuraPulse)
@@ -953,6 +973,12 @@ export class GameScene extends Phaser.Scene {
         spawnedTotal: this.damageNumbers.total,
         maxPerFrame: FEEDBACK_MAX_PER_FRAME
       })
+      // Sonde du streaming de décor (test-only) : permet d'asserter que le nombre
+      // d'objets de décor reste borné quelle que soit la distance parcourue.
+      this.seam.debugDecorInfo = (): { loadedChunks: number; decorObjects: number } => ({
+        loadedChunks: this.decorStreamer.loadedChunkCount,
+        decorObjects: this.decorStreamer.decorObjectCount
+      })
     }
   }
 
@@ -972,6 +998,12 @@ export class GameScene extends Phaser.Scene {
     }
     this.syncSprites()
     this.updateCamera(st)
+    // Streamer de décor : throttlé toutes les 4 frames pour éviter un scan de Map
+    // à chaque tick (la caméra ne se déplace pas d'un chunk par frame).
+    this.decorStreamerFrame++
+    if (this.decorStreamerFrame % 4 === 0) {
+      this.decorStreamer.update(this.cameras.main)
+    }
   }
 
   /**

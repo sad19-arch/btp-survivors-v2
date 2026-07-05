@@ -7,15 +7,20 @@ import type { GameMode } from '@core/types'
  */
 
 /**
- * Dimensions du monde, en pixels. Agrandi ×2 par côté (×4 la surface) pour une
- * zone explorable plus vaste (playtest « maps trop petites »). Coût per-frame
- * nul : sol/décor cuits en RenderTextures, ennemis spawnés en anneau AUTOUR du
- * joueur (indépendant de la taille) — plus d'espace pour manœuvrer, horde
- * inchangée. Reste ≤ 4096 px/côté (limite de texture GPU d'une RT unique).
+ * Dimensions du monde, en pixels. Monde ×10 la surface de la base (1024×768) :
+ * agrandi à 10240×7680 pour une zone explorable vaste (playtest « une map dix
+ * fois plus grande »). Coût per-frame CONSTANT quelle que soit la taille :
+ *  - Sol : un TileSprite GPU (O(1), 1 objet) ;
+ *  - Décalques + props : streamés par chunks de 1024 px autour de la caméra
+ *    (DecorStreamer, `src/render/decorStreamer.ts`) — seuls ~16 chunks sont
+ *    chargés simultanément, les autres sont détruits → coût borné ;
+ *  - Ennemis : spawnés en anneau AUTOUR du joueur, indépendant de la taille.
+ * Plus d'espace pour manœuvrer, horde inchangée.
+ * Multiples de 1024 (taille de chunk) pour un alignement propre des chunks.
  */
 export const WORLD = {
-  width: 3200,
-  height: 2400
+  width: 10240,
+  height: 7680
 } as const
 
 /** Stats de base d'un joueur. */

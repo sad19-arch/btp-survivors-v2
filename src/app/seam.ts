@@ -56,6 +56,13 @@ export interface GameSeam {
    * et que le cap borne les émissions en horde AOE. Absente en mode allégé.
    */
   debugFeedbackInfo?(): { active: number; spawnedTotal: number; maxPerFrame: number }
+  /**
+   * [Debug] Sonde du streaming de décor (posée par la GameScene) : nombre de chunks
+   * de décor actuellement chargés et nombre total d'objets de décor actifs.
+   * Permet de valider en e2e que le nombre d'objets reste borné quelle que soit
+   * la distance parcourue. Absente tant que la scène n'est pas montée.
+   */
+  debugDecorInfo?(): { loadedChunks: number; decorObjects: number }
 }
 
 declare global {
