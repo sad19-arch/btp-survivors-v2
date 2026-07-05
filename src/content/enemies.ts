@@ -80,7 +80,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
   contremaitre: {
     id: 'contremaitre',
     name: 'Contremaître',
-    hp: 900,
+    hp: 1800,
     speed: 215, // > joueur (200) : rattrape et reste au contact → vrai combat de climax
     contactDamage: 22,
     archetype: 'elite',
