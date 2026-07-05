@@ -11,6 +11,7 @@ import { createProps, createLandmark, createStructures, phaseSalt } from '@rende
 import { dirRow, walkFrame, idleFrame } from '@render/sprites'
 import { stageRender, type StageRender, FINAL_BOSS_SKIN } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
+import { computeHitEvents } from '@render/hitDiff'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
 import type { PlayerState, PrisonerState, PickupKind } from '@core/types'
@@ -148,6 +149,12 @@ export class GameScene extends Phaser.Scene {
   /** Sprite de flaque de goudron par hazard (A2 lot 3) : créé à l'apparition, détruit à l'expiration. */
   private readonly hazardSprites = new Map<number, Phaser.GameObjects.Image>()
   private readonly enemySprites = new Map<number, CharSprite>()
+  /**
+   * PV de l'ennemi à la frame précédente — permet de détecter les dégâts reçus
+   * frame-par-frame (diff HP) pour déclencher flash + chiffres + pop d'impact.
+   * Vidé dans `resetRunState`. Ids disparus nettoyés dans la boucle de release.
+   */
+  private readonly prevEnemyHp = new Map<number, number>()
   private readonly projectileSprites = new Map<number, CharSprite>()
   private readonly pickupSprites = new Map<number, CharSprite>()
   /**
@@ -814,6 +821,7 @@ export class GameScene extends Phaser.Scene {
     this.prevLevel.clear()
     this.prevHp.clear()
     this.damageFlashUntil.clear()
+    this.prevEnemyHp.clear()
     this.lastMoveMs.clear()
     this.following = false
     this.introStartMs = -1
@@ -1179,6 +1187,10 @@ export class GameScene extends Phaser.Scene {
 
     const leader = state.players[0]
     const seen = new Set<number>()
+    // Diff HP pour le feedback de coup (flash + chiffres + pop). Calculé AVANT
+    // de mettre à jour prevEnemyHp pour que chaque frame compare à la frame précédente.
+    const hitEvents = computeHitEvents(this.prevEnemyHp, state.enemies)
+    const hitById = new Map(hitEvents.map((e) => [e.id, e.amount]))
     for (const en of state.enemies) {
       seen.add(en.id)
       let sprite = this.enemySprites.get(en.id)
@@ -1204,6 +1216,8 @@ export class GameScene extends Phaser.Scene {
         const row = leader !== undefined ? dirRow(leader.x - en.x, leader.y - en.y) : 0
         sprite.setFrame(walkFrame(row, this.time.now))
       }
+      // Mémorise les HP courants pour la comparaison de la prochaine frame.
+      this.prevEnemyHp.set(en.id, en.hp)
     }
     // Retire les sprites des ennemis disparus (mort → poussière de béton + éclair blanc + scale-pop).
     for (const [id, sprite] of this.enemySprites) {
@@ -1218,8 +1232,12 @@ export class GameScene extends Phaser.Scene {
           sprite.destroy()
         }
         this.enemySprites.delete(id)
+        // Nettoie les ids disparus de prevEnemyHp pour éviter les fuites mémoire.
+        this.prevEnemyHp.delete(id)
       }
     }
+    // hitById sera consommé par les tasks 1.2-1.4 dans cette même frame.
+    void hitById
 
     const seenProj = new Set<number>()
     for (const pr of state.projectiles) {
