@@ -5,7 +5,7 @@
  * - Zéro Phaser / DOM / Math.random / Date.now / any.
  * - Data-driven : itère sur les clés d'`EffectiveStats` avec un mapping centralisé.
  * - Seuil anti-bruit : ignore les deltas damage < 0.5 après arrondi.
- * - Priorité d'affichage : count > damage > area > cooldown > pierce > bounces > projectileRadius > slow.
+ * - Priorité d'affichage : count > damage > area > cooldown > pierce > bounces > projectileRadius > orbitHitRadius.
  * - fromLevel===0 ⇒ '' (pas de delta à afficher au niveau initial).
  */
 
@@ -146,7 +146,8 @@ export function describeWeaponLevelDelta(
   const a = effectiveWeaponStats(lvlA, stats)
   const b = effectiveWeaponStats(lvlB, stats)
 
-  // Cas spécial : armes orbitales — « count » = nombre de lames, libellé distinct
+  // Accumule les fragments par priorité ; le « count » des armes orbitales
+  // (= nombre de lames) reçoit un libellé dédié dans la boucle ci-dessous.
   const fragments: string[] = []
 
   for (const key of PRIORITY_ORDER) {
