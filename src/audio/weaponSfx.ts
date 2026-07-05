@@ -12,7 +12,7 @@ import type { ZzfxParams } from './zzfx'
  *   shape : 0 sin · 1 triangle · 2 saw · 3 tan · 4 bruit.
  *
  * NB `scie` (orbitale, continue) a une entrée pour la complétude mais son one-shot
- * n'est PAS déclenché : son ronronnement passe par `createWhirLoop` (AudioDirector).
+ * n'est PAS déclenché : la scie est silencieuse (la boucle de ronronnement a été retirée).
  */
 
 /** Repli pour tout ID d'arme sans entrée explicite (évite le silence). */
@@ -25,7 +25,8 @@ export const WEAPON_ZZFX: Record<string, ZzfxParams> = {
   cle_molette: [0.4, 0.1, 300, 0, 0.02, 0.14, 2, 1, -0.25, 0, 0, 0, 0, 0.05], // whoosh boomerang
   brouette: [0.5, 0.05, 120, 0.01, 0.03, 0.18, 0, 1, -0.05, 0, 0, 0, 0, 0.04], // impact lourd/roulant
   court_circuit: [0.38, 0.2, 820, 0, 0.02, 0.12, 4, 1, 0.3, 0, 0, 0, 0, 0.6, 4], // zap électrique
-  marteau: [0.5, 0.05, 90, 0.01, 0.02, 0.2, 0, 1, -0.08, 0, 0, 0, 0, 0.1], // boom grave
+  // rat-tat-tat de marteau-piqueur : percussif court, répété 3 coups (repeatTime ~0.04s), bruit de métal
+  marteau: [0.55, 0.06, 180, 0, 0, 0.04, 0, 1, -0.2, 0, 0, 0, 0.04, 0.3], // rat-tat-tat
   pied_de_biche: [0.42, 0.12, 260, 0, 0, 0.1, 2, 1, -0.3, 0, 0, 0, 0, 0.15], // whoosh tranchant
   extincteur: [0.34, 0.15, 200, 0.02, 0.06, 0.12, 4, 1, 0, 0, 0, 0, 0, 0.9, 2], // souffle de mousse (bruit)
   goudron: [0.42, 0.1, 110, 0.01, 0.02, 0.16, 1, 1, -0.1, 0, 0, 0, 0, 0.2], // splat mou grave
