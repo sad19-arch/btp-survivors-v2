@@ -7,7 +7,12 @@
  *  - `marteau` (aura)       : onde de choc circulaire périodique.
  *
  * Système de niveaux : buildLevels produit un tableau EXPLICITE (niveaux 1..maxLevel)
- * à partir d'une base + incrément par niveau + overrides ponctuels.
+ * à partir d'une base + incrément par niveau + overrides de JALON.
+ *
+ * Les `overrides` sont CUMULATIFS : `{ 3: { count: 2 }, 6: { count: 3 } }` signifie
+ * « 2 projectiles à partir du niveau 3, 3 à partir du niveau 6 ». Chaque jalon
+ * atteint (niveau ≤ n) reste appliqué ; pour une même clé, le jalon le plus récent
+ * gagne. (Sans ce cumul, un palier s'évaporait au niveau suivant.)
  */
 
 export type WeaponKind = 'projectile' | 'orbital' | 'aura' | 'sweep' | 'strike' | 'hazard' | 'cone'
@@ -46,6 +51,11 @@ export function buildLevels(
   maxLevel: number,
   overrides: Record<number, Partial<WeaponLevel>> = {}
 ): WeaponLevel[] {
+  // Niveaux de jalon, triés croissant : on applique TOUS les jalons atteints
+  // (≤ n) dans l'ordre, donc le dernier jalon de chaque clé persiste.
+  const milestoneLevels = Object.keys(overrides)
+    .map(Number)
+    .sort((a, b) => a - b)
   const out: WeaponLevel[] = []
   for (let n = 1; n <= maxLevel; n++) {
     const row: WeaponLevel = { ...base }
@@ -56,8 +66,11 @@ export function buildLevels(
         rowRecord[k] = (baseRecord[k] ?? 0) + v * (n - 1)
       }
     }
-    const ov = overrides[n]
-    if (ov !== undefined) {Object.assign(row, ov)}
+    for (const lvl of milestoneLevels) {
+      if (lvl > n) {break}
+      const ov = overrides[lvl]
+      if (ov !== undefined) {Object.assign(row, ov)}
+    }
     out.push(row)
   }
   return out

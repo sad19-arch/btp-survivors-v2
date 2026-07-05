@@ -29,4 +29,25 @@ describe('armes — tables de niveaux (pur)', () => {
     expect(lv[2]?.damage).toBe(14) // 10 + 2*2
     expect(lv[2]?.count).toBe(2)
   })
+  it('les overrides sont CUMULATIFS (le jalon persiste aux niveaux suivants)', () => {
+    // Bug historique : un override ne s'appliquait qu'au niveau exact → le palier
+    // s'évaporait au niveau suivant (cloueur repassait de 2 à 1 projectile).
+    const base = { damage: 10, cooldownMs: 500, count: 1, area: 0, pierce: 0 }
+    const lv = buildLevels(base, {}, 8, { 3: { count: 2 }, 6: { count: 3 } })
+    expect(lv.map((l) => l.count)).toEqual([1, 1, 2, 2, 2, 3, 3, 3])
+  })
+  it('overrides cumulatifs multi-clés : le dernier jalon de CHAQUE clé gagne', () => {
+    // Cas boulons : bounces montent par paliers, count s'ajoute plus tard, sans
+    // que le count « efface » les bounces déjà acquis.
+    const base = { damage: 10, cooldownMs: 500, count: 1, area: 0, pierce: 0, bounces: 3 }
+    const lv = buildLevels(base, {}, 8, { 3: { bounces: 4 }, 5: { bounces: 5 }, 7: { count: 2 } })
+    expect(lv.map((l) => l.bounces)).toEqual([3, 3, 4, 4, 5, 5, 5, 5])
+    expect(lv.map((l) => l.count)).toEqual([1, 1, 1, 1, 1, 1, 2, 2])
+  })
+  it('armes réelles : les paliers de projectiles/lames persistent', () => {
+    const cloueur = WEAPONS['cloueur']
+    const scie = WEAPONS['scie']
+    expect(cloueur?.levels.map((l) => l.count)).toEqual([1, 1, 2, 2, 2, 3, 3, 3])
+    expect(scie?.levels.map((l) => l.count)).toEqual([2, 2, 2, 3, 3, 3, 4, 4])
+  })
 })
