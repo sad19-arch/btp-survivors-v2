@@ -617,6 +617,85 @@ const ECHAFAUDAGES_RENDER: StageRender = {
   decalDensityMultiplier: 0.9  // échafaudages semi-ordonnés, densité légère (géométrique)
 }
 
+const CHARPENTE_TOITURE_RENDER: StageRender = {
+  ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_stage07_${i}`, file: `stage07/ground/tile_${i}.png` })),
+  decals: [
+    { key: 'decal_stage07_sawdust',      file: 'stage07/decals/sawdust_fine.png' },
+    { key: 'decal_stage07_truss_shadow', file: 'stage07/decals/truss_shadow.png' }
+  ],
+  // Seul clutter streamé : poutres + tuiles rouges + isolant + gouttières.
+  // La charge suspendue (landmark grue) et les fermes de toit sont dans `structures` (placées UNE fois).
+  props: [
+    { key: 'prop_stage07_beam',      file: 'stage07/props/beam.png',           scale: 0.90, count: 4 },
+    { key: 'prop_stage07_tile_pile', file: 'stage07/props/tile_pile.png',      scale: 0.85, count: 5 },
+    { key: 'prop_stage07_insul',     file: 'stage07/props/insulation_roll.png', scale: 0.80, count: 3 },
+    { key: 'prop_stage07_gutter',    file: 'stage07/props/gutter.png',         scale: 0.75, count: 3 }
+  ],
+  enemies: {
+    copeau:  { key: 'enemy_stage07_base', file: 'stage07/enemies/base_walk.png', frame: 256, scale: 0.5 },
+    chevron: { key: 'enemy_stage07_fast', file: 'stage07/enemies/fast_walk.png', frame: 256, scale: 0.66 },
+    poutre:  { key: 'enemy_stage07_tank', file: 'stage07/enemies/tank_walk.png', frame: 256, scale: 0.78 }
+  },
+  boss: { key: 'boss_stage07', file: 'stage07/boss/boss_walk.png', frame: 256, scale: 1.22 },
+  // Charpente : landmark « charge suspendue » sur crochet grue + fermes de toit en fond.
+  // Lecture en 2 s : bois brun + tuiles rouges (signature) + jaune isolant.
+  landmark: { key: 'landmark_stage07', file: 'stage07/landmarks/roof_frame.png', scale: 1.5, count: 1 },
+  // Charge suspendue hero (band 'near', côté NE) + 5 fermes de toit réparties (band 'mid').
+  // Ordre = ordre des angles scriptés (structureAngles).
+  structures: [
+    { key: 'struct_stage07_load', file: 'stage07/structures/suspended_load.png', scale: 1.1,  count: 1, band: 'near' },
+    { key: 'struct_stage07_truss', file: 'stage07/structures/roof_trusses.png',  scale: 0.85, count: 5, band: 'mid'  }
+  ],
+  ambient: { key: 'npc_stage07', file: 'stage07/npc/couvreur_work.png', frame: 256, scale: 0.72, framePeriodMs: 240 },
+  // ── Composition scriptée stage 07 (charpente/toiture) ────────────────────────
+  // Géographie : charge suspendue (idx0) côté NE proche (grue au-dessus),
+  // 5 fermes de toit réparties en arc O-SO-S-NO (structure bois partout).
+  // Landmark (charpente hero) au Nord. PNJ couvreur posant des tuiles rouges près du NE.
+  geometry: {
+    // structureAngles[i] → structure i, dans l'ordre de `structures[]` :
+    //   0 = suspended_load (NE, ~50°) — charge visible côté NE, grue imaginée hors champ
+    //   1-5 = roof_trusses : O (175°), SO (220°), S (260°), NO (110°), ENE (30°)
+    structureAngles: [50, 175, 220, 260, 110, 30],
+    landmarkAngle: 70,    // charpente-hero au Nord-Est
+    ambientAngle:  55     // couvreur posant des tuiles rouges, près de la charge NE
+  },
+  // Zones métier : 3 secteurs complémentaires
+  zones: [
+    // Secteur Pose tuiles (NE) — dense en tuiles rouges + sciure autour de la charge
+    {
+      angleCenter: 50,
+      angleSpread: 55,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [1, 0],    // tile_pile + beam
+      dominantDecalIndices: [0],      // sawdust_fine
+      density: 1.5
+    },
+    // Secteur Isolation (SO) — rouleaux d'isolant + ombres de charpente
+    {
+      angleCenter: 220,
+      angleSpread: 60,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [2, 3],    // insulation_roll + gutter
+      dominantDecalIndices: [1],      // truss_shadow
+      density: 1.3
+    },
+    // Passage poutres (SE-E) — poutres + sciure
+    {
+      angleCenter: 315,
+      angleSpread: 50,
+      distMin: 320,
+      distMax: 700,
+      dominantPropIndices: [0, 1],    // beam + tile_pile
+      dominantDecalIndices: [0, 1],   // sawdust_fine + truss_shadow
+      density: 1.2
+    }
+  ],
+  baseTileIndex: 1,            // tuile brun clair (index 1 — bois chantier)
+  decalDensityMultiplier: 0.9  // charpente légère, densité légère (bois aéré)
+}
+
 export const STAGE_RENDER: Record<string, StageRender> = {
   terrain_vierge: TERRAIN_VIERGE_RENDER,
   terrassement: TERRASSEMENT_RENDER,
@@ -624,26 +703,7 @@ export const STAGE_RENDER: Record<string, StageRender> = {
   reseaux_enterres: RESEAUX_ENTERRES_RENDER,
   gros_oeuvre: GROS_OEUVRE_RENDER,
   echafaudages: ECHAFAUDAGES_RENDER,
-  charpente_toiture: makeStage(
-    'stage07',
-    ['copeau', 'chevron', 'poutre'],
-    [
-      ['crane_truck', 0.9, 1],
-      ['trusses', 0.85, 3],
-      ['tiles', 0.7, 4]
-    ],
-    ['sawdust', 'woodchips'],
-    [0.5, 0.66, 0.78],
-    1.22,
-    {
-      // Charpente : rangées de fermes de toit partout + charpentier qui cloue.
-      landmark: { key: 'landmark_stage07', file: 'stage07/landmarks/roof_frame.png', scale: 1.5, count: 1 },
-      structures: [
-        { key: 'struct_stage07_roof', file: 'stage07/structures/roof_trusses.png', scale: 0.85, count: 5, band: 'mid' }
-      ],
-      ambient: { key: 'npc_stage07', file: 'stage07/npc/charpentier_work.png', frame: 256, scale: 0.69, framePeriodMs: 220 }
-    }
-  ),
+  charpente_toiture: CHARPENTE_TOITURE_RENDER,
   second_oeuvre: makeStage(
     'stage08',
     ['platras', 'gainard', 'cloison'],
