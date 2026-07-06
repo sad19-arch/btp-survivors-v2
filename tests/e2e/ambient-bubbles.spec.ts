@@ -50,10 +50,9 @@ test('PNJ d\'ambiance : bulle déclenchée quand le joueur approche à moins de 
   // Récupère la position du PNJ d'ambiance.
   const npcs = await page.evaluate(() => window.__GAME__?.debugAmbientNpcs?.())
   const npc0 = npcs?.[0]
-  // Si pas de PNJ (feuille absente → fallback gracieux), le test passe en douceur.
+  // Le PNJ doit exister — son absence est un bug d'asset à corriger.
   if (npc0 === undefined) {
-    console.log('[ambient-bubbles] Aucun PNJ d\'ambiance chargé — test ignoré gracieusement.')
-    return
+    throw new Error('Aucun PNJ d\'ambiance chargé pour stage 01 — vérifier que la feuille NPC est bien préchargée')
   }
 
   // Compteur de bulles avant l'approche : doit être 0.
@@ -119,35 +118,60 @@ test('PNJ d\'ambiance : max 2 bulles simultanées (pool borné)', async ({ page 
 
   await page.waitForTimeout(300)
 
-  // S'il n'y a pas de PNJ, test gracieux.
+  // Le PNJ doit exister pour que le test soit probant — son absence est un bug d'asset.
   const npcs = await page.evaluate(() => window.__GAME__?.debugAmbientNpcs?.())
-  if ((npcs?.length ?? 0) === 0) {
-    console.log('[ambient-bubbles] Aucun PNJ — pool cap test ignoré gracieusement.')
-    return
+  const npc0 = npcs?.[0]
+  if (npc0 === undefined) {
+    throw new Error('Aucun PNJ d\'ambiance chargé pour stage 01 — test de cap de bulles non probant')
   }
 
-  // Avance le jeu pendant que le joueur reste près du spawn (les PNJ sont loin).
-  // Vérifie que le compteur de bulles ne dépasse pas 2.
-  const maxBubblesObserved = await page.evaluate(() => {
-    return new Promise<number>((resolve) => {
-      let max = 0
-      let ticks = 0
-      const iv = setInterval(() => {
-        const g = window.__GAME__
-        if (g === undefined) { clearInterval(iv); resolve(max); return }
-        const state = g.getState()
-        if (state.pendingLevelUp !== null && state.pendingLevelUp !== undefined) {
-          g.chooseUpgrade(0)
-        }
-        g.advanceTime(100)
-        const bubbles = g.debugActiveBubbles?.() ?? 0
-        if (bubbles > max) { max = bubbles }
-        ticks++
-        if (ticks >= 50) { clearInterval(iv); resolve(max) }
-      }, 40)
-    })
-  })
+  // Rapproche le joueur du PNJ (même stratégie que le test 2 : setInput + advanceTime),
+  // puis observe le compteur de bulles sur ~8s supplémentaires.
+  // Le test doit réellement observer au moins 1 bulle (sinon il ne prouve rien),
+  // ET jamais plus de 2 simultanément.
+  const { maxBubbles, everHadBubble } = await page.evaluate(
+    ({ tx, ty }: { tx: number; ty: number }) => {
+      return new Promise<{ maxBubbles: number; everHadBubble: boolean }>((resolve) => {
+        let max = 0
+        let ticks = 0
+        // Phase 1 (ticks 0..79) : marche vers le PNJ. Phase 2 (80..129) : reste sur place.
+        const iv = setInterval(() => {
+          const g = window.__GAME__
+          if (g === undefined) { clearInterval(iv); resolve({ maxBubbles: max, everHadBubble: max > 0 }); return }
 
-  // Jamais plus de MAX_AMBIENT_BUBBLES = 2 simultanées.
-  expect(maxBubblesObserved).toBeLessThanOrEqual(2)
+          const state = g.getState()
+          if (state.pendingLevelUp !== null && state.pendingLevelUp !== undefined) {
+            g.chooseUpgrade(0)
+          }
+
+          if (ticks < 80) {
+            // Phase 1 : marche vers le PNJ.
+            const p = state.players[0]
+            if (p !== undefined) {
+              const dx = tx - p.x
+              const dy = ty - p.y
+              const dist = Math.hypot(dx, dy)
+              if (dist > 5) {
+                g.setInput(1, { move: { x: dx / dist, y: dy / dist }, attack: false })
+              } else {
+                g.setInput(1, { move: { x: 0, y: 0 }, attack: false })
+              }
+            }
+          }
+
+          g.advanceTime(100)
+          const bubbles = g.debugActiveBubbles?.() ?? 0
+          if (bubbles > max) { max = bubbles }
+          ticks++
+          if (ticks >= 130) { clearInterval(iv); resolve({ maxBubbles: max, everHadBubble: max > 0 }) }
+        }, 40)
+      })
+    },
+    { tx: npc0.x, ty: npc0.y }
+  )
+
+  // Le test doit avoir observé au moins 1 bulle (sinon il ne prouve rien du tout).
+  expect(everHadBubble, 'Aucune bulle déclenchée — le test ne prouve pas le cap').toBe(true)
+  // Et jamais plus de MAX_AMBIENT_BUBBLES = 2 simultanées.
+  expect(maxBubbles).toBeLessThanOrEqual(2)
 })

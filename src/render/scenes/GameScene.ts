@@ -1826,6 +1826,10 @@ export class GameScene extends Phaser.Scene {
       delay: 1800,
       ease: 'Quad.easeIn',
       onComplete: () => {
+        // Garde anti double-destroy : si la scène a été réinitialisée (resetRun,
+        // changement de stage) pendant le tween, le container a déjà été détruit
+        // et retiré du Set — ne rien faire pour éviter double-destroy + crash.
+        if (!this.ambientBubbles.has(container)) { return }
         container.destroy()
         this.ambientBubbles.delete(container)
       }
