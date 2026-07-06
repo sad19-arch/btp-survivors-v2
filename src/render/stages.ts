@@ -465,7 +465,12 @@ const RESEAUX_ENTERRES_RENDER: StageRender = {
     { key: 'struct_stage04_excavator', file: 'stage04/props/mini_excavator.png',       scale: 1.1, count: 1, band: 'near' },
     { key: 'struct_stage04_trench',    file: 'stage04/structures/trench_junction.png',  scale: 0.85, count: 4, band: 'mid'  }
   ],
-  ambient: [{ key: 'npc_stage04', file: 'stage04/npc/electricien_work.png', frame: 256, scale: 0.71, framePeriodMs: 280, behavior: 'work' }],
+  ambient: [
+    { key: 'npc_stage04',             file: 'stage04/npc/electricien_work.png',  frame: 256, scale: 0.71,  framePeriodMs: 280, behavior: 'work' },
+    { key: 'npc_stage04_plombier',    file: 'stage04/npc/plombier_work.png',     frame: 256, scale: 1.583, framePeriodMs: 300, behavior: 'work' },
+    { key: 'npc_stage04_poseur_cable',file: 'stage04/npc/poseur_cable_work.png', frame: 256, scale: 1.610, framePeriodMs: 300, behavior: 'patrol' },
+    { key: 'npc_stage04_gainier',     file: 'stage04/npc/gainier_work.png',      frame: 256, scale: 1.638, framePeriodMs: 300, behavior: 'work' }
+  ],
   // ── Composition scriptée stage 04 (réseaux enterrés) ─────────────────────────
   // Géographie : mini-pelle (idx0) côté NE proche, 4 jonctions de tranchées
   // distribuées autour (NO, S, ESE, ONO). Landmark (croisement tuyaux) au Nord.
