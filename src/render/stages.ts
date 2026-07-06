@@ -738,7 +738,12 @@ const CHARPENTE_TOITURE_RENDER: StageRender = {
     { key: 'struct_stage07_load', file: 'stage07/structures/suspended_load.png', scale: 1.1,  count: 1, band: 'near' },
     { key: 'struct_stage07_truss', file: 'stage07/structures/roof_trusses.png',  scale: 0.85, count: 5, band: 'mid'  }
   ],
-  ambient: [{ key: 'npc_stage07', file: 'stage07/npc/couvreur_work.png', frame: 256, scale: 0.72, framePeriodMs: 240, behavior: 'work' }],
+  ambient: [
+    { key: 'npc_stage07',               file: 'stage07/npc/couvreur_work.png',      frame: 256, scale: 0.72,  framePeriodMs: 240, behavior: 'work' },
+    { key: 'npc_stage07_charpentier',   file: 'stage07/npc/charpentier_work.png',   frame: 256, scale: 0.779, framePeriodMs: 300, behavior: 'work' },
+    { key: 'npc_stage07_porteur_tuiles',file: 'stage07/npc/porteur_tuiles_work.png',frame: 256, scale: 1.638, framePeriodMs: 300, behavior: 'patrol' },
+    { key: 'npc_stage07_poseur_liteau', file: 'stage07/npc/poseur_liteau_work.png', frame: 256, scale: 1.484, framePeriodMs: 300, behavior: 'work' }
+  ],
   // ── Composition scriptée stage 07 (charpente/toiture) ────────────────────────
   // Géographie : charge suspendue (idx0) côté NE proche (grue au-dessus),
   // 5 fermes de toit réparties en arc O-SO-S-NO (structure bois partout).
