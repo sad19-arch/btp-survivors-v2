@@ -5,7 +5,7 @@ import { KeyboardInput } from '@input/keyboard'
 import { GamepadInput } from '@input/gamepad'
 import { routeInput, type FrameInput } from '@input/intents'
 import { buildPlayerInputs } from '@input/players'
-import { INTRO, WORLD, CONE_HALF_ANGLE } from '@content/config'
+import { INTRO, WORLD } from '@content/config'
 import { createGround } from '@render/ground'
 import { createLandmark, createStructures, phaseSalt, resolvePlacement, type ExclusionCircle } from '@render/props'
 import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
@@ -15,6 +15,7 @@ import { stageRender, type StageRender, FINAL_BOSS_SKIN } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { computeHitEvents } from '@render/hitDiff'
 import { hitFlashUntil, DamageNumberPool } from '@render/damageNumbers'
+import { VfxManager } from '@render/scenes/vfxManager'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
 import type { PlayerState, PrisonerState, PickupKind } from '@core/types'
@@ -144,6 +145,8 @@ export class GameScene extends Phaser.Scene {
   private keyboardInput: KeyboardInput | null = null
   private gamepads: GamepadInput[] = []
   private following = false
+  /** Effets visuels transitoires (extraits de GameScene) — observer-only, sans état de sim. */
+  private readonly vfx = new VfxManager(this)
   private readonly playerSprites = new Map<number, CharSprite>()
   /**
    * Anneau coloré au sol sous chaque joueur (identité co-op, T3/CO-2). Un seul
@@ -281,7 +284,7 @@ export class GameScene extends Phaser.Scene {
   private readonly onAuraPulse = (e: Event): void => {
     const p = e as AuraPulseEvent
     if (p.kind === 'sweep') {
-      this.spawnSweepArc(p.x, p.y, p.radius)
+      this.vfx.spawnSweepArc(p.x, p.y, p.radius)
       return
     }
     if (p.kind === 'strike') {
@@ -291,271 +294,26 @@ export class GameScene extends Phaser.Scene {
       const shooter = st.players.find((pl) => pl.alive) ?? st.players[0]
       const fromX = shooter?.x ?? p.x
       const fromY = shooter?.y ?? p.y
-      this.spawnStrikeBolt(fromX, fromY, p.x, p.y)
+      this.vfx.spawnStrikeBolt(fromX, fromY, p.x, p.y)
       return
     }
     if (p.kind === 'cone') {
-      this.spawnConeVfx(p.x, p.y, p.radius, p.dirX, p.dirY)
+      this.vfx.spawnConeVfx(p.x, p.y, p.radius, p.dirX, p.dirY)
       return
     }
     // Marteau : onde de choc + scale-pop + léger screen-shake (coup lourd).
     const toScale = Math.max(1.5, (p.radius * 2) / 90)
-    this.spawnVfx('vfx_shockwave', p.x, p.y, 0.2, toScale, 320)
+    this.vfx.spawnVfx('vfx_shockwave', p.x, p.y, 0.2, toScale, 320)
     // Flash central jaune bref (pixel-pop).
-    this.spawnPixelPop(p.x, p.y, PALETTE_HEX.jauneSecurite, 14, 220)
+    this.vfx.spawnPixelPop(p.x, p.y, PALETTE_HEX.jauneSecurite, 14, 220)
     // Screen-shake léger — coup lourd mais pas nausée.
     this.cameras.main.shake(90, 0.004)
-  }
-  /**
-   * Balayage du pied-de-biche : arc épais (croissant, pas un cercle complet)
-   * qui pivote sur ~40° en s'estompant — lecture "coup de balayage", distincte
-   * de l'onde ronde du marteau. Double-tracé (cœur blanc + contour jaune) +
-   * scale-pop (naît petit → pleine taille) + particules éjectées le long de l'arc.
-   * Primitive Graphics, aucune texture chargée.
-   */
-  private spawnSweepArc(x: number, y: number, radius: number): void {
-    const arcRadius = radius * 0.6
-    const span = Phaser.Math.DegToRad(120)
-    const startAngle = -Phaser.Math.DegToRad(90) - span / 2
-
-    // Cœur blanc (plus fin, éclatant) — dessous.
-    const gInner = this.add.graphics().setPosition(x, y).setDepth(5).setScale(0.3)
-    gInner.lineStyle(12, PALETTE_HEX.blanc, 0.85)
-    gInner.beginPath()
-    gInner.arc(0, 0, arcRadius, startAngle, startAngle + span)
-    gInner.strokePath()
-    this.tweens.add({
-      targets: gInner,
-      rotation: Phaser.Math.DegToRad(40),
-      scaleX: 1,
-      scaleY: 1,
-      alpha: 0,
-      duration: 260,
-      ease: 'Quad.easeOut',
-      onComplete: () => gInner.destroy()
-    })
-
-    // Contour jaune (épais) — dessus, légèrement décalé en temps (scale-pop décalé).
-    const gOuter = this.add.graphics().setPosition(x, y).setDepth(5).setScale(0.3)
-    gOuter.lineStyle(7, PALETTE_HEX.jauneSecurite, 1)
-    gOuter.beginPath()
-    gOuter.arc(0, 0, arcRadius, startAngle, startAngle + span)
-    gOuter.strokePath()
-    this.tweens.add({
-      targets: gOuter,
-      rotation: Phaser.Math.DegToRad(40),
-      scaleX: 1,
-      scaleY: 1,
-      alpha: 0,
-      duration: 240,
-      ease: 'Quad.easeOut',
-      onComplete: () => gOuter.destroy()
-    })
-
-    // Flash central (scale-pop) — marque le point d'impact.
-    this.spawnPixelPop(x, y, PALETTE_HEX.jauneSecurite, 10, 180)
-
-    // Particules éjectées en éventail le long de l'arc.
-    const particleCount = 5
-    for (let i = 0; i < particleCount; i++) {
-      const angle = startAngle + (span / (particleCount - 1)) * i
-      const dist = arcRadius * (0.7 + Math.random() * 0.4)
-      const px = x + Math.cos(angle) * dist
-      const py = y + Math.sin(angle) * dist
-      const speedX = Math.cos(angle) * (28 + Math.random() * 22)
-      const speedY = Math.sin(angle) * (28 + Math.random() * 22)
-      const par = this.add.rectangle(px, py, 4, 4, PALETTE_HEX.jauneSecurite).setDepth(6)
-      this.tweens.add({
-        targets: par,
-        x: px + speedX,
-        y: py + speedY,
-        alpha: 0,
-        scaleX: 0.2,
-        scaleY: 0.2,
-        duration: 220 + Math.random() * 80,
-        ease: 'Quad.easeOut',
-        onComplete: () => par.destroy()
-      })
-    }
-  }
-  /**
-   * VFX du cône d'extincteur : 2 secteurs superposés qui s'élargissent en fondu
-   * (densité et dynamisme) + petites particules « mousse » (carrés blancs) projetées
-   * vers la cible. DA-safe : palette blanc/vert léger, pas de glow.
-   * Les Graphics sont positionnés à l'origine (pas de setPosition) donc toutes les
-   * coordonnées passées aux primitives sont absolues (monde), pas relatives.
-   */
-  private spawnConeVfx(x: number, y: number, radius: number, dirX?: number, dirY?: number): void {
-    const dx = dirX ?? 0
-    const dy = dirY ?? -1
-    const centerAngle = Math.atan2(dy, dx)
-    const startAngle = centerAngle - CONE_HALF_ANGLE
-    const endAngle = centerAngle + CONE_HALF_ANGLE
-
-    // Couche 1 : secteur vert-mousse large — naît petit (scale-pop), s'élargit.
-    const g1 = this.add.graphics().setDepth(5).setPosition(x, y).setScale(0.3)
-    g1.fillStyle(0xe8f4e8, 0.65)
-    g1.beginPath()
-    g1.moveTo(0, 0)
-    g1.arc(0, 0, radius, startAngle, endAngle, false)
-    g1.closePath()
-    g1.fillPath()
-    this.tweens.add({
-      targets: g1,
-      scaleX: 1,
-      scaleY: 1,
-      alpha: 0,
-      duration: 280,
-      ease: 'Quad.easeOut',
-      onComplete: () => g1.destroy()
-    })
-
-    // Couche 2 : secteur blanc légèrement plus étroit — cœur lumineux, disparaît vite.
-    const innerSpan = CONE_HALF_ANGLE * 0.7
-    const g2 = this.add.graphics().setDepth(6).setPosition(x, y).setScale(0.4)
-    g2.fillStyle(PALETTE_HEX.blanc, 0.42)
-    g2.beginPath()
-    g2.moveTo(0, 0)
-    g2.arc(0, 0, radius, centerAngle - innerSpan, centerAngle + innerSpan, false)
-    g2.closePath()
-    g2.fillPath()
-    this.tweens.add({
-      targets: g2,
-      scaleX: 1,
-      scaleY: 1,
-      alpha: 0,
-      duration: 200,
-      ease: 'Quad.easeOut',
-      onComplete: () => g2.destroy()
-    })
-
-    // Particules « mousse » : petits carrés blancs projetés dans le cône.
-    const particleCount = 7
-    for (let i = 0; i < particleCount; i++) {
-      const spread = (Math.random() * 2 - 1) * CONE_HALF_ANGLE
-      const angle = centerAngle + spread
-      const dist = radius * (0.3 + Math.random() * 0.7)
-      const px = x + Math.cos(angle) * dist
-      const py = y + Math.sin(angle) * dist
-      const speed = 25 + Math.random() * 30
-      const par = this.add.rectangle(px, py, 3, 3, PALETTE_HEX.blanc).setDepth(7).setAlpha(0.85)
-      this.tweens.add({
-        targets: par,
-        x: px + Math.cos(angle) * speed,
-        y: py + Math.sin(angle) * speed,
-        alpha: 0,
-        scaleX: 0.1,
-        scaleY: 0.1,
-        duration: 230 + Math.random() * 100,
-        ease: 'Quad.easeOut',
-        onComplete: () => par.destroy()
-      })
-    }
-  }
-
-  /**
-   * Arc électrique (court-circuit) : tracé en zigzag brisé du JOUEUR (`fromX/fromY`)
-   * jusqu'à la CIBLE (`toX/toY`) + 2 fourches secondaires + flash d'impact.
-   * Tracé double (halo cyan épais + cœur blanc fin) — rendu « foudre » pixel-art.
-   * Durée ~140 ms. Le jitter latéral utilise Math.random() — cosmétique pur, rendu
-   * uniquement, sans effet sur l'état de sim (déterminisme préservé).
-   *
-   * Remplace l'ancien éclair localisé sur l'ennemi : l'arc JOUEUR → ENNEMI rend
-   * la décharge lisible d'un coup d'œil (on voit clairement qui est frappé et par quoi).
-   */
-  private spawnStrikeBolt(fromX: number, fromY: number, toX: number, toY: number): void {
-    const segments = 7
-    const dx = toX - fromX
-    const dy = toY - fromY
-    const len = Math.sqrt(dx * dx + dy * dy) || 1
-    // Vecteur perpendiculaire normalisé (pour le jitter latéral).
-    const perpX = -dy / len
-    const perpY = dx / len
-    // Amplitude du jitter latéral : ~12 % de la longueur de l'arc, plafonné à 60px.
-    const jitterAmp = Math.min(len * 0.12, 60)
-
-    // Génère les points du zigzag principal (interpolation linéaire + jitter perp).
-    const buildZigzag = (scale: number): { x: number; y: number }[] => {
-      const pts: { x: number; y: number }[] = [{ x: fromX, y: fromY }]
-      for (let i = 1; i < segments; i++) {
-        const t = i / segments
-        const jitter = (Math.random() * 2 - 1) * jitterAmp * scale
-        pts.push({
-          x: fromX + dx * t + perpX * jitter,
-          y: fromY + dy * t + perpY * jitter
-        })
-      }
-      pts.push({ x: toX, y: toY })
-      return pts
-    }
-
-    const drawPath = (g: Phaser.GameObjects.Graphics, pts: { x: number; y: number }[]): void => {
-      if (pts.length === 0) {
-        return
-      }
-      g.beginPath()
-      g.moveTo(pts[0]?.x ?? fromX, pts[0]?.y ?? fromY)
-      for (let i = 1; i < pts.length; i++) {
-        g.lineTo(pts[i]?.x ?? toX, pts[i]?.y ?? toY)
-      }
-      g.strokePath()
-    }
-
-    const mainPts = buildZigzag(1)
-
-    // Éclair principal : halo cyan épais + cœur blanc fin.
-    const gMain = this.add.graphics().setDepth(5)
-    gMain.lineStyle(5, PALETTE_HEX.cyanAccent, 0.92)
-    drawPath(gMain, mainPts)
-    gMain.lineStyle(2, PALETTE_HEX.blanc, 1)
-    drawPath(gMain, mainPts)
-    this.tweens.add({
-      targets: gMain,
-      alpha: 0,
-      duration: 140,
-      ease: 'Quad.easeOut',
-      onComplete: () => gMain.destroy()
-    })
-
-    // 2 fourches secondaires courtes depuis un point aléatoire du zigzag.
-    const forkCount = 2
-    for (let f = 0; f < forkCount; f++) {
-      const forkIdx = 1 + Math.floor(Math.random() * (segments - 2))
-      const forkPt = mainPts[forkIdx]
-      if (forkPt === undefined) {
-        continue
-      }
-      const forkAngle = Math.atan2(dy, dx) + Math.PI * (0.25 + Math.random() * 0.5) * (Math.random() < 0.5 ? 1 : -1)
-      const forkLen = len * (0.12 + Math.random() * 0.12)
-      const gFork = this.add.graphics().setDepth(5)
-      gFork.lineStyle(3, PALETTE_HEX.cyanAccent, 0.7)
-      gFork.beginPath()
-      gFork.moveTo(forkPt.x, forkPt.y)
-      gFork.lineTo(forkPt.x + Math.cos(forkAngle) * forkLen, forkPt.y + Math.sin(forkAngle) * forkLen)
-      gFork.strokePath()
-      gFork.lineStyle(1, PALETTE_HEX.blanc, 0.65)
-      gFork.beginPath()
-      gFork.moveTo(forkPt.x, forkPt.y)
-      gFork.lineTo(forkPt.x + Math.cos(forkAngle) * forkLen, forkPt.y + Math.sin(forkAngle) * forkLen)
-      gFork.strokePath()
-      this.tweens.add({
-        targets: gFork,
-        alpha: 0,
-        duration: 110,
-        ease: 'Quad.easeOut',
-        onComplete: () => gFork.destroy()
-      })
-    }
-
-    // Flash d'impact à la cible (scale-pop cyan + flash blanc).
-    this.spawnPixelPop(toX, toY, PALETTE_HEX.cyanAccent, 16, 200)
-    this.spawnFlash(toX, toY)
   }
   /** Libération d'un prisonnier : étincelles + bulle « Merci ! » au-dessus de l'ouvrier. */
   private readonly onPrisonerFreed = (e: Event): void => {
     const p = e as PrisonerFreedEvent
-    this.spawnVfx('vfx_sparkle', p.x, p.y, 0.5, 1.9, 450)
-    this.spawnBubble(p.x, p.y)
+    this.vfx.spawnVfx('vfx_sparkle', p.x, p.y, 0.5, 1.9, 450)
+    this.vfx.spawnBubble(p.x, p.y)
   }
   /**
    * Évolution d'arme (coffre ramassé + conditions réunies) : grand halo au sol
@@ -570,13 +328,13 @@ export class GameScene extends Phaser.Scene {
     if (p === undefined) {
       return
     }
-    this.spawnVfx('vfx_levelup', p.x, p.y, 0.2, 2.8, 650)
+    this.vfx.spawnVfx('vfx_levelup', p.x, p.y, 0.2, 2.8, 650)
     // Sparkle supplémentaire en anneau (6 points) pour bien marquer l'évolution.
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2
       const delay = i * 35
       this.time.delayedCall(delay, () => {
-        this.spawnVfx('vfx_sparkle', p.x + Math.cos(a) * 48, p.y + Math.sin(a) * 48, 0.3, 1.4, 420)
+        this.vfx.spawnVfx('vfx_sparkle', p.x + Math.cos(a) * 48, p.y + Math.sin(a) * 48, 0.3, 1.4, 420)
       })
     }
     // Screen-shake plus fort que le marteau (événement majeur du run).
@@ -684,146 +442,6 @@ export class GameScene extends Phaser.Scene {
     this.load.image('vfx_beam_segment', 'stage01/vfx/beam_segment.png')
     this.load.image('cage', 'stage01/props/cage.png')
     this.load.image('bubble_merci', 'stage01/ui/bubble_merci.png')
-  }
-
-  /**
-   * Joue un effet transitoire (scale + fondu) à une position, puis se détruit. Rendu pur.
-   * Retourne le sprite (ou `null` si la texture est absente) pour un habillage ponctuel (ex. teinte).
-   */
-  private spawnVfx(
-    key: string,
-    x: number,
-    y: number,
-    from: number,
-    to: number,
-    durationMs: number
-  ): Phaser.GameObjects.Sprite | null {
-    if (!this.textures.exists(key)) {
-      return null
-    }
-    const fx = this.add.sprite(x, y, key).setScale(from).setDepth(5)
-    this.tweens.add({
-      targets: fx,
-      scale: to,
-      alpha: 0,
-      duration: durationMs,
-      ease: 'Quad.easeOut',
-      onComplete: () => fx.destroy()
-    })
-    return fx
-  }
-
-  /** Éclair blanc bref (primitive, sans asset) — accompagne la fumée à la mort d'un ennemi. */
-  private spawnFlash(x: number, y: number): void {
-    const flash = this.add.circle(x, y, 9, 0xffffff).setDepth(6)
-    this.tweens.add({
-      targets: flash,
-      scale: 2.2,
-      alpha: 0,
-      duration: 130,
-      ease: 'Quad.easeOut',
-      onComplete: () => flash.destroy()
-    })
-  }
-
-  /**
-   * Pop pixel carré coloré (scale-pop DA-safe) : naît petit, grossit,
-   * disparaît — pur hit-feel arcade 16-bit. Utilisé par sweep, strike, marteau.
-   */
-  private spawnPixelPop(x: number, y: number, color: number, size: number, durationMs: number): void {
-    const sq = this.add.rectangle(x, y, size, size, color).setDepth(6).setScale(0.2)
-    this.tweens.add({
-      targets: sq,
-      scale: 1,
-      alpha: 0,
-      duration: durationMs,
-      ease: 'Quad.easeOut',
-      onComplete: () => sq.destroy()
-    })
-  }
-
-  /**
-   * Bulles de goudron : petits carrés sombres qui montent et disparaissent,
-   * donnant vie à l'apparition d'une flaque de goudron. Cosmétique pur.
-   */
-  private spawnTarBubbles(x: number, y: number, radius: number): void {
-    const count = 5
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2
-      const dist = Math.random() * radius * 0.7
-      const bx = x + Math.cos(angle) * dist
-      const by = y + Math.sin(angle) * dist
-      const size = 2 + Math.floor(Math.random() * 3)
-      const bubble = this.add.rectangle(bx, by, size, size, PALETTE_HEX.brunSombre).setDepth(0).setAlpha(0.9)
-      this.tweens.add({
-        targets: bubble,
-        y: by - 12 - Math.random() * 10,
-        alpha: 0,
-        duration: 350 + Math.random() * 200,
-        delay: Math.random() * 150,
-        ease: 'Quad.easeOut',
-        onComplete: () => bubble.destroy()
-      })
-    }
-  }
-
-  /** Bulle « Merci ! » (sprite pré-cuit) montant au-dessus d'un ouvrier libéré. */
-  private spawnBubble(x: number, y: number): void {
-    if (!this.textures.exists('bubble_merci')) {
-      return
-    }
-    const bubble = this.add.image(x, y - 44, 'bubble_merci').setScale(0.5).setDepth(7)
-    this.tweens.add({
-      targets: bubble,
-      y: y - 64,
-      alpha: 0,
-      duration: 2500,
-      delay: 300,
-      ease: 'Quad.easeOut',
-      onComplete: () => bubble.destroy()
-    })
-  }
-
-  /**
-   * Arrivée de boss façon « téléporteur » : colonne de lumière verticale qui grandit,
-   * 3-4 segments qui s'assemblent, puis fondu d'apparition du boss. Purement visuel.
-   */
-  private playBossTeleport(boss: CharSprite, x: number, y: number): void {
-    if (this.textures.exists('vfx_beam')) {
-      const beam = this.add.sprite(x, y, 'vfx_beam').setDepth(5).setAlpha(0.9).setScale(1, 0)
-      this.tweens.add({
-        targets: beam,
-        scaleY: 1,
-        duration: 350,
-        ease: 'Quad.easeOut',
-        onComplete: () => {
-          this.tweens.add({ targets: beam, alpha: 0, duration: 500, onComplete: () => beam.destroy() })
-        }
-      })
-    }
-    if (this.textures.exists('vfx_beam_segment')) {
-      for (let i = 0; i < 4; i++) {
-        this.time.delayedCall(i * 120, () => {
-          const seg = this.add
-            .sprite(x, y - 70 + i * 18, 'vfx_beam_segment')
-            .setDepth(6)
-            .setAlpha(0.9)
-          this.tweens.add({ targets: seg, y, alpha: 0, duration: 260, ease: 'Quad.easeIn', onComplete: () => seg.destroy() })
-        })
-      }
-    }
-    if (boss instanceof Phaser.GameObjects.Sprite) {
-      boss.setAlpha(0)
-      this.tweens.add({ targets: boss, alpha: 1, duration: 700, delay: 200 })
-    }
-  }
-
-  /** Petit anneau d'étincelles autour du héros à la fin de l'intro (« les outils apparaissent »). */
-  private spawnIntroFlourish(x: number, y: number): void {
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2
-      this.spawnVfx('vfx_sparkle', x + Math.cos(a) * 34, y + Math.sin(a) * 34, 0.3, 1.2, 420)
-    }
   }
 
   /**
@@ -1355,7 +973,7 @@ export class GameScene extends Phaser.Scene {
           this.hazardSprites.set(h.id, hs)
           // Apparition : fondu d'entrée + quelques bulles sombres montantes.
           this.tweens.add({ targets: hs, alpha: 0.85, duration: 250, ease: 'Quad.easeOut' })
-          this.spawnTarBubbles(h.x, h.y, h.radius)
+          this.vfx.spawnTarBubbles(h.x, h.y, h.radius)
         }
         hs.setPosition(h.x, h.y).setScale((h.radius * 2) / hs.width)
       } else {
@@ -1417,7 +1035,7 @@ export class GameScene extends Phaser.Scene {
       }
       const prev = this.prevLevel.get(p.id)
       if (prev !== undefined && p.level > prev) {
-        this.spawnVfx('vfx_levelup', p.x, p.y, 0.4, 2, 500)
+        this.vfx.spawnVfx('vfx_levelup', p.x, p.y, 0.4, 2, 500)
       }
       this.prevLevel.set(p.id, p.level)
       // Retour visuel de dégât : teinte rouge tant que les PV baissent.
@@ -1446,7 +1064,7 @@ export class GameScene extends Phaser.Scene {
       this.introDone = true
       const leader = this.playerSprites.get(1)
       if (leader !== undefined) {
-        this.spawnIntroFlourish(leader.x, leader.y)
+        this.vfx.spawnIntroFlourish(leader.x, leader.y)
       }
     }
 
@@ -1476,7 +1094,7 @@ export class GameScene extends Phaser.Scene {
         this.enemySprites.set(en.id, sprite)
         // Arrivée de boss : téléporteur façon Mega Man (rendu seul, boss actif).
         if (en.isBoss) {
-          this.playBossTeleport(sprite, en.x, en.y)
+          this.vfx.playBossTeleport(sprite, en.x, en.y)
         }
       }
       sprite.setPosition(en.x, en.y)
@@ -1499,7 +1117,7 @@ export class GameScene extends Phaser.Scene {
         // + pic d'allocations inutile (horde AOE : marteau niveau 8+, 300 ennemis).
         if (feedbackEmittedThisFrame < FEEDBACK_MAX_PER_FRAME) {
           this.damageNumbers.spawn(en.x, en.y, hitAmount, en.isElite, en.isBoss)
-          this.spawnPixelPop(en.x, en.y, PALETTE_HEX.orangeDanger, 6, 120)
+          this.vfx.spawnPixelPop(en.x, en.y, PALETTE_HEX.orangeDanger, 6, 120)
           feedbackEmittedThisFrame++
         }
       }
@@ -1523,10 +1141,10 @@ export class GameScene extends Phaser.Scene {
     // Retire les sprites des ennemis disparus (mort → poussière de béton + éclair blanc + scale-pop).
     for (const [id, sprite] of this.enemySprites) {
       if (!seen.has(id)) {
-        this.spawnVfx('vfx_dust', sprite.x, sprite.y, 0.2, 1.8, 380)
-        this.spawnFlash(sprite.x, sprite.y)
+        this.vfx.spawnVfx('vfx_dust', sprite.x, sprite.y, 0.2, 1.8, 380)
+        this.vfx.spawnFlash(sprite.x, sprite.y)
         // Pixel-pop orange (impact satisfaction) — DA-safe.
-        this.spawnPixelPop(sprite.x, sprite.y, PALETTE_HEX.orangeDanger, 8, 160)
+        this.vfx.spawnPixelPop(sprite.x, sprite.y, PALETTE_HEX.orangeDanger, 8, 160)
         if (sprite instanceof Phaser.GameObjects.Sprite) {
           this.pool.release(sprite)
         } else {
@@ -1620,7 +1238,7 @@ export class GameScene extends Phaser.Scene {
         if (!anim.opened && age > POP_MS * 0.85 && this.textures.exists('pickup_crate_open')) {
           anim.opened = true
           sprite.setTexture('pickup_crate_open')
-          this.spawnVfx('vfx_sparkle', pk.x, pk.y, 0.5, 1.6, 260)
+          this.vfx.spawnVfx('vfx_sparkle', pk.x, pk.y, 0.5, 1.6, 260)
         }
 
         // AURA DORÉE pulsée derrière le coffre (disque palette or, alpha modéré → repérable).
@@ -1640,7 +1258,7 @@ export class GameScene extends Phaser.Scene {
         const chestEpoch = Math.floor((this.time.now + chestOffset) / chestPeriod)
         if (this.chestSparkleEpoch.get(pk.id) !== chestEpoch) {
           this.chestSparkleEpoch.set(pk.id, chestEpoch)
-          this.spawnPixelPop(pk.x, pk.y, PALETTE_HEX.jauneSecurite, 10, 240)
+          this.vfx.spawnPixelPop(pk.x, pk.y, PALETTE_HEX.jauneSecurite, 10, 240)
         }
       }
       // B4 — Gemme XP : pulse d'échelle (shiny) + scintillement pixel discret.
@@ -1654,13 +1272,13 @@ export class GameScene extends Phaser.Scene {
         const epoch = Math.floor((this.time.now + sparkOffset) / sparkPeriod)
         if (this.xpSparkleEpoch.get(pk.id) !== epoch) {
           this.xpSparkleEpoch.set(pk.id, epoch)
-          this.spawnPixelPop(pk.x, pk.y, PALETTE_HEX.vertBonus, 5, 180)
+          this.vfx.spawnPixelPop(pk.x, pk.y, PALETTE_HEX.vertBonus, 5, 180)
         }
       }
     }
     for (const [id, sprite] of this.pickupSprites) {
       if (!seenPickup.has(id)) {
-        this.spawnVfx('vfx_sparkle', sprite.x, sprite.y, 0.6, 1.6, 300)
+        this.vfx.spawnVfx('vfx_sparkle', sprite.x, sprite.y, 0.6, 1.6, 300)
         if (sprite instanceof Phaser.GameObjects.Sprite) {
           this.pool.release(sprite)
         } else {
