@@ -988,7 +988,7 @@ export class GameScene extends Phaser.Scene {
     if (this.stage.decalDensityMultiplier !== undefined) {
       streamerOpts.decalDensityMultiplier = this.stage.decalDensityMultiplier
     }
-    // NB : createProps est retiré (remplacé par le DecorStreamer).
+    // NB : les props ne sont plus cuits statiquement — ils sont streamés par le DecorStreamer.
     // Le streamer est construit PLUS BAS, une fois les structures/landmark/PNJ posés,
     // pour leur passer leurs positions comme ANCRES d'anti-chevauchement (les props
     // streamés ne se poseront plus sur les engins/héros).

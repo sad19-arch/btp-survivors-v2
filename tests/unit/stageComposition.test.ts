@@ -34,8 +34,7 @@ describe('chunkPlacements avec zones — déterminisme', () => {
       distMin: 200,
       distMax: 900,
       dominantPropIndices: [0],
-      dominantDecalIndices: [0],
-      density: 1.8
+      dominantDecalIndices: [0]
     }
   ]
 
@@ -110,8 +109,7 @@ describe('dominance des props dans une zone', () => {
         angleSpread: 60,
         distMin: 100,
         distMax: 4000,
-        dominantPropIndices: [0], // prop idx 0 = dominant
-        density: 1.0
+        dominantPropIndices: [0] // prop idx 0 = dominant
       }
     ]
     // baseCount élevé pour maximiser les instances.
@@ -128,7 +126,7 @@ describe('dominance des props dans une zone', () => {
 
 describe('positions dans les bornes du chunk (avec zones)', () => {
   const zones: DecorZone[] = [
-    { angleCenter: 0, angleSpread: 180, distMin: 0, distMax: 9999, density: 1.5 }
+    { angleCenter: 0, angleSpread: 180, distMin: 0, distMax: 9999 }
   ]
 
   it('décalques restent dans les bornes du chunk', () => {
@@ -168,8 +166,7 @@ describe('garde-fous indices décalques', () => {
         angleSpread: 60,
         distMin: 100,
         distMax: 9999,
-        dominantDecalIndices: [0, 1],
-        density: 1.5
+        dominantDecalIndices: [0, 1]
       }
     ]
     const { decals } = chunkPlacements(SEED, CX, CY, CS, W, H, 3, [], { zones })

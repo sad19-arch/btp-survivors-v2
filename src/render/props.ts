@@ -22,50 +22,6 @@ function mulberry32(seed: number): () => number {
   }
 }
 
-/** Rayon d'exclusion autour du spawn (centre du monde) pour ne pas gêner le départ. */
-const CENTER_EXCLUSION = 300
-
-/**
- * Disperse des props décoratifs STATIQUES à des positions seedées, cuits dans une
- * RenderTexture placée au-dessus du sol mais sous les entités (depth -5). Évite la
- * zone centrale (spawn joueur). Purement visuel et déterministe — n'affecte pas la
- * simulation.
- */
-export function createProps(
-  scene: Phaser.Scene,
-  worldW: number,
-  worldH: number,
-  props: readonly PropDef[],
-  seed = 1
-): void {
-  const rng = mulberry32((seed ^ 0x9e3779b9) >>> 0)
-  const cx = worldW / 2
-  const cy = worldH / 2
-  // Densité par surface CONSTANTE : les `count` sont calibrés pour 1600×1200 ;
-  // sur un monde plus grand, on met plus d'exemplaires (dispersés sur toute la
-  // surface) pour ne pas paraître vide. Cuit dans la RT → aucun coût runtime.
-  const areaFactor = (worldW * worldH) / (1600 * 1200)
-  for (const def of props) {
-    if (!scene.textures.exists(def.key)) {
-      continue
-    }
-    const count = Math.max(def.count, Math.round(def.count * areaFactor))
-    for (let i = 0; i < count; i++) {
-      let x = 0
-      let y = 0
-      // Tire une position hors de la zone centrale (quelques essais).
-      for (let t = 0; t < 12; t++) {
-        x = rng() * worldW
-        y = rng() * worldH
-        if (Math.hypot(x - cx, y - cy) >= CENTER_EXCLUSION) {
-          break
-        }
-      }
-      scene.add.image(x, y, def.key).setScale(def.scale).setDepth(-6)
-    }
-  }
-}
-
 /**
  * Sel déterministe dérivé de l'id de phase (FNV-1a 32 bits). Mélangé à la seed de run
  * → chaque stage a une disposition de décor DIFFÉRENTE (fini les positions identiques

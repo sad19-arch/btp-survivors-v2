@@ -60,8 +60,9 @@ export interface StageGeometry {
 
 /**
  * Zone de clustering thématique pour les décalques/props d'un stage.
- * Les points tombant dans la zone reçoivent une densité multipliée et
- * un choix prioritaire parmi les indices dominants.
+ * Les points tombant dans la zone reçoivent un choix prioritaire parmi les
+ * indices dominants (la densité globale du stage est réglée par
+ * `DecorStreamerOpts.decalDensityMultiplier`, pas par zone).
  */
 export interface DecorZone {
   /** Angle central de la zone (°, 0 = Est, sens trigo). */
@@ -76,8 +77,6 @@ export interface DecorZone {
   dominantPropIndices?: number[]
   /** Indices de décalques prioritaires dans cette zone (ordre de `StageRender.decals`). Optionnel. */
   dominantDecalIndices?: number[]
-  /** Multiplicateur de densité dans cette zone (1.0 = neutre, >1 = plus dense). */
-  density: number
 }
 
 /**
@@ -238,7 +237,6 @@ const TERRAIN_VIERGE_RENDER: StageRender = {
       distMax:          760,
       dominantPropIndices:  [0],    // survey_stakes (piquets)
       dominantDecalIndices: [4],    // tracks (ornières)
-      density: 1.6
     },
     // Secteur Terrain nu (SO) — herbe sèche + cailloux
     {
@@ -248,7 +246,6 @@ const TERRAIN_VIERGE_RENDER: StageRender = {
       distMax:          760,
       dominantPropIndices:  [2, 1], // dry_weeds + rock_cluster
       dominantDecalIndices: [1, 2], // weeds + pebbles
-      density: 1.5
     },
     // Bordure Nord-Ouest — terre molle + pebbles (terrain peu foulé)
     {
@@ -258,7 +255,6 @@ const TERRAIN_VIERGE_RENDER: StageRender = {
       distMax:          720,
       dominantPropIndices:  [3],    // soft_ground (terre remuée)
       dominantDecalIndices: [0, 2], // puddle + pebbles
-      density: 1.2
     }
   ],
   baseTileIndex:          0,   // tuile terre/herbe de base (index 0)
@@ -325,7 +321,6 @@ const TERRASSEMENT_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [0],       // tas de terre (seul prop)
       dominantDecalIndices: [0],      // tracks (ornières)
-      density: 1.8
     },
     // Secteur Déblais (SE) — tas de terre + flaques boueuses
     {
@@ -335,7 +330,6 @@ const TERRASSEMENT_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [0],       // tas de terre
       dominantDecalIndices: [1],      // puddle (flaques)
-      density: 1.5
     },
     // Passage d'engins (Ouest) — ornières marquées
     {
@@ -345,7 +339,6 @@ const TERRASSEMENT_RENDER: StageRender = {
       distMax: 720,
       dominantPropIndices: [0],
       dominantDecalIndices: [0],      // tracks
-      density: 1.3
     }
   ],
   baseTileIndex: 0,           // tuile boue de base (index 0)
@@ -409,7 +402,6 @@ const FONDATIONS_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [1],       // rebar (ferraillage)
       dominantDecalIndices: [0],      // spill (taches béton)
-      density: 1.8
     },
     // Secteur Coffrage (SO) — travées de coffrage + fissures
     {
@@ -419,7 +411,6 @@ const FONDATIONS_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [2],       // formwork (coffrage)
       dominantDecalIndices: [1],      // crack (fissures)
-      density: 1.5
     },
     // Passage pompe (SE) — béton frais + ferraillage
     {
@@ -429,7 +420,6 @@ const FONDATIONS_RENDER: StageRender = {
       distMax: 700,
       dominantPropIndices: [0, 1],    // concrete_mixer + rebar
       dominantDecalIndices: [0],      // spill
-      density: 1.4
     }
   ],
   baseTileIndex: 0,            // tuile béton de base (index 0)
@@ -493,7 +483,6 @@ const RESEAUX_ENTERRES_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [0, 1],  // pipes + trencher (gaine rouge)
       dominantDecalIndices: [0, 2], // trench + cables
-      density: 1.8
     },
     // Secteur Tirage câbles (SO) — tourets + regards + ornières boueuses
     {
@@ -503,7 +492,6 @@ const RESEAUX_ENTERRES_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [2, 3],  // cable_reel + regard
       dominantDecalIndices: [1, 2], // mud + cables
-      density: 1.5
     },
     // Tranchée principale (SE-E) — gaines + regards + tranchée
     {
@@ -513,7 +501,6 @@ const RESEAUX_ENTERRES_RENDER: StageRender = {
       distMax: 720,
       dominantPropIndices: [1, 3],  // trencher + regard
       dominantDecalIndices: [0],    // trench
-      density: 1.3
     }
   ],
   baseTileIndex: 2,            // tuile gravier/tranchée de base (index 2 — moins boue que 0)
@@ -580,7 +567,6 @@ const GROS_OEUVRE_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [2, 0],    // crane_hook + block_pallet
       dominantDecalIndices: [2],      // lifting_mark (marques de levage)
-      density: 1.6
     },
     // Secteur Maçonnerie (SE-S) — palettes parpaings + mortier + poteaux
     {
@@ -590,7 +576,6 @@ const GROS_OEUVRE_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [0, 1],    // block_pallet + concrete_pole
       dominantDecalIndices: [0, 3],   // mortar + dust
-      density: 1.5
     },
     // Zone Murs (Ouest) — sections de mur + poussière béton
     {
@@ -600,7 +585,6 @@ const GROS_OEUVRE_RENDER: StageRender = {
       distMax: 720,
       dominantPropIndices: [1],       // concrete_pole
       dominantDecalIndices: [1, 3],   // rubble + dust
-      density: 1.2
     }
   ],
   baseTileIndex: 0,            // tuile poussière béton de base (index 0)
@@ -673,7 +657,6 @@ const ECHAFAUDAGES_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [0, 1],    // scaffold frame + plancher
       dominantDecalIndices: [0],      // bolt_scatter
-      density: 1.5
     },
     // Secteur Structures (Ouest) — grilles métal + ombres de tubes
     {
@@ -683,7 +666,6 @@ const ECHAFAUDAGES_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [0, 2],    // scaffold frame + garde_corps
       dominantDecalIndices: [1],      // tube_shadow
-      density: 1.3
     },
     // Passage échelles (SE) — échelles + garde-corps légers
     {
@@ -693,7 +675,6 @@ const ECHAFAUDAGES_RENDER: StageRender = {
       distMax: 700,
       dominantPropIndices: [3, 2],    // echelle + garde_corps
       dominantDecalIndices: [1, 0],   // tube_shadow + bolt_scatter
-      density: 1.2
     }
   ],
   baseTileIndex: 2,            // tuile gris neutre (index 2)
@@ -766,7 +747,6 @@ const CHARPENTE_TOITURE_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [1, 0],    // tile_pile + beam
       dominantDecalIndices: [0],      // sawdust_fine
-      density: 1.5
     },
     // Secteur Isolation (SO) — rouleaux d'isolant + ombres de charpente
     {
@@ -776,7 +756,6 @@ const CHARPENTE_TOITURE_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [2, 3],    // insulation_roll + gutter
       dominantDecalIndices: [1],      // truss_shadow
-      density: 1.3
     },
     // Passage poutres (SE-E) — poutres + sciure
     {
@@ -786,7 +765,6 @@ const CHARPENTE_TOITURE_RENDER: StageRender = {
       distMax: 700,
       dominantPropIndices: [0, 1],    // beam + tile_pile
       dominantDecalIndices: [0, 1],   // sawdust_fine + truss_shadow
-      density: 1.2
     }
   ],
   baseTileIndex: 1,            // tuile brun clair (index 1 — bois chantier)
@@ -859,7 +837,6 @@ const SECOND_OEUVRE_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [0, 2],    // drywall_stack + cable_bundle
       dominantDecalIndices: [0],      // plaster_dust
-      density: 1.5
     },
     // Secteur Électricité (SO) — tableau élec + câbles + tuyaux PVC
     {
@@ -869,7 +846,6 @@ const SECOND_OEUVRE_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [1, 2],    // electrical_panel + cable_bundle
       dominantDecalIndices: [1],      // cables_floor
-      density: 1.3
     },
     // Plomberie (SE-E) — tuyaux PVC + plaques de plâtre
     {
@@ -879,7 +855,6 @@ const SECOND_OEUVRE_RENDER: StageRender = {
       distMax: 700,
       dominantPropIndices: [3, 0],    // pvc_pipes + drywall_stack
       dominantDecalIndices: [0, 1],   // plaster_dust + cables_floor
-      density: 1.2
     }
   ],
   baseTileIndex: 2,            // tuile dalle intérieure gris clair (index 2)
@@ -952,7 +927,6 @@ const FINITIONS_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [0, 1],    // paint + roller
       dominantDecalIndices: [0],      // paint_spot
-      density: 1.4
     },
     // Secteur Carrelage (SO) — piles de carrelage + coupe-carrelage + scotch
     {
@@ -962,7 +936,6 @@ const FINITIONS_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [3, 4],    // tile_pallet + tile_cutter
       dominantDecalIndices: [1],      // masking_tape
-      density: 1.3
     },
     // Zone Bâches (SE-E) — bâches de protection + pots
     {
@@ -972,7 +945,6 @@ const FINITIONS_RENDER: StageRender = {
       distMax: 700,
       dominantPropIndices: [2, 0],    // tarp + paint
       dominantDecalIndices: [0, 1],   // paint_spot + masking_tape
-      density: 1.1
     }
   ],
   baseTileIndex: 3,            // tuile carrelage lisse (index 3 — finitions propres)
@@ -1047,7 +1019,6 @@ const LIVRAISON_AUDIT_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [0, 1],    // cones + sign_ok
       dominantDecalIndices: [1],      // tape_line (balisage propre)
-      density: 1.3
     },
     // Secteur Malfaçon cachée (SE) — fissures orange + projecteurs (audit nocturne)
     {
@@ -1057,7 +1028,6 @@ const LIVRAISON_AUDIT_RENDER: StageRender = {
       distMax: 760,
       dominantPropIndices: [2, 3],    // projector + barrier
       dominantDecalIndices: [0],      // crack_orange (fissures = menace narrative)
-      density: 1.2
     },
     // Zone Périmètre (Ouest) — barrières propres + fissures discrètes
     {
@@ -1067,7 +1037,6 @@ const LIVRAISON_AUDIT_RENDER: StageRender = {
       distMax: 720,
       dominantPropIndices: [3, 1],    // barrier + sign_ok
       dominantDecalIndices: [0, 1],   // crack_orange + tape_line
-      density: 0.9
     }
   ],
   baseTileIndex: 2,            // tuile propre/clair (index 2 — livraison nette)
