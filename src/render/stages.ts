@@ -1018,7 +1018,12 @@ const LIVRAISON_AUDIT_RENDER: StageRender = {
     { key: 'struct_stage10_van',      file: 'stage10/props/inspection_van.png',  scale: 1.1,  count: 1, band: 'near' },
     { key: 'struct_stage10_building', file: 'stage10/structures/building.png',   scale: 0.80, count: 4, band: 'mid'  }
   ],
-  ambient: [{ key: 'npc_stage10', file: 'stage10/npc/inspecteur_work.png', frame: 256, scale: 0.71, framePeriodMs: 340, behavior: 'work' }],
+  ambient: [
+    { key: 'npc_stage10', file: 'stage10/npc/inspecteur_work.png', frame: 256, scale: 0.71, framePeriodMs: 340, behavior: 'work' },
+    { key: 'npc_stage10_agent_reception', file: 'stage10/npc/agent_reception_work.png', frame: 256, scale: 1.462, framePeriodMs: 300, behavior: 'work' },
+    { key: 'npc_stage10_technicien', file: 'stage10/npc/technicien_work.png', frame: 256, scale: 1.532, framePeriodMs: 300, behavior: 'work' },
+    { key: 'npc_stage10_porteur_carton', file: 'stage10/npc/porteur_carton_work.png', frame: 256, scale: 1.610, framePeriodMs: 300, behavior: 'patrol' }
+  ],
   // ── Composition scriptée stage 10 (livraison/audit) ───────────────────────────
   // Géographie : fourgon (idx0) côté NE proche (réception en cours), 4 bâtiments
   // livrés répartis en arc O-SO-S-NO (propre, aéré). Landmark (portail ruban rouge/jaune)
