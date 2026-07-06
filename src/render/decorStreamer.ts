@@ -288,6 +288,58 @@ export function chunkPlacements(
   return { decals: decalResult, props: propResult }
 }
 
+/**
+ * Positions des COLONNES intérieures pour un chunk : grille alignée sur le monde
+ * (multiples de `spacing`), hors du rayon d'exclusion central (spawn) et à l'écart
+ * des ancres de structures/héros. PURE et déterministe (AUCUN RNG → une grille
+ * régulière, reproductible). Rend l'ambiance « intérieur de bâtiment » (05→10).
+ */
+export function columnGridForChunk(
+  cx: number,
+  cy: number,
+  chunkSize: number,
+  worldW: number,
+  worldH: number,
+  spacing: number,
+  anchors?: readonly { x: number; y: number; r: number }[]
+): Array<{ x: number; y: number }> {
+  const x0 = cx * chunkSize
+  const y0 = cy * chunkSize
+  const x1 = Math.min(x0 + chunkSize, worldW)
+  const y1 = Math.min(y0 + chunkSize, worldH)
+  const worldCx = worldW / 2
+  const worldCy = worldH / 2
+  // Marge autour du spawn : rayon central + un peu, pour ne pas planter une colonne
+  // sur le joueur au départ.
+  const exclR = CENTER_EXCLUSION_RADIUS + 40
+  const excl2 = exclR * exclR
+  const out: Array<{ x: number; y: number }> = []
+  if (spacing <= 0) { return out }
+  const gxMin = Math.ceil(x0 / spacing)
+  const gxMax = Math.floor((x1 - 1) / spacing)
+  const gyMin = Math.ceil(y0 / spacing)
+  const gyMax = Math.floor((y1 - 1) / spacing)
+  for (let gx = gxMin; gx <= gxMax; gx++) {
+    for (let gy = gyMin; gy <= gyMax; gy++) {
+      const px = gx * spacing
+      const py = gy * spacing
+      const dx = px - worldCx
+      const dy = py - worldCy
+      if (dx * dx + dy * dy < excl2) { continue }
+      // Écarte les colonnes des engins/héros (mêmes ancres que les props).
+      let blocked = false
+      if (anchors !== undefined) {
+        for (const a of anchors) {
+          if (Math.hypot(px - a.x, py - a.y) < a.r + 70) { blocked = true; break }
+        }
+      }
+      if (blocked) { continue }
+      out.push({ x: px, y: py })
+    }
+  }
+  return out
+}
+
 export interface DecorStreamerOpts {
   chunkSize: number
   seed: number
@@ -299,6 +351,12 @@ export interface DecorStreamerOpts {
   decalDensityMultiplier?: number
   /** Positions/rayons des structures/landmark/PNJ à éviter (anti-chevauchement props). */
   structureAnchors?: readonly { x: number; y: number; r: number }[]
+  /** Grille de colonnes intérieures (ambiance « dans le bâtiment », phases 05→10). */
+  interiorColumns?: {
+    key: string
+    spacing: number
+    scale: number
+  }
 }
 
 /**
@@ -438,6 +496,19 @@ export class DecorStreamer {
       }
       for (const { x, y } of positions) {
         const img = this.scene.add.image(x, y, def.key).setScale(def.scale).setDepth(-6)
+        objs.push(img)
+      }
+    }
+
+    // Colonnes intérieures (grille, depth -3 = au-dessus du décor, SOUS les entités
+    // → lisibilité du combat préservée). Ambiance « dans le bâtiment » (05→10).
+    const ic = this.opts.interiorColumns
+    if (ic !== undefined && this.scene.textures.exists(ic.key)) {
+      const cols = columnGridForChunk(
+        cx, cy, this.opts.chunkSize, this.worldW, this.worldH, ic.spacing, this.opts.structureAnchors
+      )
+      for (const { x, y } of cols) {
+        const img = this.scene.add.image(x, y, ic.key).setScale(ic.scale).setDepth(-3)
         objs.push(img)
       }
     }

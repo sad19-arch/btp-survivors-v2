@@ -80,6 +80,30 @@ export interface DecorZone {
   density: number
 }
 
+/**
+ * Ambiance INTÉRIEURE d'un stage (phases 05→10 : on est « dans le bâtiment »).
+ * Rendu observer-only, déterministe (grille géométrique, aucun RNG) :
+ *  - une GRILLE de colonnes/poteaux structurels streamée sur tout le monde
+ *    (dépth sous les entités) → forte lecture « intérieur de bâtiment » ;
+ *  - un VOILE de lumière chaude posé sur le sol/décor (sous les entités) →
+ *    ambiance « éclairage artificiel intérieur », sans nuire à la lisibilité.
+ * N'affecte PAS la simulation (sim:check reste diff 0).
+ */
+export interface InteriorTheme {
+  /** Clé de texture de la colonne structurelle. */
+  columnKey: string
+  /** Fichier de la colonne (préchargé par GameScene). */
+  columnFile: string
+  /** Espacement de la grille de colonnes (px). Défaut 760. */
+  columnSpacing?: number
+  /** Échelle de rendu des colonnes. Défaut 1.0. */
+  columnScale?: number
+  /** Couleur du voile d'ambiance intérieure (défaut 0xffd9a0 = chaud). */
+  tint?: number
+  /** Opacité du voile (0..1). Défaut 0.12. 0 = pas de voile. */
+  tintAlpha?: number
+}
+
 export interface StageRender {
   ground: StageKeyFile[]
   decals: StageKeyFile[]
@@ -102,6 +126,8 @@ export interface StageRender {
   baseTileIndex?: number
   /** Multiplicateur de densité des décalques (défaut 1.0 — brut > fini). */
   decalDensityMultiplier?: number
+  /** Ambiance intérieure (phases 05→10) — grille de colonnes + voile chaud. Optionnel. */
+  interior?: InteriorTheme
 }
 
 /** PNJ d'ambiance : skin perso + période d'animation optionnelle (vitesse du geste). */
@@ -865,7 +891,17 @@ const FINITIONS_RENDER: StageRender = {
     }
   ],
   baseTileIndex: 3,            // tuile carrelage lisse (index 3 — finitions propres)
-  decalDensityMultiplier: 0.65 // finitions très propres, densité minimale (chantier terminé)
+  decalDensityMultiplier: 0.65, // finitions très propres, densité minimale (chantier terminé)
+  // Ambiance INTÉRIEURE (on est DANS le bâtiment) : grille de poteaux structurels +
+  // voile de lumière chaude sur le sol/décor. Golden du mécanisme intérieur (05→10).
+  interior: {
+    columnKey: 'struct_stage09_column',
+    columnFile: 'stage09/structures/column.png',
+    columnSpacing: 330,
+    columnScale: 1.25,
+    tint: 0xffce9c,
+    tintAlpha: 0.18
+  }
 }
 
 const LIVRAISON_AUDIT_RENDER: StageRender = {

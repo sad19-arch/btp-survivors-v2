@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { chunkPlacements, chunkHash, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
+import { chunkPlacements, chunkHash, columnGridForChunk, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { resolvePlacement, type ExclusionCircle } from '@render/props'
 import type { DecorZone } from '@render/stages'
 
@@ -339,5 +339,44 @@ describe('chunkPlacements avec structureAnchors — anti-chevauchement', () => {
     expect(totalProps).toBe(0)
     // Les décalques ne dépendent PAS des ancres → identiques.
     expect(withA.decals).toEqual(noA.decals)
+  })
+})
+
+// ── columnGridForChunk : grille de colonnes intérieures (05→10) ────────────────
+describe('columnGridForChunk — grille intérieure déterministe', () => {
+  it('déterministe + colonnes alignées sur la grille, dans les bornes du chunk', () => {
+    const a = columnGridForChunk(CX, CY, CS, W, H, 760)
+    const b = columnGridForChunk(CX, CY, CS, W, H, 760)
+    expect(a).toEqual(b)
+    const cx0 = CX * CS
+    const cy0 = CY * CS
+    for (const c of a) {
+      expect(c.x % 760).toBe(0)
+      expect(c.y % 760).toBe(0)
+      expect(c.x).toBeGreaterThanOrEqual(cx0)
+      expect(c.x).toBeLessThan(cx0 + CS)
+      expect(c.y).toBeGreaterThanOrEqual(cy0)
+      expect(c.y).toBeLessThan(cy0 + CS)
+    }
+  })
+
+  it('exclut la zone de spawn (centre du monde)', () => {
+    const cxc = Math.floor((W / 2) / CS)
+    const cyc = Math.floor((H / 2) / CS)
+    // spacing fin → des points de grille tombent près du centre : ils doivent être exclus.
+    const cols = columnGridForChunk(cxc, cyc, CS, W, H, 200)
+    for (const c of cols) {
+      expect(Math.hypot(c.x - W / 2, c.y - H / 2)).toBeGreaterThan(300)
+    }
+  })
+
+  it('évite les ancres de structures (dégagement r + 70)', () => {
+    const anchors = [{ x: CX * CS + 400, y: CY * CS + 400, r: 130 }]
+    const cols = columnGridForChunk(CX, CY, CS, W, H, 200, anchors)
+    for (const c of cols) {
+      for (const a of anchors) {
+        expect(Math.hypot(c.x - a.x, c.y - a.y)).toBeGreaterThanOrEqual(a.r + 70)
+      }
+    }
   })
 })

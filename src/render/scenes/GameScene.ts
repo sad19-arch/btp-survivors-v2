@@ -584,6 +584,10 @@ export class GameScene extends Phaser.Scene {
         this.load.image(s.key, s.file)
       }
     }
+    // Colonne intérieure (phases 05→10) — texture de la grille streamée.
+    if (this.stage.interior !== undefined) {
+      this.load.image(this.stage.interior.columnKey, this.stage.interior.columnFile)
+    }
     // Feuilles de personnages 4×4 (lourdes) — sautées en mode allégé (→ cercles).
     if (!this.lite) {
       const boss = this.stage.boss
@@ -1030,6 +1034,27 @@ export class GameScene extends Phaser.Scene {
     // Les props streamés évitent désormais structures + landmark + PNJ (anti-chevauchement)
     // en plus du centre (spawn). Coût constant (~16 chunks actifs) quel que soit le monde.
     streamerOpts.structureAnchors = placed.map((p) => ({ x: p.x, y: p.y, r: p.r }))
+    // Ambiance INTÉRIEURE (phases 05→10) : grille de colonnes streamée (dans le
+    // streamer) + VOILE de lumière chaude sur le sol/décor. Le voile est posé à
+    // depth -0.5 → il tinte le sol/props/structures/colonnes MAIS PAS les entités
+    // (joueur/ennemis à depth ≥ 0) → « on est dedans » sans perdre la lisibilité.
+    const interior = this.stage.interior
+    if (interior !== undefined) {
+      streamerOpts.interiorColumns = {
+        key: interior.columnKey,
+        spacing: interior.columnSpacing ?? 760,
+        scale: interior.columnScale ?? 1.0
+      }
+      const tintAlpha = interior.tintAlpha ?? 0.12
+      if (tintAlpha > 0) {
+        this.add
+          .rectangle(
+            WORLD.width / 2, WORLD.height / 2, WORLD.width, WORLD.height,
+            interior.tint ?? 0xffd9a0, tintAlpha
+          )
+          .setDepth(-0.5)
+      }
+    }
     this.decorStreamer = new DecorStreamer(this, WORLD.width, WORLD.height, streamerOpts)
 
     this.add
