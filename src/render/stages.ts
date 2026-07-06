@@ -831,7 +831,12 @@ const SECOND_OEUVRE_RENDER: StageRender = {
     { key: 'struct_stage08_van',       file: 'stage08/structures/artisan_van.png',    scale: 1.1,  count: 1, band: 'near' },
     { key: 'struct_stage08_partition', file: 'stage08/structures/partition_room.png', scale: 0.85, count: 5, band: 'mid'  }
   ],
-  ambient: [{ key: 'npc_stage08', file: 'stage08/npc/plaquiste_work.png', frame: 256, scale: 0.69, framePeriodMs: 280, behavior: 'work' }],
+  ambient: [
+    { key: 'npc_stage08',          file: 'stage08/npc/plaquiste_work.png',     frame: 256, scale: 0.69, framePeriodMs: 280, behavior: 'work'   },
+    { key: 'npc_stage08_plombier', file: 'stage08/npc/plombier_work.png',      frame: 256, scale: 1.64, framePeriodMs: 300, behavior: 'work'   },
+    { key: 'npc_stage08_elec',     file: 'stage08/npc/electricien_work.png',   frame: 256, scale: 1.64, framePeriodMs: 300, behavior: 'work'   },
+    { key: 'npc_stage08_porteur',  file: 'stage08/npc/porteur_plaque_work.png',frame: 256, scale: 1.67, framePeriodMs: 300, behavior: 'patrol' }
+  ],
   // ── Composition scriptée stage 08 (second œuvre) ─────────────────────────────
   // Géographie : fourgon artisan (idx0) côté NE proche (artisan décharge le matériel),
   // 5 zones de cloisons distribuées en arc O-SO-S-NO (chantier intérieur partout).
