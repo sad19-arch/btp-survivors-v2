@@ -147,33 +147,87 @@ export const FINAL_BOSS_SKIN: StageEnemySprite = {
 const TERRAIN_VIERGE_RENDER: StageRender = {
   ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_${i}`, file: `stage01/ground/tile_${i}.png` })),
   decals: [
-    { key: 'decal_puddle', file: 'stage01/decals/puddle.png' },
-    { key: 'decal_weeds', file: 'stage01/decals/weeds.png' },
+    { key: 'decal_puddle',  file: 'stage01/decals/puddle.png' },
+    { key: 'decal_weeds',   file: 'stage01/decals/weeds.png' },
     { key: 'decal_pebbles', file: 'stage01/decals/pebbles.png' },
-    { key: 'decal_crack', file: 'stage01/decals/crack.png' },
-    { key: 'decal_tracks', file: 'stage01/decals/tracks.png' }
+    { key: 'decal_crack',   file: 'stage01/decals/crack.png' },
+    { key: 'decal_tracks',  file: 'stage01/decals/tracks.png' }
   ],
+  // Clutter streamé : piquets+rubalise, cailloux, herbe sèche, terre molle.
+  // La cabane, le panneau de chantier et les barrières sont des `structures`
+  // (placées UNE fois, scriptées) pour éviter leur réplication en vrac.
   props: [
-    { key: 'prop_sign', file: 'stage01/props/site_sign.png', scale: 1.1, count: 2 },
-    { key: 'prop_stakes', file: 'stage01/props/survey_stakes.png', scale: 1.1, count: 3 },
-    { key: 'prop_tape', file: 'stage01/props/boundary_tape.png', scale: 1.0, count: 3 },
-    { key: 'prop_rocks', file: 'stage01/props/rock_cluster.png', scale: 1.0, count: 5 },
-    { key: 'prop_weeds', file: 'stage01/props/dry_weeds.png', scale: 1.0, count: 6 },
-    { key: 'prop_soft', file: 'stage01/props/soft_ground.png', scale: 1.4, count: 3 },
-    { key: 'prop_cabin', file: 'stage01/props/site_cabin.png', scale: 1.1, count: 1 }
+    { key: 'prop_stakes', file: 'stage01/props/survey_stakes.png', scale: 1.1, count: 4 },
+    { key: 'prop_rocks',  file: 'stage01/props/rock_cluster.png',  scale: 1.0, count: 5 },
+    { key: 'prop_weeds',  file: 'stage01/props/dry_weeds.png',     scale: 1.0, count: 6 },
+    { key: 'prop_soft',   file: 'stage01/props/soft_ground.png',   scale: 1.4, count: 3 }
   ],
   enemies: {
-    huissier: { key: 'brute', file: 'stage01/enemies/brute_walk.png', frame: 192, scale: 1.0 },
-    inspecteur: { key: 'imp', file: 'stage01/enemies/imp_walk.png', frame: 192, scale: 0.9 },
-    paperasse: { key: 'mudling', file: 'stage01/enemies/mudling_walk.png', frame: 192, scale: 1.25 }
+    huissier:   { key: 'brute',   file: 'stage01/enemies/brute_walk.png',   frame: 192, scale: 1.0 },
+    inspecteur: { key: 'imp',     file: 'stage01/enemies/imp_walk.png',     frame: 192, scale: 0.9 },
+    paperasse:  { key: 'mudling', file: 'stage01/enemies/mudling_walk.png', frame: 192, scale: 1.25 }
   },
   boss: GROUND_KEEPER,
-  // Terrain vierge : bornage du terrain (parcelles piquetées) + géomètre qui vise.
+  // Terrain vierge : panneau « PERMIS DE CONSTRUIRE » en bordure de parcelle.
   landmark: { key: 'landmark_stage01', file: 'stage01/landmarks/permit.png', scale: 1.5, count: 1 },
+  // Structures-héros : panneau chantier (sign NE), algeco (cabin SE),
+  // barrières rouge/blanc (tape N), puis 3 parcelles piquetées (plot × 3 mid).
+  // Ordre = ordre des angles scriptés (structureAngles).
   structures: [
-    { key: 'struct_stage01_plot', file: 'stage01/structures/plot.png', scale: 0.85, count: 3, band: 'mid' }
+    { key: 'struct_stage01_sign',  file: 'stage01/props/site_sign.png',     scale: 1.0, count: 1, band: 'near' },
+    { key: 'struct_stage01_cabin', file: 'stage01/props/site_cabin.png',    scale: 1.1, count: 1, band: 'near' },
+    { key: 'struct_stage01_tape',  file: 'stage01/props/boundary_tape.png', scale: 1.0, count: 2, band: 'near' },
+    { key: 'struct_stage01_plot',  file: 'stage01/structures/plot.png',     scale: 0.85, count: 3, band: 'mid'  }
   ],
-  ambient: { key: 'npc_stage01', file: 'stage01/npc/geometre_work.png', frame: 256, scale: 0.72, framePeriodMs: 320 }
+  ambient: { key: 'npc_stage01', file: 'stage01/npc/geometre_work.png', frame: 256, scale: 0.72, framePeriodMs: 320 },
+  // ── Composition scriptée stage 01 (terrain vierge) ───────────────────────
+  // Géographie : panneau (sign=idx0) côté NE proche, algeco (cabin=idx1) côté SE,
+  // barrières (tape=idx2, count:2) côté N et NO, 3 parcelles (plot=idx3-5) éparse.
+  // Landmark (permis) au bord Est. PNJ géomètre près du panneau NE.
+  geometry: {
+    // structureAngles[i] → 1 instance par angle (count:2 du tape → 2 entrées)
+    //   0 = sign NE (50°)    1 = cabin SE (310°)
+    //   2 = tape N (90°)     3 = tape NO (145°)
+    //   4-6 = plot : NNO (120°), OSO (215°), SSE (280°)
+    structureAngles: [50, 310, 90, 145, 120, 215, 280],
+    landmarkAngle:   20,   // permis de construire côté Est (lisible en bordure)
+    ambientAngle:    50    // géomètre près du panneau NE (il vise le terrain)
+  },
+  // Zones métier : 3 secteurs complémentaires
+  zones: [
+    // Secteur Implantation (NE) — dense en piquets + traces de passage
+    {
+      angleCenter:       50,
+      angleSpread:       55,
+      distMin:          340,
+      distMax:          760,
+      dominantPropIndices:  [0],    // survey_stakes (piquets)
+      dominantDecalIndices: [4],    // tracks (ornières)
+      density: 1.6
+    },
+    // Secteur Terrain nu (SO) — herbe sèche + cailloux
+    {
+      angleCenter:      220,
+      angleSpread:       65,
+      distMin:          340,
+      distMax:          760,
+      dominantPropIndices:  [2, 1], // dry_weeds + rock_cluster
+      dominantDecalIndices: [1, 2], // weeds + pebbles
+      density: 1.5
+    },
+    // Bordure Nord-Ouest — terre molle + pebbles (terrain peu foulé)
+    {
+      angleCenter:      150,
+      angleSpread:       55,
+      distMin:          320,
+      distMax:          720,
+      dominantPropIndices:  [3],    // soft_ground (terre remuée)
+      dominantDecalIndices: [0, 2], // puddle + pebbles
+      density: 1.2
+    }
+  ],
+  baseTileIndex:          0,   // tuile terre/herbe de base (index 0)
+  decalDensityMultiplier: 1.2  // terrain brut début de chantier, densité moyenne
 }
 
 const TERRASSEMENT_RENDER: StageRender = {
