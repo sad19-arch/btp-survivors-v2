@@ -575,7 +575,16 @@ const GROS_OEUVRE_RENDER: StageRender = {
     }
   ],
   baseTileIndex: 0,            // tuile poussière béton de base (index 0)
-  decalDensityMultiplier: 1.0  // gros œuvre semi-propre : béton frais, densité moyenne
+  decalDensityMultiplier: 1.0, // gros œuvre semi-propre : béton frais, densité moyenne
+  // Intérieur (on est dans le gros œuvre) : poteaux béton bruts + voile poussière chaude.
+  interior: {
+    columnKey: 'struct_stage05_column',
+    columnFile: 'stage05/structures/column.png',
+    columnSpacing: 340,
+    columnScale: 1.3,
+    tint: 0xffdcae,
+    tintAlpha: 0.15
+  }
 }
 
 const ECHAFAUDAGES_RENDER: StageRender = {
@@ -654,7 +663,16 @@ const ECHAFAUDAGES_RENDER: StageRender = {
     }
   ],
   baseTileIndex: 2,            // tuile gris neutre (index 2)
-  decalDensityMultiplier: 0.9  // échafaudages semi-ordonnés, densité légère (géométrique)
+  decalDensityMultiplier: 0.9, // échafaudages semi-ordonnés, densité légère (géométrique)
+  // Intérieur (structure montée, échafaudée) : poteaux béton bruts + voile gris chaud.
+  interior: {
+    columnKey: 'struct_stage06_column',
+    columnFile: 'stage06/structures/column.png',
+    columnSpacing: 350,
+    columnScale: 1.3,
+    tint: 0xf3dcb4,
+    tintAlpha: 0.15
+  }
 }
 
 const CHARPENTE_TOITURE_RENDER: StageRender = {
@@ -733,7 +751,16 @@ const CHARPENTE_TOITURE_RENDER: StageRender = {
     }
   ],
   baseTileIndex: 1,            // tuile brun clair (index 1 — bois chantier)
-  decalDensityMultiplier: 0.9  // charpente légère, densité légère (bois aéré)
+  decalDensityMultiplier: 0.9, // charpente légère, densité légère (bois aéré)
+  // Intérieur (sous charpente/toiture) : poteaux structurels + voile bois chaud.
+  interior: {
+    columnKey: 'struct_stage07_column',
+    columnFile: 'stage07/structures/column.png',
+    columnSpacing: 360,
+    columnScale: 1.3,
+    tint: 0xffca86,
+    tintAlpha: 0.18
+  }
 }
 
 const SECOND_OEUVRE_RENDER: StageRender = {
@@ -812,7 +839,16 @@ const SECOND_OEUVRE_RENDER: StageRender = {
     }
   ],
   baseTileIndex: 2,            // tuile dalle intérieure gris clair (index 2)
-  decalDensityMultiplier: 0.8  // second œuvre ordonné, densité légère (intérieur propre)
+  decalDensityMultiplier: 0.8, // second œuvre ordonné, densité légère (intérieur propre)
+  // Intérieur (dans le bâtiment, cloisons en cours) : poteaux clairs + voile chaud doux.
+  interior: {
+    columnKey: 'struct_stage08_column',
+    columnFile: 'stage08/structures/column.png',
+    columnSpacing: 340,
+    columnScale: 1.25,
+    tint: 0xffdca4,
+    tintAlpha: 0.17
+  }
 }
 
 const FINITIONS_RENDER: StageRender = {
@@ -981,7 +1017,16 @@ const LIVRAISON_AUDIT_RENDER: StageRender = {
     }
   ],
   baseTileIndex: 2,            // tuile propre/clair (index 2 — livraison nette)
-  decalDensityMultiplier: 0.6  // densité minimale (chantier livré, propre + tension discrète)
+  decalDensityMultiplier: 0.6, // densité minimale (chantier livré, propre + tension discrète)
+  // Intérieur (bâtiment livré) : poteaux clairs finis + voile clair (lumière neutre-chaude).
+  interior: {
+    columnKey: 'struct_stage10_column',
+    columnFile: 'stage10/structures/column.png',
+    columnSpacing: 380,
+    columnScale: 1.25,
+    tint: 0xffe6c4,
+    tintAlpha: 0.14
+  }
 }
 
 export const STAGE_RENDER: Record<string, StageRender> = {
