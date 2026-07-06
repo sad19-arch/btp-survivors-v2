@@ -1,10 +1,51 @@
 import type Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
 import type { WeaponFiredEvent, PickupCollectedEvent, BossSpawnedEvent } from '@core/events'
-import { SFX, VOICE, voiceStage, musicForState, AMB, type MusicKey } from './manifest'
+import { SFX, VOICE, voiceRunStart, musicForState, MUSIC, AMB, type MusicKey } from './manifest'
 import { musicGain, sfxGain, duckedGain, type AudioLevels } from './settings'
-import { playZzfx, createWhirLoop, type ZzfxLoop } from './zzfx'
+import { playZzfx } from './zzfx'
 import { weaponZzfx } from './weaponSfx'
+
+/**
+ * Retourne la clé de voix à jouer au Nième level-up (compteur 0-based).
+ * Alterne entre les deux clips du pool `VOICE.upgrade` selon la parité.
+ * Fonction PURE — pas de `Math.random`, testable en Vitest.
+ */
+export function pickUpgradeVoice(count: number): string {
+  const pool = VOICE.upgrade
+  return pool[count % pool.length] ?? pool[0] ?? 'voice_choose_your_destiny'
+}
+
+/**
+ * B4 — Décision de throttle pour le ding de gemme XP.
+ * Fonction PURE exportée pour les tests Vitest.
+ * Retourne `true` si le ding peut être joué (délai écoulé depuis le dernier).
+ * @param lastMs  Horodatage du dernier ding joué (-Infinity si jamais joué).
+ * @param nowMs   Horodatage courant.
+ * @param throttleMs  Délai minimal entre deux dings (ms).
+ */
+export function canPlayXpDing(lastMs: number, nowMs: number, throttleMs: number): boolean {
+  return nowMs - lastMs >= throttleMs
+}
+
+/**
+ * B5 — Fanfare de coffre/évolution (ZzFX procédural).
+ * Accord majeur ascendant court : 3 notes courtes + sustain grave → son de victoire arcade 16-bit.
+ * Paramètres : [volume, randomness, freq, attack, sustain, release, shape, shapeCurve, slide, ...].
+ * Jouée en rafale (3 notes décalées) depuis `playChestFanfare`.
+ * Exportée pour tests Vitest si nécessaire.
+ */
+export const CHEST_FANFARE_NOTES: readonly (readonly number[])[] = [
+  // Note 1 : do5 court (262 Hz × 2 = 523 Hz), triangle vif
+  [0.55, 0.01, 523, 0.005, 0, 0.07, 1, 1.2, 0.05],
+  // Note 2 : mi5 (659 Hz), légère slide montante
+  [0.55, 0.01, 659, 0.005, 0, 0.08, 1, 1.2, 0.08],
+  // Note 3 : sol5 (784 Hz) + sustain → fanfare
+  [0.65, 0.01, 784, 0.005, 0.04, 0.18, 1, 1.3, 0.03]
+] as const
+
+/** Clés de musique qui ne doivent PAS boucler (lecture unique, ex. jingle court). */
+const NON_LOOPING_MUSIC = new Set<MusicKey>([MUSIC.gameover])
 
 /** Instance de son loopée (sous-ensemble commun WebAudio/HTML5, découplé de Phaser). */
 interface SoundInstance {
@@ -24,7 +65,14 @@ const VOICE_LEVEL = 1.0 // la voix passe au volume plein du canal SFX (annonces 
 const MUSIC_DUCK = 0.28 // pendant une voix, la musique tombe à ~28 % (annonceur au-dessus)
 const AMB_DUCK = 0.15 // et l'ambiance quasi muette (~15 %) pour dégager la voix
 const WEAPON_THROTTLE_MS = 55 // délai min entre deux SFX d'une MÊME arme (anti-double)
-const SAW_LOOP_LEVEL = 0.28 // volume du ronronnement de scie (× gain SFX)
+/** Délai min entre deux dings de gemme XP (anti-saturation horde). */
+const GEM_DING_THROTTLE_MS = 50
+/**
+ * Vecteur ZzFX du "ding" de ramassage de gemme XP.
+ * Sinus court, haute fréquence, slide montant → son cristallin et distinct.
+ * Paramètres : [volume, randomness, freq, attack, sustain, release, shape, shapeCurve, slide].
+ */
+const GEM_DING_ZZFX: readonly number[] = [0.28, 0.01, 1400, 0, 0, 0.1, 0, 1.6, 0.12]
 
 /** Écrans où l'ambiance de chantier tourne (nappe de fond). */
 const GAMEPLAY_SCREENS = new Set(['game', 'upgrade', 'paused'])
@@ -49,10 +97,16 @@ export class AudioDirector {
   private readonly lastSfx = new Map<string, number>()
   private prevScreen = ''
   private presentsPlayed = false
+  /** Compteur de level-ups, pour l'alternance des voix (pair/impair). */
+  private upgradeVoiceCount = 0
+  /** « Finish him » dit une seule fois par boss (remis à zéro quand le boss disparaît). */
+  private bossFinishSaid = false
+  /** Appel à l'aide dit une fois par passage en PV bas (hystérésis pour re-déclencher). */
+  private playerLowSaid = false
+  /** Dernier « enemy down » (throttle : voix de kill occasionnelle, pas à chaque mort). */
+  private lastEnemyDownMs = -Infinity
   /** Contexte WebAudio partagé (celui de Phaser) pour les SFX procéduraux zzfx ; null si HTML5. */
   private readonly audioCtx: AudioContext | null
-  /** Ronronnement continu de la scie (créé à la demande, coupé hors gameplay). */
-  private sawLoop: ZzfxLoop | null = null
 
   constructor(sound: Phaser.Sound.BaseSoundManager, events: EventTarget, getSettings: () => AudioLevels) {
     this.sound = sound
@@ -68,16 +122,26 @@ export class AudioDirector {
 
   private bindEvents(events: EventTarget): void {
     const on = (name: string, fn: (e: Event) => void): void => { events.addEventListener(name, fn) }
-    on('enemyKilled', () => { this.playCue('enemyKilled') })
+    on('enemyKilled', () => {
+      this.playCue('enemyKilled')
+      // Voix « enemy down » OCCASIONNELLE (throttle ~18s) et seulement si aucune
+      // annonce n'est en cours (ne coupe pas une réplique d'écran/boss).
+      const now = performance.now()
+      if (now - this.lastEnemyDownMs > 18000 && !this.voiceActive()) {
+        this.lastEnemyDownMs = now
+        this.playVoice(VOICE.enemyDown)
+      }
+    })
     on('playerHurt', () => { this.playCue('playerHurt') })
     on('levelUp', () => { this.playCue('levelUp') })
     // SFX procédural PAR ARME (zzfx) : chaque arme discrète émet weaponFired(id).
-    // La scie (continue) est exclue à la source → gérée en boucle (updateSawLoop).
+    // La scie reste silencieuse (pas de boucle de ronronnement — trop insupportable).
     on('weaponFired', (e) => { this.playWeaponSfx((e as WeaponFiredEvent).kind) })
     on('pickupCollected', (e) => {
       const kind = (e as PickupCollectedEvent).kind
       if (kind === 'xp') {
-        this.playCue('collect')
+        // B4 : ding zzfx cristallin throttlé 50ms (remplace le cue collect générique).
+        this.playXpDing()
       } else {
         this.playCue('bonus')
         this.playVoice(VOICE.bonus)
@@ -92,8 +156,9 @@ export class AudioDirector {
     // (Plus de SFX générique sur `auraPulse` : aura/sweep/strike/cône sonnent
     // désormais par ARME via `weaponFired`/zzfx. L'auraPulse reste pour les VFX.)
     on('prisonerFreed', () => { this.playCue('prisonerFreed'); this.playVoice(VOICE.thankyou) })
-    // Fanfare d'évolution (coffre ramassé + conditions réunies) : cue existant + voix triomphante.
-    on('evolved', () => { this.playCue('bonus'); this.playVoice(VOICE.bonus) })
+    // B5 — Fanfare d'évolution (coffre ramassé + conditions réunies) : fanfare zzfx en accord
+    // majeur + voix triomphante. Remplace le cue 'bonus' générique par une fanfare dédiée.
+    on('evolved', () => { this.playChestFanfare(); this.playVoice(VOICE.evolved) })
     on('upgradePick', () => { this.playCue('upgradePick') })
     on('menuMove', () => { this.playCue('menuMove') })
     on('menuConfirm', () => { this.playCue('menuConfirm') })
@@ -127,8 +192,7 @@ export class AudioDirector {
 
   /**
    * SFX procédural (zzfx) d'une arme, par ID, throttlé et au gain SFX courant
-   * (0/mute → rien). Variation par tir intrinsèque à zzfx (`randomness`). La scie
-   * est exclue (son continu géré par `updateSawLoop`).
+   * (0/mute → rien). Variation par tir intrinsèque à zzfx (`randomness`).
    */
   private playWeaponSfx(id: string): void {
     if (this.audioCtx === null || this.isLocked()) {
@@ -145,6 +209,53 @@ export class AudioDirector {
     }
     this.lastSfx.set(`w_${id}`, now)
     playZzfx(this.audioCtx, gain, weaponZzfx(id))
+  }
+
+  /**
+   * B5 — Fanfare de coffre/évolution (zzfx procédural).
+   * Joue 3 notes en accord majeur ascendant décalées dans le temps (~40ms entre chaque).
+   * Inaudible si audio verrouillé, contexte nul, ou gain nul.
+   */
+  private playChestFanfare(): void {
+    if (this.audioCtx === null || this.isLocked()) {
+      return
+    }
+    const ctx = this.audioCtx
+    const gain = sfxGain(this.settings)
+    if (gain <= 0) {
+      return
+    }
+    CHEST_FANFARE_NOTES.forEach((note, i) => {
+      const delayMs = i * 90
+      if (delayMs === 0) {
+        playZzfx(ctx, gain, note)
+      } else {
+        window.setTimeout(() => {
+          playZzfx(ctx, gain, note)
+        }, delayMs)
+      }
+    })
+  }
+
+  /**
+   * B4 — Ding de ramassage de gemme XP (zzfx procédural, throttlé à 50ms).
+   * Son cristallin distinct du pool `collect` — inaudible si audio verrouillé ou muet.
+   */
+  private playXpDing(): void {
+    if (this.audioCtx === null || this.isLocked()) {
+      return
+    }
+    const gain = sfxGain(this.settings)
+    if (gain <= 0) {
+      return
+    }
+    const now = performance.now()
+    const last = this.lastSfx.get('xp_ding') ?? -Infinity
+    if (!canPlayXpDing(last, now, GEM_DING_THROTTLE_MS)) {
+      return
+    }
+    this.lastSfx.set('xp_ding', now)
+    playZzfx(this.audioCtx, gain * 0.7, GEM_DING_ZZFX)
   }
 
   /** Joue une réplique de voix (canal unique : coupe la précédente, pas de chevauchement). */
@@ -200,40 +311,21 @@ export class AudioDirector {
       this.onScreenEnter(state)
       this.prevScreen = state.screen
     }
+    // Un seul scan O(N) du boss par frame (partagé entre voix dérivées et musique)
+    // au lieu d'un `.some` + un `.find` séparés (N jusqu'à 500+ ennemis en horde).
+    const boss = state.enemies.find((e) => e.isBoss)
+    // Voix DÉRIVÉES de l'état pendant le jeu (boss faible, PV joueur bas).
+    if (state.screen === 'game') {
+      this.checkDerivedVoices(state, boss)
+    }
     // Musique de fond (boss prioritaire, rotation par phase).
-    const bossPresent = state.enemies.some((e) => e.isBoss)
+    const bossPresent = boss !== undefined
     const desired = musicForState({ screen: state.screen, stageId: state.stageId, bossPresent })
     if (desired !== this.currentKey) {
       this.switchMusic(desired)
     }
     this.rampMusic()
     this.rampAmbience(state.screen)
-    this.updateSawLoop(state)
-  }
-
-  /**
-   * Ronronnement continu de la scie orbitale : actif tant qu'un joueur VIVANT a
-   * la scie en jeu (écran gameplay). Volume rampé sur le gain SFX ; coupé hors
-   * gameplay ou au mute. Un seul oscillateur, arrêté proprement (pas de fuite).
-   */
-  private updateSawLoop(state: AppViewState): void {
-    if (this.audioCtx === null) {
-      return
-    }
-    const wantSaw =
-      GAMEPLAY_SCREENS.has(state.screen) &&
-      state.players.some((p) => p.alive && p.inventory.weapons.some((w) => w.id === 'scie'))
-    if (!wantSaw) {
-      if (this.sawLoop !== null) {
-        this.sawLoop.stop()
-        this.sawLoop = null
-      }
-      return
-    }
-    if (this.sawLoop === null) {
-      this.sawLoop = createWhirLoop(this.audioCtx)
-    }
-    this.sawLoop.setVolume(this.isLocked() ? 0 : sfxGain(this.settings) * SAW_LOOP_LEVEL)
   }
 
   private onScreenEnter(state: AppViewState): void {
@@ -249,18 +341,45 @@ export class AudioDirector {
         this.playVoice(flawless ? VOICE.flawless : VOICE.victory)
         break
       }
-      case 'upgrade':
-        if (Math.random() < 0.5) {
-          this.playVoice(VOICE.upgrade) // « Choose your destiny » / « Keep going », par intermittence
-        }
+      case 'upgrade': {
+        // Joue systématiquement une voix à chaque level-up, en alternant les deux clips.
+        const key = pickUpgradeVoice(this.upgradeVoiceCount++)
+        this.playVoice([key])
         break
+      }
       case 'game':
         if (RUN_START_FROM.has(this.prevScreen)) {
-          this.playVoice([voiceStage(state.stageOrder), ...VOICE.runStart])
+          this.playVoice(voiceRunStart(state.stageOrder))
         }
         break
       default:
         break
+    }
+  }
+
+  /**
+   * Voix dérivées de l'état en jeu (observer-only, sim intacte) :
+   *  - boss à ≤ 20 % PV → « finish him » (une fois par boss) ;
+   *  - PV du joueur ≤ 25 % → appel à l'aide (une fois par passage, hystérésis à 40 %).
+   */
+  private checkDerivedVoices(state: AppViewState, boss: AppViewState['enemies'][number] | undefined): void {
+    if (boss !== undefined) {
+      if (!this.bossFinishSaid && boss.maxHp > 0 && boss.hp / boss.maxHp <= 0.20) {
+        this.bossFinishSaid = true
+        this.playVoice(VOICE.bossLowHp)
+      }
+    } else {
+      this.bossFinishSaid = false
+    }
+    const p = state.players.find((pl) => pl.alive) ?? state.players[0]
+    if (p !== undefined && p.maxHp > 0) {
+      const frac = p.hp / p.maxHp
+      if (!this.playerLowSaid && frac > 0 && frac <= 0.25) {
+        this.playerLowSaid = true
+        this.playVoice(VOICE.playerLow)
+      } else if (frac > 0.4) {
+        this.playerLowSaid = false
+      }
     }
   }
 
@@ -275,7 +394,9 @@ export class AudioDirector {
     }
     this.currentKey = next
     if (next !== null && this.hasAudio(next)) {
-      const snd = this.sound.add(next, { loop: true, volume: 0 }) as unknown as SoundInstance
+      // La musique de game-over est un jingle court : une seule lecture (pas de boucle).
+      const loop = !NON_LOOPING_MUSIC.has(next)
+      const snd = this.sound.add(next, { loop, volume: 0 }) as unknown as SoundInstance
       snd.play()
       this.current = snd
     }

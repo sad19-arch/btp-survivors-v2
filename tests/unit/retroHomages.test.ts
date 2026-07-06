@@ -60,22 +60,25 @@ describe('Clin d’œil — code Konami (casque doré)', () => {
 })
 
 describe('Clin d’œil — ouvrier prisonnier', () => {
-  it('expose un prisonnier non libéré à distance du centre', () => {
+  it('expose des prisonniers non libérés à distance du centre', () => {
     const sim = new Simulation({ seed: 7, mode: 'solo' })
     const prisoners = sim.getState().prisoners
-    expect(prisoners.length).toBe(1)
-    expect(prisoners[0]?.freed).toBe(false)
+    expect(prisoners.length).toBe(5)
+    // tous non libérés au départ
+    for (const p of prisoners) {
+      expect(p.freed).toBe(false)
+    }
     // pas au centre (spawn joueur) → pas d'auto-libération au départ
-    const dx = (prisoners[0]?.x ?? 0) - 800
-    const dy = (prisoners[0]?.y ?? 0) - 600
-    expect(Math.hypot(dx, dy)).toBeGreaterThan(RESCUE.radius)
+    const cx = 5120, cy = 3840
+    for (const p of prisoners) {
+      expect(Math.hypot((p.x) - cx, (p.y) - cy)).toBeGreaterThan(RESCUE.radius)
+    }
   })
 
-  it('placement déterministe (même seed → même position)', () => {
-    const a = new Simulation({ seed: 42, mode: 'solo' }).getState().prisoners[0]
-    const b = new Simulation({ seed: 42, mode: 'solo' }).getState().prisoners[0]
-    expect(a?.x).toBe(b?.x)
-    expect(a?.y).toBe(b?.y)
+  it('placement déterministe (même seed → même positions)', () => {
+    const a = new Simulation({ seed: 42, mode: 'solo' }).getState().prisoners
+    const b = new Simulation({ seed: 42, mode: 'solo' }).getState().prisoners
+    expect(a).toEqual(b)
   })
 
   it('rescueSystem : proximité → libéré + soin borné, signale la libération', () => {
@@ -92,7 +95,7 @@ describe('Clin d’œil — ouvrier prisonnier', () => {
     rescueSystem(world, freed)
 
     expect(world.get(prisoner, 'prisoner')?.freed).toBe(true)
-    expect(world.get(player, 'health')?.hp).toBe(50 + RESCUE.heal)
+    expect(world.get(player, 'health')?.hp).toBe(50 + Math.round(PLAYER_BASE.hp * RESCUE.healFraction))
     expect(freed.length).toBe(1)
     expect(freed[0]).toEqual({ x: 110, y: 100 })
   })

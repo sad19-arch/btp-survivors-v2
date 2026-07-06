@@ -73,11 +73,15 @@ const uiRoot = document.getElementById('ui-root')
 if (uiRoot !== null) {
   // Clic souris sur un item de menu → sélection+validation via l'App.
   const overlay = new Overlay(uiRoot, (i) => app.clickItem(i))
-  // Bandeau d'évolution : résout le nom via WEAPONS ici (composition root) pour
-  // garder l'Overlay libre de toute dépendance à `src/content`.
+  // B5 — Jackpot coffre + bandeau d'évolution : résout le nom via WEAPONS (composition root)
+  // pour garder l'Overlay libre de toute dépendance à `src/content`.
+  // Le panneau jackpot (~1.5s cosmétique) s'affiche en premier ; le bandeau d'évolution
+  // suit immédiatement (l'évolution est déjà appliquée par la sim, pas de gel gameplay ici).
   app.events.addEventListener('evolved', (e) => {
     const weaponId = (e as EvolvedEvent).weaponId
-    overlay.showEvolutionBanner(WEAPONS[weaponId]?.name ?? weaponId)
+    const weaponName = WEAPONS[weaponId]?.name ?? weaponId
+    overlay.showJackpot(weaponName)
+    overlay.showEvolutionBanner(weaponName)
   })
   const tick = (): void => {
     const state = app.getStateForFrame(app.frameId)

@@ -65,6 +65,9 @@ export class KeyboardInput {
     if (edge([K.P])) {
       pressed.push('pause')
     }
+    if (edge([K.M])) {
+      pressed.push('minimap')
+    }
 
     // Bouton d'action MAINTENU (pas un front) — ex. relever un coéquipier à terre.
     const action = held([K.E])

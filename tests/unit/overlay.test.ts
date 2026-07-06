@@ -69,6 +69,40 @@ describe('Overlay (DOM)', () => {
     overlay.sync(app.getState())
     expect(root.querySelectorAll('.card').length).toBe(4)
   })
+
+  it('.card__delta présent et non vide sur une carte weapon-up', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    // Donner de nombreuses armes pour garantir weapon-up au tirage.
+    app.debugGrant({
+      weapons: [
+        { id: 'scie', level: 1 },
+        { id: 'marteau', level: 1 },
+        { id: 'pied_de_biche', level: 1 },
+        { id: 'court_circuit', level: 1 },
+        { id: 'boulons', level: 1 }
+      ]
+    })
+    // Boucler sur plusieurs level-ups jusqu'à avoir au moins une carte weapon-up visible.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      app.debugAddXp(10_000)
+      for (let t = 0; t < 10_000 && app.getState().screen !== 'upgrade'; t += 100) {
+        app.advanceTime(100)
+      }
+      if (app.getState().screen === 'upgrade') {
+        const items = app.getState().menu?.items ?? []
+        const hasWeaponUp = items.some((i) => i.kind === 'weapon-up')
+        if (hasWeaponUp) { break }
+        app.confirm()
+        for (let t = 0; t < 1000; t += 100) { app.advanceTime(100) }
+      }
+    }
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+    // Au moins une carte doit avoir .card__delta non vide.
+    const deltas = root.querySelectorAll('.card__delta')
+    expect(deltas.length).toBeGreaterThan(0)
+    expect(deltas[0]?.textContent?.trim().length ?? 0).toBeGreaterThan(0)
+  })
 })
 
 describe('Overlay — inventaire HUD (armes/passifs + niveaux)', () => {
@@ -90,6 +124,40 @@ describe('Overlay — inventaire HUD (armes/passifs + niveaux)', () => {
     expect(tiles.length).toBe(expected + expectedPassives)
     // Format : level/maxLevel (ex. "1/8") — plus 'Nv.' depuis la refonte cartes.
     expect(root.querySelector('.inv__lvl')?.textContent).toMatch(/\d+\/\d+/)
+  })
+
+  it('rangée passifs porte la classe inv__row--passives', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({
+      weapons: [{ id: 'scie', level: 2 }],
+      passives: [{ id: 'air_comprime', level: 1 }]
+    })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+    // La 2e rangée doit porter la classe inv__row--passives.
+    expect(root.querySelector('.inv__row--passives')).not.toBeNull()
+    // Les tuiles passifs portent inv__tile--sm (petites).
+    const smTiles = root.querySelectorAll('.inv__tile--sm')
+    const expectedPassives = app.getState().players[0]?.inventory.passives.length ?? 0
+    expect(smTiles.length).toBe(expectedPassives)
+  })
+
+  it('tuiles armes sont dans .inv__row sans --passives, tuiles passifs dans .inv__row--passives', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({
+      weapons: [{ id: 'marteau', level: 1 }, { id: 'scie', level: 1 }],
+      passives: [{ id: 'air_comprime', level: 2 }, { id: 'caisse_outils', level: 1 }]
+    })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+    // Rangée armes : .inv__row sans --passives
+    const weaponRow = root.querySelector('.inv__row:not(.inv__row--passives)')
+    expect(weaponRow).not.toBeNull()
+    expect(weaponRow?.querySelectorAll('.inv__tile').length).toBe(2)
+    // Rangée passifs : .inv__row--passives
+    const passiveRow = root.querySelector('.inv__row--passives')
+    expect(passiveRow).not.toBeNull()
+    expect(passiveRow?.querySelectorAll('.inv__tile--sm').length).toBe(2)
   })
 
   it('le fallback monogramme ne plante pas (pas de vraie image en happy-dom)', () => {

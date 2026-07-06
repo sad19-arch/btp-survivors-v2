@@ -2,6 +2,7 @@ import { h, clear } from './h'
 import { injectStyles } from './styles'
 import { playerColor } from '@content/players'
 import { gamepadHudModel } from './gamepadHud'
+import { Minimap } from './minimap'
 import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView } from '@/app/appState'
 
 /**
@@ -26,6 +27,16 @@ export class Overlay {
   private padSignature = ''
   /** Remplissage de la barre de PV de boss (mis à jour chaque frame ; null = pas de boss). */
   private bossBarFill: HTMLElement | null = null
+  /** Couche du panneau jackpot (coffre d'évolution ramassé) — B5. */
+  private readonly jackpotLayer: HTMLElement
+  /** Timer de fermeture automatique du panneau jackpot. */
+  private jackpotTimer: number | null = null
+  /** Mini-carte (bas-gauche) — prisonniers/boss/coffres/joueur, togglable. */
+  private readonly minimap: Minimap
+  /** Compteur de frames pour throttler la maj de la mini-carte (~toutes les 4 frames). */
+  private minimapFrame = 0
+  /** Mini-carte visible à la frame précédente — force une maj immédiate à l'apparition. */
+  private minimapWasShown = false
   /** Signature (ids+niveaux) du dernier inventaire rendu — évite de reconstruire à chaque frame. */
   private inventorySignature = ''
   private signature = ''
@@ -49,6 +60,9 @@ export class Overlay {
     this.bossLayer = h('div')
     this.inventoryLayer = h('div')
     this.padLayer = h('div', { className: 'pads' })
+    this.jackpotLayer = h('div')
+    this.minimap = new Minimap()
+    this.minimap.setVisible(false)
     root.append(
       this.hud,
       this.screenLayer,
@@ -56,7 +70,9 @@ export class Overlay {
       this.introLayer,
       this.bossLayer,
       this.inventoryLayer,
-      this.padLayer
+      this.padLayer,
+      this.jackpotLayer,
+      this.minimap.el
     )
   }
 
@@ -69,6 +85,34 @@ export class Overlay {
     this.syncBossBar(state)
     this.syncInventory(state)
     this.syncGamepads(state)
+    this.syncMinimap(state)
+  }
+
+  /**
+   * Mini-carte (bas-gauche) : visible seulement en écran `game` (hors intro) ET
+   * si `minimapVisible` (toggle M / manette). Repositionne ses marqueurs toutes
+   * les ~4 frames (throttle, comme l'inventaire/décor) — les entités bougent,
+   * mais pas besoin d'un rebuild à 60 Hz.
+   */
+  private syncMinimap(state: AppViewState): void {
+    const show = state.screen === 'game' && !state.introActive && state.minimapVisible
+    this.minimap.setVisible(show)
+    if (!show) {
+      this.minimapWasShown = false
+      return
+    }
+    // À l'apparition : maj immédiate (sinon panneau vide quelques frames). Ensuite throttle.
+    if (!this.minimapWasShown) {
+      this.minimapWasShown = true
+      this.minimapFrame = 0
+      this.minimap.update(state)
+      return
+    }
+    this.minimapFrame = (this.minimapFrame + 1) % 4
+    if (this.minimapFrame !== 0) {
+      return
+    }
+    this.minimap.update(state)
   }
 
   /**
@@ -282,6 +326,90 @@ export class Overlay {
     this.showBanner(`Évolution — ${name}`, 'banner banner--evolution')
   }
 
+  /**
+   * B5 — Panneau « jackpot » (machine à sous arcade) déclenché à la prise d'un
+   * coffre d'évolution. Affiche une roulette pixel qui défile (~1.1s) et s'arrête
+   * sur le nom de l'arme évoluée, avec un flash final.
+   *
+   * Purement cosmétique : l'évolution est déjà appliquée par la sim au moment de
+   * l'appel. Le panneau se ferme automatiquement après `totalMs` ms.
+   * Ne bloque aucune interaction, ne perturbe pas le déterminisme.
+   *
+   * @param weaponName  Nom de l'arme évoluée (résolu côté `main.ts` via `WEAPONS`).
+   * @param onDone      Callback optionnel appelé à la fermeture du panneau.
+   */
+  showJackpot(weaponName: string, onDone?: () => void): void {
+    // Annuler un éventuel jackpot en cours.
+    if (this.jackpotTimer !== null) {
+      window.clearTimeout(this.jackpotTimer)
+      this.jackpotTimer = null
+    }
+    clear(this.jackpotLayer)
+
+    // Liste d'items défilants (mots-clés chantier + nom final).
+    const reelItems = [
+      'Niveau max', 'Passif actif', 'Coffre ouvert', 'Combinaison',
+      weaponName, 'Niveau max', 'Passif actif', weaponName
+    ]
+
+    // Durées (ms).
+    const reelDurationMs = 900  // durée de défilement
+    const flashDelayMs = 950     // flash après arrêt
+    const totalMs = 1500         // durée totale avant fermeture
+
+    const itemH = 48 // hauteur d'un item en px (sync CSS .jackpot__item height)
+    const winnerIndex = reelItems.length - 1 // dernier item = le vrai nom
+
+    const reel = h('div', { className: 'jackpot__reel' })
+    reelItems.forEach((label, i) => {
+      reel.append(h('div', {
+        className: i === winnerIndex ? 'jackpot__item jackpot__item--winner' : 'jackpot__item',
+        text: label
+      }))
+    })
+
+    // Position initiale : tout en haut (item 0 visible).
+    reel.style.transform = 'translateY(0px)'
+
+    const window_ = h('div', { className: 'jackpot__window' }, reel)
+    const panel = h(
+      'div',
+      { className: 'jackpot' },
+      h('div', { className: 'jackpot__title', text: 'Evolution' }),
+      window_
+    )
+    this.jackpotLayer.append(panel)
+
+    // Animation de défilement CSS via requestAnimationFrame : décélération cubic-ease.
+    const targetY = -(winnerIndex * itemH)
+    const startTime = performance.now()
+
+    const animate = (now: number): void => {
+      const elapsed = now - startTime
+      const t = Math.min(elapsed / reelDurationMs, 1)
+      // Ease-out cubic : rapide au début, ralentit à la fin.
+      const ease = 1 - (1 - t) ** 3
+      const y = targetY * ease
+      reel.style.transform = `translateY(${Math.round(y)}px)`
+      if (t < 1) {
+        requestAnimationFrame(animate)
+      }
+    }
+    requestAnimationFrame(animate)
+
+    // Flash pixel du panneau après arrêt (DA-safe : animation CSS steps).
+    window.setTimeout(() => {
+      panel.classList.add('jackpot--flash')
+    }, flashDelayMs)
+
+    // Fermeture automatique.
+    this.jackpotTimer = window.setTimeout(() => {
+      clear(this.jackpotLayer)
+      this.jackpotTimer = null
+      onDone?.()
+    }, totalMs)
+  }
+
   private showBanner(text: string, className: string): void {
     clear(this.bannerLayer)
     this.bannerLayer.append(h('div', { className, text }))
@@ -358,17 +486,21 @@ export class Overlay {
       h(
         'div',
         { className: 'inv' },
-        h('div', { className: 'inv__row' }, ...inv.weapons.map((e) => this.invTile(e))),
-        h('div', { className: 'inv__row' }, ...inv.passives.map((e) => this.invTile(e)))
+        h('div', { className: 'inv__row' }, ...inv.weapons.map((e) => this.invTile(e, false))),
+        h('div', { className: 'inv__row inv__row--passives' }, ...inv.passives.map((e) => this.invTile(e, true)))
       )
     )
   }
 
-  /** Une tuile d'inventaire : icône (ou monogramme de secours) + pastille de niveau. */
-  private invTile(entry: InventoryEntry): HTMLElement {
+  /**
+   * Une tuile d'inventaire : icône (ou monogramme de secours) + pastille de niveau.
+   * @param small - true pour la rangée passifs (~56×56, classe `inv__tile--sm`)
+   */
+  private invTile(entry: InventoryEntry, small: boolean): HTMLElement {
+    const tileClass = small ? 'inv__tile inv__tile--sm' : 'inv__tile'
     return h(
       'div',
-      { className: 'inv__tile' },
+      { className: tileClass },
       icon(entry.id, entry.name, 'inv__icon', 'inv__img', 'inv__mono'),
       h('div', { className: 'inv__lvl', text: `${entry.level}/${entry.maxLevel ?? entry.level}` })
     )
@@ -514,6 +646,9 @@ export class Overlay {
     }
     if (item.description !== undefined && item.description !== '') {
       children.push(h('div', { className: 'card__desc', text: item.description }))
+    }
+    if (item.delta !== undefined && item.delta !== '') {
+      children.push(h('div', { className: 'card__delta', text: item.delta }))
     }
     return h(
       'div',

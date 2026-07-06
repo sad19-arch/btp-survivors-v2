@@ -322,6 +322,8 @@ export interface GameState {
   pickups: PickupState[]
   /** Ouvriers prisonniers présents (cage + sosie à libérer). */
   prisoners: PrisonerState[]
+  /** Progression des sauvetages (mini-carte + HUD). */
+  rescue: { total: number; rescued: number }
   /** Flaques de goudron actives (pour le rendu — Task 7/8). */
   hazards: HazardState[]
   pendingLevelUp: PendingLevelUp | null

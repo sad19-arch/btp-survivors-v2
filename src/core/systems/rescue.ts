@@ -37,7 +37,7 @@ export function rescueSystem(world: World, freed: Vec2[]): void {
       const dy = pos.y - ppos.y
       if (dx * dx + dy * dy <= r2) {
         prisoner.freed = true
-        health.hp = Math.min(health.maxHp, health.hp + RESCUE.heal)
+        health.hp = Math.min(health.maxHp, health.hp + Math.round(health.maxHp * RESCUE.healFraction))
         world.add(pe, 'velocity', { x: 0, y: RESCUE.fleeSpeed }) // s'enfuit en courant vers le bas
         freed.push({ x: ppos.x, y: ppos.y })
         break

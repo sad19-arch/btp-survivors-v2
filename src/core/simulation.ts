@@ -34,6 +34,7 @@ import { allPlayersDead } from './systems/gameRules'
 import { recomputePlayerStats } from './systems/playerStats'
 import { rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
+import { tickChestDirector, maybeDropEliteChest } from './systems/chestDirector'
 import { coopHpFactor, FINAL_BOSS, MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
 import { SPAWN_RAMP, spawnParamsAt, difficultyScaleAt } from '@content/spawnRamp'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
@@ -106,6 +107,10 @@ export class Simulation {
   private lootRng: Rng
   /** RNG dédié au placement du prisonnier — séparé pour NE PAS décaler la séquence de spawn/upgrade. */
   private prisonerRng: Rng
+  /** RNG dédié au directeur de coffres — séparé du RNG spawn/loot/upgrade. */
+  private chestRng: Rng
+  /** Ms accumulées depuis le dernier coffre périodique (directeur de coffres). */
+  private chestAccMs = 0
   private readonly phaseId: ConstructionPhaseId
   private phase: ConstructionPhase
   /** Id de personnage par joueur (index = playerId-1), résolu au spawn. */
@@ -123,6 +128,8 @@ export class Simulation {
   private pendingLevelUp: PendingLevelUp | null = null
   /** PV totaux des joueurs au pas précédent → détecte les dégâts (SFX, observation pure). */
   private prevHpTotal = 0
+  /** Nombre de prisonniers libérés depuis le début de la run (progression des sauvetages). */
+  private rescuedTotal = 0
   private readonly inputs = new Map<number, PlayerInput>()
   private readonly playerEntities = new Map<number, EntityId>()
   /** Index spatial des ennemis (positions courantes, post-mouvement), reconstruit chaque pas
@@ -140,6 +147,7 @@ export class Simulation {
     this.rng = new Rng(opts.seed)
     this.lootRng = new Rng((opts.seed ^ 0x1007) | 0)
     this.prisonerRng = new Rng((opts.seed ^ 0x2b1d) | 0)
+    this.chestRng = new Rng((opts.seed ^ 0x3c7a) | 0)
     this.phaseId = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
     this.phase = resolvePhase(this.phaseId)
     this.characters = opts.characters ?? []
@@ -275,6 +283,7 @@ export class Simulation {
       projectiles: this.collectProjectiles(),
       pickups: this.collectPickups(),
       prisoners: this.collectPrisoners(),
+      rescue: { total: RESCUE.count, rescued: this.rescuedTotal },
       hazards: this.collectHazards(),
       pendingLevelUp: this.pendingLevelUp
     }
@@ -359,7 +368,8 @@ export class Simulation {
       return
     }
     const radius = role === 'mid' ? MINI_BOSS.spawnRadius : FINAL_BOSS.spawnRadius
-    const bossScale = { hp: coopHpFactor(this.playerCount()), contactDamage: 1, speed: 1 }
+    const hpMult = role === 'mid' ? MINI_BOSS.hpMult : FINAL_BOSS.hpMult
+    const bossScale = { hp: coopHpFactor(this.playerCount()) * hpMult, contactDamage: 1, speed: 1 }
     spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), radius, role, bossScale)
     this.events.dispatchEvent(new BossSpawnedEvent(role))
     if (role === 'mid') {
@@ -406,19 +416,22 @@ export class Simulation {
     this.rng = new Rng(seed)
     this.lootRng = new Rng((seed ^ 0x1007) | 0)
     this.prisonerRng = new Rng((seed ^ 0x2b1d) | 0)
+    this.chestRng = new Rng((seed ^ 0x3c7a) | 0)
     this.phase = resolvePhase(this.phaseId)
     this.scene = 'game'
     this.elapsedMs = 0
     this.remainderMs = 0
     this.spawnAccMs = 0
+    this.chestAccMs = 0
     this.score = 0
     this.midBossSpawned = false
     this.finalBossSpawned = false
     this.pendingLevelUp = null
     this.inputs.clear()
     this.playerEntities.clear()
+    this.rescuedTotal = 0
     this.spawnPlayers()
-    this.spawnPrisoner()
+    this.spawnPrisoners()
     this.prevHpTotal = this.totalPlayerHp()
   }
 
@@ -431,18 +444,22 @@ export class Simulation {
     return total
   }
 
-  /** Place l'unique ouvrier prisonnier de la run (position seedée, à distance du centre). */
-  private spawnPrisoner(): void {
+  /** Place les `RESCUE.count` prisonniers, éparpillés loin dans des secteurs distincts. */
+  private spawnPrisoners(): void {
     const cx = WORLD.width / 2
     const cy = WORLD.height / 2
-    const angle = this.prisonerRng.float(0, Math.PI * 2)
-    const dist = this.prisonerRng.float(RESCUE.minDist, RESCUE.maxDist)
     const margin = 80
-    const x = Math.min(WORLD.width - margin, Math.max(margin, cx + Math.cos(angle) * dist))
-    const y = Math.min(WORLD.height - margin, Math.max(margin, cy + Math.sin(angle) * dist))
-    const e = this.world.spawn()
-    this.world.add(e, 'position', { x, y })
-    this.world.add(e, 'prisoner', { freed: false })
+    const base = this.prisonerRng.float(0, Math.PI * 2)
+    for (let i = 0; i < RESCUE.count; i++) {
+      const jitter = this.prisonerRng.float(-0.35, 0.35) // ±20°
+      const angle = base + (i * 2 * Math.PI) / RESCUE.count + jitter
+      const dist = this.prisonerRng.float(RESCUE.distMin, RESCUE.distMax)
+      const x = Math.min(WORLD.width - margin, Math.max(margin, cx + Math.cos(angle) * dist))
+      const y = Math.min(WORLD.height - margin, Math.max(margin, cy + Math.sin(angle) * dist))
+      const e = this.world.spawn()
+      this.world.add(e, 'position', { x, y })
+      this.world.add(e, 'prisoner', { freed: false })
+    }
   }
 
   private spawnPlayers(): void {
@@ -487,6 +504,9 @@ export class Simulation {
     const collected: PickupKind[] = []
     const chestCollectors: number[] = []
     this.runSpawns(dtMs)
+    // Directeur de coffres périodiques (RNG isolé, déterministe).
+    this.chestAccMs += dtMs
+    this.chestAccMs = tickChestDirector(this.world, this.chestRng, this.chestAccMs, this.playersCentroid())
     this.applyPlayerInputs()
     // Snapshot pré-mouvement : les armes voient les ennemis là où ils sont AVANT
     // `movementSystem` (le scan linéaire qu'elles remplaçaient itérait le monde à cet
@@ -502,11 +522,17 @@ export class Simulation {
     boomerangSystem(this.world, dtMs)
     this.rebuildEnemyGrid()
     collisionSystem(this.world, dtMs, this.enemyGrid)
+    const deadElitePositions = this.collectDeadElitePositions()
     const killed = reapDeadEnemies(this.world, this.lootRng)
+    // Drop coffre sur mort d'élite (RNG dédié, ne perturbe pas lootRng/rng).
+    for (const pos of deadElitePositions) {
+      maybeDropEliteChest(this.world, this.chestRng, pos)
+    }
     this.score += killed
     pickupSystem(this.world, dtMs, collected, chestCollectors)
     this.handleChestPickups(chestCollectors)
     rescueSystem(this.world, freed)
+    this.rescuedTotal += freed.length
     projectileLifetimeSystem(this.world, dtMs)
     hazardSystem(this.world, dtMs, this.enemyGrid)
     // Après collision/reap (les joueurs peuvent tomber à terre ce pas-ci), avant les
@@ -661,7 +687,7 @@ export class Simulation {
     }
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
-      const bossScale = { hp: coopHpFactor(this.playerCount()), contactDamage: 1, speed: 1 }
+      const bossScale = { hp: coopHpFactor(this.playerCount()) * MINI_BOSS.hpMult, contactDamage: 1, speed: 1 }
       spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), MINI_BOSS.spawnRadius, 'mid', bossScale)
       this.events.dispatchEvent(new BossSpawnedEvent('mid'))
     }
@@ -675,7 +701,7 @@ export class Simulation {
     }
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
-      const bossScale = { hp: coopHpFactor(this.playerCount()), contactDamage: 1, speed: 1 }
+      const bossScale = { hp: coopHpFactor(this.playerCount()) * FINAL_BOSS.hpMult, contactDamage: 1, speed: 1 }
       spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), FINAL_BOSS.spawnRadius, 'final', bossScale)
       this.events.dispatchEvent(new BossSpawnedEvent('final'))
     }
@@ -855,6 +881,24 @@ export class Simulation {
       n += 1
     }
     return n
+  }
+
+  /**
+   * Collecte les positions des ennemis élites dont les PV sont à 0 ou moins,
+   * AVANT leur reap — pour pouvoir faire apparaître des coffres à leur position
+   * de mort sans modifier la signature de `reapDeadEnemies`.
+   */
+  private collectDeadElitePositions(): Vec2[] {
+    const positions: Vec2[] = []
+    for (const e of this.world.query('enemy', 'health', 'position')) {
+      const health = this.world.get(e, 'health')
+      const enemy = this.world.get(e, 'enemy')
+      const pos = this.world.get(e, 'position')
+      if (health !== undefined && health.hp <= 0 && enemy?.isElite === true && pos !== undefined) {
+        positions.push({ x: pos.x, y: pos.y })
+      }
+    }
+    return positions
   }
 
   private playersCentroid(): Vec2 {

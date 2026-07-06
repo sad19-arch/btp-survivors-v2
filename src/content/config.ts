@@ -7,15 +7,20 @@ import type { GameMode } from '@core/types'
  */
 
 /**
- * Dimensions du monde, en pixels. Agrandi ×2 par côté (×4 la surface) pour une
- * zone explorable plus vaste (playtest « maps trop petites »). Coût per-frame
- * nul : sol/décor cuits en RenderTextures, ennemis spawnés en anneau AUTOUR du
- * joueur (indépendant de la taille) — plus d'espace pour manœuvrer, horde
- * inchangée. Reste ≤ 4096 px/côté (limite de texture GPU d'une RT unique).
+ * Dimensions du monde, en pixels. Monde ×10 la surface de la base (1024×768) :
+ * agrandi à 10240×7680 pour une zone explorable vaste (playtest « une map dix
+ * fois plus grande »). Coût per-frame CONSTANT quelle que soit la taille :
+ *  - Sol : un TileSprite GPU (O(1), 1 objet) ;
+ *  - Décalques + props : streamés par chunks de 1024 px autour de la caméra
+ *    (DecorStreamer, `src/render/decorStreamer.ts`) — seuls ~16 chunks sont
+ *    chargés simultanément, les autres sont détruits → coût borné ;
+ *  - Ennemis : spawnés en anneau AUTOUR du joueur, indépendant de la taille.
+ * Plus d'espace pour manœuvrer, horde inchangée.
+ * Multiples de 1024 (taille de chunk) pour un alignement propre des chunks.
  */
 export const WORLD = {
-  width: 3200,
-  height: 2400
+  width: 10240,
+  height: 7680
 } as const
 
 /** Stats de base d'un joueur. */
@@ -66,6 +71,26 @@ export const PICKUP_DROPS = {
   heal: { chance: 0, value: 18 },
   magnet: { chance: 0, value: 0 },
   chest: { chance: 0, value: 35 }
+} as const
+
+/**
+ * Directeur de coffres d'évolution.
+ *
+ * Contrôle l'économie de coffres : apparition périodique + drop sur mort d'élite.
+ * Plafon `maxActive` garantit que jamais plus de N coffres ne coexistent.
+ *
+ * Ces valeurs sont tunables séparément de `PICKUP_DROPS` (coffres d'évolution,
+ * pas simples bonus de loot) — la décision est déterministe via un RNG dédié.
+ */
+export const CHEST = {
+  /** Intervalle (ms) entre deux apparitions périodiques de coffre. */
+  intervalMs: 55000,
+  /** Probabilité qu'un ennemi élite lâche un coffre à sa mort (0..1). */
+  eliteDropChance: 0.35,
+  /** Nombre maximum de coffres actifs simultanément (inclut le coffre mini-boss). */
+  maxActive: 5,
+  /** Rayon d'apparition (px) autour du joueur vivant le plus proche. */
+  spawnRadius: 260
 } as const
 
 /** Nombre de joueurs selon le mode. */
@@ -156,7 +181,14 @@ export const MINI_BOSS = {
    * faire entrer À L'ÉCRAN → le combat de climax est vu et engagé, pas un spawn
    * hors-champ que le joueur fond à distance sans le remarquer.
    */
-  spawnRadius: 320
+  spawnRadius: 320,
+  /**
+   * Multiplicateur de PV du mini-boss (× la def `contremaitre`). Le mini-boss de
+   * 5:00 est volontairement CORIACE (ne plus le fondre en 2 s une fois les armes
+   * montées/évoluées) ; comme il ne bloque PAS la victoire (sa mort = coffre), un
+   * bot non-évolué qui ne le tue pas survit quand même autour.
+   */
+  hpMult: 1.0
 } as const
 
 /**
@@ -167,7 +199,13 @@ export const FINAL_BOSS = {
   /** Instant d'apparition, en ms de temps de jeu (~10:30). */
   atMs: 630_000,
   /** Rayon d'apparition du boss (px), même logique que MINI_BOSS : à l'écran. */
-  spawnRadius: 320
+  spawnRadius: 320,
+  /**
+   * Multiplicateur de PV du boss FINAL (× la def `contremaitre`). Plus bas que le
+   * mini-boss : la VICTOIRE dépend de le tuer → il doit rester battable même par
+   * un build de mi-parcours (cible sim `KITE_MIN_WIN_PCT`).
+   */
+  hpMult: 0.67
 } as const
 
 /**
@@ -175,19 +213,21 @@ export const FINAL_BOSS = {
  * via un RNG dédié (n'altère pas la séquence de spawn/upgrade). Libéré par simple
  * proximité → petit soin en récompense.
  *
- * ⚠️ ÉQUILIBRAGE : `heal > 0` viole la marge zéro du tuning « skill récompensé ».
- * `heal` est volontairement modeste ; à re-vérifier via `npm run sim` et à réduire
- * si une cible bascule (cf. balance-zero-margin).
+ * ÉQUILIBRAGE : 5 prisonniers éparpillés LOIN (`distMin`/`distMax`), chacun rend
+ * `healFraction` du maxHp. Le trajet (exposition à la horde) est le prix — les bots
+ * sim ne détournent pas vers eux, donc `sim:check` reste VERT (cf. vie-du-chantier).
  */
 export const RESCUE = {
   /** Rayon de proximité (px) pour déclencher la libération. */
   radius: 64,
-  /** PV rendus au joueur libérateur (borné à maxHp). */
-  heal: 40,
-  /** Distance min/max du spawn au centre du monde (évite l'auto-libération au départ). */
-  minDist: 360,
-  maxDist: 560,
-  /** Vitesse de fuite (px/s) de l'ouvrier libéré, qui part vers le bas hors écran. */
+  /** Fraction du maxHp du libérateur rendue en PV (remplace le soin plat). */
+  healFraction: 0.30,
+  /** Nombre de prisonniers éparpillés par run. */
+  count: 5,
+  /** Distance min/max au centre du monde (éparpillement lointain, exploration). */
+  distMin: 1600,
+  distMax: 3800,
+  /** Vitesse de fuite (px/s) de l'ouvrier libéré (part vers le bas hors écran). */
   fleeSpeed: 260
 } as const
 

@@ -302,3 +302,58 @@ describe('App — inventaire résolu (getState().players[i].inventory)', () => {
     expect(entry?.name).toBe('arme_inexistante')
   })
 })
+
+describe('App — delta lisible sur les cartes weapon-up', () => {
+  it('une carte weapon-up possédée a un champ delta non vide contenant « dégâts »', () => {
+    // Stratégie : pré-charger des armes à niv 1 (éligibles weapon-up),
+    // avancer plusieurs level-ups jusqu'à trouver au moins une carte weapon-up.
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({
+      weapons: [
+        { id: 'scie', level: 1 },
+        { id: 'marteau', level: 1 },
+        { id: 'pied_de_biche', level: 1 },
+        { id: 'court_circuit', level: 1 },
+        { id: 'boulons', level: 1 }
+      ]
+    })
+    let weaponUpItems: Array<{ kind?: string; delta?: string }> = []
+    // Faire plusieurs level-ups jusqu'à tomber sur au moins une carte weapon-up.
+    for (let attempt = 0; attempt < 5 && weaponUpItems.length === 0; attempt++) {
+      app.debugAddXp(10_000)
+      for (let t = 0; t < 10_000 && app.getState().screen !== 'upgrade'; t += 100) {
+        app.advanceTime(100)
+      }
+      if (app.getState().screen === 'upgrade') {
+        weaponUpItems = (app.getState().menu?.items ?? []).filter((i) => i.kind === 'weapon-up')
+        if (weaponUpItems.length > 0) { break }
+        // Choisir la première carte et passer à l'essai suivant.
+        app.confirm()
+        for (let t = 0; t < 1000; t += 100) { app.advanceTime(100) }
+      }
+    }
+    expect(weaponUpItems.length).toBeGreaterThan(0)
+    const hasDelta = weaponUpItems.some((i) => typeof i.delta === 'string' && i.delta !== '')
+    expect(hasDelta).toBe(true)
+    const deltaItem = weaponUpItems.find((i) => typeof i.delta === 'string' && i.delta !== '')
+    expect(deltaItem?.delta).toContain('dégâts')
+  })
+
+  it('les cartes passive-up et weapon-new ne portent pas de champ delta', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({
+      weapons: [{ id: 'scie', level: 1 }, { id: 'marteau', level: 1 }]
+    })
+    app.debugAddXp(10_000)
+    for (let t = 0; t < 10_000 && app.getState().screen !== 'upgrade'; t += 100) {
+      app.advanceTime(100)
+    }
+    const s = app.getState()
+    expect(s.screen).toBe('upgrade')
+    const items = s.menu?.items ?? []
+    const nonWeaponUp = items.filter((i) => i.kind !== 'weapon-up')
+    for (const item of nonWeaponUp) {
+      expect(item.delta).toBeUndefined()
+    }
+  })
+})

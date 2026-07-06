@@ -24,6 +24,8 @@ export interface GameSeam {
   pause(): void
   resume(): void
   restart(): void
+  /** Bascule l'affichage de la mini-carte (équivalent touche M / bouton Back manette). */
+  toggleMinimap(): void
   chooseUpgrade(index: number): void
   events: EventTarget
   // --- helpers de debug (test-only : fast-forward pour Playwright/e2e) ---
@@ -49,6 +51,30 @@ export interface GameSeam {
    * le rendu. Absente tant que la scène n'est pas montée / en mode allégé.
    */
   debugRenderInfo?(): { id: number; texture: string | null }[]
+  /**
+   * [Debug] Sonde du feedback de coup (posée par la GameScene) : compteur des chiffres
+   * de dégâts actifs et total cumulé depuis la création du pool, et cap par frame.
+   * Permet de valider en e2e que les coups déclenchent bien des chiffres flottants
+   * et que le cap borne les émissions en horde AOE. Absente en mode allégé.
+   */
+  debugFeedbackInfo?(): { active: number; spawnedTotal: number; maxPerFrame: number }
+  /**
+   * [Debug] Sonde du streaming de décor (posée par la GameScene) : nombre de chunks
+   * de décor actuellement chargés et nombre total d'objets de décor actifs.
+   * Permet de valider en e2e que le nombre d'objets reste borné quelle que soit
+   * la distance parcourue. Absente tant que la scène n'est pas montée.
+   */
+  debugDecorInfo?(): { loadedChunks: number; decorObjects: number }
+  /**
+   * [Debug/B4] Positions actuelles (monde) de chaque PNJ d'ambiance du stage courant.
+   * Absente en mode allégé ou tant que la scène n'est pas montée.
+   */
+  debugAmbientNpcs?(): { x: number; y: number }[]
+  /**
+   * [Debug/B4] Nombre de bulles de râlerie actuellement affichées (≤ MAX_AMBIENT_BUBBLES).
+   * Absente en mode allégé ou tant que la scène n'est pas montée.
+   */
+  debugActiveBubbles?(): number
 }
 
 declare global {
@@ -92,6 +118,9 @@ export function createSeam(app: App): GameSeam {
     },
     restart: () => {
       app.restart()
+    },
+    toggleMinimap: () => {
+      app.toggleMinimap()
     },
     chooseUpgrade: (index: number) => {
       app.chooseUpgrade(index)

@@ -2,7 +2,7 @@ import type { App } from '@/app/app'
 import type { Vec2 } from '@core/types'
 
 /** Action ponctuelle (front montant) émise par un périphérique. */
-export type NavAction = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' | 'pause'
+export type NavAction = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' | 'pause' | 'minimap'
 
 /** Entrées d'une frame : déplacement continu + actions ponctuelles. */
 export interface FrameInput {
@@ -48,6 +48,9 @@ export function routeInput(app: App, perPlayer: ReadonlyMap<number, FrameInput>)
         break
       case 'pause':
         app.togglePause()
+        break
+      case 'minimap':
+        app.toggleMinimap()
         break
     }
   }

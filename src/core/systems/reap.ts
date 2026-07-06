@@ -56,7 +56,7 @@ function maybeDropBonus(world: World, rng: Rng, pos: Vec2): void {
  * doivent s'effacer si personne ne les ramasse. `coffre`/`heal`/`magnet`/`chest`
  * restent persistants (pas de `lifeMs`).
  */
-function dropPickup(world: World, pos: Vec2, type: PickupKind, value: number): void {
+export function dropPickup(world: World, pos: Vec2, type: PickupKind, value: number): void {
   const gem = world.spawn()
   world.add(gem, 'position', { x: pos.x, y: pos.y })
   world.add(gem, 'pickup', type === 'xp' ? { type, value, lifeMs: PICKUP.gemLifeMs } : { type, value })

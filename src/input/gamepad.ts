@@ -2,8 +2,8 @@ import Phaser from 'phaser'
 import type { FrameInput, NavAction } from './intents'
 
 const DEADZONE = 0.35
-/** Mapping standard Xbox : A=0, B=1, LB=4, RB=5, Start=9, D-pad 12..15. */
-const BTN = { A: 0, B: 1, START: 9, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 } as const
+/** Mapping standard Xbox : A=0, B=1, LB=4, RB=5, Back/Select=8, Start=9, D-pad 12..15. */
+const BTN = { A: 0, B: 1, BACK: 8, START: 9, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 } as const
 
 /**
  * Deadzone avec re-scale (pure) : sous le seuil → 0 ; au-delà, la plage
@@ -82,6 +82,9 @@ export class GamepadInput {
     }
     if (down(BTN.START)) {
       now.add('pause')
+    }
+    if (down(BTN.BACK)) {
+      now.add('minimap')
     }
 
     // Fronts montants seulement (évite la répétition continue dans les menus).

@@ -7,7 +7,12 @@
  *  - `marteau` (aura)       : onde de choc circulaire périodique.
  *
  * Système de niveaux : buildLevels produit un tableau EXPLICITE (niveaux 1..maxLevel)
- * à partir d'une base + incrément par niveau + overrides ponctuels.
+ * à partir d'une base + incrément par niveau + overrides de JALON.
+ *
+ * Les `overrides` sont CUMULATIFS : `{ 3: { count: 2 }, 6: { count: 3 } }` signifie
+ * « 2 projectiles à partir du niveau 3, 3 à partir du niveau 6 ». Chaque jalon
+ * atteint (niveau ≤ n) reste appliqué ; pour une même clé, le jalon le plus récent
+ * gagne. (Sans ce cumul, un palier s'évaporait au niveau suivant.)
  */
 
 export type WeaponKind = 'projectile' | 'orbital' | 'aura' | 'sweep' | 'strike' | 'hazard' | 'cone'
@@ -46,6 +51,11 @@ export function buildLevels(
   maxLevel: number,
   overrides: Record<number, Partial<WeaponLevel>> = {}
 ): WeaponLevel[] {
+  // Niveaux de jalon, triés croissant : on applique TOUS les jalons atteints
+  // (≤ n) dans l'ordre, donc le dernier jalon de chaque clé persiste.
+  const milestoneLevels = Object.keys(overrides)
+    .map(Number)
+    .sort((a, b) => a - b)
   const out: WeaponLevel[] = []
   for (let n = 1; n <= maxLevel; n++) {
     const row: WeaponLevel = { ...base }
@@ -56,8 +66,11 @@ export function buildLevels(
         rowRecord[k] = (baseRecord[k] ?? 0) + v * (n - 1)
       }
     }
-    const ov = overrides[n]
-    if (ov !== undefined) {Object.assign(row, ov)}
+    for (const lvl of milestoneLevels) {
+      if (lvl > n) {break}
+      const ov = overrides[lvl]
+      if (ov !== undefined) {Object.assign(row, ov)}
+    }
     out.push(row)
   }
   return out
@@ -183,15 +196,15 @@ export const WEAPONS: Record<string, WeaponDef> = {
     levels: [{ damage: 45, cooldownMs: 380, count: 6, area: 80, pierce: 0 }]
   },
   coulee_bitume: { id: 'coulee_bitume', name: 'Coulée de bitume', description: 'Grandes flaques de bitume brûlant qui durent longtemps.', kind: 'hazard', maxLevel: 1,
-    levels: [{ damage: 14, cooldownMs: 1500, count: 2, area: 96, pierce: 99, tickMs: 300, projectileLifeMs: 4200 }] },
+    levels: [{ damage: 28, cooldownMs: 1500, count: 2, area: 96, pierce: 99, tickMs: 300, projectileLifeMs: 4200 }] },
   tempete_boulons: { id: 'tempete_boulons', name: 'Tempête de boulons', description: 'Grêle de boulons ricochant dans tous les sens.', kind: 'projectile', maxLevel: 1,
-    levels: [{ damage: 26, cooldownMs: 360, count: 3, area: 0, pierce: 0, bounces: 6, projectileSpeed: 560, projectileLifeMs: 1900 }] },
+    levels: [{ damage: 40, cooldownMs: 360, count: 3, area: 0, pierce: 0, bounces: 6, projectileSpeed: 560, projectileLifeMs: 1900 }] },
   cle_choc: { id: 'cle_choc', name: 'Clé à choc', description: 'Double boomerang de clés à choc qui transperce les ennemis.', kind: 'projectile', maxLevel: 1,
-    levels: [{ damage: 40, cooldownMs: 650, count: 2, area: 0, pierce: 5, projectileSpeed: 440, boomerangOutMs: 520, projectileLifeMs: 3000 }] },
+    levels: [{ damage: 68, cooldownMs: 650, count: 2, area: 0, pierce: 5, projectileSpeed: 440, boomerangOutMs: 520, projectileLifeMs: 3000 }] },
   canon_mousse: { id: 'canon_mousse', name: 'Canon à mousse', description: 'Jet de mousse puissant qui immobilise les ennemis.', kind: 'cone', maxLevel: 1,
-    levels: [{ damage: 18, cooldownMs: 620, count: 1, area: 190, pierce: 99, slowMult: 0.35, slowMs: 2200 }] },
+    levels: [{ damage: 40, cooldownMs: 620, count: 1, area: 190, pierce: 99, slowMult: 0.35, slowMs: 2200 }] },
   transpalette: { id: 'transpalette', name: 'Transpallette automatisée', description: 'Transpalette géant qui écrase tout sur son passage.', kind: 'projectile', maxLevel: 1,
-    levels: [{ damage: 60, cooldownMs: 1100, count: 1, area: 0, pierce: 99, projectileSpeed: 300, projectileRadius: 40, projectileLifeMs: 3200 }] }
+    levels: [{ damage: 110, cooldownMs: 1100, count: 1, area: 0, pierce: 99, projectileSpeed: 300, projectileRadius: 40, projectileLifeMs: 3200 }] }
 }
 
 const FALLBACK_LEVEL: WeaponLevel = { damage: 0, cooldownMs: 1000, count: 1, area: 0, pierce: 0 }

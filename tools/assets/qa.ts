@@ -9,12 +9,42 @@
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { PNG } from 'pngjs'
 import { parsePng } from './png'
 
 const PUBLIC_DIR = 'public'
 
 /** Fichiers de référence tolérés hors conventions de nommage. */
 const REFERENCE_FILES = new Set(['player_j1.png'])
+
+/**
+ * Catégories (= dossier parent) dont un sprite DOIT être détouré (fond transparent).
+ * Un fond opaque plein (4 coins pleins = « boîte ») y est un DÉFAUT de détourage
+ * que le simple test `hasAlpha` ne détecte pas (une boîte a un canal alpha à 255).
+ * Exclus : `ground` (tuiles opaques par nature), `decals` (marques au sol à bord
+ * doux), `vfx` (glows semi-transparents voulus), `ui` (panneaux opaques voulus).
+ */
+const CUTOUT_CATEGORIES = new Set([
+  'props', 'structures', 'landmarks', 'npc', 'enemies', 'boss', 'pickups', 'weapons', 'player'
+])
+
+/** Forme minimale d'un PNG décodé (pngjs ne fournit pas de types résolvables ici). */
+interface DecodedPng { width: number; height: number; data: Uint8Array }
+
+/** Compte les coins (0..4) dont l'alpha est opaque (>200). Décode les pixels via pngjs. */
+function opaqueCorners(bytes: Uint8Array): number {
+  const sync = (PNG as unknown as { sync: { read(b: Buffer): DecodedPng } }).sync
+  const png = sync.read(Buffer.from(bytes))
+  const W = png.width
+  const H = png.height
+  const data = png.data
+  const corners: Array<[number, number]> = [[0, 0], [W - 1, 0], [0, H - 1], [W - 1, H - 1]]
+  let n = 0
+  for (const [x, y] of corners) {
+    if ((data[(y * W + x) * 4 + 3] ?? 0) > 200) { n += 1 }
+  }
+  return n
+}
 
 /** Conventions de nommage (manifest §6) → catégorie. */
 const NAME_PATTERNS: { re: RegExp; kind: string; needsAlpha: boolean }[] = [
@@ -68,8 +98,10 @@ function check(path: string): Report {
   const warnings: string[] = []
 
   let info
+  let bytes: Uint8Array
   try {
-    info = parsePng(new Uint8Array(readFileSync(path)))
+    bytes = new Uint8Array(readFileSync(path))
+    info = parsePng(bytes)
   } catch {
     return { file, errors: ['fichier illisible ou non-PNG'], warnings }
   }
@@ -91,6 +123,23 @@ function check(path: string): Report {
     const n = Number.parseInt(sizeTok[1] ?? '0', 10)
     if (n > 0 && (info.width % n !== 0 || info.height % n !== 0)) {
       warnings.push(`dimensions ${info.width}×${info.height} non multiples de ${n}`)
+    }
+  }
+
+  // Détourage : un asset « sprite » (perso/prop/engin/pickup/arme) ne doit PAS
+  // avoir un fond opaque (4 coins pleins = boîte non détourée). Attrape le bug
+  // « mal détouré » invisible au simple test `hasAlpha`.
+  const segs = file.split('/')
+  const category = segs.length >= 2
+    ? (segs[segs.length - 2] ?? '')
+    : (base.startsWith('player_') ? 'player' : '')
+  if (CUTOUT_CATEGORIES.has(category)) {
+    try {
+      if (opaqueCorners(bytes) >= 4) {
+        errors.push('fond opaque (asset « en boîte » — détourage manquant)')
+      }
+    } catch {
+      // Décodage impossible : l'en-tête a déjà été validé, on n'échoue pas dessus.
     }
   }
 

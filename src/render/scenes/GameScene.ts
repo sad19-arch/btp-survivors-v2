@@ -7,10 +7,14 @@ import { routeInput, type FrameInput } from '@input/intents'
 import { buildPlayerInputs } from '@input/players'
 import { INTRO, WORLD, CONE_HALF_ANGLE } from '@content/config'
 import { createGround } from '@render/ground'
-import { createProps, createLandmark, createStructures, phaseSalt } from '@render/props'
+import { createLandmark, createStructures, phaseSalt, resolvePlacement, type ExclusionCircle } from '@render/props'
+import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { dirRow, walkFrame, idleFrame } from '@render/sprites'
+import { ambientOffset, shouldBubble, pickPhrase } from '@render/ambientNpc'
 import { stageRender, type StageRender, FINAL_BOSS_SKIN } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
+import { computeHitEvents } from '@render/hitDiff'
+import { hitFlashUntil, DamageNumberPool } from '@render/damageNumbers'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
 import type { PlayerState, PrisonerState, PickupKind } from '@core/types'
@@ -62,8 +66,9 @@ const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; f
   tempete_boulons: { key: 'proj_boulons', scale: 0.55, spin: false, faceVel: true },
   cle_molette: { key: 'proj_cle', scale: 0.7, spin: true, faceVel: false },
   cle_choc: { key: 'proj_cle', scale: 0.7, spin: true, faceVel: false },
-  brouette: { key: 'proj_brouette', scale: 1.0, spin: false, faceVel: true },
-  transpalette: { key: 'proj_brouette', scale: 1.2, spin: false, faceVel: true },
+  // B3 : réutilise l'icône de carte brouette (plus reconnaissable qu'un bloc de granit).
+  brouette: { key: 'icon_brouette', scale: 0.45, spin: false, faceVel: true },
+  transpalette: { key: 'icon_brouette', scale: 0.55, spin: false, faceVel: true },
 }
 /**
  * Sprites de pickups par type. Typé `Record<PickupKind, …>` : le compilateur
@@ -72,7 +77,8 @@ const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; f
  * `coffre` qui rendait le coffre d'évolution invisible, cf. playtest).
  */
 const PICKUP_SPRITE: Record<PickupKind, { key: string; scale: number }> = {
-  xp: { key: 'pickup_xp', scale: 0.5 },
+  // B4 : gemmes plus grosses (visuel seul, hitbox core inchangée).
+  xp: { key: 'pickup_xp', scale: 0.8 },
   heal: { key: 'pickup_health', scale: 0.55 },
   magnet: { key: 'pickup_magnet', scale: 0.55 },
   chest: { key: 'pickup_crate', scale: 0.6 },
@@ -99,6 +105,18 @@ const PICKUP_COLOR = 0x3ddc84
 const PICKUP_RADIUS = 5
 /** Clamp du delta réel pour éviter la spirale de la mort après un gel d'onglet. */
 const MAX_FRAME_MS = 100
+/**
+ * Nombre maximum de chiffres de dégâts + pops d'impact ALLOUANTS émis par frame.
+ * Au-delà de ce plafond, les émissions sont silencieusement ignorées (le hit-flash
+ * tint, lui, n'est PAS capé — il n'alloue rien).
+ * Valeur choisie : 16 — visible en masse lors d'AOE normale, mais 200 chiffres
+ * superposés en horde ne serait que du bruit illisible + un pic d'allocations.
+ */
+export const FEEDBACK_MAX_PER_FRAME = 16
+/** Délai (ms) entre deux bulles pour le MÊME PNJ d'ambiance. */
+const AMBIENT_BUBBLE_COOLDOWN_MS = 4000
+/** Nombre maximum de bulles d'ambiance simultanées. */
+const MAX_AMBIENT_BUBBLES = 2
 
 /** Sprite de personnage : feuille pixel-art si l'asset existe, sinon cercle de repli. */
 type CharSprite = Phaser.GameObjects.Sprite | Phaser.GameObjects.Arc
@@ -148,8 +166,62 @@ export class GameScene extends Phaser.Scene {
   /** Sprite de flaque de goudron par hazard (A2 lot 3) : créé à l'apparition, détruit à l'expiration. */
   private readonly hazardSprites = new Map<number, Phaser.GameObjects.Image>()
   private readonly enemySprites = new Map<number, CharSprite>()
+  /**
+   * PV de l'ennemi à la frame précédente — permet de détecter les dégâts reçus
+   * frame-par-frame (diff HP) pour déclencher flash + chiffres + pop d'impact.
+   * Vidé dans `resetRunState`. Ids disparus nettoyés dans la boucle de release.
+   */
+  private readonly prevEnemyHp = new Map<number, number>()
+  /**
+   * Instant (this.time.now) jusqu'auquel l'ennemi doit rester en teinte flash blanc.
+   * ~60ms par coup — feedback court et non intrusif (DA 16-bit).
+   * Vidé dans `resetRunState`.
+   */
+  private readonly enemyFlashUntil = new Map<number, number>()
+  /**
+   * Pool de chiffres de dégâts flottants (poolé — pas de new Text par hit).
+   * Initialisé dans `create()`, instance fraîche par scène.
+   */
+  private damageNumbers!: DamageNumberPool
+  /**
+   * Streamer de décor par chunks (décalques + props) : génère le décor autour
+   * de la caméra et détruit celui qui s'éloigne. Coût constant quelle que soit
+   * la taille du monde (~16 chunks actifs à la fois). Purement visuel.
+   * Initialisé dans `create()`, nettoyé dans `resetRunState()`.
+   */
+  private decorStreamer!: DecorStreamer
+  /** Compteur de frames depuis le dernier update du DecorStreamer (throttle toutes les 4 frames). */
+  private decorStreamerFrame = 0
   private readonly projectileSprites = new Map<number, CharSprite>()
   private readonly pickupSprites = new Map<number, CharSprite>()
+  /**
+   * Ensembles « vus cette frame » réutilisés (culling des sprites orphelins).
+   * Alloués une fois et vidés (`.clear()`) à chaque frame plutôt que recréés,
+   * pour éviter ~5 allocations/frame (240+ objets/s en horde → pauses GC).
+   */
+  private readonly seenHazScratch = new Set<number>()
+  private readonly seenEnemyScratch = new Set<number>()
+  private readonly seenProjScratch = new Set<number>()
+  private readonly seenPickupScratch = new Set<number>()
+  private readonly seenPrisonerScratch = new Set<number>()
+  /**
+   * B4 — Epoch du dernier scintillement pixel par gemme XP (id → index de période).
+   * Permet de ne spawner qu'un seul carré par période (~900ms) quelle que soit la cadence.
+   * Nettoyé en même temps que `pickupSprites` (id disparu = supprimé des deux).
+   */
+  private readonly xpSparkleEpoch = new Map<number, number>()
+  /**
+   * B5 — Epoch de scintillement des coffres d'évolution (pixel-pop jaune périodique).
+   * Même principe que xpSparkleEpoch : un seul pixel-pop par période (~700ms).
+   */
+  private readonly chestSparkleEpoch = new Map<number, number>()
+  /**
+   * État d'animation par coffre (id → { spawnedAt, opened }) : pop-in avec rebond
+   * puis ouverture du couvercle (swap de texture vers `pickup_crate_open`).
+   */
+  private readonly chestAnim = new Map<number, { spawnedAt: number; opened: boolean }>()
+  /** Aura dorée pulsée derrière chaque coffre (id → disque). Détruite à la collecte. */
+  private readonly chestAura = new Map<number, Phaser.GameObjects.Arc>()
   /**
    * Étiquette « JN » + chevron au-dessus de chaque joueur humain, pour le repérer
    * dans une nuée d'ennemis (playtest). Un couple texte+chevron par joueur, couleur
@@ -183,8 +255,21 @@ export class GameScene extends Phaser.Scene {
   /** Sprites du prisonnier : cage + ouvrier barbu, par id d'entité. */
   private readonly prisonerCages = new Map<number, Phaser.GameObjects.Image | Phaser.GameObjects.Arc>()
   private readonly prisonerWorkers = new Map<number, CharSprite>()
-  /** PNJ d'ambiance non-hostile du stage (idle), ou null si absent. */
-  private ambientSprite: Phaser.GameObjects.Sprite | null = null
+  /** PNJ(s) d'ambiance non-hostiles du stage — tableau (B1+). */
+  private ambientSprites: Array<{
+    sprite: Phaser.GameObjects.Sprite
+    anchor: { x: number; y: number }
+    seed: number
+    behavior: 'work' | 'patrol'
+    framePeriodMs: number
+  }> = []
+  /**
+   * B4 — Cooldown de bulle par PNJ (index → dernier timestamp ms).
+   * Empêche le spam de bulles sur un seul PNJ.
+   */
+  private readonly ambientBubbleCooldowns = new Map<number, number>()
+  /** B4 — Set des conteneurs bulle actifs (borné à MAX_AMBIENT_BUBBLES). */
+  private readonly ambientBubbles = new Set<Phaser.GameObjects.Container>()
   /**
    * VFX des armes à impulsion (marteau/pied-de-biche/court-circuit), déclenché
    * par l'événement d'aura de la sim. Une forme dédiée par `kind` — pas de
@@ -200,7 +285,13 @@ export class GameScene extends Phaser.Scene {
       return
     }
     if (p.kind === 'strike') {
-      this.spawnStrikeBolt(p.x, p.y, p.radius)
+      // Récupère la position du joueur 1 (en vie de préférence) pour tracer
+      // l'arc électrique JOUEUR → CIBLE plutôt qu'un éclair localisé sur l'ennemi.
+      const st = this.app.getStateForFrame(this.app.frameId)
+      const shooter = st.players.find((pl) => pl.alive) ?? st.players[0]
+      const fromX = shooter?.x ?? p.x
+      const fromY = shooter?.y ?? p.y
+      this.spawnStrikeBolt(fromX, fromY, p.x, p.y)
       return
     }
     if (p.kind === 'cone') {
@@ -363,48 +454,65 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Coup du court-circuit : éclair en zigzag qui tombe sur la cible + 2-3 fourches
-   * secondaires + flash d'impact scale-pop. Tracé double (cœur blanc + halo cyan)
-   * pour un rendu « électrique » pixel-art. Le jitter latéral utilise Math.random()
-   * — cosmétique pur, rendu uniquement, sans effet sur l'état de sim (déterminisme préservé).
+   * Arc électrique (court-circuit) : tracé en zigzag brisé du JOUEUR (`fromX/fromY`)
+   * jusqu'à la CIBLE (`toX/toY`) + 2 fourches secondaires + flash d'impact.
+   * Tracé double (halo cyan épais + cœur blanc fin) — rendu « foudre » pixel-art.
+   * Durée ~140 ms. Le jitter latéral utilise Math.random() — cosmétique pur, rendu
+   * uniquement, sans effet sur l'état de sim (déterminisme préservé).
+   *
+   * Remplace l'ancien éclair localisé sur l'ennemi : l'arc JOUEUR → ENNEMI rend
+   * la décharge lisible d'un coup d'œil (on voit clairement qui est frappé et par quoi).
    */
-  private spawnStrikeBolt(x: number, y: number, radius: number): void {
-    const segments = 6
-    const startY = y - radius * 0.9
+  private spawnStrikeBolt(fromX: number, fromY: number, toX: number, toY: number): void {
+    const segments = 7
+    const dx = toX - fromX
+    const dy = toY - fromY
+    const len = Math.sqrt(dx * dx + dy * dy) || 1
+    // Vecteur perpendiculaire normalisé (pour le jitter latéral).
+    const perpX = -dy / len
+    const perpY = dx / len
+    // Amplitude du jitter latéral : ~12 % de la longueur de l'arc, plafonné à 60px.
+    const jitterAmp = Math.min(len * 0.12, 60)
 
-    // Génère les points du zigzag principal.
-    const buildZigzag = (jitterScale: number): { x: number; y: number }[] => {
-      const pts: { x: number; y: number }[] = [{ x, y: startY }]
+    // Génère les points du zigzag principal (interpolation linéaire + jitter perp).
+    const buildZigzag = (scale: number): { x: number; y: number }[] => {
+      const pts: { x: number; y: number }[] = [{ x: fromX, y: fromY }]
       for (let i = 1; i < segments; i++) {
         const t = i / segments
-        const jitter = (Math.random() * 2 - 1) * radius * jitterScale
-        pts.push({ x: x + jitter, y: startY + radius * 0.9 * t })
+        const jitter = (Math.random() * 2 - 1) * jitterAmp * scale
+        pts.push({
+          x: fromX + dx * t + perpX * jitter,
+          y: fromY + dy * t + perpY * jitter
+        })
       }
-      pts.push({ x, y })
+      pts.push({ x: toX, y: toY })
       return pts
     }
 
     const drawPath = (g: Phaser.GameObjects.Graphics, pts: { x: number; y: number }[]): void => {
+      if (pts.length === 0) {
+        return
+      }
       g.beginPath()
-      g.moveTo(pts[0]?.x ?? x, pts[0]?.y ?? startY)
+      g.moveTo(pts[0]?.x ?? fromX, pts[0]?.y ?? fromY)
       for (let i = 1; i < pts.length; i++) {
-        g.lineTo(pts[i]?.x ?? x, pts[i]?.y ?? y)
+        g.lineTo(pts[i]?.x ?? toX, pts[i]?.y ?? toY)
       }
       g.strokePath()
     }
 
-    const mainPts = buildZigzag(0.18)
+    const mainPts = buildZigzag(1)
 
     // Éclair principal : halo cyan épais + cœur blanc fin.
     const gMain = this.add.graphics().setDepth(5)
-    gMain.lineStyle(6, PALETTE_HEX.cyanAccent, 0.9)
+    gMain.lineStyle(5, PALETTE_HEX.cyanAccent, 0.92)
     drawPath(gMain, mainPts)
     gMain.lineStyle(2, PALETTE_HEX.blanc, 1)
     drawPath(gMain, mainPts)
     this.tweens.add({
       targets: gMain,
       alpha: 0,
-      duration: 180,
+      duration: 140,
       ease: 'Quad.easeOut',
       onComplete: () => gMain.destroy()
     })
@@ -417,15 +525,15 @@ export class GameScene extends Phaser.Scene {
       if (forkPt === undefined) {
         continue
       }
-      const forkAngle = Math.PI * (0.3 + Math.random() * 0.4) * (Math.random() < 0.5 ? 1 : -1)
-      const forkLen = radius * (0.25 + Math.random() * 0.2)
+      const forkAngle = Math.atan2(dy, dx) + Math.PI * (0.25 + Math.random() * 0.5) * (Math.random() < 0.5 ? 1 : -1)
+      const forkLen = len * (0.12 + Math.random() * 0.12)
       const gFork = this.add.graphics().setDepth(5)
-      gFork.lineStyle(3, PALETTE_HEX.cyanAccent, 0.75)
+      gFork.lineStyle(3, PALETTE_HEX.cyanAccent, 0.7)
       gFork.beginPath()
       gFork.moveTo(forkPt.x, forkPt.y)
       gFork.lineTo(forkPt.x + Math.cos(forkAngle) * forkLen, forkPt.y + Math.sin(forkAngle) * forkLen)
       gFork.strokePath()
-      gFork.lineStyle(1, PALETTE_HEX.blanc, 0.7)
+      gFork.lineStyle(1, PALETTE_HEX.blanc, 0.65)
       gFork.beginPath()
       gFork.moveTo(forkPt.x, forkPt.y)
       gFork.lineTo(forkPt.x + Math.cos(forkAngle) * forkLen, forkPt.y + Math.sin(forkAngle) * forkLen)
@@ -433,15 +541,15 @@ export class GameScene extends Phaser.Scene {
       this.tweens.add({
         targets: gFork,
         alpha: 0,
-        duration: 130,
+        duration: 110,
         ease: 'Quad.easeOut',
         onComplete: () => gFork.destroy()
       })
     }
 
-    // Flash d'impact scale-pop (plus gros que le flash standard).
-    this.spawnPixelPop(x, y, PALETTE_HEX.cyanAccent, 16, 200)
-    this.spawnFlash(x, y)
+    // Flash d'impact à la cible (scale-pop cyan + flash blanc).
+    this.spawnPixelPop(toX, toY, PALETTE_HEX.cyanAccent, 16, 200)
+    this.spawnFlash(toX, toY)
   }
   /** Libération d'un prisonnier : étincelles + bulle « Merci ! » au-dessus de l'ouvrier. */
   private readonly onPrisonerFreed = (e: Event): void => {
@@ -511,6 +619,10 @@ export class GameScene extends Phaser.Scene {
         this.load.image(s.key, s.file)
       }
     }
+    // Colonne intérieure (phases 05→10) — texture de la grille streamée.
+    if (this.stage.interior !== undefined) {
+      this.load.image(this.stage.interior.columnKey, this.stage.interior.columnFile)
+    }
     // Feuilles de personnages 4×4 (lourdes) — sautées en mode allégé (→ cercles).
     if (!this.lite) {
       const boss = this.stage.boss
@@ -542,9 +654,8 @@ export class GameScene extends Phaser.Scene {
       this.load.spritesheet('player_idle_gold', 'player_idle_gold.png', { frameWidth: 192, frameHeight: 192 })
       // Ouvrier prisonnier (sosie barbu du héros) — même gabarit que le joueur (192).
       this.load.spritesheet('prisoner', 'stage01/npc/prisoner_walk.png', { frameWidth: 192, frameHeight: 192 })
-      // PNJ d'ambiance non-hostile du stage (feuille perso).
-      if (this.stage.ambient !== undefined) {
-        const a = this.stage.ambient
+      // PNJ(s) d'ambiance non-hostiles du stage (feuilles perso).
+      for (const a of this.stage.ambient ?? []) {
         this.load.spritesheet(a.key, a.file, { frameWidth: a.frame, frameHeight: a.frame })
       }
     }
@@ -554,11 +665,15 @@ export class GameScene extends Phaser.Scene {
     this.load.image('proj_boulons', 'stage01/weapons/proj_boulons.png')
     this.load.image('proj_cle', 'stage01/weapons/proj_cle.png')
     this.load.image('proj_brouette', 'stage01/weapons/proj_brouette.png')
+    // B3 : icône de carte brouette réutilisée comme sprite de projectile (plus lisible).
+    this.load.image('icon_brouette', 'stage01/ui/icon_brouette_64.png')
     this.load.image('vfx_goudron', 'stage01/vfx/vfx_goudron.png')
     this.load.image('pickup_xp', 'stage01/pickups/xp.png')
     this.load.image('pickup_health', 'stage01/pickups/health.png')
     this.load.image('pickup_magnet', 'stage01/pickups/magnet.png')
     this.load.image('pickup_crate', 'stage01/pickups/crate.png')
+    // État « entrouvert » du coffre (animation d'ouverture au spawn).
+    this.load.image('pickup_crate_open', 'stage01/pickups/crate_open.png')
     this.load.image('vfx_impact', 'stage01/vfx/impact.png')
     this.load.image('vfx_sparkle', 'stage01/vfx/sparkle.png')
     this.load.image('vfx_levelup', 'stage01/vfx/levelup.png')
@@ -802,6 +917,11 @@ export class GameScene extends Phaser.Scene {
     this.enemySprites.clear()
     this.projectileSprites.clear()
     this.pickupSprites.clear()
+    this.xpSparkleEpoch.clear()
+    this.chestSparkleEpoch.clear()
+    this.chestAnim.clear()
+    this.chestAura.forEach((a) => a.destroy())
+    this.chestAura.clear()
     this.playerLabels.forEach((l) => {
       l.text.destroy()
       l.chevron.destroy()
@@ -814,11 +934,24 @@ export class GameScene extends Phaser.Scene {
     this.prevLevel.clear()
     this.prevHp.clear()
     this.damageFlashUntil.clear()
+    this.prevEnemyHp.clear()
+    this.enemyFlashUntil.clear()
     this.lastMoveMs.clear()
     this.following = false
     this.introStartMs = -1
     this.introDone = false
-    this.ambientSprite = null
+    this.ambientSprites = []
+    this.ambientBubbleCooldowns.clear()
+    // Nettoie les bulles actives (pas de fuite entre runs).
+    for (const bub of this.ambientBubbles) {
+      bub.destroy()
+    }
+    this.ambientBubbles.clear()
+    this.decorStreamerFrame = 0
+    // Nettoie les chunks streamés (si le streamer est déjà initialisé — pas au 1er appel).
+    if (this.decorStreamer !== undefined) {
+      this.decorStreamer.clear()
+    }
   }
 
   create(): void {
@@ -827,47 +960,161 @@ export class GameScene extends Phaser.Scene {
     // Nouvelle instance à chaque (re)création de scène — les anciens sprites poolés
     // sont détruits par Phaser au shutdown, un pool réutilisé les rendrait fantômes.
     this.pool = new SpritePool(this)
-    // Sol : base tuilée seedée + décalques épars (rendu pur, aucune logique).
+    // Pool de chiffres de dégâts : instance fraîche par scene (les Text Phaser sont
+    // détruits au shutdown ; un pool réutilisé les rendrait fantômes).
+    this.damageNumbers = new DamageNumberPool(this)
+    // Sol : base tuilée (TileSprite, O(1)) + streamer de décalques/props par chunks.
     // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
     const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
-    createGround(
-      this,
-      WORLD.width,
-      WORLD.height,
-      { tileKeys: this.stage.ground.map((g) => g.key), decalKeys: this.stage.decals.map((d) => d.key) },
-      stageSeed
-    )
-    // Props décoratifs dispersés (au-dessus du sol, sous les entités).
-    createProps(
-      this,
-      WORLD.width,
-      WORLD.height,
-      this.stage.props.map((p) => ({ key: p.key, scale: p.scale, count: p.count })),
-      stageSeed
-    )
+    // Base du sol (TileSprite seul — décalques gérés par le DecorStreamer).
+    const groundAssets: { tileKeys: string[]; baseTileIndex?: number } = {
+      tileKeys: this.stage.ground.map((g) => g.key)
+    }
+    if (this.stage.baseTileIndex !== undefined) {
+      groundAssets.baseTileIndex = this.stage.baseTileIndex
+    }
+    createGround(this, WORLD.width, WORLD.height, groundAssets)
+    // Streamer de décor : décalques + props streamés autour de la caméra par chunks de
+    // DEFAULT_CHUNK_SIZE px. Coût constant (~16 chunks actifs) quel que soit le monde.
+    const streamerOpts: import('@render/decorStreamer').DecorStreamerOpts = {
+      chunkSize: DEFAULT_CHUNK_SIZE,
+      seed: stageSeed,
+      decals: this.stage.decals.map((d) => d.key),
+      props: this.stage.props.map((p) => ({ key: p.key, scale: p.scale, count: p.count }))
+    }
+    if (this.stage.zones !== undefined) {
+      streamerOpts.zones = this.stage.zones
+    }
+    if (this.stage.decalDensityMultiplier !== undefined) {
+      streamerOpts.decalDensityMultiplier = this.stage.decalDensityMultiplier
+    }
+    // NB : les props ne sont plus cuits statiquement — ils sont streamés par le DecorStreamer.
+    // Le streamer est construit PLUS BAS, une fois les structures/landmark/PNJ posés,
+    // pour leur passer leurs positions comme ANCRES d'anti-chevauchement (les props
+    // streamés ne se poseront plus sur les engins/héros).
+
+    // ── Anti-chevauchement déterministe ────────────────────────────────────────
+    // Ordre : centre (fixe) → prisonniers (fixes) → structures → landmark → PNJ.
+    // Chaque couche évite les précédentes et accumule ses positions dans `placed`
+    // pour que les suivantes les ignorent aussi.
+    //
+    // Rayon du centre : CENTER_CLEAR interne de props.ts (260 px) ;
+    // on passe ici le rayon d'affichage large (300 px) pour conserver la marge
+    // de lisibilité du spawn.
+    const exclusions: ExclusionCircle[] = [
+      { x: WORLD.width / 2, y: WORLD.height / 2, r: 300 }
+    ]
+    // Prisonniers : lus depuis l'état sim (peuplés avant create() via sim.reset()).
+    // Rayon 80 px = cage (~40 px) + marge de lisibilité (40 px).
+    for (const pr of this.app.getState().prisoners) {
+      exclusions.push({ x: pr.x, y: pr.y, r: 80 })
+    }
+    // Liste mutable dans laquelle chaque fonction AJOUTE les positions posées.
+    const placed: ExclusionCircle[] = []
+
     // Grandes structures qui remplissent l'arène (l'étape de chantier partout, hors centre).
+    const stageGeometry = this.stage.geometry
     if (this.stage.structures !== undefined) {
       createStructures(
         this,
         WORLD.width,
         WORLD.height,
         this.stage.structures.map((s) => ({ key: s.key, scale: s.scale, count: s.count, band: s.band })),
-        stageSeed
+        stageSeed,
+        stageGeometry,
+        exclusions,
+        placed
       )
     }
     // Landmark HERO de la phase — grand, en périphérie, décor.
     const lm = this.stage.landmark
     if (lm !== undefined) {
-      createLandmark(this, WORLD.width, WORLD.height, { key: lm.key, scale: lm.scale, count: lm.count }, stageSeed)
+      createLandmark(
+        this, WORLD.width, WORLD.height,
+        { key: lm.key, scale: lm.scale, count: lm.count },
+        stageSeed, stageGeometry,
+        exclusions, placed
+      )
     }
-    // PNJ d'ambiance non-hostile (geste métier) à un spot seedé hors du centre — « vie » du chantier.
-    const amb = this.stage.ambient
-    if (amb !== undefined && this.textures.exists(amb.key)) {
-      const ang = (((stageSeed * 2654435761) >>> 0) % 1000) / 1000 * Math.PI * 2
-      const ax = WORLD.width / 2 + Math.cos(ang) * 470
-      const ay = WORLD.height / 2 + Math.sin(ang) * 470
-      this.ambientSprite = this.add.sprite(ax, ay, amb.key).setScale(amb.scale).setDepth(1)
+    // PNJ(s) d'ambiance non-hostiles (geste métier) — un sprite par entrée, placement seedé
+    // hors centre. Chaque PNJ reçoit un seed individuel dérivé de stageSeed + index, ce qui
+    // garantit un placement déterministe et hors-chevauchement même si le tableau grandit (B5+).
+    // T4 : geometry.ambientAngle cible le PREMIER PNJ (chef de file) ; les suivants tournent
+    // autour d'angles dérivés (+ 40° par PNJ) pour rester dans le même secteur.
+    const AMB_DIST_MIN = 420
+    const AMB_DIST_MAX = 520
+    for (const [npcIdx, amb] of (this.stage.ambient ?? []).entries()) {
+      if (!this.textures.exists(amb.key)) { continue }
+      // Rayon forfaitaire du PNJ : demi-frame compact (64 px) × scale.
+      const ambRadius = Math.round(amb.scale * 64)
+      // Angle : le premier PNJ suit geometry.ambientAngle (ou formule seedée),
+      // les suivants sont décalés de 40° dans le même secteur.
+      const baseAngleDeg =
+        stageGeometry?.ambientAngle !== undefined
+          ? stageGeometry.ambientAngle
+          : (((stageSeed * 2654435761) >>> 0) % 1000) / 1000 * 360
+      const ambAngleDeg = (baseAngleDeg + npcIdx * 40) % 360
+      // Dart-throwing déterministe : sel unique par PNJ pour ne pas dépendre des
+      // autres placements (structures/landmark) ni des autres PNJs.
+      const npcSalt = (0xab7c1234 + npcIdx * 0x9e3779b9) >>> 0
+      const ambRng = (() => {
+        let t = ((stageSeed ^ npcSalt) >>> 0)
+        return () => {
+          t = (t + 0x6d2b79f5) >>> 0
+          let r = Math.imul(t ^ (t >>> 15), 1 | t)
+          r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) >>> 0
+          return ((r ^ (r >>> 14)) >>> 0) / 4294967296
+        }
+      })()
+      const pos = resolvePlacement(
+        ambAngleDeg,
+        AMB_DIST_MIN, AMB_DIST_MAX,
+        WORLD.width / 2, WORLD.height / 2,
+        WORLD.width, WORLD.height, 40,
+        exclusions, placed, ambRadius, ambRng
+      )
+      const sprite = this.add.sprite(pos.x, pos.y, amb.key).setScale(amb.scale).setDepth(1)
+      // Seed individuel dérivé de stageSeed + index → chaque PNJ a une errance et
+      // une réplique DISTINCTES même si le tableau contient plusieurs entrées (B3 fix).
+      const npcSeed = (stageSeed ^ (npcIdx * 0x9e3779b9)) >>> 0
+      this.ambientSprites.push({
+        sprite,
+        anchor: { x: pos.x, y: pos.y },
+        seed: npcSeed,
+        behavior: amb.behavior,
+        framePeriodMs: amb.framePeriodMs ?? 300
+      })
+      // Chaque PNJ devient une ancre (les props ne se poseront pas dessus).
+      placed.push({ x: pos.x, y: pos.y, r: ambRadius })
     }
+
+    // ── Streamer de décor (construit ici, ancres = tout ce qui a été posé) ───────
+    // Les props streamés évitent désormais structures + landmark + PNJ (anti-chevauchement)
+    // en plus du centre (spawn). Coût constant (~16 chunks actifs) quel que soit le monde.
+    streamerOpts.structureAnchors = placed.map((p) => ({ x: p.x, y: p.y, r: p.r }))
+    // Ambiance INTÉRIEURE (phases 05→10) : grille de colonnes streamée (dans le
+    // streamer) + VOILE de lumière chaude sur le sol/décor. Le voile est posé à
+    // depth -0.5 → il tinte le sol/props/structures/colonnes MAIS PAS les entités
+    // (joueur/ennemis à depth ≥ 0) → « on est dedans » sans perdre la lisibilité.
+    const interior = this.stage.interior
+    if (interior !== undefined) {
+      streamerOpts.interiorColumns = {
+        key: interior.columnKey,
+        spacing: interior.columnSpacing ?? 760,
+        scale: interior.columnScale ?? 1.0
+      }
+      const tintAlpha = interior.tintAlpha ?? 0.12
+      if (tintAlpha > 0) {
+        this.add
+          .rectangle(
+            WORLD.width / 2, WORLD.height / 2, WORLD.width, WORLD.height,
+            interior.tint ?? 0xffd9a0, tintAlpha
+          )
+          .setDepth(-0.5)
+      }
+    }
+    this.decorStreamer = new DecorStreamer(this, WORLD.width, WORLD.height, streamerOpts)
+
     this.add
       .rectangle(WORLD.width / 2, WORLD.height / 2, WORLD.width, WORLD.height)
       .setStrokeStyle(4, 0xf5c542)
@@ -886,6 +1133,9 @@ export class GameScene extends Phaser.Scene {
 
     this.syncSprites()
     this.updateCamera(this.app.getStateForFrame(this.app.frameId))
+    // Préchargement initial des chunks au démarrage (la caméra est positionnée,
+    // le streamer peut déjà charger la vue initiale sans attendre le 1er update()).
+    this.decorStreamer.update(this.cameras.main)
 
     // Onde de choc du marteau + libération de prisonnier + évolution d'arme : la sim émet, l'App relaie.
     this.app.events.addEventListener('auraPulse', this.onAuraPulse)
@@ -915,6 +1165,22 @@ export class GameScene extends Phaser.Scene {
         }
         return info.sort((a, b) => a.id - b.id)
       }
+      // Sonde du feedback de coup (test-only) : compteur chiffres actifs/total + cap.
+      this.seam.debugFeedbackInfo = (): { active: number; spawnedTotal: number; maxPerFrame: number } => ({
+        active: this.damageNumbers.active,
+        spawnedTotal: this.damageNumbers.total,
+        maxPerFrame: FEEDBACK_MAX_PER_FRAME
+      })
+      // Sonde du streaming de décor (test-only) : permet d'asserter que le nombre
+      // d'objets de décor reste borné quelle que soit la distance parcourue.
+      this.seam.debugDecorInfo = (): { loadedChunks: number; decorObjects: number } => ({
+        loadedChunks: this.decorStreamer.loadedChunkCount,
+        decorObjects: this.decorStreamer.decorObjectCount
+      })
+      // B4 — Sondes PNJ d'ambiance (test-only) : positions actuelles et bulles actives.
+      this.seam.debugAmbientNpcs = (): { x: number; y: number }[] =>
+        this.ambientSprites.map((npc) => ({ x: npc.sprite.x, y: npc.sprite.y }))
+      this.seam.debugActiveBubbles = (): number => this.ambientBubbles.size
     }
   }
 
@@ -934,6 +1200,12 @@ export class GameScene extends Phaser.Scene {
     }
     this.syncSprites()
     this.updateCamera(st)
+    // Streamer de décor : throttlé toutes les 4 frames pour éviter un scan de Map
+    // à chaque tick (la caméra ne se déplace pas d'un chunk par frame).
+    this.decorStreamerFrame++
+    if (this.decorStreamerFrame % 4 === 0) {
+      this.decorStreamer.update(this.cameras.main)
+    }
   }
 
   /**
@@ -1072,7 +1344,8 @@ export class GameScene extends Phaser.Scene {
     // à l'échelle du rayon. Repli sur un cercle Graphics si la texture est absente.
     this.hazardGraphics.clear()
     const useTarSprite = this.textures.exists('vfx_goudron')
-    const seenHaz = new Set<number>()
+    const seenHaz = this.seenHazScratch
+    seenHaz.clear()
     for (const h of state.hazards) {
       if (useTarSprite) {
         seenHaz.add(h.id)
@@ -1178,7 +1451,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     const leader = state.players[0]
-    const seen = new Set<number>()
+    const seen = this.seenEnemyScratch
+    seen.clear()
+    // Diff HP pour le feedback de coup (flash + chiffres + pop). Calculé AVANT
+    // de mettre à jour prevEnemyHp pour que chaque frame compare à la frame précédente.
+    const hitEvents = computeHitEvents(this.prevEnemyHp, state.enemies)
+    const hitById = new Map(hitEvents.map((e) => [e.id, e.amount]))
+    // Compteur d'allocations de feedback (chiffres + pops) pour ce passage de sync.
+    // Remis à 0 ici — avant la boucle — pour borner le pic par frame.
+    let feedbackEmittedThisFrame = 0
     for (const en of state.enemies) {
       seen.add(en.id)
       let sprite = this.enemySprites.get(en.id)
@@ -1204,6 +1485,40 @@ export class GameScene extends Phaser.Scene {
         const row = leader !== undefined ? dirRow(leader.x - en.x, leader.y - en.y) : 0
         sprite.setFrame(walkFrame(row, this.time.now))
       }
+      // ── Feedback de coup (hit-feel) ────────────────────────────────────
+      const hitAmount = hitById.get(en.id)
+      if (hitAmount !== undefined) {
+        // Hit-flash blanc ~60ms (DA 16-bit, palette blanc uniquement).
+        // NON capé : setTintFill n'alloue rien — tout ennemi touché doit réagir.
+        const until = hitFlashUntil(this.time.now, hitAmount, 60)
+        if (until !== undefined) {
+          this.enemyFlashUntil.set(en.id, until)
+        }
+        // Chiffre de dégâts flottant (poolé) + pop d'impact : CAPÉS à
+        // FEEDBACK_MAX_PER_FRAME — 200 chiffres superposés = bruit illisible
+        // + pic d'allocations inutile (horde AOE : marteau niveau 8+, 300 ennemis).
+        if (feedbackEmittedThisFrame < FEEDBACK_MAX_PER_FRAME) {
+          this.damageNumbers.spawn(en.x, en.y, hitAmount, en.isElite, en.isBoss)
+          this.spawnPixelPop(en.x, en.y, PALETTE_HEX.orangeDanger, 6, 120)
+          feedbackEmittedThisFrame++
+        }
+      }
+      // Applique la teinte flash blanc si dans la fenêtre, sinon efface.
+      const flashUntil = this.enemyFlashUntil.get(en.id)
+      if (flashUntil !== undefined) {
+        if (this.time.now < flashUntil) {
+          if (sprite instanceof Phaser.GameObjects.Sprite) {
+            sprite.setTintFill(PALETTE_HEX.blanc)
+          }
+        } else {
+          if (sprite instanceof Phaser.GameObjects.Sprite) {
+            sprite.clearTint()
+          }
+          this.enemyFlashUntil.delete(en.id)
+        }
+      }
+      // Mémorise les HP courants pour la comparaison de la prochaine frame.
+      this.prevEnemyHp.set(en.id, en.hp)
     }
     // Retire les sprites des ennemis disparus (mort → poussière de béton + éclair blanc + scale-pop).
     for (const [id, sprite] of this.enemySprites) {
@@ -1218,10 +1533,14 @@ export class GameScene extends Phaser.Scene {
           sprite.destroy()
         }
         this.enemySprites.delete(id)
+        // Nettoie les ids disparus pour éviter les fuites mémoire.
+        this.prevEnemyHp.delete(id)
+        this.enemyFlashUntil.delete(id)
       }
     }
 
-    const seenProj = new Set<number>()
+    const seenProj = this.seenProjScratch
+    seenProj.clear()
     for (const pr of state.projectiles) {
       seenProj.add(pr.id)
       let sprite = this.projectileSprites.get(pr.id)
@@ -1256,7 +1575,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const seenPickup = new Set<number>()
+    const seenPickup = this.seenPickupScratch
+    seenPickup.clear()
     for (const pk of state.pickups) {
       seenPickup.add(pk.id)
       let sprite = this.pickupSprites.get(pk.id)
@@ -1271,11 +1591,71 @@ export class GameScene extends Phaser.Scene {
         this.pickupSprites.set(pk.id, sprite)
       }
       sprite.setPosition(pk.x, pk.y)
-      // Coffre d'évolution : léger « respire » (scale oscillant) pour le
-      // repérer dans la horde — DA-safe (pas de glow), scale re-fixé à
-      // l'acquisition donc aucun conflit avec le pooling.
-      if (pk.type === 'coffre' && sprite instanceof Phaser.GameObjects.Sprite) {
-        sprite.setScale(cfg.scale * (1 + 0.12 * Math.sin(this.time.now / 180)))
+      // B5 — Coffre d'évolution : pulse de scale amplifié (±22 %) + scintillement
+      // pixel jaune périodique (~700ms) pour le repérer dans la nuée.
+      // DA-safe (pas de glow moderne, palette uniquement, pixel-pop carré).
+      if ((pk.type === 'coffre' || pk.type === 'chest') && sprite instanceof Phaser.GameObjects.Sprite) {
+        // Animation d'apparition : pop-in avec REBOND (ease-out-back) puis balancement.
+        let anim = this.chestAnim.get(pk.id)
+        if (anim === undefined) {
+          anim = { spawnedAt: this.time.now, opened: false }
+          this.chestAnim.set(pk.id, anim)
+        }
+        const age = this.time.now - anim.spawnedAt
+        const POP_MS = 320
+        let scaleMul: number
+        if (age < POP_MS) {
+          // easeOutBack : dépasse (~×1.1) puis revient → rebond franc à l'apparition.
+          const t = age / POP_MS
+          const c1 = 1.70158
+          const u = t - 1
+          scaleMul = 1 + (c1 + 1) * u * u * u + c1 * u * u
+        } else {
+          // Balancement idle léger (moins violent que l'ancien ±22 %).
+          scaleMul = 1 + 0.09 * Math.abs(Math.sin(this.time.now / 260))
+        }
+        sprite.setScale(cfg.scale * scaleMul)
+
+        // Le coffre s'ENTROUVRE une fois posé (swap vers l'état entrouvert + étincelle).
+        if (!anim.opened && age > POP_MS * 0.85 && this.textures.exists('pickup_crate_open')) {
+          anim.opened = true
+          sprite.setTexture('pickup_crate_open')
+          this.spawnVfx('vfx_sparkle', pk.x, pk.y, 0.5, 1.6, 260)
+        }
+
+        // AURA DORÉE pulsée derrière le coffre (disque palette or, alpha modéré → repérable).
+        let aura = this.chestAura.get(pk.id)
+        if (aura === undefined) {
+          aura = this.add.circle(pk.x, pk.y, 42, PALETTE_HEX.jauneSecurite, 0.24).setDepth(-0.3)
+          this.chestAura.set(pk.id, aura)
+        }
+        const wave = 0.5 + 0.5 * Math.sin(this.time.now / 300)
+        aura.setPosition(pk.x, pk.y)
+        aura.setScale(1 + 0.16 * wave)
+        aura.setAlpha(0.18 + 0.16 * wave)
+
+        // Scintillement pixel or périodique (conservé, décalé par id).
+        const chestPeriod = 700
+        const chestOffset = (pk.id * 211) % chestPeriod
+        const chestEpoch = Math.floor((this.time.now + chestOffset) / chestPeriod)
+        if (this.chestSparkleEpoch.get(pk.id) !== chestEpoch) {
+          this.chestSparkleEpoch.set(pk.id, chestEpoch)
+          this.spawnPixelPop(pk.x, pk.y, PALETTE_HEX.jauneSecurite, 10, 240)
+        }
+      }
+      // B4 — Gemme XP : pulse d'échelle (shiny) + scintillement pixel discret.
+      if (pk.type === 'xp' && sprite instanceof Phaser.GameObjects.Sprite) {
+        // Pulse sinusoïdal léger (±10 %) : chaque gemme a une phase décalée par son id.
+        const phase = (pk.id * 1.3) % (Math.PI * 2)
+        sprite.setScale(cfg.scale * (1 + 0.1 * Math.sin(this.time.now / 220 + phase)))
+        // Scintillement pixel : un carré vert-bonus UNE FOIS par période (~900ms, staggeré par id).
+        const sparkPeriod = 900
+        const sparkOffset = (pk.id * 337) % sparkPeriod
+        const epoch = Math.floor((this.time.now + sparkOffset) / sparkPeriod)
+        if (this.xpSparkleEpoch.get(pk.id) !== epoch) {
+          this.xpSparkleEpoch.set(pk.id, epoch)
+          this.spawnPixelPop(pk.x, pk.y, PALETTE_HEX.vertBonus, 5, 180)
+        }
       }
     }
     for (const [id, sprite] of this.pickupSprites) {
@@ -1287,13 +1667,27 @@ export class GameScene extends Phaser.Scene {
           sprite.destroy()
         }
         this.pickupSprites.delete(id)
+        // Nettoyage des epochs de scintillement (évite une fuite sur les pickups collectés).
+        this.xpSparkleEpoch.delete(id)
+        this.chestSparkleEpoch.delete(id)
+        // Nettoyage de l'anim + de l'aura du coffre (évite une fuite / aura fantôme).
+        this.chestAnim.delete(id)
+        const aura = this.chestAura.get(id)
+        if (aura !== undefined) {
+          aura.destroy()
+          this.chestAura.delete(id)
+        }
       }
     }
 
-    // PNJ d'ambiance : léger balancement sud (boucle lente), il ne se bat pas.
-    if (this.ambientSprite !== null) {
-      this.ambientSprite.setFrame(walkFrame(0, this.time.now, this.stage.ambient?.framePeriodMs ?? 300))
+    // PNJ(s) d'ambiance : errance douce (B3) + animation de geste (boucle lente).
+    for (const npc of this.ambientSprites) {
+      const off = ambientOffset(npc.seed, this.time.now, npc.behavior)
+      npc.sprite.setPosition(npc.anchor.x + off.dx, npc.anchor.y + off.dy)
+      npc.sprite.setFrame(walkFrame(0, this.time.now, npc.framePeriodMs))
     }
+    // B4 — Bulles râleuses à l'approche du joueur.
+    this.updateAmbientBubbles(state)
 
     this.syncPrisoners(state.prisoners)
   }
@@ -1355,9 +1749,111 @@ export class GameScene extends Phaser.Scene {
     sprite.setFrame(moving ? walkFrame(row, this.time.now) : idleFrame(row))
   }
 
+  /**
+   * B4 — Bulles râleuses à l'approche du joueur.
+   * Vérifie, pour chaque PNJ d'ambiance, si un joueur vivant est à portée
+   * (`shouldBubble`) et si le cooldown est écoulé. Si oui, affiche une bulle
+   * DA (panneau pixel, texte monospace, sans emoji, sans innerHTML).
+   * Pool borné à MAX_AMBIENT_BUBBLES simultanées.
+   */
+  private updateAmbientBubbles(state: AppViewState): void {
+    const now = this.time.now
+    const alivePlayers = state.players.filter((p) => p.alive)
+    if (alivePlayers.length === 0) { return }
+
+    for (let i = 0; i < this.ambientSprites.length; i++) {
+      const npc = this.ambientSprites[i]
+      if (npc === undefined) { continue }
+      // Cooldown par PNJ.
+      const lastMs = this.ambientBubbleCooldowns.get(i) ?? -Infinity
+      if (now - lastMs < AMBIENT_BUBBLE_COOLDOWN_MS) { continue }
+      // Pool borné.
+      if (this.ambientBubbles.size >= MAX_AMBIENT_BUBBLES) { continue }
+
+      // Distance joueur le plus proche de la position ACTUELLE du sprite.
+      const sx = npc.sprite.x
+      const sy = npc.sprite.y
+      let minDist = Infinity
+      for (const p of alivePlayers) {
+        const d = Math.hypot(p.x - sx, p.y - sy)
+        if (d < minDist) { minDist = d }
+      }
+      if (!shouldBubble(minDist)) { continue }
+
+      // Déclenche la bulle.
+      this.ambientBubbleCooldowns.set(i, now)
+      this.spawnAmbientBubble(sx, sy, pickPhrase(npc.seed))
+    }
+  }
+
+  /**
+   * Affiche un panneau bulle DA au-dessus d'un PNJ avec le texte indiqué.
+   * Style 16-bit strict : coins carrés, bord sombre, ergot bas, pas d'emoji.
+   * Fade court (1 200 ms) ; le conteneur se détruit automatiquement à la fin.
+   */
+  private spawnAmbientBubble(x: number, y: number, text: string): void {
+    const pad = 8
+    const txt = this.add.text(0, 0, text, {
+      fontFamily: 'monospace',
+      fontSize: '11px',
+      color: PALETTE.contour,
+      wordWrap: { width: 140 }
+    }).setOrigin(0.5, 0.5)
+
+    const bw = txt.width + pad * 2
+    const bh = txt.height + pad * 2
+
+    // Corps du panneau (fond blanc, bord sombre).
+    const bg = this.add.graphics()
+    bg.fillStyle(PALETTE_HEX.blanc, 1)
+    bg.fillRect(-bw / 2, -bh / 2, bw, bh)
+    bg.lineStyle(2, PALETTE_HEX.contour, 1)
+    bg.strokeRect(-bw / 2, -bh / 2, bw, bh)
+
+    // Ergot triangulaire pointant vers le bas.
+    const ergotSize = 6
+    bg.fillStyle(PALETTE_HEX.blanc, 1)
+    bg.fillTriangle(
+      -ergotSize, bh / 2,
+      ergotSize, bh / 2,
+      0, bh / 2 + ergotSize
+    )
+    bg.lineStyle(2, PALETTE_HEX.contour, 1)
+    bg.strokeTriangle(
+      -ergotSize, bh / 2,
+      ergotSize, bh / 2,
+      0, bh / 2 + ergotSize
+    )
+
+    // Conteneur : positionné au-dessus du sprite.
+    const offsetY = -(bh / 2 + ergotSize + 44)
+    const container = this.add.container(x, y + offsetY, [bg, txt])
+    container.setDepth(9)
+    this.ambientBubbles.add(container)
+
+    // Fade + montée légère, puis destruction propre.
+    this.tweens.add({
+      targets: container,
+      alpha: 0,
+      y: y + offsetY - 12,
+      duration: 1200,
+      delay: 1800,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        // Garde anti double-destroy : si la scène a été réinitialisée (resetRun,
+        // changement de stage) pendant le tween, le container a déjà été détruit
+        // et retiré du Set — ne rien faire pour éviter double-destroy + crash.
+        if (!this.ambientBubbles.has(container)) { return }
+        container.destroy()
+        this.ambientBubbles.delete(container)
+      }
+    })
+  }
+
   /** Dessine l'ouvrier prisonnier (cage + sosie barbu) ; libéré → il court hors écran. */
   private syncPrisoners(prisoners: readonly PrisonerState[]): void {
-    const seen = new Set<number>()
+    const seen = this.seenPrisonerScratch
+    seen.clear()
     for (const pr of prisoners) {
       seen.add(pr.id)
       let worker = this.prisonerWorkers.get(pr.id)

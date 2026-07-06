@@ -64,15 +64,22 @@ describe('simulation — split de boss', () => {
   it('debugSpawnBoss("mid") : tuer le boss mid ne gagne PAS, et laisse un coffre', () => {
     const sim = new Simulation({ seed: 7, mode: 'solo' })
     sim.debugSpawnBoss('mid')
-    // Grant une arme surpuissante pour tuer le boss rapidement et déterministe.
-    sim.debugGrant({ weapons: [{ id: 'cloueur', level: 6 }] })
+    // Grant 3 armes max pour tuer le boss 1800 HP rapidement (kite + DPS élevé).
+    sim.debugGrant({
+      weapons: [
+        { id: 'cloueur', level: 8 },
+        { id: 'scie', level: 8 },
+        { id: 'marteau', level: 8 }
+      ]
+    })
     let steps = 0
-    while (steps < 2000) {
+    while (steps < 4000) {
       const st = sim.getState()
       if (!st.enemies.some((e) => e.isBoss)) {
         break
       }
-      sim.setInput(1, { move: { x: 0, y: 0 }, attack: true })
+      // Kite : le joueur fuit vers le haut pour éviter le contact et survivre.
+      sim.setInput(1, { move: { x: 0, y: -1 }, attack: true })
       if (st.pendingLevelUp !== null) {
         sim.chooseUpgrade(0)
         continue
@@ -88,16 +95,24 @@ describe('simulation — split de boss', () => {
   it('debugSpawnBoss("final") : tuer le boss final déclenche la victoire', () => {
     const sim = new Simulation({ seed: 7, mode: 'solo' })
     sim.debugSpawnBoss('final')
-    sim.debugGrant({ weapons: [{ id: 'cloueur', level: 6 }] })
+    // Grant 3 armes max pour tuer le boss 1800 HP rapidement (kite + DPS élevé).
+    sim.debugGrant({
+      weapons: [
+        { id: 'cloueur', level: 8 },
+        { id: 'scie', level: 8 },
+        { id: 'marteau', level: 8 }
+      ]
+    })
     let steps = 0
     let won = false
-    while (steps < 2000) {
+    while (steps < 4000) {
       const st = sim.getState()
       if (st.scene === 'won') {
         won = true
         break
       }
-      sim.setInput(1, { move: { x: 0, y: 0 }, attack: true })
+      // Kite : le joueur fuit vers le haut pour éviter le contact et survivre.
+      sim.setInput(1, { move: { x: 0, y: -1 }, attack: true })
       if (st.pendingLevelUp !== null) {
         sim.chooseUpgrade(0)
         continue

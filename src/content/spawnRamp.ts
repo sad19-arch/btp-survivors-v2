@@ -78,6 +78,6 @@ export function difficultyScaleAt(elapsedMs: number): DifficultyScale {
     // adouci laisse le kite atteindre le boss, mais l'imprudent qui encaisse le
     // contact meurt quand même — garde-fou greedy/idle.
     contactDamage: 0.5 + 0.26 * min,
-    speed: Math.min(1.2, 1.0 + 0.04 * min)
+    speed: Math.min(1.25, 1.0 + 0.045 * min)
   }
 }

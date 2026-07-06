@@ -48,6 +48,8 @@ export interface MenuItemView {
   maxLevel?: number
   /** Type de carte (arme ou passif). */
   kind?: CardKind
+  /** Fragment FR décrivant le gain du niveau (ex. « +2 dégâts · +1 projectile »). */
+  delta?: string
 }
 
 /** Le menu actif (null en jeu). */
@@ -77,4 +79,6 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   stageOrder: number
   /** Sélection de personnage en cours (joueur actif / total) ; `null` hors de ce flux. */
   characterSelect: { player: number; total: number } | null
+  /** Mini-carte affichée (bas-gauche) — bascule clavier M / manette Back/Select. */
+  minimapVisible: boolean
 }
