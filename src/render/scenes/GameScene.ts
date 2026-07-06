@@ -201,6 +201,13 @@ export class GameScene extends Phaser.Scene {
    */
   private readonly chestSparkleEpoch = new Map<number, number>()
   /**
+   * État d'animation par coffre (id → { spawnedAt, opened }) : pop-in avec rebond
+   * puis ouverture du couvercle (swap de texture vers `pickup_crate_open`).
+   */
+  private readonly chestAnim = new Map<number, { spawnedAt: number; opened: boolean }>()
+  /** Aura dorée pulsée derrière chaque coffre (id → disque). Détruite à la collecte. */
+  private readonly chestAura = new Map<number, Phaser.GameObjects.Arc>()
+  /**
    * Étiquette « JN » + chevron au-dessus de chaque joueur humain, pour le repérer
    * dans une nuée d'ennemis (playtest). Un couple texte+chevron par joueur, couleur
    * = `playerColor`, depth élevé (au-dessus des ennemis). Détruits dans
@@ -638,6 +645,8 @@ export class GameScene extends Phaser.Scene {
     this.load.image('pickup_health', 'stage01/pickups/health.png')
     this.load.image('pickup_magnet', 'stage01/pickups/magnet.png')
     this.load.image('pickup_crate', 'stage01/pickups/crate.png')
+    // État « entrouvert » du coffre (animation d'ouverture au spawn).
+    this.load.image('pickup_crate_open', 'stage01/pickups/crate_open.png')
     this.load.image('vfx_impact', 'stage01/vfx/impact.png')
     this.load.image('vfx_sparkle', 'stage01/vfx/sparkle.png')
     this.load.image('vfx_levelup', 'stage01/vfx/levelup.png')
@@ -883,6 +892,9 @@ export class GameScene extends Phaser.Scene {
     this.pickupSprites.clear()
     this.xpSparkleEpoch.clear()
     this.chestSparkleEpoch.clear()
+    this.chestAnim.clear()
+    this.chestAura.forEach((a) => a.destroy())
+    this.chestAura.clear()
     this.playerLabels.forEach((l) => {
       l.text.destroy()
       l.chevron.destroy()
@@ -1528,10 +1540,47 @@ export class GameScene extends Phaser.Scene {
       // B5 — Coffre d'évolution : pulse de scale amplifié (±22 %) + scintillement
       // pixel jaune périodique (~700ms) pour le repérer dans la nuée.
       // DA-safe (pas de glow moderne, palette uniquement, pixel-pop carré).
-      if (pk.type === 'coffre' && sprite instanceof Phaser.GameObjects.Sprite) {
-        // Rebond/pulse sinusoïdal plus prononcé que l'ancien ±12 %.
-        sprite.setScale(cfg.scale * (1 + 0.22 * Math.abs(Math.sin(this.time.now / 200))))
-        // Scintillement pixel jaune sécurité, décalé par id (pas de synchronisation).
+      if ((pk.type === 'coffre' || pk.type === 'chest') && sprite instanceof Phaser.GameObjects.Sprite) {
+        // Animation d'apparition : pop-in avec REBOND (ease-out-back) puis balancement.
+        let anim = this.chestAnim.get(pk.id)
+        if (anim === undefined) {
+          anim = { spawnedAt: this.time.now, opened: false }
+          this.chestAnim.set(pk.id, anim)
+        }
+        const age = this.time.now - anim.spawnedAt
+        const POP_MS = 320
+        let scaleMul: number
+        if (age < POP_MS) {
+          // easeOutBack : dépasse (~×1.1) puis revient → rebond franc à l'apparition.
+          const t = age / POP_MS
+          const c1 = 1.70158
+          const u = t - 1
+          scaleMul = 1 + (c1 + 1) * u * u * u + c1 * u * u
+        } else {
+          // Balancement idle léger (moins violent que l'ancien ±22 %).
+          scaleMul = 1 + 0.09 * Math.abs(Math.sin(this.time.now / 260))
+        }
+        sprite.setScale(cfg.scale * scaleMul)
+
+        // Le coffre s'ENTROUVRE une fois posé (swap vers l'état entrouvert + étincelle).
+        if (!anim.opened && age > POP_MS * 0.85 && this.textures.exists('pickup_crate_open')) {
+          anim.opened = true
+          sprite.setTexture('pickup_crate_open')
+          this.spawnVfx('vfx_sparkle', pk.x, pk.y, 0.5, 1.6, 260)
+        }
+
+        // AURA DORÉE pulsée derrière le coffre (disque palette or, alpha modéré → repérable).
+        let aura = this.chestAura.get(pk.id)
+        if (aura === undefined) {
+          aura = this.add.circle(pk.x, pk.y, 42, PALETTE_HEX.jauneSecurite, 0.24).setDepth(-0.3)
+          this.chestAura.set(pk.id, aura)
+        }
+        const wave = 0.5 + 0.5 * Math.sin(this.time.now / 300)
+        aura.setPosition(pk.x, pk.y)
+        aura.setScale(1 + 0.16 * wave)
+        aura.setAlpha(0.18 + 0.16 * wave)
+
+        // Scintillement pixel or périodique (conservé, décalé par id).
         const chestPeriod = 700
         const chestOffset = (pk.id * 211) % chestPeriod
         const chestEpoch = Math.floor((this.time.now + chestOffset) / chestPeriod)
@@ -1567,6 +1616,13 @@ export class GameScene extends Phaser.Scene {
         // Nettoyage des epochs de scintillement (évite une fuite sur les pickups collectés).
         this.xpSparkleEpoch.delete(id)
         this.chestSparkleEpoch.delete(id)
+        // Nettoyage de l'anim + de l'aura du coffre (évite une fuite / aura fantôme).
+        this.chestAnim.delete(id)
+        const aura = this.chestAura.get(id)
+        if (aura !== undefined) {
+          aura.destroy()
+          this.chestAura.delete(id)
+        }
       }
     }
 
