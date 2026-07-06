@@ -538,32 +538,92 @@ const GROS_OEUVRE_RENDER: StageRender = {
   decalDensityMultiplier: 1.0  // gros œuvre semi-propre : béton frais, densité moyenne
 }
 
+const ECHAFAUDAGES_RENDER: StageRender = {
+  ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_stage06_${i}`, file: `stage06/ground/tile_${i}.png` })),
+  decals: [
+    { key: 'decal_stage06_bolt',   file: 'stage06/decals/bolt_scatter.png' },
+    { key: 'decal_stage06_shadow', file: 'stage06/decals/tube_shadow.png' }
+  ],
+  // Clutter streamé : cadres + planchers + garde-corps + échelles.
+  // La nacelle (boom_lift) et la tour complète (scaffold_tower) sont dans `structures` (placées UNE fois).
+  props: [
+    { key: 'prop_stage06_scaffold',    file: 'stage06/props/scaffold.png',    scale: 0.90, count: 3 },
+    { key: 'prop_stage06_plancher',    file: 'stage06/props/plancher.png',    scale: 0.85, count: 3 },
+    { key: 'prop_stage06_garde_corps', file: 'stage06/props/garde_corps.png', scale: 0.80, count: 3 },
+    { key: 'prop_stage06_echelle',     file: 'stage06/props/echelle.png',     scale: 0.80, count: 3 },
+    { key: 'prop_stage06_tubes',       file: 'stage06/props/tubes.png',       scale: 0.70, count: 2 }
+  ],
+  enemies: {
+    boulon:   { key: 'enemy_stage06_base', file: 'stage06/enemies/base_walk.png', frame: 256, scale: 0.71 },
+    grimpeur: { key: 'enemy_stage06_fast', file: 'stage06/enemies/fast_walk.png', frame: 256, scale: 0.65 },
+    pylone:   { key: 'enemy_stage06_tank', file: 'stage06/enemies/tank_walk.png', frame: 256, scale: 0.77 }
+  },
+  boss: { key: 'boss_stage06', file: 'stage06/boss/boss_walk.png', frame: 256, scale: 1.41 },
+  // Échafaudages : tour-héros (landmark) + nacelle ciseaux (band near) + grilles de structure (mid).
+  landmark: { key: 'landmark_stage06', file: 'stage06/landmarks/scaffold_tower.png', scale: 1.5, count: 1 },
+  // Nacelle jaune hero (proche, bande 'near') + grilles de cadres métal réparties (bande 'mid').
+  // Ordre = ordre des angles scriptés (structureAngles).
+  structures: [
+    { key: 'struct_stage06_nacelle', file: 'stage06/props/boom_lift.png',          scale: 1.1,  count: 1, band: 'near' },
+    { key: 'struct_stage06_grid',    file: 'stage06/structures/scaffold_grid.png', scale: 0.80, count: 5, band: 'mid'  }
+  ],
+  ambient: { key: 'npc_stage06', file: 'stage06/npc/echafaudeur_work.png', frame: 256, scale: 0.68, framePeriodMs: 260 },
+  // ── Composition scriptée stage 06 (échafaudages) ─────────────────────────────
+  // Géographie : nacelle jaune (idx0) côté NE proche imposante, 5 grilles de cadres
+  // réparties en arc O-SO-S-N (structures géométriques autour de l'arène).
+  // Landmark (tour complète) au Nord. PNJ monteur près de la nacelle NE, serrant un boulon.
+  geometry: {
+    // structureAngles[i] → structure i, dans l'ordre de `structures[]` :
+    //   0 = boom_lift / nacelle (NE, ~50°) — héros jaune visible côté NE
+    //   1-5 = scaffold_grid (arc O-SO-S-N : 170°, 215°, 260°, 85°, 320°)
+    structureAngles: [50, 170, 215, 260, 85, 320],
+    landmarkAngle: 75,    // tour d'échafaudage-héros au Nord-Est
+    ambientAngle:  55     // monteur près de la nacelle NE, boulon en main
+  },
+  // Zones métier : 3 secteurs complémentaires
+  zones: [
+    // Secteur Montage NE — dense en planchers + cadres autour de la nacelle
+    {
+      angleCenter: 50,
+      angleSpread: 55,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [0, 1],    // scaffold frame + plancher
+      dominantDecalIndices: [0],      // bolt_scatter
+      density: 1.5
+    },
+    // Secteur Structures (Ouest) — grilles métal + ombres de tubes
+    {
+      angleCenter: 200,
+      angleSpread: 65,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [0, 2],    // scaffold frame + garde_corps
+      dominantDecalIndices: [1],      // tube_shadow
+      density: 1.3
+    },
+    // Passage échelles (SE) — échelles + garde-corps légers
+    {
+      angleCenter: 315,
+      angleSpread: 50,
+      distMin: 320,
+      distMax: 700,
+      dominantPropIndices: [3, 2],    // echelle + garde_corps
+      dominantDecalIndices: [1, 0],   // tube_shadow + bolt_scatter
+      density: 1.2
+    }
+  ],
+  baseTileIndex: 2,            // tuile gris neutre (index 2)
+  decalDensityMultiplier: 0.9  // échafaudages semi-ordonnés, densité légère (géométrique)
+}
+
 export const STAGE_RENDER: Record<string, StageRender> = {
   terrain_vierge: TERRAIN_VIERGE_RENDER,
   terrassement: TERRASSEMENT_RENDER,
   fondations: FONDATIONS_RENDER,
   reseaux_enterres: RESEAUX_ENTERRES_RENDER,
   gros_oeuvre: GROS_OEUVRE_RENDER,
-  echafaudages: makeStage(
-    'stage06',
-    ['boulon', 'grimpeur', 'pylone'],
-    [
-      ['scaffold', 1.0, 2],
-      ['boom_lift', 0.85, 1],
-      ['tubes', 0.7, 3]
-    ],
-    ['bolt_scatter', 'oil'],
-    [0.71, 0.65, 0.77],
-    1.41,
-    {
-      // Échafaudages : tours d'échafaudage partout + échafaudeur qui serre un boulon.
-      landmark: { key: 'landmark_stage06', file: 'stage06/landmarks/scaffold_tower.png', scale: 1.5, count: 1 },
-      structures: [
-        { key: 'struct_stage06_scaffold', file: 'stage06/structures/scaffold_grid.png', scale: 0.8, count: 6, band: 'mid' }
-      ],
-      ambient: { key: 'npc_stage06', file: 'stage06/npc/echafaudeur_work.png', frame: 256, scale: 0.68, framePeriodMs: 260 }
-    }
-  ),
+  echafaudages: ECHAFAUDAGES_RENDER,
   charpente_toiture: makeStage(
     'stage07',
     ['copeau', 'chevron', 'poutre'],
