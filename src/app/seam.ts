@@ -24,6 +24,8 @@ export interface GameSeam {
   pause(): void
   resume(): void
   restart(): void
+  /** Bascule l'affichage de la mini-carte (équivalent touche M / bouton Back manette). */
+  toggleMinimap(): void
   chooseUpgrade(index: number): void
   events: EventTarget
   // --- helpers de debug (test-only : fast-forward pour Playwright/e2e) ---
@@ -106,6 +108,9 @@ export function createSeam(app: App): GameSeam {
     },
     restart: () => {
       app.restart()
+    },
+    toggleMinimap: () => {
+      app.toggleMinimap()
     },
     chooseUpgrade: (index: number) => {
       app.chooseUpgrade(index)
