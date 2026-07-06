@@ -456,32 +456,94 @@ const RESEAUX_ENTERRES_RENDER: StageRender = {
   decalDensityMultiplier: 1.15 // chantier actif, densité moyenne (réseaux en cours de pose)
 }
 
+const GROS_OEUVRE_RENDER: StageRender = {
+  ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_stage05_${i}`, file: `stage05/ground/tile_${i}.png` })),
+  decals: [
+    { key: 'decal_stage05_mortar',       file: 'stage05/decals/mortar.png' },
+    { key: 'decal_stage05_rubble',       file: 'stage05/decals/rubble.png' },
+    { key: 'decal_stage05_lifting_mark', file: 'stage05/decals/lifting_mark.png' },
+    { key: 'decal_stage05_dust',         file: 'stage05/decals/concrete_dust.png' }
+  ],
+  // Seul clutter streamé : palettes de parpaings + poteaux béton + crochets grue.
+  // Les GROS ENGINS (grue à tour + toupie) sont dans `structures` (placés 1 fois).
+  props: [
+    { key: 'prop_stage05_block_pallet',  file: 'stage05/props/block_pallet.png',  scale: 0.85, count: 5 },
+    { key: 'prop_stage05_concrete_pole', file: 'stage05/props/concrete_pole.png', scale: 0.75, count: 4 },
+    { key: 'prop_stage05_crane_hook',    file: 'stage05/props/crane_hook.png',    scale: 0.80, count: 3 }
+  ],
+  enemies: {
+    parpaing: { key: 'enemy_stage05_base', file: 'stage05/enemies/base_walk.png', frame: 256, scale: 0.71 },
+    truelle:  { key: 'enemy_stage05_fast', file: 'stage05/enemies/fast_walk.png', frame: 256, scale: 0.63 },
+    banche:   { key: 'enemy_stage05_tank', file: 'stage05/enemies/tank_walk.png', frame: 256, scale: 0.80 }
+  },
+  boss: { key: 'boss_stage05', file: 'stage05/boss/boss_walk.png', frame: 256, scale: 1.19 },
+  // Gros œuvre : murs qui montent (landmark) + grue à tour + toupie comme engins-héros.
+  // Poteaux béton + crochets + palettes = verticalité lisible en 2 s.
+  landmark: { key: 'landmark_stage05', file: 'stage05/landmarks/walls.png', scale: 1.5, count: 1 },
+  // Engins-héros placés UNE fois (grue NE imposante, toupie SE proche)
+  // + pans de murs parpaings en fond (verticalité). Ordre = ordre des angles scriptés.
+  structures: [
+    { key: 'struct_stage05_crane',   file: 'stage05/props/tower_crane.png',  scale: 1.2,  count: 1, band: 'near' },
+    { key: 'struct_stage05_mixer',   file: 'stage05/props/mobile_crane.png', scale: 1.05, count: 1, band: 'near' },
+    { key: 'struct_stage05_wall',    file: 'stage05/structures/wall_section.png', scale: 0.85, count: 5, band: 'mid'  }
+  ],
+  ambient: { key: 'npc_stage05', file: 'stage05/npc/mason_work.png', frame: 256, scale: 0.79, framePeriodMs: 280 },
+  // ── Composition scriptée stage 05 (gros œuvre) ───────────────────────────────
+  // Géographie : grue à tour (idx0) côté NE proche imposante, toupie (idx1) côté SE proche,
+  // 5 sections de mur distribuées en arc O-SO-N (murs qui montent autour).
+  // Landmark (bâtiment en construction) au Nord. PNJ maçon près de la toupie SE.
+  geometry: {
+    // structureAngles[i] → structure i, dans l'ordre de `structures[]` :
+    //   0 = tower_crane (NE, ~45°) — héros imposant côté NE
+    //   1 = mobile_crane (SE, ~315°) — toupie livrant le béton côté SE
+    //   2-6 = wall_section : O (180°), SO (230°), SSO (210°), N (90°), ENE (30°)
+    structureAngles: [45, 315, 180, 230, 150, 90, 30],
+    landmarkAngle: 70,    // bâtiment-hero murs au Nord-Est
+    ambientAngle:  320    // maçon près de la toupie SE (pose les parpaings)
+  },
+  // Zones métier : 3 secteurs complémentaires
+  zones: [
+    // Secteur Grue (NE) — dense en crochets + palettes autour de la grue
+    {
+      angleCenter: 45,
+      angleSpread: 55,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [2, 0],    // crane_hook + block_pallet
+      dominantDecalIndices: [2],      // lifting_mark (marques de levage)
+      density: 1.6
+    },
+    // Secteur Maçonnerie (SE-S) — palettes parpaings + mortier + poteaux
+    {
+      angleCenter: 310,
+      angleSpread: 60,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [0, 1],    // block_pallet + concrete_pole
+      dominantDecalIndices: [0, 3],   // mortar + dust
+      density: 1.5
+    },
+    // Zone Murs (Ouest) — sections de mur + poussière béton
+    {
+      angleCenter: 190,
+      angleSpread: 70,
+      distMin: 320,
+      distMax: 720,
+      dominantPropIndices: [1],       // concrete_pole
+      dominantDecalIndices: [1, 3],   // rubble + dust
+      density: 1.2
+    }
+  ],
+  baseTileIndex: 0,            // tuile poussière béton de base (index 0)
+  decalDensityMultiplier: 1.0  // gros œuvre semi-propre : béton frais, densité moyenne
+}
+
 export const STAGE_RENDER: Record<string, StageRender> = {
   terrain_vierge: TERRAIN_VIERGE_RENDER,
   terrassement: TERRASSEMENT_RENDER,
   fondations: FONDATIONS_RENDER,
   reseaux_enterres: RESEAUX_ENTERRES_RENDER,
-  gros_oeuvre: makeStage(
-    'stage05',
-    ['parpaing', 'truelle', 'banche'],
-    [
-      ['tower_crane', 0.8, 1],
-      ['mobile_crane', 0.9, 1],
-      ['block_pallet', 0.8, 4],
-      ['telehandler', 0.8, 1]
-    ],
-    ['mortar', 'rubble'],
-    [0.71, 0.63, 0.8],
-    1.19,
-    {
-      // Gros œuvre : murs hero + pans de mur qui montent partout + maçon qui pose une brique.
-      landmark: { key: 'landmark_stage05', file: 'stage05/landmarks/walls.png', scale: 1.5, count: 1 },
-      structures: [
-        { key: 'struct_stage05_wall', file: 'stage05/structures/wall_section.png', scale: 0.85, count: 7, band: 'mid' }
-      ],
-      ambient: { key: 'npc_stage05', file: 'stage05/npc/mason_work.png', frame: 256, scale: 0.79, framePeriodMs: 280 }
-    }
-  ),
+  gros_oeuvre: GROS_OEUVRE_RENDER,
   echafaudages: makeStage(
     'stage06',
     ['boulon', 'grimpeur', 'pylone'],
