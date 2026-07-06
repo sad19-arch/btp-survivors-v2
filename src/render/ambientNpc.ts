@@ -7,7 +7,7 @@
 export const NAG_PHRASES = [
   'Arrête de glander !',
   'Va bosser !',
-  "T'en as pas marre de prendre des pauses ?",
+  "Tu n'en as pas marre de prendre des pauses ?",
   'Tu veux aller manger ?'
 ] as const
 
