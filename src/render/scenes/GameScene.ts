@@ -240,8 +240,14 @@ export class GameScene extends Phaser.Scene {
   /** Sprites du prisonnier : cage + ouvrier barbu, par id d'entité. */
   private readonly prisonerCages = new Map<number, Phaser.GameObjects.Image | Phaser.GameObjects.Arc>()
   private readonly prisonerWorkers = new Map<number, CharSprite>()
-  /** PNJ d'ambiance non-hostile du stage (idle), ou null si absent. */
-  private ambientSprite: Phaser.GameObjects.Sprite | null = null
+  /** PNJ(s) d'ambiance non-hostiles du stage — tableau (B1+). */
+  private ambientSprites: Array<{
+    sprite: Phaser.GameObjects.Sprite
+    anchor: { x: number; y: number }
+    seed: number
+    behavior: 'work' | 'patrol'
+    framePeriodMs: number
+  }> = []
   /**
    * VFX des armes à impulsion (marteau/pied-de-biche/court-circuit), déclenché
    * par l'événement d'aura de la sim. Une forme dédiée par `kind` — pas de
@@ -626,9 +632,8 @@ export class GameScene extends Phaser.Scene {
       this.load.spritesheet('player_idle_gold', 'player_idle_gold.png', { frameWidth: 192, frameHeight: 192 })
       // Ouvrier prisonnier (sosie barbu du héros) — même gabarit que le joueur (192).
       this.load.spritesheet('prisoner', 'stage01/npc/prisoner_walk.png', { frameWidth: 192, frameHeight: 192 })
-      // PNJ d'ambiance non-hostile du stage (feuille perso).
-      if (this.stage.ambient !== undefined) {
-        const a = this.stage.ambient
+      // PNJ(s) d'ambiance non-hostiles du stage (feuilles perso).
+      for (const a of this.stage.ambient ?? []) {
         this.load.spritesheet(a.key, a.file, { frameWidth: a.frame, frameHeight: a.frame })
       }
     }
@@ -913,7 +918,7 @@ export class GameScene extends Phaser.Scene {
     this.following = false
     this.introStartMs = -1
     this.introDone = false
-    this.ambientSprite = null
+    this.ambientSprites = []
     this.decorStreamerFrame = 0
     // Nettoie les chunks streamés (si le streamer est déjà initialisé — pas au 1er appel).
     if (this.decorStreamer !== undefined) {
@@ -1003,26 +1008,29 @@ export class GameScene extends Phaser.Scene {
         exclusions, placed
       )
     }
-    // PNJ d'ambiance non-hostile (geste métier) à un spot seedé hors du centre — « vie » du chantier.
-    // T4 : si geometry.ambientAngle est défini, le PNJ est placé dans ce secteur (angle fixe),
-    // ce qui l'ancre près du landmark/zone de travail de la phase.
-    // Anti-chevauchement : le PNJ évite tout ce qui est dans exclusions + placed.
-    const amb = this.stage.ambient
-    if (amb !== undefined && this.textures.exists(amb.key)) {
+    // PNJ(s) d'ambiance non-hostiles (geste métier) — un sprite par entrée, placement seedé
+    // hors centre. Chaque PNJ reçoit un seed individuel dérivé de stageSeed + index, ce qui
+    // garantit un placement déterministe et hors-chevauchement même si le tableau grandit (B5+).
+    // T4 : geometry.ambientAngle cible le PREMIER PNJ (chef de file) ; les suivants tournent
+    // autour d'angles dérivés (+ 40° par PNJ) pour rester dans le même secteur.
+    const AMB_DIST_MIN = 420
+    const AMB_DIST_MAX = 520
+    for (const [npcIdx, amb] of (this.stage.ambient ?? []).entries()) {
+      if (!this.textures.exists(amb.key)) { continue }
       // Rayon forfaitaire du PNJ : demi-frame compact (64 px) × scale.
       const ambRadius = Math.round(amb.scale * 64)
-      // Détermine l'angle scripté (ou par formule seedée, pas Math.random).
-      const ambAngleDeg =
+      // Angle : le premier PNJ suit geometry.ambientAngle (ou formule seedée),
+      // les suivants sont décalés de 40° dans le même secteur.
+      const baseAngleDeg =
         stageGeometry?.ambientAngle !== undefined
           ? stageGeometry.ambientAngle
           : (((stageSeed * 2654435761) >>> 0) % 1000) / 1000 * 360
-      // Bande de distance du PNJ ambiance (original ~470 px).
-      const AMB_DIST_MIN = 420
-      const AMB_DIST_MAX = 520
-      // Dart-throwing déterministe : même RNG mulberry32 seedé depuis stageSeed,
-      // sel distinct (0xab7c1234) pour ne pas dépendre de la séquence des structures/landmark.
+      const ambAngleDeg = (baseAngleDeg + npcIdx * 40) % 360
+      // Dart-throwing déterministe : sel unique par PNJ pour ne pas dépendre des
+      // autres placements (structures/landmark) ni des autres PNJs.
+      const npcSalt = (0xab7c1234 + npcIdx * 0x9e3779b9) >>> 0
       const ambRng = (() => {
-        let t = ((stageSeed ^ 0xab7c1234) >>> 0)
+        let t = ((stageSeed ^ npcSalt) >>> 0)
         return () => {
           t = (t + 0x6d2b79f5) >>> 0
           let r = Math.imul(t ^ (t >>> 15), 1 | t)
@@ -1037,8 +1045,15 @@ export class GameScene extends Phaser.Scene {
         WORLD.width, WORLD.height, 40,
         exclusions, placed, ambRadius, ambRng
       )
-      this.ambientSprite = this.add.sprite(pos.x, pos.y, amb.key).setScale(amb.scale).setDepth(1)
-      // Le PNJ devient lui aussi une ancre (les props ne se poseront pas dessus).
+      const sprite = this.add.sprite(pos.x, pos.y, amb.key).setScale(amb.scale).setDepth(1)
+      this.ambientSprites.push({
+        sprite,
+        anchor: { x: pos.x, y: pos.y },
+        seed: npcIdx,
+        behavior: amb.behavior,
+        framePeriodMs: amb.framePeriodMs ?? 300
+      })
+      // Chaque PNJ devient une ancre (les props ne se poseront pas dessus).
       placed.push({ x: pos.x, y: pos.y, r: ambRadius })
     }
 
@@ -1626,9 +1641,9 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // PNJ d'ambiance : léger balancement sud (boucle lente), il ne se bat pas.
-    if (this.ambientSprite !== null) {
-      this.ambientSprite.setFrame(walkFrame(0, this.time.now, this.stage.ambient?.framePeriodMs ?? 300))
+    // PNJ(s) d'ambiance : animation de geste (boucle lente), ils ne se battent pas.
+    for (const npc of this.ambientSprites) {
+      npc.sprite.setFrame(walkFrame(0, this.time.now, npc.framePeriodMs))
     }
 
     this.syncPrisoners(state.prisoners)

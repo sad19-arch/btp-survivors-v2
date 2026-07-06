@@ -116,8 +116,8 @@ export interface StageRender {
   landmark?: StageProp
   /** Grandes structures qui remplissent l'arène (l'étape de chantier partout). */
   structures?: StageStructure[]
-  /** PNJ d'ambiance non-hostile (feuille perso, geste métier) — la « vie » du chantier. */
-  ambient?: StageAmbient
+  /** PNJ d'ambiance non-hostiles (feuilles perso, geste métier) — la « vie » du chantier. */
+  ambient?: StageAmbientNpc[]
   /** Géographie scriptée (angles fixes) — optionnel, repli aléatoire si absent. */
   geometry?: StageGeometry
   /** Zones de clustering thématique — optionnel, repli uniforme si absent. */
@@ -130,17 +130,21 @@ export interface StageRender {
   interior?: InteriorTheme
 }
 
-/** PNJ d'ambiance : skin perso + période d'animation optionnelle (vitesse du geste). */
-export interface StageAmbient extends StageEnemySprite {
+/** PNJ d'ambiance : skin perso + comportement + période d'animation optionnelle. */
+export interface StageAmbientNpc extends StageEnemySprite {
+  /** Comportement de déplacement : 'work' = errance courte (~24 px), 'patrol' = plus large (~120 px). */
+  behavior: 'work' | 'patrol'
   /** Période d'une frame du geste, en ms (défaut 300). */
   framePeriodMs?: number
+  /** Nombre d'instances de ce PNJ (défaut 1 — réservé pour B5+). */
+  count?: number
 }
 
 /** Ajouts optionnels d'ambiance d'un stage (landmark + structures + PNJ + composition). */
 export interface StageExtra {
   landmark?: StageProp
   structures?: StageStructure[]
-  ambient?: StageAmbient
+  ambient?: StageAmbientNpc[]
   geometry?: StageGeometry
   zones?: DecorZone[]
   baseTileIndex?: number
@@ -205,7 +209,7 @@ const TERRAIN_VIERGE_RENDER: StageRender = {
     { key: 'struct_stage01_tape',  file: 'stage01/props/boundary_tape.png', scale: 1.0, count: 2, band: 'near' },
     { key: 'struct_stage01_plot',  file: 'stage01/structures/plot.png',     scale: 0.85, count: 3, band: 'mid'  }
   ],
-  ambient: { key: 'npc_stage01', file: 'stage01/npc/geometre_work.png', frame: 256, scale: 0.72, framePeriodMs: 320 },
+  ambient: [{ key: 'npc_stage01', file: 'stage01/npc/geometre_work.png', frame: 256, scale: 0.72, framePeriodMs: 320, behavior: 'work' }],
   // ── Composition scriptée stage 01 (terrain vierge) ───────────────────────
   // Géographie : panneau (sign=idx0) côté NE proche, algeco (cabin=idx1) côté SE,
   // barrières (tape=idx2, count:2) côté N et NO, 3 parcelles (plot=idx3-5) éparse.
@@ -285,7 +289,7 @@ const TERRASSEMENT_RENDER: StageRender = {
     { key: 'prop_s2_dozer', file: 'stage02/props/bulldozer.png', scale: 1.0, count: 1, band: 'mid' },
     { key: 'struct_stage02_pit', file: 'stage02/structures/pit_big.png', scale: 0.85, count: 3, band: 'mid' }
   ],
-  ambient: { key: 'npc_stage02', file: 'stage02/npc/chef_work.png', frame: 256, scale: 0.71, framePeriodMs: 340 },
+  ambient: [{ key: 'npc_stage02', file: 'stage02/npc/chef_work.png', frame: 256, scale: 0.71, framePeriodMs: 340, behavior: 'work' }],
   // ── Composition scriptée stage 02 (terrassement) ──────────────────────────────
   // Géographie : pelleteuse (prop_s2_excavator=idx0) côté NE, benne (idx1) côté SE,
   // compacteur (idx2=roller) à l'Ouest. Les 5 fosses distribuées sur le quart NE-SE
@@ -367,7 +371,7 @@ const FONDATIONS_RENDER: StageRender = {
     { key: 'struct_stage03_pump',     file: 'stage03/props/concrete_pump.png',   scale: 1.05, count: 1, band: 'near' },
     { key: 'struct_stage03_bay',      file: 'stage03/structures/formwork_bay.png', scale: 0.85, count: 5, band: 'mid'  }
   ],
-  ambient: { key: 'npc_stage03', file: 'stage03/npc/ferrailleur_work.png', frame: 256, scale: 0.69, framePeriodMs: 260 },
+  ambient: [{ key: 'npc_stage03', file: 'stage03/npc/ferrailleur_work.png', frame: 256, scale: 0.69, framePeriodMs: 260, behavior: 'work' }],
   // ── Composition scriptée stage 03 (fondations) ───────────────────────────────
   // Géographie : toupie (mixer_truck=idx0) côté NE proche, pompe (idx1) côté SE proche,
   // 5 travées de coffrage distribuées en arc Nord-Ouest (idle, décor).
@@ -446,7 +450,7 @@ const RESEAUX_ENTERRES_RENDER: StageRender = {
     { key: 'struct_stage04_excavator', file: 'stage04/props/mini_excavator.png',       scale: 1.1, count: 1, band: 'near' },
     { key: 'struct_stage04_trench',    file: 'stage04/structures/trench_junction.png',  scale: 0.85, count: 4, band: 'mid'  }
   ],
-  ambient: { key: 'npc_stage04', file: 'stage04/npc/electricien_work.png', frame: 256, scale: 0.71, framePeriodMs: 280 },
+  ambient: [{ key: 'npc_stage04', file: 'stage04/npc/electricien_work.png', frame: 256, scale: 0.71, framePeriodMs: 280, behavior: 'work' }],
   // ── Composition scriptée stage 04 (réseaux enterrés) ─────────────────────────
   // Géographie : mini-pelle (idx0) côté NE proche, 4 jonctions de tranchées
   // distribuées autour (NO, S, ESE, ONO). Landmark (croisement tuyaux) au Nord.
@@ -527,7 +531,7 @@ const GROS_OEUVRE_RENDER: StageRender = {
     { key: 'struct_stage05_mixer',   file: 'stage05/props/mobile_crane.png', scale: 1.05, count: 1, band: 'near' },
     { key: 'struct_stage05_wall',    file: 'stage05/structures/wall_section.png', scale: 0.85, count: 5, band: 'mid'  }
   ],
-  ambient: { key: 'npc_stage05', file: 'stage05/npc/mason_work.png', frame: 256, scale: 0.79, framePeriodMs: 280 },
+  ambient: [{ key: 'npc_stage05', file: 'stage05/npc/mason_work.png', frame: 256, scale: 0.79, framePeriodMs: 280, behavior: 'work' }],
   // ── Composition scriptée stage 05 (gros œuvre) ───────────────────────────────
   // Géographie : grue à tour (idx0) côté NE proche imposante, toupie (idx1) côté SE proche,
   // 5 sections de mur distribuées en arc O-SO-N (murs qui montent autour).
@@ -616,7 +620,7 @@ const ECHAFAUDAGES_RENDER: StageRender = {
     { key: 'struct_stage06_nacelle', file: 'stage06/props/boom_lift.png',          scale: 1.1,  count: 1, band: 'near' },
     { key: 'struct_stage06_grid',    file: 'stage06/structures/scaffold_grid.png', scale: 0.80, count: 5, band: 'mid'  }
   ],
-  ambient: { key: 'npc_stage06', file: 'stage06/npc/echafaudeur_work.png', frame: 256, scale: 0.68, framePeriodMs: 260 },
+  ambient: [{ key: 'npc_stage06', file: 'stage06/npc/echafaudeur_work.png', frame: 256, scale: 0.68, framePeriodMs: 260, behavior: 'work' }],
   // ── Composition scriptée stage 06 (échafaudages) ─────────────────────────────
   // Géographie : nacelle jaune (idx0) côté NE proche imposante, 5 grilles de cadres
   // réparties en arc O-SO-S-N (structures géométriques autour de l'arène).
@@ -704,7 +708,7 @@ const CHARPENTE_TOITURE_RENDER: StageRender = {
     { key: 'struct_stage07_load', file: 'stage07/structures/suspended_load.png', scale: 1.1,  count: 1, band: 'near' },
     { key: 'struct_stage07_truss', file: 'stage07/structures/roof_trusses.png',  scale: 0.85, count: 5, band: 'mid'  }
   ],
-  ambient: { key: 'npc_stage07', file: 'stage07/npc/couvreur_work.png', frame: 256, scale: 0.72, framePeriodMs: 240 },
+  ambient: [{ key: 'npc_stage07', file: 'stage07/npc/couvreur_work.png', frame: 256, scale: 0.72, framePeriodMs: 240, behavior: 'work' }],
   // ── Composition scriptée stage 07 (charpente/toiture) ────────────────────────
   // Géographie : charge suspendue (idx0) côté NE proche (grue au-dessus),
   // 5 fermes de toit réparties en arc O-SO-S-NO (structure bois partout).
@@ -792,7 +796,7 @@ const SECOND_OEUVRE_RENDER: StageRender = {
     { key: 'struct_stage08_van',       file: 'stage08/structures/artisan_van.png',    scale: 1.1,  count: 1, band: 'near' },
     { key: 'struct_stage08_partition', file: 'stage08/structures/partition_room.png', scale: 0.85, count: 5, band: 'mid'  }
   ],
-  ambient: { key: 'npc_stage08', file: 'stage08/npc/plaquiste_work.png', frame: 256, scale: 0.69, framePeriodMs: 280 },
+  ambient: [{ key: 'npc_stage08', file: 'stage08/npc/plaquiste_work.png', frame: 256, scale: 0.69, framePeriodMs: 280, behavior: 'work' }],
   // ── Composition scriptée stage 08 (second œuvre) ─────────────────────────────
   // Géographie : fourgon artisan (idx0) côté NE proche (artisan décharge le matériel),
   // 5 zones de cloisons distribuées en arc O-SO-S-NO (chantier intérieur partout).
@@ -880,7 +884,7 @@ const FINITIONS_RENDER: StageRender = {
     { key: 'struct_stage09_station', file: 'stage09/structures/paint_station.png', scale: 1.1,  count: 1, band: 'near' },
     { key: 'struct_stage09_room',    file: 'stage09/structures/finished_room.png', scale: 0.80, count: 4, band: 'mid'  }
   ],
-  ambient: { key: 'npc_stage09', file: 'stage09/npc/painter_work.png', frame: 256, scale: 0.74, framePeriodMs: 260 },
+  ambient: [{ key: 'npc_stage09', file: 'stage09/npc/painter_work.png', frame: 256, scale: 0.74, framePeriodMs: 260, behavior: 'work' }],
   // ── Composition scriptée stage 09 (finitions) ─────────────────────────────────
   // Géographie : station peinture (idx0) côté NE proche (peintre travaille ici),
   // 4 pièces finies distribuées en arc O-SO-S-NO (chantier presque propre partout).
@@ -969,7 +973,7 @@ const LIVRAISON_AUDIT_RENDER: StageRender = {
     { key: 'struct_stage10_van',      file: 'stage10/props/inspection_van.png',  scale: 1.1,  count: 1, band: 'near' },
     { key: 'struct_stage10_building', file: 'stage10/structures/building.png',   scale: 0.80, count: 4, band: 'mid'  }
   ],
-  ambient: { key: 'npc_stage10', file: 'stage10/npc/inspecteur_work.png', frame: 256, scale: 0.71, framePeriodMs: 340 },
+  ambient: [{ key: 'npc_stage10', file: 'stage10/npc/inspecteur_work.png', frame: 256, scale: 0.71, framePeriodMs: 340, behavior: 'work' }],
   // ── Composition scriptée stage 10 (livraison/audit) ───────────────────────────
   // Géographie : fourgon (idx0) côté NE proche (réception en cours), 4 bâtiments
   // livrés répartis en arc O-SO-S-NO (propre, aéré). Landmark (portail ruban rouge/jaune)
