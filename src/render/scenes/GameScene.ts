@@ -10,6 +10,7 @@ import { createGround } from '@render/ground'
 import { createLandmark, createStructures, phaseSalt, resolvePlacement, type ExclusionCircle } from '@render/props'
 import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { dirRow, walkFrame, idleFrame } from '@render/sprites'
+import { ambientOffset } from '@render/ambientNpc'
 import { stageRender, type StageRender, FINAL_BOSS_SKIN } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { computeHitEvents } from '@render/hitDiff'
@@ -1046,10 +1047,13 @@ export class GameScene extends Phaser.Scene {
         exclusions, placed, ambRadius, ambRng
       )
       const sprite = this.add.sprite(pos.x, pos.y, amb.key).setScale(amb.scale).setDepth(1)
+      // Seed individuel dérivé de stageSeed + index → chaque PNJ a une errance et
+      // une réplique DISTINCTES même si le tableau contient plusieurs entrées (B3 fix).
+      const npcSeed = (stageSeed ^ (npcIdx * 0x9e3779b9)) >>> 0
       this.ambientSprites.push({
         sprite,
         anchor: { x: pos.x, y: pos.y },
-        seed: npcIdx,
+        seed: npcSeed,
         behavior: amb.behavior,
         framePeriodMs: amb.framePeriodMs ?? 300
       })
@@ -1641,8 +1645,10 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // PNJ(s) d'ambiance : animation de geste (boucle lente), ils ne se battent pas.
+    // PNJ(s) d'ambiance : errance douce (B3) + animation de geste (boucle lente).
     for (const npc of this.ambientSprites) {
+      const off = ambientOffset(npc.seed, this.time.now, npc.behavior)
+      npc.sprite.setPosition(npc.anchor.x + off.dx, npc.anchor.y + off.dy)
       npc.sprite.setFrame(walkFrame(0, this.time.now, npc.framePeriodMs))
     }
 
