@@ -775,6 +775,85 @@ const SECOND_OEUVRE_RENDER: StageRender = {
   decalDensityMultiplier: 0.8  // second œuvre ordonné, densité légère (intérieur propre)
 }
 
+const FINITIONS_RENDER: StageRender = {
+  ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_stage09_${i}`, file: `stage09/ground/tile_${i}.png` })),
+  decals: [
+    { key: 'decal_stage09_paint_spot',    file: 'stage09/decals/paint_spot.png' },
+    { key: 'decal_stage09_masking_tape',  file: 'stage09/decals/masking_tape.png' }
+  ],
+  // Seul clutter streamé : pots de peinture + rouleaux + bâches + carrelage + coupe-carrelage.
+  // La station de peinture (héros) est dans `structures` (placée UNE fois).
+  props: [
+    { key: 'prop_stage09_paint',       file: 'stage09/props/paint.png',       scale: 0.70, count: 5 },
+    { key: 'prop_stage09_roller',      file: 'stage09/props/roller.png',      scale: 0.75, count: 4 },
+    { key: 'prop_stage09_tarp',        file: 'stage09/props/tarp.png',        scale: 0.80, count: 3 },
+    { key: 'prop_stage09_tile_pallet', file: 'stage09/props/tile_pallet.png', scale: 0.80, count: 3 },
+    { key: 'prop_stage09_tile_cutter', file: 'stage09/props/tile_cutter.png', scale: 0.85, count: 2 }
+  ],
+  enemies: {
+    goutte:  { key: 'enemy_stage09_base', file: 'stage09/enemies/base_walk.png', frame: 256, scale: 0.68 },
+    pinceau: { key: 'enemy_stage09_fast', file: 'stage09/enemies/fast_walk.png', frame: 256, scale: 0.63 },
+    pot:     { key: 'enemy_stage09_tank', file: 'stage09/enemies/tank_walk.png', frame: 256, scale: 0.80 }
+  },
+  boss: { key: 'boss_stage09', file: 'stage09/boss/boss_walk.png', frame: 256, scale: 1.09 },
+  // Finitions : station peinture-héros (landmark visible) + pièces finies réparties + peintre au rouleau.
+  landmark: { key: 'landmark_stage09', file: 'stage09/landmarks/finished_corner.png', scale: 1.5, count: 1 },
+  // Station peinture hero (band 'near', côté NE) + 4 pièces finies réparties (band 'mid').
+  // Ordre = ordre des angles scriptés (structureAngles).
+  structures: [
+    { key: 'struct_stage09_station', file: 'stage09/structures/paint_station.png', scale: 1.1,  count: 1, band: 'near' },
+    { key: 'struct_stage09_room',    file: 'stage09/structures/finished_room.png', scale: 0.80, count: 4, band: 'mid'  }
+  ],
+  ambient: { key: 'npc_stage09', file: 'stage09/npc/painter_work.png', frame: 256, scale: 0.74, framePeriodMs: 260 },
+  // ── Composition scriptée stage 09 (finitions) ─────────────────────────────────
+  // Géographie : station peinture (idx0) côté NE proche (peintre travaille ici),
+  // 4 pièces finies distribuées en arc O-SO-S-NO (chantier presque propre partout).
+  // Landmark (coin fini jaune) au Nord. PNJ peintre près de la station NE, rouleau en main.
+  geometry: {
+    // structureAngles[i] → structure i, dans l'ordre de `structures[]` :
+    //   0 = paint_station (NE, ~50°) — station peinture hero côté NE
+    //   1-4 = finished_room : O (175°), SO (220°), S (265°), NO (110°)
+    structureAngles: [50, 175, 220, 265, 110],
+    landmarkAngle: 70,    // coin fini-hero au Nord-Est
+    ambientAngle:  55     // peintre près de la station NE, rouleau levé
+  },
+  // Zones métier : 3 secteurs (très légère densité — chantier propre)
+  zones: [
+    // Secteur Peinture (NE) — dense en pots + rouleaux autour de la station
+    {
+      angleCenter: 50,
+      angleSpread: 55,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [0, 1],    // paint + roller
+      dominantDecalIndices: [0],      // paint_spot
+      density: 1.4
+    },
+    // Secteur Carrelage (SO) — piles de carrelage + coupe-carrelage + scotch
+    {
+      angleCenter: 220,
+      angleSpread: 60,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [3, 4],    // tile_pallet + tile_cutter
+      dominantDecalIndices: [1],      // masking_tape
+      density: 1.3
+    },
+    // Zone Bâches (SE-E) — bâches de protection + pots
+    {
+      angleCenter: 315,
+      angleSpread: 50,
+      distMin: 320,
+      distMax: 700,
+      dominantPropIndices: [2, 0],    // tarp + paint
+      dominantDecalIndices: [0, 1],   // paint_spot + masking_tape
+      density: 1.1
+    }
+  ],
+  baseTileIndex: 3,            // tuile carrelage lisse (index 3 — finitions propres)
+  decalDensityMultiplier: 0.65 // finitions très propres, densité minimale (chantier terminé)
+}
+
 export const STAGE_RENDER: Record<string, StageRender> = {
   terrain_vierge: TERRAIN_VIERGE_RENDER,
   terrassement: TERRASSEMENT_RENDER,
@@ -784,26 +863,7 @@ export const STAGE_RENDER: Record<string, StageRender> = {
   echafaudages: ECHAFAUDAGES_RENDER,
   charpente_toiture: CHARPENTE_TOITURE_RENDER,
   second_oeuvre: SECOND_OEUVRE_RENDER,
-  finitions: makeStage(
-    'stage09',
-    ['goutte', 'pinceau', 'pot'],
-    [
-      ['van', 0.8, 1],
-      ['paint', 0.7, 4],
-      ['tile_pallet', 0.75, 3]
-    ],
-    ['paint_spot'],
-    [0.68, 0.63, 0.8],
-    1.09,
-    {
-      // Finitions : pièces finies (carrelage, fenêtres) partout + peintre au rouleau.
-      landmark: { key: 'landmark_stage09', file: 'stage09/landmarks/finished_corner.png', scale: 1.5, count: 1 },
-      structures: [
-        { key: 'struct_stage09_room', file: 'stage09/structures/finished_room.png', scale: 0.8, count: 4, band: 'mid' }
-      ],
-      ambient: { key: 'npc_stage09', file: 'stage09/npc/painter_work.png', frame: 256, scale: 0.74, framePeriodMs: 260 }
-    }
-  ),
+  finitions: FINITIONS_RENDER,
   livraison_audit: makeStage(
     'stage10',
     ['formulaire', 'auditeur', 'commission'],
