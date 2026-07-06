@@ -381,7 +381,12 @@ const FONDATIONS_RENDER: StageRender = {
     { key: 'struct_stage03_pump',     file: 'stage03/props/concrete_pump.png',   scale: 1.05, count: 1, band: 'near' },
     { key: 'struct_stage03_bay',      file: 'stage03/structures/formwork_bay.png', scale: 0.85, count: 5, band: 'mid'  }
   ],
-  ambient: [{ key: 'npc_stage03', file: 'stage03/npc/ferrailleur_work.png', frame: 256, scale: 0.69, framePeriodMs: 260, behavior: 'work' }],
+  ambient: [
+    { key: 'npc_stage03',          file: 'stage03/npc/ferrailleur_work.png', frame: 256, scale: 0.69,  framePeriodMs: 260, behavior: 'work' },
+    { key: 'npc_stage03_coffreur', file: 'stage03/npc/coffreur_work.png',    frame: 256, scale: 1.532, framePeriodMs: 300, behavior: 'work' },
+    { key: 'npc_stage03_betonnier',file: 'stage03/npc/betonnier_work.png',   frame: 256, scale: 1.532, framePeriodMs: 300, behavior: 'patrol' },
+    { key: 'npc_stage03_cimentier',file: 'stage03/npc/cimentier_work.png',   frame: 256, scale: 1.484, framePeriodMs: 300, behavior: 'work' }
+  ],
   // ── Composition scriptée stage 03 (fondations) ───────────────────────────────
   // Géographie : toupie (mixer_truck=idx0) côté NE proche, pompe (idx1) côté SE proche,
   // 5 travées de coffrage distribuées en arc Nord-Ouest (idle, décor).
