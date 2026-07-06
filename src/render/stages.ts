@@ -645,7 +645,12 @@ const ECHAFAUDAGES_RENDER: StageRender = {
     { key: 'struct_stage06_nacelle', file: 'stage06/props/boom_lift.png',          scale: 1.1,  count: 1, band: 'near' },
     { key: 'struct_stage06_grid',    file: 'stage06/structures/scaffold_grid.png', scale: 0.80, count: 5, band: 'mid'  }
   ],
-  ambient: [{ key: 'npc_stage06', file: 'stage06/npc/echafaudeur_work.png', frame: 256, scale: 0.68, framePeriodMs: 260, behavior: 'work' }],
+  ambient: [
+    { key: 'npc_stage06',                file: 'stage06/npc/echafaudeur_work.png',    frame: 256, scale: 0.68, framePeriodMs: 260, behavior: 'work' },
+    { key: 'npc_stage06_monteur_tube',   file: 'stage06/npc/monteur_tube_work.png',   frame: 256, scale: 1.61, framePeriodMs: 300, behavior: 'patrol' },
+    { key: 'npc_stage06_porteur_planche',file: 'stage06/npc/porteur_planche_work.png',frame: 256, scale: 1.51, framePeriodMs: 300, behavior: 'patrol' },
+    { key: 'npc_stage06_porteur_echelle',file: 'stage06/npc/porteur_echelle_work.png',frame: 256, scale: 1.34, framePeriodMs: 300, behavior: 'patrol' },
+  ],
   // ── Composition scriptée stage 06 (échafaudages) ─────────────────────────────
   // Géographie : nacelle jaune (idx0) côté NE proche imposante, 5 grilles de cadres
   // réparties en arc O-SO-S-N (structures géométriques autour de l'arène).
