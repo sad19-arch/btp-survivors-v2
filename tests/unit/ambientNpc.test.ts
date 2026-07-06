@@ -6,6 +6,13 @@ describe('ambientNpc (pur)', () => {
     expect(pickPhrase(3)).toBe(pickPhrase(3))
     expect(NAG_PHRASES).toContain(pickPhrase(3))
   })
+  it('pickPhrase reste dans le pool pour des seeds négatifs (seed PNJ = XOR pouvant déborder en négatif)', () => {
+    for (const seed of [-1, -4, -7, -123456, -0x9e3779b9]) {
+      expect(NAG_PHRASES).toContain(pickPhrase(seed))
+    }
+    // -1 mod 4 → dernière phrase (idiome `((s % n) + n) % n`), pas un index négatif.
+    expect(pickPhrase(-1)).toBe(NAG_PHRASES[NAG_PHRASES.length - 1])
+  })
   it('ambientOffset borné + déterministe', () => {
     for (const t of [0, 500, 1234, 99999]) {
       const o = ambientOffset(7, t, 'work')

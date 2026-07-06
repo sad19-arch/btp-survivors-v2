@@ -448,7 +448,7 @@ const CSS = `
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background: rgba(43, 32, 24, 0.85);
+  background: ${PALETTE.brunSombre}D9; /* brunSombre @ ~85% (palette, pas de rgb() en dur) */
   border: 3px solid ${PALETTE.contour};
   box-shadow: 4px 4px 0 ${PALETTE.contour};
   padding: 6px;
@@ -462,8 +462,7 @@ const CSS = `
 /* Aire de tracé : fond sombre, marqueurs positionnés en absolu. */
 #ui-root .minimap__field {
   position: relative;
-  width: 200px;
-  height: 150px;
+  /* Dimensions fixées par le JS (source unique FIELD_W/FIELD_H dans minimap.ts). */
   background: ${PALETTE.brunSombre};
   border: 2px solid ${PALETTE.contour};
   box-sizing: border-box;
@@ -487,7 +486,7 @@ const CSS = `
   border: 2px solid ${PALETTE.contour};
 }
 #ui-root .minimap__dot--prisoner {
-  background: ${PALETTE.jauneSecurite};
+  background: ${PALETTE.vertBonus};
   border: 1px solid ${PALETTE.contour};
 }
 #ui-root .minimap__dot--boss {

@@ -16,6 +16,10 @@ test('mini-carte : présente, togglable, marqueurs prisonniers', async ({ page }
   const map = page.locator('.minimap')
   await expect(map).toBeVisible()
 
+  // La mise à jour des marqueurs est throttlée (~4 frames) → attendre explicitement
+  // qu'au moins un marqueur prisonnier soit rendu avant de compter (robustesse).
+  await page.locator('.minimap__dot--prisoner').first().waitFor({ state: 'attached', timeout: 15000 })
+
   // 5 prisonniers au départ (RESCUE.count).
   await expect(page.locator('.minimap__dot--prisoner')).toHaveCount(5)
 

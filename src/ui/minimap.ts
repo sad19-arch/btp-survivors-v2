@@ -17,7 +17,11 @@ export function worldToMinimap(
   return { mx, my }
 }
 
-/** Dimensions (px) de l'aire de tracé — doit rester synchrone avec `.minimap__field` (styles.ts). */
+/**
+ * Dimensions (px) de l'aire de tracé — SOURCE UNIQUE : appliquées directement au
+ * `.minimap__field` dans le constructeur, donc styles.ts n'a plus à les redéclarer
+ * (fini le couplage implicite CSS ↔ JS).
+ */
 const FIELD_W = 200
 const FIELD_H = 150
 
@@ -40,14 +44,17 @@ export class Minimap {
   private readonly counter: HTMLElement
 
   constructor() {
-    this.counter = h('div', { className: 'minimap__counter', text: 'Ouvriers 0/0' })
+    this.counter = h('div', { className: 'minimap__counter', text: 'Prisonniers 0/0' })
     this.field = h('div', { className: 'minimap__field' })
+    // Dimensions pilotées par le JS (source unique FIELD_W/FIELD_H).
+    this.field.style.width = `${FIELD_W}px`
+    this.field.style.height = `${FIELD_H}px`
     this.el = h('div', { className: 'minimap' }, this.counter, this.field)
   }
 
   /** Reconstruit les marqueurs depuis l'état courant (appelé throttlé par l'overlay). */
   update(state: MinimapState): void {
-    this.counter.textContent = `Ouvriers ${state.rescue.rescued}/${state.rescue.total}`
+    this.counter.textContent = `Prisonniers ${state.rescue.rescued}/${state.rescue.total}`
     clear(this.field)
     // Prisonniers non libérés (marqueur cage jaune) — classe stable pour l'e2e.
     for (const p of state.prisoners) {
