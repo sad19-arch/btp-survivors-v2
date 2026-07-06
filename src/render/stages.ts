@@ -289,7 +289,12 @@ const TERRASSEMENT_RENDER: StageRender = {
     { key: 'prop_s2_dozer', file: 'stage02/props/bulldozer.png', scale: 1.0, count: 1, band: 'mid' },
     { key: 'struct_stage02_pit', file: 'stage02/structures/pit_big.png', scale: 0.85, count: 3, band: 'mid' }
   ],
-  ambient: [{ key: 'npc_stage02', file: 'stage02/npc/chef_work.png', frame: 256, scale: 0.71, framePeriodMs: 340, behavior: 'work' }],
+  ambient: [
+    { key: 'npc_stage02',           file: 'stage02/npc/chef_work.png',      frame: 256, scale: 0.71,  framePeriodMs: 340, behavior: 'work' },
+    { key: 'npc_stage02_signaleur', file: 'stage02/npc/signaleur_work.png', frame: 256, scale: 1.53,  framePeriodMs: 300, behavior: 'patrol' },
+    { key: 'npc_stage02_porteur',   file: 'stage02/npc/porteur_work.png',   frame: 256, scale: 1.61,  framePeriodMs: 300, behavior: 'work' },
+    { key: 'npc_stage02_macon',     file: 'stage02/npc/macon_work.png',     frame: 256, scale: 1.61,  framePeriodMs: 320, behavior: 'work' }
+  ],
   // ── Composition scriptée stage 02 (terrassement) ──────────────────────────────
   // Géographie : pelleteuse (prop_s2_excavator=idx0) côté NE, benne (idx1) côté SE,
   // compacteur (idx2=roller) à l'Ouest. Les 5 fosses distribuées sur le quart NE-SE
