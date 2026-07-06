@@ -258,46 +258,6 @@ const TERRASSEMENT_RENDER: StageRender = {
   decalDensityMultiplier: 1.2 // chantier brut, mais sans « papier peint » (trame trop régulière si trop dense)
 }
 
-/** Spécification compacte d'un prop : [nom de fichier (sans ext), échelle, nombre]. */
-type PropSpec = readonly [name: string, scale: number, count: number]
-
-function buildProps(prefix: string, specs: readonly PropSpec[]): StageProp[] {
-  return specs.map(([name, scale, count]) => ({
-    key: `prop_${prefix}_${name}`,
-    file: `${prefix}/props/${name}.png`,
-    scale,
-    count
-  }))
-}
-
-/**
- * Construit la config de rendu d'un stage 03-10 (assets produits à la demande ;
- * repli cercle tant que les feuilles n'existent pas). `ids` = [base, fast, tank]
- * (mêmes ids que le pool de la phase). Échelles calibrées comme le stage 02 (art
- * v3 similaire) — à affiner au calibrage réel de chaque stage.
- */
-function makeStage(
-  prefix: string,
-  ids: readonly [string, string, string],
-  propSpecs: readonly PropSpec[],
-  decals: readonly string[],
-  enemyScales: readonly [number, number, number] = [0.74, 0.64, 0.8],
-  bossScale = 0.7,
-  extra: StageExtra = {}
-): StageRender {
-  return {
-    ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_${prefix}_${i}`, file: `${prefix}/ground/tile_${i}.png` })),
-    decals: decals.map((d) => ({ key: `decal_${prefix}_${d}`, file: `${prefix}/decals/${d}.png` })),
-    props: buildProps(prefix, propSpecs),
-    enemies: {
-      [ids[0]]: { key: `enemy_${prefix}_base`, file: `${prefix}/enemies/base_walk.png`, frame: 256, scale: enemyScales[0] },
-      [ids[1]]: { key: `enemy_${prefix}_fast`, file: `${prefix}/enemies/fast_walk.png`, frame: 256, scale: enemyScales[1] },
-      [ids[2]]: { key: `enemy_${prefix}_tank`, file: `${prefix}/enemies/tank_walk.png`, frame: 256, scale: enemyScales[2] }
-    },
-    boss: { key: `boss_${prefix}`, file: `${prefix}/boss/boss_walk.png`, frame: 256, scale: bossScale },
-    ...extra
-  }
-}
 
 const FONDATIONS_RENDER: StageRender = {
   ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_stage03_${i}`, file: `stage03/ground/tile_${i}.png` })),
@@ -854,6 +814,86 @@ const FINITIONS_RENDER: StageRender = {
   decalDensityMultiplier: 0.65 // finitions très propres, densité minimale (chantier terminé)
 }
 
+const LIVRAISON_AUDIT_RENDER: StageRender = {
+  ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_stage10_${i}`, file: `stage10/ground/tile_${i}.png` })),
+  decals: [
+    { key: 'decal_stage10_crack',  file: 'stage10/decals/crack_orange.png' },
+    { key: 'decal_stage10_tape',   file: 'stage10/decals/tape_line.png' }
+  ],
+  // Clutter streamé : cônes alignés + panneau OK + projecteur + barrières propres.
+  // Le fourgon d'inspection (héros) et les bâtiments finis sont dans `structures` (placés 1 fois).
+  props: [
+    { key: 'prop_stage10_cones',     file: 'stage10/props/cones.png',     scale: 0.80, count: 5 },
+    { key: 'prop_stage10_sign_ok',   file: 'stage10/props/sign_ok.png',   scale: 0.85, count: 3 },
+    { key: 'prop_stage10_projector', file: 'stage10/props/projector.png', scale: 0.90, count: 2 },
+    { key: 'prop_stage10_barrier',   file: 'stage10/props/barrier.png',   scale: 0.85, count: 3 }
+  ],
+  enemies: {
+    formulaire: { key: 'enemy_stage10_base', file: 'stage10/enemies/base_walk.png', frame: 256, scale: 0.65 },
+    auditeur:   { key: 'enemy_stage10_fast', file: 'stage10/enemies/fast_walk.png', frame: 256, scale: 0.65 },
+    commission: { key: 'enemy_stage10_tank', file: 'stage10/enemies/tank_walk.png', frame: 256, scale: 0.88 }
+  },
+  boss: { key: 'boss_stage10', file: 'stage10/boss/boss_walk.png', frame: 256, scale: 1.25 },
+  // Livraison/audit : portail/ruban-héros (landmark) + fourgon d'inspection (band 'near') +
+  // bâtiments finis en fond (band 'mid') + fissures orange discrètes (menace narrative).
+  landmark: { key: 'landmark_stage10', file: 'stage10/landmarks/gate.png', scale: 1.5, count: 1 },
+  // Fourgon d'inspection hero (band 'near', côté NE) + 4 bâtiments finis répartis (band 'mid').
+  // Ordre = ordre des angles scriptés (structureAngles).
+  structures: [
+    { key: 'struct_stage10_van',      file: 'stage10/props/inspection_van.png',  scale: 1.1,  count: 1, band: 'near' },
+    { key: 'struct_stage10_building', file: 'stage10/structures/building.png',   scale: 0.80, count: 4, band: 'mid'  }
+  ],
+  ambient: { key: 'npc_stage10', file: 'stage10/npc/inspecteur_work.png', frame: 256, scale: 0.71, framePeriodMs: 340 },
+  // ── Composition scriptée stage 10 (livraison/audit) ───────────────────────────
+  // Géographie : fourgon (idx0) côté NE proche (réception en cours), 4 bâtiments
+  // livrés répartis en arc O-SO-S-NO (propre, aéré). Landmark (portail ruban rouge/jaune)
+  // au Nord. PNJ agent de réception près du fourgon NE, note en main.
+  // Tension narrative : fissures orange discrètes au sol dans la zone SE (malfaçon cachée).
+  geometry: {
+    // structureAngles[i] → structure i, dans l'ordre de `structures[]` :
+    //   0 = inspection_van (NE, ~50°) — fourgon d'inspection hero côté NE
+    //   1-4 = building : O (175°), SO (225°), S (265°), NO (110°)
+    structureAngles: [50, 175, 225, 265, 110],
+    landmarkAngle: 70,    // portail ruban-hero au Nord-Est
+    ambientAngle:  55     // agent de réception près du fourgon NE, note en main
+  },
+  // Zones métier : 3 secteurs (densité minimale — livraison propre, tension sous-jacente)
+  zones: [
+    // Secteur Réception (NE) — cônes + panneaux OK autour du fourgon
+    {
+      angleCenter: 50,
+      angleSpread: 55,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [0, 1],    // cones + sign_ok
+      dominantDecalIndices: [1],      // tape_line (balisage propre)
+      density: 1.3
+    },
+    // Secteur Malfaçon cachée (SE) — fissures orange + projecteurs (audit nocturne)
+    {
+      angleCenter: 315,
+      angleSpread: 55,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [2, 3],    // projector + barrier
+      dominantDecalIndices: [0],      // crack_orange (fissures = menace narrative)
+      density: 1.2
+    },
+    // Zone Périmètre (Ouest) — barrières propres + fissures discrètes
+    {
+      angleCenter: 185,
+      angleSpread: 60,
+      distMin: 320,
+      distMax: 720,
+      dominantPropIndices: [3, 1],    // barrier + sign_ok
+      dominantDecalIndices: [0, 1],   // crack_orange + tape_line
+      density: 0.9
+    }
+  ],
+  baseTileIndex: 2,            // tuile propre/clair (index 2 — livraison nette)
+  decalDensityMultiplier: 0.6  // densité minimale (chantier livré, propre + tension discrète)
+}
+
 export const STAGE_RENDER: Record<string, StageRender> = {
   terrain_vierge: TERRAIN_VIERGE_RENDER,
   terrassement: TERRASSEMENT_RENDER,
@@ -864,26 +904,7 @@ export const STAGE_RENDER: Record<string, StageRender> = {
   charpente_toiture: CHARPENTE_TOITURE_RENDER,
   second_oeuvre: SECOND_OEUVRE_RENDER,
   finitions: FINITIONS_RENDER,
-  livraison_audit: makeStage(
-    'stage10',
-    ['formulaire', 'auditeur', 'commission'],
-    [
-      ['inspection_van', 1.0, 1],
-      ['sign_ok', 0.9, 2],
-      ['cones', 0.6, 5]
-    ],
-    ['tape_line'],
-    [0.65, 0.65, 0.88],
-    1.25,
-    {
-      // Livraison/audit : bâtiments livrés « CONFORME » partout + inspecteur qui note.
-      landmark: { key: 'landmark_stage10', file: 'stage10/landmarks/gate.png', scale: 1.5, count: 1 },
-      structures: [
-        { key: 'struct_stage10_building', file: 'stage10/structures/building.png', scale: 0.7, count: 5, band: 'mid' }
-      ],
-      ambient: { key: 'npc_stage10', file: 'stage10/npc/inspecteur_work.png', frame: 256, scale: 0.71, framePeriodMs: 340 }
-    }
-  )
+  livraison_audit: LIVRAISON_AUDIT_RENDER
 }
 
 /** Config de rendu d'un stage, avec repli sur le terrain vierge. */
