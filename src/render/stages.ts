@@ -551,7 +551,12 @@ const GROS_OEUVRE_RENDER: StageRender = {
     { key: 'struct_stage05_mixer',   file: 'stage05/props/mobile_crane.png', scale: 1.05, count: 1, band: 'near' },
     { key: 'struct_stage05_wall',    file: 'stage05/structures/wall_section.png', scale: 0.85, count: 5, band: 'mid'  }
   ],
-  ambient: [{ key: 'npc_stage05', file: 'stage05/npc/mason_work.png', frame: 256, scale: 0.79, framePeriodMs: 280, behavior: 'work' }],
+  ambient: [
+    { key: 'npc_stage05',              file: 'stage05/npc/mason_work.png',        frame: 256, scale: 0.79,  framePeriodMs: 280, behavior: 'work' },
+    { key: 'npc_stage05_parpaingueur', file: 'stage05/npc/parpaingueur_work.png', frame: 256, scale: 1.462, framePeriodMs: 300, behavior: 'work' },
+    { key: 'npc_stage05_porteur_blocs',file: 'stage05/npc/porteur_blocs_work.png',frame: 256, scale: 1.508, framePeriodMs: 300, behavior: 'patrol' },
+    { key: 'npc_stage05_grutier',      file: 'stage05/npc/grutier_work.png',      frame: 256, scale: 1.610, framePeriodMs: 320, behavior: 'work' }
+  ],
   // ── Composition scriptée stage 05 (gros œuvre) ───────────────────────────────
   // Géographie : grue à tour (idx0) côté NE proche imposante, toupie (idx1) côté SE proche,
   // 5 sections de mur distribuées en arc O-SO-N (murs qui montent autour).
