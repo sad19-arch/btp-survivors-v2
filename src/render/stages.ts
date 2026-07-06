@@ -924,7 +924,12 @@ const FINITIONS_RENDER: StageRender = {
     { key: 'struct_stage09_station', file: 'stage09/structures/paint_station.png', scale: 1.1,  count: 1, band: 'near' },
     { key: 'struct_stage09_room',    file: 'stage09/structures/finished_room.png', scale: 0.80, count: 4, band: 'mid'  }
   ],
-  ambient: [{ key: 'npc_stage09', file: 'stage09/npc/painter_work.png', frame: 256, scale: 0.74, framePeriodMs: 260, behavior: 'work' }],
+  ambient: [
+    { key: 'npc_stage09',           file: 'stage09/npc/painter_work.png',      frame: 256, scale: 0.74,  framePeriodMs: 260, behavior: 'work' },
+    { key: 'npc_stage09_carreleur', file: 'stage09/npc/carreleur_work.png',    frame: 256, scale: 1.439, framePeriodMs: 300, behavior: 'work' },
+    { key: 'npc_stage09_poseur_sol',file: 'stage09/npc/poseur_sol_work.png',   frame: 256, scale: 1.462, framePeriodMs: 300, behavior: 'work' },
+    { key: 'npc_stage09_porteur_pots', file: 'stage09/npc/porteur_pots_work.png', frame: 256, scale: 1.583, framePeriodMs: 300, behavior: 'patrol' }
+  ],
   // ── Composition scriptée stage 09 (finitions) ─────────────────────────────────
   // Géographie : station peinture (idx0) côté NE proche (peintre travaille ici),
   // 4 pièces finies distribuées en arc O-SO-S-NO (chantier presque propre partout).
