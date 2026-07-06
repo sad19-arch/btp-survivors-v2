@@ -213,9 +213,9 @@ export const FINAL_BOSS = {
  * via un RNG dédié (n'altère pas la séquence de spawn/upgrade). Libéré par simple
  * proximité → petit soin en récompense.
  *
- * ⚠️ ÉQUILIBRAGE : `heal > 0` viole la marge zéro du tuning « skill récompensé ».
- * `heal` est volontairement modeste ; à re-vérifier via `npm run sim` et à réduire
- * si une cible bascule (cf. balance-zero-margin).
+ * ÉQUILIBRAGE : 5 prisonniers éparpillés LOIN (`distMin`/`distMax`), chacun rend
+ * `healFraction` du maxHp. Le trajet (exposition à la horde) est le prix — les bots
+ * sim ne détournent pas vers eux, donc `sim:check` reste VERT (cf. vie-du-chantier).
  */
 export const RESCUE = {
   /** Rayon de proximité (px) pour déclencher la libération. */
