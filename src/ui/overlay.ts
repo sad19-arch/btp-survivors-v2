@@ -2,6 +2,7 @@ import { h, clear } from './h'
 import { injectStyles } from './styles'
 import { playerColor } from '@content/players'
 import { gamepadHudModel } from './gamepadHud'
+import { Minimap } from './minimap'
 import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView } from '@/app/appState'
 
 /**
@@ -30,6 +31,12 @@ export class Overlay {
   private readonly jackpotLayer: HTMLElement
   /** Timer de fermeture automatique du panneau jackpot. */
   private jackpotTimer: number | null = null
+  /** Mini-carte (bas-gauche) — prisonniers/boss/coffres/joueur, togglable. */
+  private readonly minimap: Minimap
+  /** Compteur de frames pour throttler la maj de la mini-carte (~toutes les 4 frames). */
+  private minimapFrame = 0
+  /** Mini-carte visible à la frame précédente — force une maj immédiate à l'apparition. */
+  private minimapWasShown = false
   /** Signature (ids+niveaux) du dernier inventaire rendu — évite de reconstruire à chaque frame. */
   private inventorySignature = ''
   private signature = ''
@@ -54,6 +61,8 @@ export class Overlay {
     this.inventoryLayer = h('div')
     this.padLayer = h('div', { className: 'pads' })
     this.jackpotLayer = h('div')
+    this.minimap = new Minimap()
+    this.minimap.setVisible(false)
     root.append(
       this.hud,
       this.screenLayer,
@@ -62,7 +71,8 @@ export class Overlay {
       this.bossLayer,
       this.inventoryLayer,
       this.padLayer,
-      this.jackpotLayer
+      this.jackpotLayer,
+      this.minimap.el
     )
   }
 
@@ -75,6 +85,34 @@ export class Overlay {
     this.syncBossBar(state)
     this.syncInventory(state)
     this.syncGamepads(state)
+    this.syncMinimap(state)
+  }
+
+  /**
+   * Mini-carte (bas-gauche) : visible seulement en écran `game` (hors intro) ET
+   * si `minimapVisible` (toggle M / manette). Repositionne ses marqueurs toutes
+   * les ~4 frames (throttle, comme l'inventaire/décor) — les entités bougent,
+   * mais pas besoin d'un rebuild à 60 Hz.
+   */
+  private syncMinimap(state: AppViewState): void {
+    const show = state.screen === 'game' && !state.introActive && state.minimapVisible
+    this.minimap.setVisible(show)
+    if (!show) {
+      this.minimapWasShown = false
+      return
+    }
+    // À l'apparition : maj immédiate (sinon panneau vide quelques frames). Ensuite throttle.
+    if (!this.minimapWasShown) {
+      this.minimapWasShown = true
+      this.minimapFrame = 0
+      this.minimap.update(state)
+      return
+    }
+    this.minimapFrame = (this.minimapFrame + 1) % 4
+    if (this.minimapFrame !== 0) {
+      return
+    }
+    this.minimap.update(state)
   }
 
   /**

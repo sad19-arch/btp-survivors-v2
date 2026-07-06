@@ -439,6 +439,69 @@ const CSS = `
   to   { opacity: 1; transform: translate(-50%, -50%); }
 }
 #ui-root .jackpot { animation: jackpot-in 0.18s ease-out; }
+/* Mini-carte (bas-gauche) : panneau pixel 16-bit, coins carrés, bordure noire,
+   ombre portée décalée. Aucun gradient/glow/coin arrondi (DA stricte). */
+#ui-root .minimap {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(43, 32, 24, 0.85);
+  border: 3px solid ${PALETTE.contour};
+  box-shadow: 4px 4px 0 ${PALETTE.contour};
+  padding: 6px;
+}
+#ui-root .minimap__counter {
+  color: ${PALETTE.jauneSecurite};
+  font-size: 12px;
+  font-weight: bold;
+  text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+/* Aire de tracé : fond sombre, marqueurs positionnés en absolu. */
+#ui-root .minimap__field {
+  position: relative;
+  width: 200px;
+  height: 150px;
+  background: ${PALETTE.brunSombre};
+  border: 2px solid ${PALETTE.contour};
+  box-sizing: border-box;
+  overflow: hidden;
+}
+/* Marqueur : petit carré pixel (pas de rond), centré sur sa position. */
+#ui-root .minimap__dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  margin-top: -3px;
+  background: ${PALETTE.blanc};
+  box-sizing: border-box;
+}
+#ui-root .minimap__dot--player {
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  margin-top: -4px;
+  border: 2px solid ${PALETTE.contour};
+}
+#ui-root .minimap__dot--prisoner {
+  background: ${PALETTE.jauneSecurite};
+  border: 1px solid ${PALETTE.contour};
+}
+#ui-root .minimap__dot--boss {
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  margin-top: -4px;
+  background: ${PALETTE.rougeAlerte};
+  border: 1px solid ${PALETTE.contour};
+}
+#ui-root .minimap__dot--coffre {
+  background: ${PALETTE.jauneSecurite};
+  border: 1px solid ${PALETTE.orangeDanger};
+}
 `
 
 let injected = false

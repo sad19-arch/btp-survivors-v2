@@ -112,6 +112,11 @@ export class App {
    * propre — sinon les sprites/VFX de la partie précédente s'accumulent (fuite).
    */
   private runId = 0
+  /**
+   * Mini-carte affichée (bas-gauche). Purement UI (observer-only) : bascule
+   * clavier `M` / bouton manette Back/Select via `toggleMinimap()`. Défaut visible.
+   */
+  minimapVisible = true
 
   constructor(opts: AppOptions) {
     this.seed = opts.seed
@@ -349,6 +354,12 @@ export class App {
     this.refreshFocus()
   }
 
+  /** Bascule l'affichage de la mini-carte (touche M / bouton Back/Select). Purement UI. */
+  toggleMinimap(): void {
+    this.minimapVisible = !this.minimapVisible
+    this.bumpState()
+  }
+
   /** Choisit une carte d'upgrade par index (API directe pour le seam). */
   chooseUpgrade(index: number): void {
     this.bumpState()
@@ -446,7 +457,8 @@ export class App {
       stageOrder: phase?.order ?? 0,
       characterSelect: this.charSelectOpen
         ? { player: this.charSelectPlayer, total: this.selectedPlayers }
-        : null
+        : null,
+      minimapVisible: this.minimapVisible
     }
   }
 

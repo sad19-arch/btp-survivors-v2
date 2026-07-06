@@ -79,4 +79,6 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   stageOrder: number
   /** Sélection de personnage en cours (joueur actif / total) ; `null` hors de ce flux. */
   characterSelect: { player: number; total: number } | null
+  /** Mini-carte affichée (bas-gauche) — bascule clavier M / manette Back/Select. */
+  minimapVisible: boolean
 }
