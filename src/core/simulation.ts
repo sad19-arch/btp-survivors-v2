@@ -128,6 +128,8 @@ export class Simulation {
   private pendingLevelUp: PendingLevelUp | null = null
   /** PV totaux des joueurs au pas précédent → détecte les dégâts (SFX, observation pure). */
   private prevHpTotal = 0
+  /** Nombre de prisonniers libérés depuis le début de la run (progression des sauvetages). */
+  private rescuedTotal = 0
   private readonly inputs = new Map<number, PlayerInput>()
   private readonly playerEntities = new Map<number, EntityId>()
   /** Index spatial des ennemis (positions courantes, post-mouvement), reconstruit chaque pas
@@ -281,6 +283,7 @@ export class Simulation {
       projectiles: this.collectProjectiles(),
       pickups: this.collectPickups(),
       prisoners: this.collectPrisoners(),
+      rescue: { total: RESCUE.count, rescued: this.rescuedTotal },
       hazards: this.collectHazards(),
       pendingLevelUp: this.pendingLevelUp
     }
@@ -426,8 +429,9 @@ export class Simulation {
     this.pendingLevelUp = null
     this.inputs.clear()
     this.playerEntities.clear()
+    this.rescuedTotal = 0
     this.spawnPlayers()
-    this.spawnPrisoner()
+    this.spawnPrisoners()
     this.prevHpTotal = this.totalPlayerHp()
   }
 
@@ -440,18 +444,22 @@ export class Simulation {
     return total
   }
 
-  /** Place l'unique ouvrier prisonnier de la run (position seedée, à distance du centre). */
-  private spawnPrisoner(): void {
+  /** Place les `RESCUE.count` prisonniers, éparpillés loin dans des secteurs distincts. */
+  private spawnPrisoners(): void {
     const cx = WORLD.width / 2
     const cy = WORLD.height / 2
-    const angle = this.prisonerRng.float(0, Math.PI * 2)
-    const dist = this.prisonerRng.float(RESCUE.minDist, RESCUE.maxDist)
     const margin = 80
-    const x = Math.min(WORLD.width - margin, Math.max(margin, cx + Math.cos(angle) * dist))
-    const y = Math.min(WORLD.height - margin, Math.max(margin, cy + Math.sin(angle) * dist))
-    const e = this.world.spawn()
-    this.world.add(e, 'position', { x, y })
-    this.world.add(e, 'prisoner', { freed: false })
+    const base = this.prisonerRng.float(0, Math.PI * 2)
+    for (let i = 0; i < RESCUE.count; i++) {
+      const jitter = this.prisonerRng.float(-0.35, 0.35) // ±20°
+      const angle = base + (i * 2 * Math.PI) / RESCUE.count + jitter
+      const dist = this.prisonerRng.float(RESCUE.distMin, RESCUE.distMax)
+      const x = Math.min(WORLD.width - margin, Math.max(margin, cx + Math.cos(angle) * dist))
+      const y = Math.min(WORLD.height - margin, Math.max(margin, cy + Math.sin(angle) * dist))
+      const e = this.world.spawn()
+      this.world.add(e, 'position', { x, y })
+      this.world.add(e, 'prisoner', { freed: false })
+    }
   }
 
   private spawnPlayers(): void {
@@ -524,6 +532,7 @@ export class Simulation {
     pickupSystem(this.world, dtMs, collected, chestCollectors)
     this.handleChestPickups(chestCollectors)
     rescueSystem(this.world, freed)
+    this.rescuedTotal += freed.length
     projectileLifetimeSystem(this.world, dtMs)
     hazardSystem(this.world, dtMs, this.enemyGrid)
     // Après collision/reap (les joueurs peuvent tomber à terre ce pas-ci), avant les

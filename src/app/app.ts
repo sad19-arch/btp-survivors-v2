@@ -770,6 +770,7 @@ function emptyState(seed: number, stageId: ConstructionPhaseId): GameState {
     projectiles: [],
     pickups: [],
     prisoners: [],
+    rescue: { total: 0, rescued: 0 },
     hazards: [],
     pendingLevelUp: null
   }

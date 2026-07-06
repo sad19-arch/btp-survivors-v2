@@ -220,12 +220,14 @@ export const FINAL_BOSS = {
 export const RESCUE = {
   /** Rayon de proximité (px) pour déclencher la libération. */
   radius: 64,
-  /** PV rendus au joueur libérateur (borné à maxHp). */
-  heal: 40,
-  /** Distance min/max du spawn au centre du monde (évite l'auto-libération au départ). */
-  minDist: 360,
-  maxDist: 560,
-  /** Vitesse de fuite (px/s) de l'ouvrier libéré, qui part vers le bas hors écran. */
+  /** Fraction du maxHp du libérateur rendue en PV (remplace le soin plat). */
+  healFraction: 0.30,
+  /** Nombre de prisonniers éparpillés par run. */
+  count: 5,
+  /** Distance min/max au centre du monde (éparpillement lointain, exploration). */
+  distMin: 1600,
+  distMax: 3800,
+  /** Vitesse de fuite (px/s) de l'ouvrier libéré (part vers le bas hors écran). */
   fleeSpeed: 260
 } as const
 
