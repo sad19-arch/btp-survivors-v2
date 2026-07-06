@@ -311,12 +311,15 @@ export class AudioDirector {
       this.onScreenEnter(state)
       this.prevScreen = state.screen
     }
+    // Un seul scan O(N) du boss par frame (partagé entre voix dérivées et musique)
+    // au lieu d'un `.some` + un `.find` séparés (N jusqu'à 500+ ennemis en horde).
+    const boss = state.enemies.find((e) => e.isBoss)
     // Voix DÉRIVÉES de l'état pendant le jeu (boss faible, PV joueur bas).
     if (state.screen === 'game') {
-      this.checkDerivedVoices(state)
+      this.checkDerivedVoices(state, boss)
     }
     // Musique de fond (boss prioritaire, rotation par phase).
-    const bossPresent = state.enemies.some((e) => e.isBoss)
+    const bossPresent = boss !== undefined
     const desired = musicForState({ screen: state.screen, stageId: state.stageId, bossPresent })
     if (desired !== this.currentKey) {
       this.switchMusic(desired)
@@ -359,8 +362,7 @@ export class AudioDirector {
    *  - boss à ≤ 20 % PV → « finish him » (une fois par boss) ;
    *  - PV du joueur ≤ 25 % → appel à l'aide (une fois par passage, hystérésis à 40 %).
    */
-  private checkDerivedVoices(state: AppViewState): void {
-    const boss = state.enemies.find((e) => e.isBoss)
+  private checkDerivedVoices(state: AppViewState, boss: AppViewState['enemies'][number] | undefined): void {
     if (boss !== undefined) {
       if (!this.bossFinishSaid && boss.maxHp > 0 && boss.hp / boss.maxHp <= 0.20) {
         this.bossFinishSaid = true

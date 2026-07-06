@@ -195,6 +195,16 @@ export class GameScene extends Phaser.Scene {
   private readonly projectileSprites = new Map<number, CharSprite>()
   private readonly pickupSprites = new Map<number, CharSprite>()
   /**
+   * Ensembles « vus cette frame » réutilisés (culling des sprites orphelins).
+   * Alloués une fois et vidés (`.clear()`) à chaque frame plutôt que recréés,
+   * pour éviter ~5 allocations/frame (240+ objets/s en horde → pauses GC).
+   */
+  private readonly seenHazScratch = new Set<number>()
+  private readonly seenEnemyScratch = new Set<number>()
+  private readonly seenProjScratch = new Set<number>()
+  private readonly seenPickupScratch = new Set<number>()
+  private readonly seenPrisonerScratch = new Set<number>()
+  /**
    * B4 — Epoch du dernier scintillement pixel par gemme XP (id → index de période).
    * Permet de ne spawner qu'un seul carré par période (~900ms) quelle que soit la cadence.
    * Nettoyé en même temps que `pickupSprites` (id disparu = supprimé des deux).
@@ -1334,7 +1344,8 @@ export class GameScene extends Phaser.Scene {
     // à l'échelle du rayon. Repli sur un cercle Graphics si la texture est absente.
     this.hazardGraphics.clear()
     const useTarSprite = this.textures.exists('vfx_goudron')
-    const seenHaz = new Set<number>()
+    const seenHaz = this.seenHazScratch
+    seenHaz.clear()
     for (const h of state.hazards) {
       if (useTarSprite) {
         seenHaz.add(h.id)
@@ -1440,7 +1451,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     const leader = state.players[0]
-    const seen = new Set<number>()
+    const seen = this.seenEnemyScratch
+    seen.clear()
     // Diff HP pour le feedback de coup (flash + chiffres + pop). Calculé AVANT
     // de mettre à jour prevEnemyHp pour que chaque frame compare à la frame précédente.
     const hitEvents = computeHitEvents(this.prevEnemyHp, state.enemies)
@@ -1527,7 +1539,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const seenProj = new Set<number>()
+    const seenProj = this.seenProjScratch
+    seenProj.clear()
     for (const pr of state.projectiles) {
       seenProj.add(pr.id)
       let sprite = this.projectileSprites.get(pr.id)
@@ -1562,7 +1575,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const seenPickup = new Set<number>()
+    const seenPickup = this.seenPickupScratch
+    seenPickup.clear()
     for (const pk of state.pickups) {
       seenPickup.add(pk.id)
       let sprite = this.pickupSprites.get(pk.id)
@@ -1838,7 +1852,8 @@ export class GameScene extends Phaser.Scene {
 
   /** Dessine l'ouvrier prisonnier (cage + sosie barbu) ; libéré → il court hors écran. */
   private syncPrisoners(prisoners: readonly PrisonerState[]): void {
-    const seen = new Set<number>()
+    const seen = this.seenPrisonerScratch
+    seen.clear()
     for (const pr of prisoners) {
       seen.add(pr.id)
       let worker = this.prisonerWorkers.get(pr.id)
