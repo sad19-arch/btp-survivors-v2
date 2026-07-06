@@ -75,10 +75,38 @@ const VOICE_NAMES: readonly string[] = [
   'gameover', 'that_was_terrible', 'you_are_such_a_looser'
 ]
 
-/** Fichiers voix à précharger (clé `voice_<nom>` → chemin). */
-export const VOICE_FILES: ReadonlyArray<readonly [string, string]> = VOICE_NAMES.map(
-  (n) => [`voice_${n}`, `audio/voice/voice_${n}.ogg`] as const
-)
+/**
+ * Voix .mp3 ajoutées par l'utilisateur (clé Phaser PROPRE → chemin exact ;
+ * gère les extensions .mp3, les majuscules et l'espace du fichier « worker »).
+ */
+const VOICE_MP3: ReadonlyArray<readonly [string, string]> = [
+  ['voice_i_need_assistance', 'audio/voice/voice_I_need_assistance.mp3'],
+  ['voice_checkpoint', 'audio/voice/voice_chekpoint.mp3'],
+  ['voice_clou_douken', 'audio/voice/voice_clou-douken.mp3'],
+  ['voice_enemy_down', 'audio/voice/voice_enemy_down.mp3'],
+  ['voice_final_round_fight', 'audio/voice/voice_final_round_fight.mp3'],
+  ['voice_finish_him', 'audio/voice/voice_finish_him.mp3'],
+  ['voice_go_go_go', 'audio/voice/voice_go_go_go.mp3'],
+  ['voice_incoming', 'audio/voice/voice_incoming.mp3'],
+  ['voice_mission_complete', 'audio/voice/voice_mission_complete.mp3'],
+  ['voice_perfect', 'audio/voice/voice_perfect.mp3'],
+  ['voice_power_up', 'audio/voice/voice_power_up.mp3'],
+  ['voice_rise_from_your_grave', 'audio/voice/voice_rise_from_your_grave.mp3'],
+  ['voice_see_you_in_hell', 'audio/voice/voice_see_you_in_hell.mp3'],
+  ['voice_we_have_to_get_out_of_here', 'audio/voice/voice_we_have_to_get_out_of_here.mp3'],
+  ['voice_welcome_to_your_doom', 'audio/voice/voice_welcome_to_your_doom.mp3'],
+  ['voice_worker', 'audio/voice/voice_worker_metal_gear_solid.mp3'],
+  ['voice_yeah', 'audio/voice/voice_yeah.mp3'],
+  ...Array.from({ length: 10 }, (_, i) =>
+    [`voice_round_${i + 1}_fight`, `audio/voice/voice_round_${i + 1}_fight.mp3`] as const
+  )
+]
+
+/** Fichiers voix à précharger (clé `voice_<nom>` → chemin). Mix .ogg (existants) + .mp3 (nouveaux). */
+export const VOICE_FILES: ReadonlyArray<readonly [string, string]> = [
+  ...VOICE_NAMES.map((n) => [`voice_${n}`, `audio/voice/voice_${n}.ogg`] as const),
+  ...VOICE_MP3
+]
 
 /**
  * Cues SFX logiques → pool + paramètres. Les placeholders (`weapon_cloueur`,
@@ -102,24 +130,53 @@ export const SFX: Readonly<Record<string, SfxCue>> = {
   stageClear: { keys: ['sfx_stage_clear'], volume: 0.7 }
 }
 
-/** Pools de VOIX arcade (annonceur) par moment de jeu. */
+/** Pools de VOIX arcade (annonceur) par moment de jeu. `playVoice` pioche → alternance. */
 export const VOICE = {
   intro: ['voice_presents'],
-  runStart: ['voice_ready', 'voice_fight'],
-  boss: ['voice_boss', 'voice_prepare_yourself_for_an_epic_battle', 'voice_final_wave'],
-  /** Réplique dédiée au boss FINAL (distincte du mid-boss) — clé existante, déjà préchargée. */
-  bossFinal: ['voice_final_wave'],
+  runStart: ['voice_ready', 'voice_fight', 'voice_go_go_go'],
+  /** Apparition mini-boss : annonce + taunts (dont « incoming » pour la vague). */
+  boss: [
+    'voice_boss', 'voice_prepare_yourself_for_an_epic_battle', 'voice_final_wave',
+    'voice_rise_from_your_grave', 'voice_welcome_to_your_doom', 'voice_see_you_in_hell',
+    'voice_incoming'
+  ],
+  /** Réplique dédiée au boss FINAL (distincte du mid-boss). */
+  bossFinal: ['voice_welcome_to_your_doom', 'voice_final_wave', 'voice_prepare_yourself_for_an_epic_battle'],
+  /** Boss à faible PV → « finish him ». */
+  bossLowHp: ['voice_finish_him'],
+  /** Ennemi abattu (occasionnel, throttlé). */
+  enemyDown: ['voice_enemy_down'],
+  /** PV joueur bas → appel à l'aide (alterne). */
+  playerLow: ['voice_i_need_assistance', 'voice_we_have_to_get_out_of_here'],
   bonus: ['voice_bonus'],
+  /** Évolution d'arme (coffre) : fanfare + voix (dont le clin d'œil « clou-douken »). */
+  evolved: ['voice_bonus', 'voice_clou_douken'],
   thankyou: ['voice_thankyou'],
-  upgrade: ['voice_choose_your_destiny', 'voice_keep_going'],
-  victory: ['voice_victory', 'voice_stage_clear', 'voice_you_are_incredible'],
+  upgrade: ['voice_choose_your_destiny', 'voice_keep_going', 'voice_power_up', 'voice_perfect', 'voice_yeah'],
+  victory: ['voice_victory', 'voice_stage_clear', 'voice_you_are_incredible', 'voice_mission_complete'],
   flawless: ['voice_flowless_victory'],
-  gameover: ['voice_gameover', 'voice_that_was_terrible', 'voice_you_are_such_a_looser']
+  /** Nouveau stage atteint (checkpoint). */
+  checkpoint: ['voice_checkpoint'],
+  gameover: ['voice_gameover', 'voice_that_was_terrible', 'voice_you_are_such_a_looser', 'voice_worker']
 } as const
 
 /** Annonce de stage : la phase 10 dit « FINAL STAGE », sinon « STAGE N ». */
 export function voiceStage(order: number): string {
   return order >= 10 ? 'voice_final_stage' : `voice_stage_${order}`
+}
+
+/**
+ * Pool de voix au DÉBUT d'un stage (run-start) : annonce de stage + « ROUND N FIGHT »
+ * + cris de départ, « FINAL ROUND » au stage 10, « checkpoint » dès le 2e stage.
+ * PURE → testable. `playVoice` en pioche une (variété d'annonceur).
+ */
+export function voiceRunStart(order: number): string[] {
+  const round = `voice_round_${Math.min(Math.max(order, 1), 10)}_fight`
+  const pool = [voiceStage(order), round, ...VOICE.runStart]
+  // Au stage 10 : « FINAL ROUND » + on garde aussi « STAGE 10 » comme variante d'annonce.
+  if (order >= 10) { pool.push('voice_final_round_fight', 'voice_stage_10') }
+  if (order >= 2) { pool.push('voice_checkpoint') }
+  return pool
 }
 
 /** Rotation des 4 pistes gameplay par phase (clé = id de phase). */

@@ -119,8 +119,9 @@ describe('audio — évolution (arme évoluée) déclenche voix triomphante', ()
     const director = new AudioDirector(manager, events, () => settings)
     expect(director).toBeInstanceOf(AudioDirector) // construit pour son effet de bord (bindEvents s'abonne au bus)
     events.dispatchEvent(new EvolvedEvent('mitrailleuse_clous', 1))
-    // La voix bonus est ajoutée via add() (canal voix unique).
-    expect(addedKeys.some((k) => (VOICE.bonus as readonly string[]).includes(k))).toBe(true)
+    // La voix d'évolution est ajoutée via add() (pool VOICE.evolved : bonus OU clou-douken).
+    expect(addedKeys.length).toBe(1)
+    expect(VOICE.evolved).toContain(addedKeys[0])
   })
 })
 
@@ -140,14 +141,15 @@ describe('audio — le boss final déclenche une réplique dédiée (distincte d
     return { manager, addedKeys }
   }
 
-  it("BossSpawnedEvent('final') joue la réplique VOICE.bossFinal (voice_final_wave)", () => {
+  it("BossSpawnedEvent('final') joue une réplique du pool VOICE.bossFinal", () => {
     const events = new EventTarget()
     const { manager, addedKeys } = fakeSoundManager()
     const settings: AudioLevels = { master: 1, music: 1, sfx: 1, muted: false }
     const director = new AudioDirector(manager, events, () => settings)
     expect(director).toBeInstanceOf(AudioDirector)
     events.dispatchEvent(new BossSpawnedEvent('final'))
-    expect(addedKeys).toContain('voice_final_wave')
+    expect(addedKeys.length).toBe(1)
+    expect(VOICE.bossFinal).toContain(addedKeys[0])
   })
 
   it("BossSpawnedEvent('mid') joue une réplique du pool VOICE.boss (pas nécessairement final)", () => {

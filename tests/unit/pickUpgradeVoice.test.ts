@@ -4,37 +4,36 @@ import { VOICE } from '@/audio/manifest'
 
 describe('pickUpgradeVoice — sélection déterministe des voix de level-up', () => {
   it('retourne une clé du pool VOICE.upgrade', () => {
-    for (let i = 0; i < 10; i++) {
-      const key = pickUpgradeVoice(i)
-      expect(VOICE.upgrade).toContain(key)
+    for (let i = 0; i < 12; i++) {
+      expect(VOICE.upgrade).toContain(pickUpgradeVoice(i))
     }
   })
 
-  it('alterne entre les deux clips selon la parité (pair → [0], impair → [1])', () => {
+  it('cycle sur tout le pool (count modulo taille) — variété d\'annonceur', () => {
     const pool = VOICE.upgrade
-    expect(pickUpgradeVoice(0)).toBe(pool[0]) // count 0 → index 0
-    expect(pickUpgradeVoice(1)).toBe(pool[1]) // count 1 → index 1
-    expect(pickUpgradeVoice(2)).toBe(pool[0]) // count 2 → index 0 (cycle)
-    expect(pickUpgradeVoice(3)).toBe(pool[1]) // count 3 → index 1
+    for (let i = 0; i < pool.length * 2; i++) {
+      expect(pickUpgradeVoice(i)).toBe(pool[i % pool.length])
+    }
   })
 
   it('ne dépend pas de Math.random — même count → même résultat', () => {
-    const a = pickUpgradeVoice(7)
-    const b = pickUpgradeVoice(7)
-    expect(a).toBe(b)
+    expect(pickUpgradeVoice(7)).toBe(pickUpgradeVoice(7))
   })
 
-  it('produit une alternance sur 20 level-ups consécutifs (index croissants)', () => {
-    const results = Array.from({ length: 20 }, (_, i) => pickUpgradeVoice(i))
+  it('distribue équitablement sur un multiple de la taille du pool', () => {
     const pool = VOICE.upgrade
-    // chaque clip doit apparaître exactement 10 fois sur 20 passages
-    expect(results.filter((k) => k === pool[0]).length).toBe(10)
-    expect(results.filter((k) => k === pool[1]).length).toBe(10)
+    const n = pool.length * 4
+    const results = Array.from({ length: n }, (_, i) => pickUpgradeVoice(i))
+    for (const clip of pool) {
+      expect(results.filter((k) => k === clip).length).toBe(4)
+    }
   })
 
-  it('le pool VOICE.upgrade contient exactement 2 clips distincts', () => {
-    expect(VOICE.upgrade.length).toBe(2)
-    expect(VOICE.upgrade[0]).toBe('voice_choose_your_destiny')
-    expect(VOICE.upgrade[1]).toBe('voice_keep_going')
+  it('le pool VOICE.upgrade inclut les voix classiques + les nouvelles (power-up/perfect/yeah)', () => {
+    expect(VOICE.upgrade).toContain('voice_choose_your_destiny')
+    expect(VOICE.upgrade).toContain('voice_keep_going')
+    expect(VOICE.upgrade).toContain('voice_power_up')
+    expect(VOICE.upgrade).toContain('voice_perfect')
+    expect(VOICE.upgrade).toContain('voice_yeah')
   })
 })

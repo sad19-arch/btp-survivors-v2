@@ -1,7 +1,7 @@
 import type Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
 import type { WeaponFiredEvent, PickupCollectedEvent, BossSpawnedEvent } from '@core/events'
-import { SFX, VOICE, voiceStage, musicForState, MUSIC, AMB, type MusicKey } from './manifest'
+import { SFX, VOICE, voiceRunStart, musicForState, MUSIC, AMB, type MusicKey } from './manifest'
 import { musicGain, sfxGain, duckedGain, type AudioLevels } from './settings'
 import { playZzfx } from './zzfx'
 import { weaponZzfx } from './weaponSfx'
@@ -99,6 +99,12 @@ export class AudioDirector {
   private presentsPlayed = false
   /** Compteur de level-ups, pour l'alternance des voix (pair/impair). */
   private upgradeVoiceCount = 0
+  /** « Finish him » dit une seule fois par boss (remis à zéro quand le boss disparaît). */
+  private bossFinishSaid = false
+  /** Appel à l'aide dit une fois par passage en PV bas (hystérésis pour re-déclencher). */
+  private playerLowSaid = false
+  /** Dernier « enemy down » (throttle : voix de kill occasionnelle, pas à chaque mort). */
+  private lastEnemyDownMs = -Infinity
   /** Contexte WebAudio partagé (celui de Phaser) pour les SFX procéduraux zzfx ; null si HTML5. */
   private readonly audioCtx: AudioContext | null
 
@@ -116,7 +122,16 @@ export class AudioDirector {
 
   private bindEvents(events: EventTarget): void {
     const on = (name: string, fn: (e: Event) => void): void => { events.addEventListener(name, fn) }
-    on('enemyKilled', () => { this.playCue('enemyKilled') })
+    on('enemyKilled', () => {
+      this.playCue('enemyKilled')
+      // Voix « enemy down » OCCASIONNELLE (throttle ~18s) et seulement si aucune
+      // annonce n'est en cours (ne coupe pas une réplique d'écran/boss).
+      const now = performance.now()
+      if (now - this.lastEnemyDownMs > 18000 && !this.voiceActive()) {
+        this.lastEnemyDownMs = now
+        this.playVoice(VOICE.enemyDown)
+      }
+    })
     on('playerHurt', () => { this.playCue('playerHurt') })
     on('levelUp', () => { this.playCue('levelUp') })
     // SFX procédural PAR ARME (zzfx) : chaque arme discrète émet weaponFired(id).
@@ -143,7 +158,7 @@ export class AudioDirector {
     on('prisonerFreed', () => { this.playCue('prisonerFreed'); this.playVoice(VOICE.thankyou) })
     // B5 — Fanfare d'évolution (coffre ramassé + conditions réunies) : fanfare zzfx en accord
     // majeur + voix triomphante. Remplace le cue 'bonus' générique par une fanfare dédiée.
-    on('evolved', () => { this.playChestFanfare(); this.playVoice(VOICE.bonus) })
+    on('evolved', () => { this.playChestFanfare(); this.playVoice(VOICE.evolved) })
     on('upgradePick', () => { this.playCue('upgradePick') })
     on('menuMove', () => { this.playCue('menuMove') })
     on('menuConfirm', () => { this.playCue('menuConfirm') })
@@ -296,6 +311,10 @@ export class AudioDirector {
       this.onScreenEnter(state)
       this.prevScreen = state.screen
     }
+    // Voix DÉRIVÉES de l'état pendant le jeu (boss faible, PV joueur bas).
+    if (state.screen === 'game') {
+      this.checkDerivedVoices(state)
+    }
     // Musique de fond (boss prioritaire, rotation par phase).
     const bossPresent = state.enemies.some((e) => e.isBoss)
     const desired = musicForState({ screen: state.screen, stageId: state.stageId, bossPresent })
@@ -327,11 +346,38 @@ export class AudioDirector {
       }
       case 'game':
         if (RUN_START_FROM.has(this.prevScreen)) {
-          this.playVoice([voiceStage(state.stageOrder), ...VOICE.runStart])
+          this.playVoice(voiceRunStart(state.stageOrder))
         }
         break
       default:
         break
+    }
+  }
+
+  /**
+   * Voix dérivées de l'état en jeu (observer-only, sim intacte) :
+   *  - boss à ≤ 20 % PV → « finish him » (une fois par boss) ;
+   *  - PV du joueur ≤ 25 % → appel à l'aide (une fois par passage, hystérésis à 40 %).
+   */
+  private checkDerivedVoices(state: AppViewState): void {
+    const boss = state.enemies.find((e) => e.isBoss)
+    if (boss !== undefined) {
+      if (!this.bossFinishSaid && boss.maxHp > 0 && boss.hp / boss.maxHp <= 0.20) {
+        this.bossFinishSaid = true
+        this.playVoice(VOICE.bossLowHp)
+      }
+    } else {
+      this.bossFinishSaid = false
+    }
+    const p = state.players.find((pl) => pl.alive) ?? state.players[0]
+    if (p !== undefined && p.maxHp > 0) {
+      const frac = p.hp / p.maxHp
+      if (!this.playerLowSaid && frac > 0 && frac <= 0.25) {
+        this.playerLowSaid = true
+        this.playVoice(VOICE.playerLow)
+      } else if (frac > 0.4) {
+        this.playerLowSaid = false
+      }
     }
   }
 
