@@ -696,6 +696,85 @@ const CHARPENTE_TOITURE_RENDER: StageRender = {
   decalDensityMultiplier: 0.9  // charpente légère, densité légère (bois aéré)
 }
 
+const SECOND_OEUVRE_RENDER: StageRender = {
+  ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_stage08_${i}`, file: `stage08/ground/tile_${i}.png` })),
+  decals: [
+    { key: 'decal_stage08_plaster', file: 'stage08/decals/plaster_dust.png' },
+    { key: 'decal_stage08_cables',  file: 'stage08/decals/cables_floor.png' }
+  ],
+  // Seul clutter streamé : plaques + tableau élec + câbles + tuyaux PVC.
+  // Le fourgon artisan (hero) et les zones de cloisons sont dans `structures` (placés 1 fois).
+  props: [
+    { key: 'prop_stage08_drywall',   file: 'stage08/props/drywall_stack.png',    scale: 0.85, count: 5 },
+    { key: 'prop_stage08_elecpanel', file: 'stage08/props/electrical_panel.png', scale: 0.75, count: 3 },
+    { key: 'prop_stage08_cables',    file: 'stage08/props/cable_bundle.png',     scale: 0.80, count: 4 },
+    { key: 'prop_stage08_pvc',       file: 'stage08/props/pvc_pipes.png',        scale: 0.80, count: 3 }
+  ],
+  enemies: {
+    platras:  { key: 'enemy_stage08_base', file: 'stage08/enemies/base_walk.png', frame: 256, scale: 0.72 },
+    gainard:  { key: 'enemy_stage08_fast', file: 'stage08/enemies/fast_walk.png', frame: 256, scale: 0.63 },
+    cloison:  { key: 'enemy_stage08_tank', file: 'stage08/enemies/tank_walk.png', frame: 256, scale: 0.80 }
+  },
+  boss: { key: 'boss_stage08', file: 'stage08/boss/boss_walk.png', frame: 256, scale: 1.30 },
+  // Second œuvre : fourgon artisan blanc en héros (landmark visible, band 'near') +
+  // zones de cloisons en cours réparties autour (band 'mid').
+  landmark: { key: 'landmark_stage08', file: 'stage08/landmarks/partition.png', scale: 1.5, count: 1 },
+  // Fourgon artisan hero (band 'near', côté NE) + 5 zones de cloisons en cours (band 'mid').
+  // Ordre = ordre des angles scriptés (structureAngles).
+  structures: [
+    { key: 'struct_stage08_van',       file: 'stage08/structures/artisan_van.png',    scale: 1.1,  count: 1, band: 'near' },
+    { key: 'struct_stage08_partition', file: 'stage08/structures/partition_room.png', scale: 0.85, count: 5, band: 'mid'  }
+  ],
+  ambient: { key: 'npc_stage08', file: 'stage08/npc/plaquiste_work.png', frame: 256, scale: 0.69, framePeriodMs: 280 },
+  // ── Composition scriptée stage 08 (second œuvre) ─────────────────────────────
+  // Géographie : fourgon artisan (idx0) côté NE proche (artisan décharge le matériel),
+  // 5 zones de cloisons distribuées en arc O-SO-S-NO (chantier intérieur partout).
+  // Landmark (zone cloisons-héros) au Nord. PNJ plaquiste/électricien près du fourgon NE.
+  geometry: {
+    // structureAngles[i] → structure i, dans l'ordre de `structures[]` :
+    //   0 = artisan_van (NE, ~50°) — fourgon blanc hero côté NE
+    //   1-5 = partition_room : O (175°), SO (220°), S (265°), NO (110°), ENE (30°)
+    structureAngles: [50, 175, 220, 265, 110, 30],
+    landmarkAngle: 70,    // zone cloisons-hero au Nord-Est
+    ambientAngle:  55     // plaquiste lissant le plâtre près du fourgon NE
+  },
+  // Zones métier : 3 secteurs complémentaires
+  zones: [
+    // Secteur Pose cloisons (NE) — dense en plaques + câbles autour du fourgon
+    {
+      angleCenter: 50,
+      angleSpread: 55,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [0, 2],    // drywall_stack + cable_bundle
+      dominantDecalIndices: [0],      // plaster_dust
+      density: 1.5
+    },
+    // Secteur Électricité (SO) — tableau élec + câbles + tuyaux PVC
+    {
+      angleCenter: 220,
+      angleSpread: 60,
+      distMin: 340,
+      distMax: 760,
+      dominantPropIndices: [1, 2],    // electrical_panel + cable_bundle
+      dominantDecalIndices: [1],      // cables_floor
+      density: 1.3
+    },
+    // Plomberie (SE-E) — tuyaux PVC + plaques de plâtre
+    {
+      angleCenter: 315,
+      angleSpread: 50,
+      distMin: 320,
+      distMax: 700,
+      dominantPropIndices: [3, 0],    // pvc_pipes + drywall_stack
+      dominantDecalIndices: [0, 1],   // plaster_dust + cables_floor
+      density: 1.2
+    }
+  ],
+  baseTileIndex: 2,            // tuile dalle intérieure gris clair (index 2)
+  decalDensityMultiplier: 0.8  // second œuvre ordonné, densité légère (intérieur propre)
+}
+
 export const STAGE_RENDER: Record<string, StageRender> = {
   terrain_vierge: TERRAIN_VIERGE_RENDER,
   terrassement: TERRASSEMENT_RENDER,
@@ -704,26 +783,7 @@ export const STAGE_RENDER: Record<string, StageRender> = {
   gros_oeuvre: GROS_OEUVRE_RENDER,
   echafaudages: ECHAFAUDAGES_RENDER,
   charpente_toiture: CHARPENTE_TOITURE_RENDER,
-  second_oeuvre: makeStage(
-    'stage08',
-    ['platras', 'gainard', 'cloison'],
-    [
-      ['forklift', 0.8, 1],
-      ['drywall', 0.8, 4],
-      ['insulation', 0.7, 3]
-    ],
-    ['plaster_dust', 'scrap'],
-    [0.72, 0.63, 0.8],
-    1.30,
-    {
-      // Second œuvre : cloisons/pièces en pose partout + plaquiste qui lisse le plâtre.
-      landmark: { key: 'landmark_stage08', file: 'stage08/landmarks/partition.png', scale: 1.5, count: 1 },
-      structures: [
-        { key: 'struct_stage08_partition', file: 'stage08/structures/partition_room.png', scale: 0.8, count: 5, band: 'mid' }
-      ],
-      ambient: { key: 'npc_stage08', file: 'stage08/npc/plaquiste_work.png', frame: 256, scale: 0.69, framePeriodMs: 280 }
-    }
-  ),
+  second_oeuvre: SECOND_OEUVRE_RENDER,
   finitions: makeStage(
     'stage09',
     ['goutte', 'pinceau', 'pot'],
