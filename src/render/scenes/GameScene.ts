@@ -10,7 +10,7 @@ import { createGround } from '@render/ground'
 import { createLandmark, createStructures, phaseSalt, resolvePlacement, type ExclusionCircle } from '@render/props'
 import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { dirRow, walkFrame, idleFrame } from '@render/sprites'
-import { ambientOffset } from '@render/ambientNpc'
+import { ambientOffset, shouldBubble, pickPhrase } from '@render/ambientNpc'
 import { stageRender, type StageRender, FINAL_BOSS_SKIN } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { computeHitEvents } from '@render/hitDiff'
@@ -113,6 +113,10 @@ const MAX_FRAME_MS = 100
  * superposés en horde ne serait que du bruit illisible + un pic d'allocations.
  */
 export const FEEDBACK_MAX_PER_FRAME = 16
+/** Délai (ms) entre deux bulles pour le MÊME PNJ d'ambiance. */
+const AMBIENT_BUBBLE_COOLDOWN_MS = 4000
+/** Nombre maximum de bulles d'ambiance simultanées. */
+const MAX_AMBIENT_BUBBLES = 2
 
 /** Sprite de personnage : feuille pixel-art si l'asset existe, sinon cercle de repli. */
 type CharSprite = Phaser.GameObjects.Sprite | Phaser.GameObjects.Arc
@@ -249,6 +253,13 @@ export class GameScene extends Phaser.Scene {
     behavior: 'work' | 'patrol'
     framePeriodMs: number
   }> = []
+  /**
+   * B4 — Cooldown de bulle par PNJ (index → dernier timestamp ms).
+   * Empêche le spam de bulles sur un seul PNJ.
+   */
+  private readonly ambientBubbleCooldowns = new Map<number, number>()
+  /** B4 — Set des conteneurs bulle actifs (borné à MAX_AMBIENT_BUBBLES). */
+  private readonly ambientBubbles = new Set<Phaser.GameObjects.Container>()
   /**
    * VFX des armes à impulsion (marteau/pied-de-biche/court-circuit), déclenché
    * par l'événement d'aura de la sim. Une forme dédiée par `kind` — pas de
@@ -920,6 +931,12 @@ export class GameScene extends Phaser.Scene {
     this.introStartMs = -1
     this.introDone = false
     this.ambientSprites = []
+    this.ambientBubbleCooldowns.clear()
+    // Nettoie les bulles actives (pas de fuite entre runs).
+    for (const bub of this.ambientBubbles) {
+      bub.destroy()
+    }
+    this.ambientBubbles.clear()
     this.decorStreamerFrame = 0
     // Nettoie les chunks streamés (si le streamer est déjà initialisé — pas au 1er appel).
     if (this.decorStreamer !== undefined) {
@@ -1150,6 +1167,10 @@ export class GameScene extends Phaser.Scene {
         loadedChunks: this.decorStreamer.loadedChunkCount,
         decorObjects: this.decorStreamer.decorObjectCount
       })
+      // B4 — Sondes PNJ d'ambiance (test-only) : positions actuelles et bulles actives.
+      this.seam.debugAmbientNpcs = (): { x: number; y: number }[] =>
+        this.ambientSprites.map((npc) => ({ x: npc.sprite.x, y: npc.sprite.y }))
+      this.seam.debugActiveBubbles = (): number => this.ambientBubbles.size
     }
   }
 
@@ -1651,6 +1672,8 @@ export class GameScene extends Phaser.Scene {
       npc.sprite.setPosition(npc.anchor.x + off.dx, npc.anchor.y + off.dy)
       npc.sprite.setFrame(walkFrame(0, this.time.now, npc.framePeriodMs))
     }
+    // B4 — Bulles râleuses à l'approche du joueur.
+    this.updateAmbientBubbles(state)
 
     this.syncPrisoners(state.prisoners)
   }
@@ -1710,6 +1733,103 @@ export class GameScene extends Phaser.Scene {
     }
     const row = dirRow(p.vx, p.vy)
     sprite.setFrame(moving ? walkFrame(row, this.time.now) : idleFrame(row))
+  }
+
+  /**
+   * B4 — Bulles râleuses à l'approche du joueur.
+   * Vérifie, pour chaque PNJ d'ambiance, si un joueur vivant est à portée
+   * (`shouldBubble`) et si le cooldown est écoulé. Si oui, affiche une bulle
+   * DA (panneau pixel, texte monospace, sans emoji, sans innerHTML).
+   * Pool borné à MAX_AMBIENT_BUBBLES simultanées.
+   */
+  private updateAmbientBubbles(state: AppViewState): void {
+    const now = this.time.now
+    const alivePlayers = state.players.filter((p) => p.alive)
+    if (alivePlayers.length === 0) { return }
+
+    for (let i = 0; i < this.ambientSprites.length; i++) {
+      const npc = this.ambientSprites[i]
+      if (npc === undefined) { continue }
+      // Cooldown par PNJ.
+      const lastMs = this.ambientBubbleCooldowns.get(i) ?? -Infinity
+      if (now - lastMs < AMBIENT_BUBBLE_COOLDOWN_MS) { continue }
+      // Pool borné.
+      if (this.ambientBubbles.size >= MAX_AMBIENT_BUBBLES) { continue }
+
+      // Distance joueur le plus proche de la position ACTUELLE du sprite.
+      const sx = npc.sprite.x
+      const sy = npc.sprite.y
+      let minDist = Infinity
+      for (const p of alivePlayers) {
+        const d = Math.hypot(p.x - sx, p.y - sy)
+        if (d < minDist) { minDist = d }
+      }
+      if (!shouldBubble(minDist)) { continue }
+
+      // Déclenche la bulle.
+      this.ambientBubbleCooldowns.set(i, now)
+      this.spawnAmbientBubble(sx, sy, pickPhrase(npc.seed))
+    }
+  }
+
+  /**
+   * Affiche un panneau bulle DA au-dessus d'un PNJ avec le texte indiqué.
+   * Style 16-bit strict : coins carrés, bord sombre, ergot bas, pas d'emoji.
+   * Fade court (1 200 ms) ; le conteneur se détruit automatiquement à la fin.
+   */
+  private spawnAmbientBubble(x: number, y: number, text: string): void {
+    const pad = 8
+    const txt = this.add.text(0, 0, text, {
+      fontFamily: 'monospace',
+      fontSize: '11px',
+      color: PALETTE.contour,
+      wordWrap: { width: 140 }
+    }).setOrigin(0.5, 0.5)
+
+    const bw = txt.width + pad * 2
+    const bh = txt.height + pad * 2
+
+    // Corps du panneau (fond blanc, bord sombre).
+    const bg = this.add.graphics()
+    bg.fillStyle(PALETTE_HEX.blanc, 1)
+    bg.fillRect(-bw / 2, -bh / 2, bw, bh)
+    bg.lineStyle(2, PALETTE_HEX.contour, 1)
+    bg.strokeRect(-bw / 2, -bh / 2, bw, bh)
+
+    // Ergot triangulaire pointant vers le bas.
+    const ergotSize = 6
+    bg.fillStyle(PALETTE_HEX.blanc, 1)
+    bg.fillTriangle(
+      -ergotSize, bh / 2,
+      ergotSize, bh / 2,
+      0, bh / 2 + ergotSize
+    )
+    bg.lineStyle(2, PALETTE_HEX.contour, 1)
+    bg.strokeTriangle(
+      -ergotSize, bh / 2,
+      ergotSize, bh / 2,
+      0, bh / 2 + ergotSize
+    )
+
+    // Conteneur : positionné au-dessus du sprite.
+    const offsetY = -(bh / 2 + ergotSize + 44)
+    const container = this.add.container(x, y + offsetY, [bg, txt])
+    container.setDepth(9)
+    this.ambientBubbles.add(container)
+
+    // Fade + montée légère, puis destruction propre.
+    this.tweens.add({
+      targets: container,
+      alpha: 0,
+      y: y + offsetY - 12,
+      duration: 1200,
+      delay: 1800,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        container.destroy()
+        this.ambientBubbles.delete(container)
+      }
+    })
   }
 
   /** Dessine l'ouvrier prisonnier (cage + sosie barbu) ; libéré → il court hors écran. */
