@@ -939,9 +939,10 @@ export class GameScene extends Phaser.Scene {
     if (this.stage.decalDensityMultiplier !== undefined) {
       streamerOpts.decalDensityMultiplier = this.stage.decalDensityMultiplier
     }
-    this.decorStreamer = new DecorStreamer(this, WORLD.width, WORLD.height, streamerOpts)
     // NB : createProps est retiré (remplacé par le DecorStreamer).
-    // Les landmark/structures (nombre fixe, ancrés près du centre) restent inchangés.
+    // Le streamer est construit PLUS BAS, une fois les structures/landmark/PNJ posés,
+    // pour leur passer leurs positions comme ANCRES d'anti-chevauchement (les props
+    // streamés ne se poseront plus sur les engins/héros).
 
     // ── Anti-chevauchement déterministe ────────────────────────────────────────
     // Ordre : centre (fixe) → prisonniers (fixes) → structures → landmark → PNJ.
@@ -1021,7 +1022,16 @@ export class GameScene extends Phaser.Scene {
         exclusions, placed, ambRadius, ambRng
       )
       this.ambientSprite = this.add.sprite(pos.x, pos.y, amb.key).setScale(amb.scale).setDepth(1)
+      // Le PNJ devient lui aussi une ancre (les props ne se poseront pas dessus).
+      placed.push({ x: pos.x, y: pos.y, r: ambRadius })
     }
+
+    // ── Streamer de décor (construit ici, ancres = tout ce qui a été posé) ───────
+    // Les props streamés évitent désormais structures + landmark + PNJ (anti-chevauchement)
+    // en plus du centre (spawn). Coût constant (~16 chunks actifs) quel que soit le monde.
+    streamerOpts.structureAnchors = placed.map((p) => ({ x: p.x, y: p.y, r: p.r }))
+    this.decorStreamer = new DecorStreamer(this, WORLD.width, WORLD.height, streamerOpts)
+
     this.add
       .rectangle(WORLD.width / 2, WORLD.height / 2, WORLD.width, WORLD.height)
       .setStrokeStyle(4, 0xf5c542)

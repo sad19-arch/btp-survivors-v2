@@ -274,3 +274,70 @@ describe('resolvePlacement — 2 items co-scriptés ne se chevauchent pas', () =
     expect(distBetween).toBeGreaterThanOrEqual(160)
   })
 })
+
+// ── structureAnchors : anti-chevauchement des props streamés ──────────────────
+// Correctif playtest : les props streamés se posaient sur les engins/héros. On
+// passe désormais les positions des structures/landmark/PNJ comme ANCRES ; les
+// props qui tomberaient dessus (ou trop près d'un autre prop) sont retirés — SANS
+// consommer de RNG, donc la séquence reste identique au chemin sans ancres.
+describe('chunkPlacements avec structureAnchors — anti-chevauchement', () => {
+  // Constantes internes du module (dupliquées ici pour documenter le contrat).
+  const PROP_ANCHOR_CLEAR = 60
+  const PROP_MIN_SPACING = 92
+  const x0 = CX * CS
+  const y0 = CY * CS
+
+  it('sans anchors = comportement inchangé (non-régression)', () => {
+    const a = chunkPlacements(SEED, CX, CY, CS, W, H, 3, [10, 6])
+    const b = chunkPlacements(SEED, CX, CY, CS, W, H, 3, [10, 6], {})
+    expect(a.props).toEqual(b.props)
+  })
+
+  it('déterministe avec anchors (double appel identique)', () => {
+    const anchors = [{ x: x0 + 300, y: y0 + 300, r: 120 }]
+    const a = chunkPlacements(SEED, CX, CY, CS, W, H, 3, [10, 6], { structureAnchors: anchors })
+    const b = chunkPlacements(SEED, CX, CY, CS, W, H, 3, [10, 6], { structureAnchors: anchors })
+    expect(a.props).toEqual(b.props)
+  })
+
+  it('aucun prop ne tombe sur une ancre (dégagement r + PROP_ANCHOR_CLEAR)', () => {
+    const anchors = [
+      { x: x0 + 250, y: y0 + 250, r: 100 },
+      { x: x0 + 700, y: y0 + 600, r: 140 }
+    ]
+    const { props } = chunkPlacements(SEED, CX, CY, CS, W, H, 0, [20, 20], { structureAnchors: anchors })
+    for (const group of props) {
+      for (const p of group) {
+        for (const a of anchors) {
+          expect(Math.hypot(p.x - a.x, p.y - a.y)).toBeGreaterThanOrEqual(a.r + PROP_ANCHOR_CLEAR)
+        }
+      }
+    }
+  })
+
+  it('les props d\'un chunk sont mutuellement espacés (>= PROP_MIN_SPACING)', () => {
+    // Ancre lointaine (n'exclut rien) : sert juste à activer le mode anti-chevauchement.
+    const anchors = [{ x: -9999, y: -9999, r: 1 }]
+    const { props } = chunkPlacements(SEED, CX, CY, CS, W, H, 0, [20, 20], { structureAnchors: anchors })
+    const all = props.flat()
+    for (let i = 0; i < all.length; i++) {
+      const pi = all[i]
+      if (pi === undefined) { continue }
+      for (let j = i + 1; j < all.length; j++) {
+        const pj = all[j]
+        if (pj === undefined) { continue }
+        expect(Math.hypot(pi.x - pj.x, pi.y - pj.y)).toBeGreaterThanOrEqual(PROP_MIN_SPACING)
+      }
+    }
+  })
+
+  it('une ancre couvrant tout le chunk retire tous les props (décalques intacts)', () => {
+    const bigAnchor = [{ x: x0 + CS / 2, y: y0 + CS / 2, r: CS }]
+    const withA = chunkPlacements(SEED, CX, CY, CS, W, H, 4, [15, 10], { structureAnchors: bigAnchor })
+    const noA = chunkPlacements(SEED, CX, CY, CS, W, H, 4, [15, 10])
+    const totalProps = withA.props.reduce((s, g) => s + g.length, 0)
+    expect(totalProps).toBe(0)
+    // Les décalques ne dépendent PAS des ancres → identiques.
+    expect(withA.decals).toEqual(noA.decals)
+  })
+})

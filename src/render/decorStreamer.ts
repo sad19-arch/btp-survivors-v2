@@ -11,6 +11,14 @@ export const DEFAULT_CHUNK_SIZE = 1024
 /** Centre autour duquel aucun décalque/prop n'est émis (spawn joueur). */
 const CENTER_EXCLUSION_RADIUS = 300
 
+/**
+ * Dégagement min entre le CENTRE d'un prop streamé et le bord d'une ancre de
+ * structure (engin/landmark/PNJ). Empêche les props de se poser SUR les héros.
+ */
+const PROP_ANCHOR_CLEAR = 60
+/** Distance min entre les centres de deux props streamés d'un même chunk. */
+const PROP_MIN_SPACING = 92
+
 /** PRNG seedé (mulberry32) — identique à ground.ts / props.ts pour cohérence. */
 function mulberry32(seed: number): () => number {
   let t = seed >>> 0
@@ -156,6 +164,8 @@ export function chunkPlacements(
   opts?: {
     zones?: readonly DecorZone[]
     decalDensityMultiplier?: number
+    /** Positions/rayons des structures/landmark/PNJ à éviter (anti-chevauchement props). */
+    structureAnchors?: readonly { x: number; y: number; r: number }[]
   }
 ): {
   decals: Array<{ decalIndex: number; x: number; y: number }>
@@ -213,6 +223,9 @@ export function chunkPlacements(
 
   // ── Props ──────────────────────────────────────────────────────────────────
   const refArea = 1600 * 1200
+  const anchors = opts?.structureAnchors
+  // Props déjà posés dans CE chunk (tous types confondus) → espacement mutuel.
+  const placedProps: Array<{ x: number; y: number }> = []
   const propResult: Array<Array<{ x: number; y: number }>> = propCounts.map((baseCount, propIdx) => {
     const count = Math.max(0, Math.round(baseCount * chunkArea / refArea))
     const positions: Array<{ x: number; y: number }> = []
@@ -249,6 +262,24 @@ export function chunkPlacements(
           }
         }
       }
+      // Anti-chevauchement : si des ancres de structures sont fournies, on écarte
+      // les props qui tomberaient SUR un engin/landmark/PNJ ou trop près d'un autre
+      // prop déjà posé. AUCUN appel RNG ici → la séquence RNG est IDENTIQUE au chemin
+      // sans ancres (les tests de déterminisme existants restent verts ; seuls des
+      // props chevauchants sont retirés de la sortie quand `structureAnchors` est passé).
+      if (anchors !== undefined) {
+        let overlap = false
+        for (const a of anchors) {
+          if (Math.hypot(px - a.x, py - a.y) < a.r + PROP_ANCHOR_CLEAR) { overlap = true; break }
+        }
+        if (!overlap) {
+          for (const pp of placedProps) {
+            if (Math.hypot(px - pp.x, py - pp.y) < PROP_MIN_SPACING) { overlap = true; break }
+          }
+        }
+        if (overlap) { continue }
+        placedProps.push({ x: px, y: py })
+      }
       positions.push({ x: px, y: py })
     }
     return positions
@@ -266,8 +297,8 @@ export interface DecorStreamerOpts {
   zones?: readonly DecorZone[]
   /** Multiplicateur de densité des décalques (défaut 1.0). */
   decalDensityMultiplier?: number
-  /** Positions fixes des structures (pour biais d'ancrage des décalques — T4). */
-  structureAnchors?: readonly { x: number; y: number }[]
+  /** Positions/rayons des structures/landmark/PNJ à éviter (anti-chevauchement props). */
+  structureAnchors?: readonly { x: number; y: number; r: number }[]
 }
 
 /**
@@ -357,12 +388,19 @@ export class DecorStreamer {
     const cx = parseInt(parts[0] ?? '0', 10)
     const cy = parseInt(parts[1] ?? '0', 10)
 
-    const placementOpts: { zones?: readonly DecorZone[]; decalDensityMultiplier?: number } = {}
+    const placementOpts: {
+      zones?: readonly DecorZone[]
+      decalDensityMultiplier?: number
+      structureAnchors?: readonly { x: number; y: number; r: number }[]
+    } = {}
     if (this.opts.zones !== undefined) {
       placementOpts.zones = this.opts.zones
     }
     if (this.opts.decalDensityMultiplier !== undefined) {
       placementOpts.decalDensityMultiplier = this.opts.decalDensityMultiplier
+    }
+    if (this.opts.structureAnchors !== undefined) {
+      placementOpts.structureAnchors = this.opts.structureAnchors
     }
     const { decals: decalPlacements, props: propPlacements } = chunkPlacements(
       this.opts.seed,
