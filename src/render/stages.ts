@@ -209,7 +209,12 @@ const TERRAIN_VIERGE_RENDER: StageRender = {
     { key: 'struct_stage01_tape',  file: 'stage01/props/boundary_tape.png', scale: 1.0, count: 2, band: 'near' },
     { key: 'struct_stage01_plot',  file: 'stage01/structures/plot.png',     scale: 0.85, count: 3, band: 'mid'  }
   ],
-  ambient: [{ key: 'npc_stage01', file: 'stage01/npc/geometre_work.png', frame: 256, scale: 0.72, framePeriodMs: 320, behavior: 'work' }],
+  ambient: [
+    { key: 'npc_stage01',            file: 'stage01/npc/geometre_work.png',    frame: 256, scale: 0.72,  framePeriodMs: 320, behavior: 'work' },
+    { key: 'npc_stage01_topographe', file: 'stage01/npc/topographe_work.png',  frame: 256, scale: 1.610, framePeriodMs: 300, behavior: 'work' },
+    { key: 'npc_stage01_piqueteur',  file: 'stage01/npc/piqueteur_work.png',   frame: 256, scale: 1.439, framePeriodMs: 300, behavior: 'work' },
+    { key: 'npc_stage01_ouvplan',    file: 'stage01/npc/ouvplan_work.png',     frame: 256, scale: 1.397, framePeriodMs: 340, behavior: 'work' }
+  ],
   // ── Composition scriptée stage 01 (terrain vierge) ───────────────────────
   // Géographie : panneau (sign=idx0) côté NE proche, algeco (cabin=idx1) côté SE,
   // barrières (tape=idx2, count:2) côté N et NO, 3 parcelles (plot=idx3-5) éparse.
