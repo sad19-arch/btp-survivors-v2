@@ -16,7 +16,7 @@
 
 import { WEAPONS } from '@content/weapons'
 import { PASSIVES } from '@content/passives'
-import { INVENTORY } from '@content/config'
+import { INVENTORY, CARD_WEIGHT } from '@content/config'
 import { Rng } from '../rng'
 
 export type CardKind = 'weapon-new' | 'passive-new' | 'weapon-up' | 'passive-up'
@@ -135,23 +135,81 @@ export function eligibleCards(inv: Inventory): Card[] {
 }
 
 /**
+ * Retourne le poids de tirage d'une carte selon son kind.
+ * Les cartes d'amélioration d'une arme/passif possédé ont un poids élevé
+ * pour qu'elles soient fortement favorisées dans le tirage pondéré.
+ */
+function cardWeight(kind: Card['kind']): number {
+  if (kind === 'weapon-up' || kind === 'passive-up') {
+    return CARD_WEIGHT.ownedUp
+  }
+  return CARD_WEIGHT.new
+}
+
+/**
  * Tire jusqu'à `count` cartes distinctes sans remise depuis les cartes éligibles,
- * via un mélange Fisher-Yates seedé.
+ * via un tirage pondéré déterministe (par poids de `kind`).
+ *
+ * Algorithme :
+ * 1. Construire un tableau de travail (copie mutable des éligibles).
+ * 2. Répéter `count` fois (ou jusqu'à épuisement) :
+ *    - Sommer les poids des cartes restantes.
+ *    - Si total === 0, s'arrêter.
+ *    - Tirer `roll = rng.float(0, total)`.
+ *    - Parcourir les poids cumulatifs pour trouver la carte sélectionnée.
+ *    - Retirer la carte choisie (splice) → pas de remise.
+ *    - Ajouter au résultat.
  *
  * Déterministe : même seed + même inventaire ⇒ même ordre.
  */
 export function rollCards(rng: Rng, inv: Inventory, count: number): Card[] {
-  const all = eligibleCards(inv)
+  const working = [...eligibleCards(inv)]
+  const result: Card[] = []
 
-  // Mélange Fisher-Yates in-place (destructif, donc copie d'abord)
-  const shuffled = [...all]
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = rng.int(0, i)
-    const tmp = shuffled[i] as Card
-    shuffled[i] = shuffled[j] as Card
-    shuffled[j] = tmp
+  const limit = Math.min(count, working.length)
+
+  for (let drawn = 0; drawn < limit; drawn++) {
+    // Somme des poids des cartes restantes
+    let total = 0
+    for (const card of working) {
+      total += cardWeight(card.kind)
+    }
+
+    if (total === 0) {
+      break
+    }
+
+    // Tirage pondéré
+    const roll = rng.float(0, total)
+    let cumulative = 0
+    let selectedIndex = -1
+
+    for (let i = 0; i < working.length; i++) {
+      const card = working[i]
+      if (card === undefined) {
+        throw new Error(`rollCards: working[${i}] undefined (inattendu)`)
+      }
+      cumulative += cardWeight(card.kind)
+      if (roll < cumulative) {
+        selectedIndex = i
+        break
+      }
+    }
+
+    // Garde : si aucun index trouvé (flottant exactement égal au total),
+    // prendre le dernier élément
+    if (selectedIndex === -1) {
+      selectedIndex = working.length - 1
+    }
+
+    const selected = working[selectedIndex]
+    if (selected === undefined) {
+      throw new Error(`rollCards: working[${selectedIndex}] undefined après sélection`)
+    }
+
+    result.push(selected)
+    working.splice(selectedIndex, 1)
   }
 
-  // Prendre jusqu'à `count`
-  return shuffled.slice(0, count)
+  return result
 }

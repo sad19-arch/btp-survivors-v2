@@ -156,6 +156,17 @@ export const STARTING_WEAPONS: readonly string[] = ['cloueur']
 export const INVENTORY = { weapons: 6, passives: 6 } as const
 
 /**
+ * Poids de tirage des cartes de level-up par catégorie.
+ * - `ownedUp` : poids des cartes d'amélioration d'une arme/passif déjà possédé
+ *   (`weapon-up`, `passive-up`). Valeur élevée = ces cartes sont fortement favorisées.
+ * - `new` : poids des cartes de découverte (`weapon-new`, `passive-new`).
+ *
+ * Levier de tuning : augmenter `ownedUp` pour favoriser encore plus les améliorations
+ * des armes possédées (cible : ≥ 70 % de tirages avec ≥1 carte weapon-up sur 200 seeds).
+ */
+export const CARD_WEIGHT = { ownedUp: 6, new: 1 } as const
+
+/**
  * Paramètres de spawn (géométrie & perf). La cadence et la quantité d'ennemis
  * dans le temps vivent dans `spawnRamp.ts` (rampe data-driven) ; le mini-boss
  * à 5:00 est géré par le directeur de spawn (`simulation.ts`).
