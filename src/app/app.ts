@@ -18,6 +18,7 @@ import { PASSIVES, aggregatePassives } from '@content/passives'
 import { describeWeaponLevelDelta } from '@content/weaponDelta'
 import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
+import { evolutionStatuses } from '@core/systems/evolution'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
 import type { AppViewState, DeathReport, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
 import { selectDeathQuote } from '@content/deathQuotes'
@@ -834,6 +835,13 @@ function emptyState(seed: number, stageId: ConstructionPhaseId): GameState {
  * contre un id de contenu inconnu (replie sur l'id brut, jamais de `!`).
  */
 function buildInventory(p: PlayerState): InventoryView {
+  // Construire l'inventaire core pour calculer les statuts d'évolution (lecture seule).
+  const invCore = {
+    weapons: p.weapons.map((id, i) => ({ id, level: p.weaponLevels[i] ?? 1 })),
+    passives: p.passives
+  }
+  const statuses = evolutionStatuses(invCore)
+
   const weapons = p.weapons.map((id, i) => {
     const def = WEAPONS[id]
     const entry: InventoryEntry = {
@@ -843,6 +851,19 @@ function buildInventory(p: PlayerState): InventoryView {
     }
     if (def !== undefined) {
       entry.maxLevel = def.maxLevel
+    }
+    // Enrichir avec le statut d'évolution si une évolution existe pour cette arme.
+    const status = statuses.find((s) => s.base === id)
+    if (status !== undefined) {
+      entry.evolveReady = status.ready
+      if (status.ready) {
+        entry.evolveHint = 'Prête à évoluer !'
+      } else if (!status.hasPassive) {
+        const passiveName = PASSIVES[status.passive]?.name ?? status.passive
+        entry.evolveHint = `Passif manquant : ${passiveName}`
+      } else {
+        entry.evolveHint = 'Monte-la au max'
+      }
     }
     return entry
   })
