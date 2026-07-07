@@ -66,6 +66,13 @@ export class Overlay {
    */
   private readonly lastLevel = new Map<number, number>()
   /**
+   * Échéance (performance.now, ms) jusqu'à laquelle la barre XP flashe après un level-up,
+   * par joueur. Le HUD étant reconstruit chaque frame (`clear()`), le flash est piloté par
+   * cet état (classe ré-appliquée tant que `now < échéance`) et NON par un `setTimeout`
+   * one-shot sur un nœud détruit à la frame suivante (qui rendait le flash invisible).
+   */
+  private readonly xpFlashUntil = new Map<number, number>()
+  /**
    * Timestamp (performance.now) du dernier appel à sync() — calcul du dt inter-frame
    * côté rendu. Initialisé à -1 (jamais vu) → dt=16ms nominal au premier appel.
    */
@@ -104,7 +111,7 @@ export class Overlay {
     const now = performance.now()
     const dtMs = this.lastFrameTimeMs < 0 ? 16 : Math.min(now - this.lastFrameTimeMs, 100)
     this.lastFrameTimeMs = now
-    this.syncHud(state, dtMs)
+    this.syncHud(state, dtMs, now)
     this.syncScreen(state)
     this.syncBanner(state)
     this.syncIntroCard(state)
@@ -188,7 +195,7 @@ export class Overlay {
     )
   }
 
-  private syncHud(state: AppViewState, dtMs: number): void {
+  private syncHud(state: AppViewState, dtMs: number, now: number): void {
     // HUD visible en run, mais masqué pendant l'intro (le héros entre en scène).
     const inRun =
       (state.screen === 'game' || state.screen === 'paused' || state.screen === 'upgrade') && !state.introActive
@@ -197,6 +204,7 @@ export class Overlay {
       // Réinitialise l'état XP animé pour ne pas polluer la prochaine run.
       this.xpDisplayed.clear()
       this.lastLevel.clear()
+      this.xpFlashUntil.clear()
       return
     }
     const p = state.players[0]
@@ -213,24 +221,21 @@ export class Overlay {
     const displayed = approach(prevDisplayed, xpTarget, dtMs)
     this.xpDisplayed.set(playerId, displayed)
 
-    // --- Flash de level-up ---
+    // --- Flash de level-up (piloté par état : le HUD est reconstruit chaque frame) ---
     const prevLevel = this.lastLevel.get(playerId)
-    let xpBarModifier = 'hud__bar--xp'
     if (prevLevel !== undefined && level > prevLevel) {
-      // Level-up : la barre repart de 0 (reset propre)
+      // Level-up : la barre repart de 0 (reset propre) et flashe pendant ~220 ms.
       this.xpDisplayed.set(playerId, 0)
-      xpBarModifier = 'hud__bar--xp hud__bar--xp-flash'
+      this.xpFlashUntil.set(playerId, now + 220)
     }
     this.lastLevel.set(playerId, level)
+    // La classe de flash est ré-appliquée à chaque frame tant que l'échéance n'est pas
+    // passée — sinon, le HUD étant recréé chaque frame, le flash serait invisible.
+    const flashing = now < (this.xpFlashUntil.get(playerId) ?? 0)
+    const xpBarModifier = flashing ? 'hud__bar--xp hud__bar--xp-flash' : 'hud__bar--xp'
 
     clear(this.hud)
     const xpBar = this.bar(displayed, xpBarModifier)
-    // Retire la classe de flash après l'animation (CSS ~200ms) pour pouvoir la ré-ajouter.
-    if (xpBarModifier.includes('hud__bar--xp-flash')) {
-      window.setTimeout(() => {
-        xpBar.classList.remove('hud__bar--xp-flash')
-      }, 220)
-    }
 
     this.hud.append(
       h(
