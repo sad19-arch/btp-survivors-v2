@@ -607,9 +607,9 @@ export class Overlay {
     const stats = h(
       'div',
       { className: 'report__stats' },
-      h('span', { text: `${report.progressPercent} % termine` }),
+      h('span', { text: `${report.progressPercent} % terminé` }),
       h('span', { text: `Temps tenu : ${formatTime(report.elapsedMs)} / ${formatTime(report.stageDurationMs)}` }),
-      h('span', { text: `Ennemis tues : ${formatNumber(report.kills)}` }),
+      h('span', { text: `Ennemis tués : ${formatNumber(report.kills)}` }),
       h('span', { text: `Plus que ${formatTime(report.remainingSeconds * 1000)} avant validation.` })
     )
 
