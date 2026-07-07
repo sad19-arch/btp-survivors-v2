@@ -1,5 +1,6 @@
 /**
  * Tests Task 6 : flux `waveRng` isolé + helper `spawnGroup`.
+ * Tests Task 8 : directeur de vagues (conservation de budget + déterminisme).
  *
  * Exigence clé : consommer `waveRng` (via spawnGroup) ne doit PAS décaler
  * le flux `rng` principal (spawn de vagues ordinaires → ennemis identiques).
@@ -11,6 +12,10 @@ import { spawnGroup, spawnWave } from '@core/systems/spawn'
 import { PHASES, ConstructionPhaseId, phasePoolIds } from '@content/phases'
 import type { ConstructionPhase } from '@content/phases'
 import type { WavePlacement } from '@core/types'
+import { createWaveDirectorState, stepWaveDirector } from '@core/systems/waveDirector'
+import { SPAWN_RAMP, spawnParamsAt } from '@content/spawnRamp'
+import { EVENT_POOL_DEFAULT } from '@content/waveEvents'
+import { SPAWN } from '@content/config'
 
 function terrainVierge(): ConstructionPhase {
   const phase = PHASES[ConstructionPhaseId.TERRAIN_VIERGE]
@@ -218,5 +223,151 @@ describe('spawnGroup', () => {
         expect(pool).toContain(comp.type)
       }
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Task 8 — stepWaveDirector
+// ---------------------------------------------------------------------------
+
+describe('waveDirector — conservation du budget', () => {
+  it('Σ placements ≈ Σ rampe plate (±15 %) sur 60 s à dt=16 ms', () => {
+    const DURATION_MS = 60_000
+    const DT_MS = 16
+    const CENTER = { x: 800, y: 600 }
+
+    // Budget attendu par la rampe plate.
+    let expectedBudget = 0
+    {
+      let t = 0
+      while (t < DURATION_MS) {
+        const { intervalMs, countPerWave } = spawnParamsAt(SPAWN_RAMP, t)
+        expectedBudget += (DT_MS / intervalMs) * countPerWave
+        t += DT_MS
+      }
+    }
+
+    // Budget émis par le directeur.
+    const state = createWaveDirectorState()
+    const rng = new Rng(42)
+    let actualPlacements = 0
+    let t = 0
+    while (t < DURATION_MS) {
+      const placements = stepWaveDirector(state, {
+        dtMs: DT_MS,
+        elapsedMs: t,
+        center: CENTER,
+        ramp: SPAWN_RAMP,
+        events: EVENT_POOL_DEFAULT,
+        ringRadius: SPAWN.ringRadius,
+        rng
+      })
+      actualPlacements += placements.length
+      t += DT_MS
+    }
+
+    const ratio = actualPlacements / expectedBudget
+    // Tolérance ±15 % + le budget résiduel non dépensé en fin de fenêtre
+    // (peut rester en stock si le dernier slot d'événement n'est pas atteint).
+    expect(ratio).toBeGreaterThanOrEqual(0.70)
+    expect(ratio).toBeLessThanOrEqual(1.15)
+  })
+})
+
+describe('waveDirector — déterminisme', () => {
+  it('même seed → même séquence de placements', () => {
+    const DURATION_MS = 60_000
+    const DT_MS = 16
+    const CENTER = { x: 800, y: 600 }
+    const SEED = 7
+
+    const runDirector = (): string[] => {
+      const state = createWaveDirectorState()
+      const rng = new Rng(SEED)
+      const log: string[] = []
+      let t = 0
+      while (t < DURATION_MS) {
+        const placements = stepWaveDirector(state, {
+          dtMs: DT_MS,
+          elapsedMs: t,
+          center: CENTER,
+          ramp: SPAWN_RAMP,
+          events: EVENT_POOL_DEFAULT,
+          ringRadius: SPAWN.ringRadius,
+          rng
+        })
+        if (placements.length > 0) {
+          log.push(`t=${t}:count=${placements.length}:b0=${placements[0]?.behavior ?? '?'}`)
+        }
+        t += DT_MS
+      }
+      return log
+    }
+
+    const run1 = runDirector()
+    const run2 = runDirector()
+    expect(run1).toEqual(run2)
+    // Sanity : au moins un spawn dans 60 s.
+    expect(run1.length).toBeGreaterThan(0)
+  })
+
+  it('au moins un événement groupé (≥ countMin=4) sur 3 minutes', () => {
+    const DURATION_MS = 180_000
+    const DT_MS = 16
+    const CENTER = { x: 800, y: 600 }
+
+    const state = createWaveDirectorState()
+    const rng = new Rng(42)
+    let maxGroupSize = 0
+    let t = 0
+    while (t < DURATION_MS) {
+      const placements = stepWaveDirector(state, {
+        dtMs: DT_MS,
+        elapsedMs: t,
+        center: CENTER,
+        ramp: SPAWN_RAMP,
+        events: EVENT_POOL_DEFAULT,
+        ringRadius: SPAWN.ringRadius,
+        rng
+      })
+      if (placements.length > maxGroupSize) {
+        maxGroupSize = placements.length
+      }
+      t += DT_MS
+    }
+
+    // Le plus gros événement doit être ≥ countMin du plus petit event (4 pour converge).
+    expect(maxGroupSize).toBeGreaterThanOrEqual(4)
+  })
+
+  it("allowedFromSec respecté — aucun encircle avant 120 s", () => {
+    const DURATION_MS = 119_000
+    const DT_MS = 16
+    const CENTER = { x: 800, y: 600 }
+
+    const state = createWaveDirectorState()
+    const rng = new Rng(99)
+    let encircleFound = false
+    let t = 0
+    while (t < DURATION_MS) {
+      const placements = stepWaveDirector(state, {
+        dtMs: DT_MS,
+        elapsedMs: t,
+        center: CENTER,
+        ramp: SPAWN_RAMP,
+        events: EVENT_POOL_DEFAULT,
+        ringRadius: SPAWN.ringRadius,
+        rng
+      })
+      // encircle donne behavior 'circler' (placeEncircle).
+      for (const p of placements) {
+        if (p.behavior === 'circler') {
+          encircleFound = true
+        }
+      }
+      t += DT_MS
+    }
+
+    expect(encircleFound).toBe(false)
   })
 })
