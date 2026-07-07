@@ -33,7 +33,7 @@ import { boomerangSystem } from './systems/boomerang'
 import { consumeLevelUp, initialProgress } from './systems/leveling'
 import { allPlayersDead } from './systems/gameRules'
 import { recomputePlayerStats } from './systems/playerStats'
-import { eligibleCards, rollCards, type Inventory } from './systems/cards'
+import { rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
 import { tickChestDirector, maybeDropEliteChest } from './systems/chestDirector'
 import { CHEST, coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
@@ -646,14 +646,13 @@ export class Simulation {
         weapons: loadout?.slots.map((s) => ({ id: s.id, level: s.level })) ?? [],
         passives: passives?.list.map((p) => ({ id: p.id, level: p.level })) ?? []
       }
-      // eligibleCards vérifie si quelque chose est upgradeable ; rollCards échantillonne.
-      const eligible = eligibleCards(inv)
-      if (eligible.length > 0) {
-        const choices = rollCards(this.rng, inv, PROGRESSION.choices)
-        if (choices.length > 0) {
-          this.choiceQueue.push({ playerId, choices })
-          continue
-        }
+      // rollCards vérifie lui-même l'éligibilité (via eligibleCards) puis échantillonne :
+      // s'il renvoie ≥ 1 carte, l'inventaire n'est pas maxé → on propose un choix.
+      // (Pas de double-vérification eligibleCards : évite une fenêtre logique non testée.)
+      const choices = rollCards(this.rng, inv, PROGRESSION.choices)
+      if (choices.length > 0) {
+        this.choiceQueue.push({ playerId, choices })
+        continue
       }
 
       // Branche 3 : secours déterministe (tout maxé, rien à tirer).
