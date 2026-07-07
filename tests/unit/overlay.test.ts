@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { App } from '@/app/app'
 import { Overlay } from '@ui/overlay'
 
@@ -254,6 +254,67 @@ describe('Overlay — HUD multi-joueur (co-op)', () => {
     expect(hud?.textContent).toContain('Niv. 1')
     expect(hud?.textContent).toContain('PV ')
     expect(hud?.textContent).toContain('XP ')
+  })
+})
+
+describe('Overlay — jackpot (anticipation + roulette)', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('showJackpot applique jackpot--charging IMMEDIATEMENT (avant toute roulette)', () => {
+    const { root, overlay } = mount()
+    overlay.showJackpot('Mitrailleuse a clous')
+    // Dès l'appel synchrone, la classe d'anticipation doit être présente.
+    const panel = root.querySelector('.jackpot')
+    expect(panel).not.toBeNull()
+    expect(panel?.classList.contains('jackpot--charging')).toBe(true)
+  })
+
+  it('jackpot--charging retire apres la phase d anticipation (500 ms)', () => {
+    const { root, overlay } = mount()
+    overlay.showJackpot('Mitrailleuse a clous')
+    const panel = root.querySelector('.jackpot')
+    expect(panel?.classList.contains('jackpot--charging')).toBe(true)
+    // Avance dans le temps après anticipationMs.
+    vi.advanceTimersByTime(500)
+    expect(panel?.classList.contains('jackpot--charging')).toBe(false)
+  })
+
+  it('le panneau affiche le nom de l arme (winner dans la roulette)', () => {
+    const { root, overlay } = mount()
+    overlay.showJackpot('Mitrailleuse a clous')
+    // Le DOM est construit synchronement, le winner est dans le reel.
+    const winner = root.querySelector('.jackpot__item--winner')
+    expect(winner).not.toBeNull()
+    expect(winner?.textContent).toBe('Mitrailleuse a clous')
+  })
+
+  it('le panneau disparait apres anticipation + totalMs (2000 ms)', () => {
+    const { root, overlay } = mount()
+    overlay.showJackpot('Mitrailleuse a clous')
+    // Toujours visible après 1999 ms.
+    vi.advanceTimersByTime(1999)
+    expect(root.querySelector('.jackpot')).not.toBeNull()
+    // Fermé après 2000 ms (500 anticipation + 1500 total).
+    vi.advanceTimersByTime(1)
+    expect(root.querySelector('.jackpot')).toBeNull()
+  })
+
+  it('re-trigger immédiat n exécute pas les timers du jackpot précédent (pas de fuite)', () => {
+    const { root, overlay } = mount()
+    const cb1 = vi.fn()
+    const cb2 = vi.fn()
+    overlay.showJackpot('Arme A', cb1)
+    // Re-trigger avant que quoi que ce soit ne se termine.
+    overlay.showJackpot('Arme B', cb2)
+    // Avance jusqu à la fermeture du 2e jackpot.
+    vi.advanceTimersByTime(2001)
+    // Le callback du 1er jackpot ne doit PAS avoir été appelé (timers annulés).
+    expect(cb1).not.toHaveBeenCalled()
+    // Le callback du 2e doit l'avoir été exactement une fois.
+    expect(cb2).toHaveBeenCalledTimes(1)
+    // Le panneau est fermé.
+    expect(root.querySelector('.jackpot')).toBeNull()
   })
 })
 

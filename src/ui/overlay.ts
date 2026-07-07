@@ -32,8 +32,10 @@ export class Overlay {
   private bossBarFill: HTMLElement | null = null
   /** Couche du panneau jackpot (coffre d'évolution ramassé) — B5. */
   private readonly jackpotLayer: HTMLElement
-  /** Timer de fermeture automatique du panneau jackpot. */
-  private jackpotTimer: number | null = null
+  /** Timers en cours pour l'animation jackpot (anticipation + flash + fermeture). */
+  private jackpotTimers: number[] = []
+  /** Handle rAF du défilement de la roulette jackpot (pour annulation au re-trigger). */
+  private jackpotRaf: number | null = null
   /** Mini-carte (bas-gauche) — prisonniers/boss/coffres/joueur, togglable. */
   private readonly minimap: Minimap
   /** Compteur de frames pour throttler la maj de la mini-carte (~toutes les 4 frames). */
@@ -444,12 +446,18 @@ export class Overlay {
    * @param weaponName  Nom de l'arme évoluée (résolu côté `main.ts` via `WEAPONS`).
    * @param onDone      Callback optionnel appelé à la fermeture du panneau.
    */
-  showJackpot(weaponName: string, onDone?: () => void): void {
-    // Annuler un éventuel jackpot en cours.
-    if (this.jackpotTimer !== null) {
-      window.clearTimeout(this.jackpotTimer)
-      this.jackpotTimer = null
+  private clearJackpotTimers(): void {
+    for (const id of this.jackpotTimers) { window.clearTimeout(id) }
+    this.jackpotTimers = []
+    if (this.jackpotRaf !== null) {
+      cancelAnimationFrame(this.jackpotRaf)
+      this.jackpotRaf = null
     }
+  }
+
+  showJackpot(weaponName: string, onDone?: () => void): void {
+    // Annuler tout jackpot en cours (timers + rAF) avant de reconstruire.
+    this.clearJackpotTimers()
     clear(this.jackpotLayer)
 
     // Liste d'items défilants (mots-clés chantier + nom final).
@@ -459,9 +467,10 @@ export class Overlay {
     ]
 
     // Durées (ms).
+    const anticipationMs = 500  // phase de suspense avant la roulette
     const reelDurationMs = 900  // durée de défilement
-    const flashDelayMs = 950     // flash après arrêt
-    const totalMs = 1500         // durée totale avant fermeture
+    const flashDelayMs = 950     // flash après arrêt de la roulette
+    const totalMs = 1500         // durée de la roulette avant fermeture
 
     const itemH = 48 // hauteur d'un item en px (sync CSS .jackpot__item height)
     const winnerIndex = reelItems.length - 1 // dernier item = le vrai nom
@@ -486,34 +495,44 @@ export class Overlay {
     )
     this.jackpotLayer.append(panel)
 
-    // Animation de défilement CSS via requestAnimationFrame : décélération cubic-ease.
-    const targetY = -(winnerIndex * itemH)
-    const startTime = performance.now()
+    // ── Phase d'anticipation (~500 ms) : panneau pulsé/tremblant avant la roulette.
+    panel.classList.add('jackpot--charging')
 
-    const animate = (now: number): void => {
-      const elapsed = now - startTime
-      const t = Math.min(elapsed / reelDurationMs, 1)
-      // Ease-out cubic : rapide au début, ralentit à la fin.
-      const ease = 1 - (1 - t) ** 3
-      const y = targetY * ease
-      reel.style.transform = `translateY(${Math.round(y)}px)`
-      if (t < 1) {
-        requestAnimationFrame(animate)
+    // Timer 1 : fin de l'anticipation → démarre la roulette.
+    this.jackpotTimers.push(window.setTimeout(() => {
+      panel.classList.remove('jackpot--charging')
+
+      // Animation de défilement CSS via requestAnimationFrame : décélération cubic-ease.
+      const targetY = -(winnerIndex * itemH)
+      const startTime = performance.now()
+
+      const animate = (now: number): void => {
+        const elapsed = now - startTime
+        const t = Math.min(elapsed / reelDurationMs, 1)
+        // Ease-out cubic : rapide au début, ralentit à la fin.
+        const ease = 1 - (1 - t) ** 3
+        const y = targetY * ease
+        reel.style.transform = `translateY(${Math.round(y)}px)`
+        if (t < 1) {
+          this.jackpotRaf = requestAnimationFrame(animate)
+        } else {
+          this.jackpotRaf = null
+        }
       }
-    }
-    requestAnimationFrame(animate)
+      this.jackpotRaf = requestAnimationFrame(animate)
 
-    // Flash pixel du panneau après arrêt (DA-safe : animation CSS steps).
-    window.setTimeout(() => {
-      panel.classList.add('jackpot--flash')
-    }, flashDelayMs)
+      // Timer 2 : flash pixel après arrêt de la roulette (DA-safe : animation CSS steps).
+      this.jackpotTimers.push(window.setTimeout(() => {
+        panel.classList.add('jackpot--flash')
+      }, flashDelayMs))
 
-    // Fermeture automatique.
-    this.jackpotTimer = window.setTimeout(() => {
-      clear(this.jackpotLayer)
-      this.jackpotTimer = null
-      onDone?.()
-    }, totalMs)
+      // Timer 3 : fermeture automatique.
+      this.jackpotTimers.push(window.setTimeout(() => {
+        this.clearJackpotTimers()
+        clear(this.jackpotLayer)
+        onDone?.()
+      }, totalMs))
+    }, anticipationMs))
   }
 
   private showBanner(text: string, className: string): void {

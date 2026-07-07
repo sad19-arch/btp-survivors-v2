@@ -444,6 +444,17 @@ const CSS = `
 #ui-root .jackpot--flash {
   animation: jackpot-flash 0.5s steps(2, end);
 }
+/* Phase d'anticipation avant la roulette : tremble/pulse pixel-art (DA-safe). */
+@keyframes jackpot-charge {
+  0%   { transform: translate(-50%, -50%) scale(1)    translate(0px,  0px); border-color: ${PALETTE.jauneSecurite}; }
+  25%  { transform: translate(-50%, -50%) scale(1.03) translate(2px, -2px); border-color: ${PALETTE.rougeAlerte}; }
+  50%  { transform: translate(-50%, -50%) scale(1)    translate(0px,  0px); border-color: ${PALETTE.jauneSecurite}; }
+  75%  { transform: translate(-50%, -50%) scale(1.03) translate(-2px, 2px); border-color: ${PALETTE.rougeAlerte}; }
+  100% { transform: translate(-50%, -50%) scale(1)    translate(0px,  0px); border-color: ${PALETTE.jauneSecurite}; }
+}
+#ui-root .jackpot--charging {
+  animation: jackpot-charge 0.2s steps(2, end) infinite;
+}
 /* Entrée du panneau jackpot (slide pixel). */
 @keyframes jackpot-in {
   from { opacity: 0; transform: translate(-50%, calc(-50% - 10px)); }
