@@ -5,6 +5,7 @@ import { playerColor } from '@content/players'
 import { gamepadHudModel } from './gamepadHud'
 import { Minimap } from './minimap'
 import { approach } from './anim'
+import { cardEnterStyle } from './cardEnter'
 import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView } from '@/app/appState'
 
 /**
@@ -77,6 +78,17 @@ export class Overlay {
    * côté rendu. Initialisé à -1 (jamais vu) → dt=16ms nominal au premier appel.
    */
   private lastFrameTimeMs = -1
+  /**
+   * Écran de la frame précédente — détection des transitions de screen.
+   * Permet de savoir si on vient d'arriver sur 'upgrade'.
+   */
+  private prevScreen: string = ''
+  /**
+   * Timestamp (performance.now) de l'apparition de l'écran upgrade.
+   * -1 = écran upgrade inactif. Remis à -1 à la sortie de l'écran pour
+   * rejouer le reveal au prochain level-up.
+   */
+  private upgradeAppearAt = -1
 
   constructor(root: HTMLElement, onSelect?: (index: number) => void) {
     injectStyles()
@@ -112,7 +124,7 @@ export class Overlay {
     const dtMs = this.lastFrameTimeMs < 0 ? 16 : Math.min(now - this.lastFrameTimeMs, 100)
     this.lastFrameTimeMs = now
     this.syncHud(state, dtMs, now)
-    this.syncScreen(state)
+    this.syncScreen(state, now)
     this.syncBanner(state)
     this.syncIntroCard(state)
     this.syncBossBar(state)
@@ -293,37 +305,59 @@ export class Overlay {
     )
   }
 
-  private syncScreen(state: AppViewState): void {
-    const sig = this.computeSignature(state)
-    if (sig === this.signature) {
-      return
+  private syncScreen(state: AppViewState, now: number): void {
+    // Suivi des transitions d'écran pour le reveal des cartes upgrade.
+    if (state.screen === 'upgrade' && this.prevScreen !== 'upgrade') {
+      // On vient d'arriver sur l'écran upgrade → démarre le reveal.
+      this.upgradeAppearAt = now
+    } else if (state.screen !== 'upgrade' && this.prevScreen === 'upgrade') {
+      // On quitte l'écran upgrade → réinitialise pour le prochain level-up.
+      this.upgradeAppearAt = -1
     }
-    this.signature = sig
-    clear(this.screenLayer)
-    switch (state.screen) {
-      case 'title':
-        this.screenLayer.append(this.titlePanel(state))
-        break
-      case 'characterSelect':
-        this.screenLayer.append(this.characterSelectPanel(state))
-        break
-      case 'paused':
-        this.screenLayer.append(this.menuPanel('Pause', null, state))
-        break
-      case 'gameover':
-        this.screenLayer.append(this.gameOverPanel(state))
-        break
-      case 'victory':
-        this.screenLayer.append(this.victoryPanel(state))
-        break
-      case 'upgrade':
-        this.screenLayer.append(this.upgradePanel(state))
-        break
-      case 'options':
-        this.screenLayer.append(this.menuPanel('Options', 'Réglages audio', state))
-        break
-      default:
-        break // en jeu : pas de modale
+    this.prevScreen = state.screen
+
+    const sig = this.computeSignature(state)
+    const needsRebuild = sig !== this.signature
+    if (needsRebuild) {
+      this.signature = sig
+      clear(this.screenLayer)
+      switch (state.screen) {
+        case 'title':
+          this.screenLayer.append(this.titlePanel(state))
+          break
+        case 'characterSelect':
+          this.screenLayer.append(this.characterSelectPanel(state))
+          break
+        case 'paused':
+          this.screenLayer.append(this.menuPanel('Pause', null, state))
+          break
+        case 'gameover':
+          this.screenLayer.append(this.gameOverPanel(state))
+          break
+        case 'victory':
+          this.screenLayer.append(this.victoryPanel(state))
+          break
+        case 'upgrade':
+          this.screenLayer.append(this.upgradePanel(state))
+          break
+        case 'options':
+          this.screenLayer.append(this.menuPanel('Options', 'Réglages audio', state))
+          break
+        default:
+          break // en jeu : pas de modale
+      }
+    }
+
+    // Stagger reveal des cartes upgrade : mis à jour en-place chaque frame
+    // (sans reconstruire le panneau) pour que l'animation survive au cache de signature.
+    if (state.screen === 'upgrade') {
+      const elapsedMs = this.upgradeAppearAt >= 0 ? now - this.upgradeAppearAt : Number.MAX_SAFE_INTEGER
+      const cardEls = this.screenLayer.querySelectorAll<HTMLElement>('.card')
+      cardEls.forEach((el, i) => {
+        const st = cardEnterStyle(elapsedMs, i)
+        el.style.opacity = String(st.opacity)
+        el.style.transform = `translateY(${st.translateYpx}px)`
+      })
     }
   }
 
