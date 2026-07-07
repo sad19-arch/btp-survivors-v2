@@ -134,7 +134,7 @@ export class Simulation {
   private midBossWaveIndex = 0
   /** Vrai une fois le boss FINAL (rôle `final`) RÉELLEMENT apparu (garde-fou anti faux-positif de victoire). */
   private finalBossSpawned = false
-  private pendingLevelUp: PendingLevelUp | null = null
+  private choiceQueue: PendingLevelUp[] = []
   /** PV totaux des joueurs au pas précédent → détecte les dégâts (SFX, observation pure). */
   private prevHpTotal = 0
   /** Nombre de prisonniers libérés depuis le début de la run (progression des sauvetages). */
@@ -207,7 +207,7 @@ export class Simulation {
 
   /** Vrai si le temps de jeu ne doit pas s'écouler. */
   private isFrozen(): boolean {
-    return this.scene !== 'game' || this.pendingLevelUp !== null
+    return this.scene !== 'game' || this.choiceQueue.length > 0
   }
 
   /** Met la partie en pause (depuis l'état en jeu). */
@@ -234,8 +234,8 @@ export class Simulation {
    * vérifie si un palier supplémentaire a été atteint (XP banque).
    */
   chooseUpgrade(index: number): void {
-    const pending = this.pendingLevelUp
-    if (pending === null) {
+    const pending = this.choiceQueue[0]
+    if (pending === undefined) {
       return
     }
     const choice = pending.choices[index]
@@ -245,7 +245,7 @@ export class Simulation {
         this.applyCard(e, choice)
       }
     }
-    this.pendingLevelUp = null
+    this.choiceQueue.shift()
     this.checkLevelUp()
   }
 
@@ -304,7 +304,7 @@ export class Simulation {
       prisoners: this.collectPrisoners(),
       rescue: { total: RESCUE.count, rescued: this.rescuedTotal },
       hazards: this.collectHazards(),
-      pendingLevelUp: this.pendingLevelUp
+      pendingLevelUp: this.choiceQueue[0] ?? null
     }
   }
 
@@ -446,7 +446,7 @@ export class Simulation {
     this.score = 0
     this.midBossWaveIndex = 0
     this.finalBossSpawned = false
-    this.pendingLevelUp = null
+    this.choiceQueue = []
     this.inputs.clear()
     this.playerEntities.clear()
     this.rescuedTotal = 0
@@ -616,11 +616,11 @@ export class Simulation {
   }
 
   /**
-   * Vérifie si un joueur a atteint un palier d'XP. Le cas échéant, prépare la
-   * carte d'upgrade en attente (1 joueur à la fois → gel jusqu'au choix).
+   * Vérifie si un joueur a atteint un palier d'XP. Le cas échéant, pousse un
+   * élément dans la file de choix (1 palier à la fois → gel jusqu'au choix).
    */
   private checkLevelUp(): void {
-    if (this.pendingLevelUp !== null) {
+    if (this.choiceQueue.length > 0) {
       return
     }
     for (const [playerId, e] of this.playerEntities) {
@@ -642,7 +642,7 @@ export class Simulation {
         // (`consumeLevelUp` ci-dessus), mais on ne gèle PAS le temps sur un écran
         // à 0 carte — ce serait un soft-lock (aucun moyen de le lever). On continue.
         if (choices.length > 0) {
-          this.pendingLevelUp = { playerId, choices }
+          this.choiceQueue.push({ playerId, choices })
           return
         }
         continue
