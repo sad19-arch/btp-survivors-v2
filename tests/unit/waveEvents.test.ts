@@ -317,6 +317,223 @@ describe('placeEvent("miniBoss")', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Task 8 — encircle AMPLIFIÉ : anneau complet fermé (count=16)
+// ---------------------------------------------------------------------------
+
+describe('placeEvent("encircle") — anneau complet fermé (Task 8)', () => {
+  it('placeEncircle(16, r, rng) renvoie exactement 16 placements', () => {
+    const rng = new Rng(100)
+    const result = placeEvent('encircle', 16, 500, rng)
+    expect(result).toHaveLength(16)
+  })
+
+  it('écart angulaire ≈ 2π/16 entre voisins triés (anneau équiréparti)', () => {
+    const rng = new Rng(101)
+    const result = placeEvent('encircle', 16, 500, rng)
+    const expectedDelta = TWO_PI / 16
+    const angles = result.map((p) => {
+      if (p.bAngle === undefined) {
+        throw new Error('bAngle manquant sur un placement encircle')
+      }
+      return p.bAngle
+    })
+    const sorted = [...angles].sort((a, b) => a - b)
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const curr = sorted[i]
+      const next = sorted[i + 1]
+      if (curr === undefined || next === undefined) {
+        throw new Error(`angle manquant à l'index ${i}`)
+      }
+      expect(next - curr).toBeCloseTo(expectedDelta, 3)
+    }
+  })
+
+  it("anneau FERMÉ : l'écart wrap-around (dernier→premier) est aussi ≈ 2π/16", () => {
+    const rng = new Rng(102)
+    const result = placeEvent('encircle', 16, 500, rng)
+    const angles = result.map((p) => {
+      if (p.bAngle === undefined) {
+        throw new Error('bAngle manquant sur un placement encircle')
+      }
+      return p.bAngle
+    })
+    const sorted = [...angles].sort((a, b) => a - b)
+    const first = sorted[0]
+    const last = sorted[sorted.length - 1]
+    if (first === undefined || last === undefined) {
+      throw new Error('tableau trié vide')
+    }
+    // L'écart wrap-around (de last à first + 2π) doit être ≈ 2π/16
+    const wrapGap = (first + TWO_PI) - last
+    const expectedDelta = TWO_PI / 16
+    expect(wrapGap).toBeCloseTo(expectedDelta, 3)
+  })
+
+  it('tous les placements ont behavior "circler" (défaut encircle)', () => {
+    const rng = new Rng(103)
+    const result = placeEvent('encircle', 16, 500, rng)
+    for (const p of result) {
+      expect(p.behavior).toBe('circler')
+    }
+  })
+
+  it('est déterministe (même seed → même sortie pour count=16)', () => {
+    const [r1, r2] = mirrorRng(104)
+    const a = placeEvent('encircle', 16, 500, r1)
+    const b = placeEvent('encircle', 16, 500, r2)
+    expect(a).toHaveLength(b.length)
+    for (let i = 0; i < a.length; i++) {
+      const ai = a[i]
+      const bi = b[i]
+      if (ai === undefined || bi === undefined) {
+        throw new Error(`placement manquant à l'index ${i}`)
+      }
+      expect(ai.angle).toBeCloseTo(bi.angle, 10)
+      expect(ai.radius).toBeCloseTo(bi.radius, 10)
+      expect(ai.behavior).toBe(bi.behavior)
+      expect(ai.bAngle).toBeCloseTo(bi.bAngle ?? 0, 10)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Task 8 — sweep AMPLIFIÉ : mur dense (espacement serré)
+// ---------------------------------------------------------------------------
+
+describe('placeEvent("sweep") — mur dense (Task 8)', () => {
+  it('sweep(12, r, rng) renvoie exactement 12 placements', () => {
+    const rng = new Rng(110)
+    const result = placeEvent('sweep', 12, 500, rng)
+    expect(result).toHaveLength(12)
+  })
+
+  it('espacement perpendiculaire entre voisins UNIFORME (mur linéaire) pour count=12', () => {
+    // Spread default = 0.4 rad → écart entre voisins = 2*0.4/11 ≈ 0.0727 rad
+    // Tous les écarts doivent être quasi-identiques (mur uniforme, pas de groupes)
+    const rng = new Rng(111)
+    const result = placeEvent('sweep', 12, 500, rng)
+    const angles = result.map((p) => p.angle).sort((a, b) => a - b)
+    const gaps: number[] = []
+    for (let i = 0; i < angles.length - 1; i++) {
+      const curr = angles[i]
+      const next = angles[i + 1]
+      if (curr === undefined || next === undefined) {
+        throw new Error(`angle manquant à l'index ${i}`)
+      }
+      gaps.push(next - curr)
+    }
+    // Tous les écarts doivent être quasi-identiques (tolérance 1e-9)
+    const firstGap = gaps[0]
+    if (firstGap === undefined) {
+      throw new Error('tableau de gaps vide')
+    }
+    for (const g of gaps) {
+      expect(g).toBeCloseTo(firstGap, 8)
+    }
+  })
+
+  it('spread total (max-angle - min-angle) = 2×spread pour count=12 (mur compact)', () => {
+    // Spread default = 0.4 rad → spread total = 2×0.4 = 0.8 rad
+    const defaultSpread = 0.4
+    const rng = new Rng(112)
+    const result = placeEvent('sweep', 12, 500, rng)
+    const angles = result.map((p) => p.angle).sort((a, b) => a - b)
+    const minA = angles[0]
+    const maxA = angles[angles.length - 1]
+    if (minA === undefined || maxA === undefined) {
+      throw new Error('tableau vide')
+    }
+    expect(maxA - minA).toBeCloseTo(2 * defaultSpread, 8)
+  })
+
+  it('tous les placements partagent le MÊME bAngle (direction de traversée)', () => {
+    const rng = new Rng(113)
+    const result = placeEvent('sweep', 12, 500, rng)
+    const first = result[0]
+    if (first === undefined) {
+      throw new Error('aucun placement retourné pour sweep')
+    }
+    expect(first.bAngle).toBeDefined()
+    const sharedAngle = first.bAngle as number
+    for (const p of result) {
+      expect(p.bAngle).toBeCloseTo(sharedAngle, 10)
+    }
+  })
+
+  it('est déterministe pour count=12', () => {
+    const [r1, r2] = mirrorRng(114)
+    const a = placeEvent('sweep', 12, 500, r1)
+    const b = placeEvent('sweep', 12, 500, r2)
+    for (let i = 0; i < a.length; i++) {
+      const ai = a[i]
+      const bi = b[i]
+      if (ai === undefined || bi === undefined) {
+        throw new Error(`placement manquant à l'index ${i}`)
+      }
+      expect(ai.angle).toBeCloseTo(bi.angle, 10)
+      expect(ai.bAngle).toBeCloseTo(bi.bAngle ?? 0, 10)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Task 8 — EVENT_POOL_BY_PHASE : counts amplifiés sur les phases tardives
+// ---------------------------------------------------------------------------
+
+describe('EVENT_POOL_BY_PHASE — counts amplifiés (Task 8)', () => {
+  // Phases tardives (8-10) doivent avoir des encircles plus denses (≥ 12/18)
+  const latePhases = [
+    ConstructionPhaseId.SECOND_OEUVRE,
+    ConstructionPhaseId.FINITIONS,
+    ConstructionPhaseId.LIVRAISON_AUDIT
+  ] as const
+
+  it('encircle countMax ≥ 14 sur les phases tardives (anneau dense)', () => {
+    for (const phaseId of latePhases) {
+      const pool = eventPoolForPhase(phaseId)
+      const encircle = pool.find((d) => d.kind === 'encircle')
+      if (encircle === undefined) {
+        throw new Error(`encircle absent du pool pour la phase ${phaseId}`)
+      }
+      expect(encircle.countMax).toBeGreaterThanOrEqual(14)
+    }
+  })
+
+  it('encircle countMin ≥ 10 sur les phases tardives (anneau lisible)', () => {
+    for (const phaseId of latePhases) {
+      const pool = eventPoolForPhase(phaseId)
+      const encircle = pool.find((d) => d.kind === 'encircle')
+      if (encircle === undefined) {
+        throw new Error(`encircle absent du pool pour la phase ${phaseId}`)
+      }
+      expect(encircle.countMin).toBeGreaterThanOrEqual(10)
+    }
+  })
+
+  it('sweep countMax ≥ 8 sur les phases tardives (mur dense)', () => {
+    for (const phaseId of latePhases) {
+      const pool = eventPoolForPhase(phaseId)
+      const sweep = pool.find((d) => d.kind === 'sweep')
+      if (sweep === undefined) {
+        throw new Error(`sweep absent du pool pour la phase ${phaseId}`)
+      }
+      expect(sweep.countMax).toBeGreaterThanOrEqual(8)
+    }
+  })
+
+  it('sweep countMin ≥ 5 sur les phases tardives (mur visible)', () => {
+    for (const phaseId of latePhases) {
+      const pool = eventPoolForPhase(phaseId)
+      const sweep = pool.find((d) => d.kind === 'sweep')
+      if (sweep === undefined) {
+        throw new Error(`sweep absent du pool pour la phase ${phaseId}`)
+      }
+      expect(sweep.countMin).toBeGreaterThanOrEqual(5)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
 // placeEvent — behaviorOverride optionnel
 // ---------------------------------------------------------------------------
 

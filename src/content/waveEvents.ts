@@ -199,19 +199,26 @@ function placeBurst(
  * ennemis comme des points sur le cercle de rayon `ringRadius` autour du
  * côté opposé, en étalant sur l'arc perpendiculaire.
  */
+/**
+ * placeSweep accepte un `spread` optionnel (demi-angle, rad) pour le contraste
+ * densité variable (Task 8). Par défaut = 0.4 rad (comportement d'origine T7,
+ * préservé pour le garde-fou sim:check sur `terrain_vierge`).
+ * Passer `FORMATION.sweepSpreadTight` (0.25) pour un mur condensé.
+ * Passer `FORMATION.sweepSpreadLoose` (0.55) pour une vague aérée.
+ */
 function placeSweep(
   count: number,
   ringRadius: number,
   rng: Rng,
-  behaviorOverride?: EnemyBehavior
+  behaviorOverride?: EnemyBehavior,
+  spread: number = 0.4
 ): WavePlacement[] {
   const behavior: EnemyBehavior = behaviorOverride ?? 'sweep'
   const dir = rng.float(0, TWO_PI)
   // Le côté de spawn = opposé à `dir`
   const spawnSide = dir + Math.PI
   // Spread perpendiculaire : les ennemis s'étalent autour de `spawnSide`
-  // sur un arc de ±0.4 rad (étalé linéairement si count > 1)
-  const spread = 0.4
+  // sur un arc de ±spread rad (étalé linéairement si count > 1)
   const result: WavePlacement[] = []
   for (let i = 0; i < count; i++) {
     const offset = count === 1
@@ -368,23 +375,25 @@ export const EVENT_POOL_BY_PHASE: Partial<Record<ConstructionPhaseId, readonly W
   ],
 
   // Phase 8 — Second œuvre : cloisons et gaines, cercles serrés + traversées croisées
+  // Encircle amplifié (Task 8) : anneaux plus complets (10-14 vs 8-12), densité lisible.
   [ConstructionPhaseId.SECOND_OEUVRE]: [
-    { kind: 'encircle', weight: 6, countMin: 8, countMax: 12, allowedFromSec: 70 },
-    { kind: 'sweep',    weight: 6, countMin: 5, countMax: 8,  allowedFromSec: 70 },
-    { kind: 'burst',    weight: 3, countMin: 6, countMax: 10, allowedFromSec: 0 },
-    { kind: 'pincer',   weight: 2, countMin: 4, countMax: 8,  allowedFromSec: 0 },
-    { kind: 'converge', weight: 2, countMin: 4, countMax: 7,  allowedFromSec: 0 },
-    { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
+    { kind: 'encircle', weight: 6, countMin: 10, countMax: 14, allowedFromSec: 70 },
+    { kind: 'sweep',    weight: 6, countMin: 5,  countMax: 8,  allowedFromSec: 70 },
+    { kind: 'burst',    weight: 3, countMin: 6,  countMax: 10, allowedFromSec: 0 },
+    { kind: 'pincer',   weight: 2, countMin: 4,  countMax: 8,  allowedFromSec: 0 },
+    { kind: 'converge', weight: 2, countMin: 4,  countMax: 7,  allowedFromSec: 0 },
+    { kind: 'miniBoss', weight: 1, countMin: 1,  countMax: 1,  allowedFromSec: 300 }
   ],
 
   // Phase 9 — Finitions : audit minutieux, cerclages et passages en inspection
+  // Encircle amplifié (Task 8) : anneaux denses (10-16), pression de cerclage maximale.
   [ConstructionPhaseId.FINITIONS]: [
-    { kind: 'encircle', weight: 7, countMin: 8, countMax: 13, allowedFromSec: 60 },
-    { kind: 'sweep',    weight: 6, countMin: 5, countMax: 8,  allowedFromSec: 60 },
-    { kind: 'burst',    weight: 2, countMin: 6, countMax: 10, allowedFromSec: 0 },
-    { kind: 'pincer',   weight: 2, countMin: 4, countMax: 8,  allowedFromSec: 0 },
-    { kind: 'converge', weight: 1, countMin: 4, countMax: 7,  allowedFromSec: 0 },
-    { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
+    { kind: 'encircle', weight: 7, countMin: 10, countMax: 16, allowedFromSec: 60 },
+    { kind: 'sweep',    weight: 6, countMin: 5,  countMax: 8,  allowedFromSec: 60 },
+    { kind: 'burst',    weight: 2, countMin: 6,  countMax: 10, allowedFromSec: 0 },
+    { kind: 'pincer',   weight: 2, countMin: 4,  countMax: 8,  allowedFromSec: 0 },
+    { kind: 'converge', weight: 1, countMin: 4,  countMax: 7,  allowedFromSec: 0 },
+    { kind: 'miniBoss', weight: 1, countMin: 1,  countMax: 1,  allowedFromSec: 300 }
   ],
 
   // Phase 10 — Livraison & audit : commission qui cerne + inspection en rang serrés

@@ -266,6 +266,35 @@ export const INTRO = {
 export const CONE_HALF_ANGLE = 0.5 as const
 
 /**
+ * Paramètres de compacité des formations de horde (Task 8).
+ *
+ * `encircleRadiusFactor` : facteur appliqué au `ringRadius` pour l'encirclement
+ *   (< 1 ⇒ anneau plus proche du joueur, plus menaçant).
+ *
+ * `sweepSpreadTight` : demi-angle perpendiculaire (rad) utilisé par les entrées
+ *   de pool CONDENSÉES — elles forment un mur serré, visuellement impactant.
+ *
+ * `sweepSpreadLoose` : demi-angle perpendiculaire (rad) des entrées AÉRÉES —
+ *   plus d'espace entre les ennemis, rythme relâché (contraste).
+ *
+ * L'alternance tight / loose dans le pool crée un contraste de densité perçu.
+ */
+export const FORMATION = {
+  /** Facteur de rayon pour encircle (0.7 = resserré vs ringRadius). */
+  encircleRadiusFactor: 0.7,
+  /**
+   * Demi-angle perpendiculaire du mur CONDENSÉ (spread total = 2×).
+   * Était 0.4 (T7). Réduit à 0.25 pour un mur nettement plus serré.
+   */
+  sweepSpreadTight: 0.25,
+  /**
+   * Demi-angle perpendiculaire du mur AÉRÉ (spread total = 2×).
+   * Plus large que tight pour créer un contraste de rythme.
+   */
+  sweepSpreadLoose: 0.55
+} as const
+
+/**
  * Paramètres de détection du « camping » (joueur qui ne bouge pas assez).
  *
  * Si la LONGUEUR DE CHEMIN CUMULÉE du joueur (somme des déplacements pas-à-pas)
