@@ -1,5 +1,6 @@
 import { h, clear } from './h'
 import { injectStyles } from './styles'
+import { formatTime } from './format'
 import { playerColor } from '@content/players'
 import { gamepadHudModel } from './gamepadHud'
 import { Minimap } from './minimap'
@@ -749,13 +750,6 @@ export class Overlay {
   }
 }
 
-/** Formate un temps en ms vers `m:ss`. */
-function formatTime(ms: number): string {
-  const total = Math.floor(ms / 1000)
-  const m = Math.floor(total / 60)
-  const s = total % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
 
 const MONOGRAM_STOPWORDS = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'a', 'au', 'aux', 'et'])
 
