@@ -109,6 +109,8 @@ export class Simulation {
   private prisonerRng: Rng
   /** RNG dédié au directeur de coffres — séparé du RNG spawn/loot/upgrade. */
   private chestRng: Rng
+  /** RNG dédié au directeur de vagues — séparé de tous les autres flux (placement déterministe). */
+  private _waveRng: Rng
   /** Ms accumulées depuis le dernier coffre périodique (directeur de coffres). */
   private chestAccMs = 0
   private readonly phaseId: ConstructionPhaseId
@@ -148,6 +150,7 @@ export class Simulation {
     this.lootRng = new Rng((opts.seed ^ 0x1007) | 0)
     this.prisonerRng = new Rng((opts.seed ^ 0x2b1d) | 0)
     this.chestRng = new Rng((opts.seed ^ 0x3c7a) | 0)
+    this._waveRng = new Rng((opts.seed ^ 0x5a1e) | 0)
     this.phaseId = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
     this.phase = resolvePhase(this.phaseId)
     this.characters = opts.characters ?? []
@@ -158,6 +161,15 @@ export class Simulation {
   setSeed(seed: number): void {
     this.reset(seed)
   }
+
+  /**
+   * Expose le flux RNG dédié aux vagues — utilisé par le directeur de vagues (Task 8)
+   * pour appeler `spawnGroup` sans perturber le flux `rng` principal.
+   */
+  get waveRng(): Rng {
+    return this._waveRng
+  }
+
 
   /** Injecte l'état d'entrée d'un joueur (déplacement + attaque). */
   setInput(playerId: number, input: PlayerInput): void {
@@ -417,6 +429,7 @@ export class Simulation {
     this.lootRng = new Rng((seed ^ 0x1007) | 0)
     this.prisonerRng = new Rng((seed ^ 0x2b1d) | 0)
     this.chestRng = new Rng((seed ^ 0x3c7a) | 0)
+    this._waveRng = new Rng((seed ^ 0x5a1e) | 0)
     this.phase = resolvePhase(this.phaseId)
     this.scene = 'game'
     this.elapsedMs = 0

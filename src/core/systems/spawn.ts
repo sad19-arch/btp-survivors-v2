@@ -1,6 +1,6 @@
 import type { World } from '../world'
 import type { Rng } from '../rng'
-import type { Vec2, EnemyBehavior } from '../types'
+import type { Vec2, EnemyBehavior, WavePlacement } from '../types'
 import type { ConstructionPhase } from '@content/phases'
 import { phasePoolIds } from '@content/phases'
 import { ENEMIES } from '@content/enemies'
@@ -82,6 +82,46 @@ export interface SpawnInit {
   behavior?: EnemyBehavior
   bPhase?: number
   bAngle?: number
+}
+
+/**
+ * Fait apparaître un groupe d'ennemis positionnés précisément selon des `WavePlacement`.
+ * Contrairement à `spawnWave` (anneau aléatoire), les positions sont déterminées par le
+ * contrôleur (directeur de vagues, Task 8) — le RNG n'est utilisé que pour tirer le type.
+ *
+ * `rng` doit être le flux `waveRng` dédié, isolé du flux de spawn normal, pour que les
+ * appels du directeur ne décalent pas la séquence de spawn des vagues ordinaires.
+ */
+export function spawnGroup(
+  world: World,
+  rng: Rng,
+  phase: ConstructionPhase,
+  center: Vec2,
+  placements: readonly WavePlacement[],
+  scale: DifficultyScale = NO_SCALE
+): void {
+  const pool = phasePoolIds(phase)
+  if (pool.length === 0) {
+    return
+  }
+
+  for (const placement of placements) {
+    const id = rng.pick(pool)
+    const def = ENEMIES[id]
+    if (def === undefined) {
+      continue
+    }
+    const pos: Vec2 = {
+      x: center.x + Math.cos(placement.angle) * placement.radius,
+      y: center.y + Math.sin(placement.angle) * placement.radius
+    }
+    const init: SpawnInit = {
+      behavior: placement.behavior,
+      bPhase: rng.float(0, Math.PI * 2),
+      ...(placement.bAngle !== undefined ? { bAngle: placement.bAngle } : {})
+    }
+    spawnEnemy(world, def, pos, false, scale, undefined, init)
+  }
 }
 
 /**

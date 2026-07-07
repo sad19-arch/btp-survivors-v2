@@ -59,6 +59,18 @@ export interface ProgressComp {
 /** Comportements d'IA disponibles pour les ennemis. */
 export type EnemyBehavior = 'chase' | 'zigzag' | 'circler' | 'sweep' | 'charger'
 
+/**
+ * Placement d'un ennemi dans un groupe de vague (directeur de vagues).
+ * `angle` et `radius` définissent la position relative au centre de la vague ;
+ * `behavior` et `bAngle` surchargent les defaults de l'ennemi.
+ */
+export interface WavePlacement {
+  angle: number
+  radius: number
+  behavior: EnemyBehavior
+  bAngle?: number
+}
+
 /** Données propres à une entité ennemie. */
 export interface EnemyComp {
   type: string
