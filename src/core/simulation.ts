@@ -36,6 +36,8 @@ import { recomputePlayerStats } from './systems/playerStats'
 import { rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
 import { tickChestDirector, maybeDropEliteChest } from './systems/chestDirector'
+import { resolveObstacleCollisions } from './systems/obstacleCollision'
+import { buildSiteLayout, type Obstacle } from './siteLayout'
 import { CHEST, coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
 import { SPAWN_RAMP, difficultyScaleAt } from '@content/spawnRamp'
 import { eventPoolForPhase } from '@content/waveEvents'
@@ -158,6 +160,8 @@ export class Simulation {
    *  des candidats — le test de distance + toute logique de dégâts restent exacts et inchangés
    *  (cf. `collisionSystem`), donc n'affecte pas les dégâts observables. */
   private readonly enemyGrid = new SpatialGrid(64)
+  /** Obstacles statiques du site (calculés UNE fois au reset, vide pour terrain_vierge). */
+  private obstacles: readonly Obstacle[] = []
 
   constructor(opts: SimOptions) {
     this.mode = opts.mode
@@ -502,6 +506,9 @@ export class Simulation {
     this.inputs.clear()
     this.playerEntities.clear()
     this.rescuedTotal = 0
+    // Calcul du layout UNE fois — RNG interne isolé (seed ^ 0x51e0), n'affecte PAS le
+    // flux RNG de la sim. Pour terrain_vierge : obstacles = [] → no-op garanti.
+    this.obstacles = buildSiteLayout(seed, WORLD.width, WORLD.height, this.phaseId).obstacles
     this.spawnPlayers()
     this.spawnPrisoners()
     this.prevHpTotal = this.totalPlayerHp()
@@ -594,6 +601,9 @@ export class Simulation {
     tetherSystem(this.world, MODE_PLAYER_COUNT[this.mode] ?? 1, TETHER.maxRadius)
     movementSystem(this.world, dtMs)
     worldBoundsSystem(this.world, WORLD)
+    // Résolution des obstacles statiques : repousse joueurs+ennemis hors du décor.
+    // No-op pour terrain_vierge (obstacles = []) → sim:check diff 0 garanti.
+    resolveObstacleCollisions(this.world, this.obstacles)
     boomerangSystem(this.world, dtMs)
     this.rebuildEnemyGrid()
     collisionSystem(this.world, dtMs, this.enemyGrid)
