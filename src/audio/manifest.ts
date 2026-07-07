@@ -71,15 +71,6 @@ export const MUSIC_FILES_STAGE: ReadonlyArray<readonly [string, string]> = [
   [MUSIC.stage_10, 'audio/music/stage_10.mp3']
 ]
 
-/**
- * @deprecated Utiliser `MUSIC_FILES_SHARED` pour le boot et `MUSIC_FILES_STAGE` pour le lazy-load.
- * Conservé pour rétrocompatibilité des imports existants (tests, etc.).
- */
-export const MUSIC_FILES: ReadonlyArray<readonly [string, string]> = [
-  ...MUSIC_FILES_SHARED,
-  ...MUSIC_FILES_STAGE
-]
-
 const SFX_NAMES: readonly string[] = [
   'hurt_1', 'hurt_2', 'hurt_3', 'hurt_4',
   'explosion_1', 'explosion_2', 'explosion_3', 'explosion_4',
