@@ -16,7 +16,16 @@ import { ConstructionPhaseId } from '@content/phases'
 // Types publics
 // ---------------------------------------------------------------------------
 
-export type WaveEventKind = 'converge' | 'pincer' | 'encircle' | 'burst' | 'sweep' | 'miniBoss'
+export type WaveEventKind =
+  | 'converge'
+  | 'pincer'
+  | 'encircle'
+  | 'burst'
+  | 'sweep'
+  | 'miniBoss'
+  | 'spiral'
+  | 'columns'
+  | 'concentric'
 
 export interface WaveEventDef {
   kind: WaveEventKind
@@ -61,12 +70,15 @@ export interface WaveEventDef {
  *                          ce behavior à la place du défaut.
  *
  * Comportements par défaut selon le kind (sauf `behaviorOverride`) :
- *   converge  → 'chase'
- *   pincer    → 'chase'
- *   encircle  → 'circler'
- *   burst     → 'chase'
- *   sweep     → 'sweep'
- *   miniBoss  → [] (géré par le directeur en T10, pas une formation d'ennemis)
+ *   converge   → 'chase'
+ *   pincer     → 'chase'
+ *   encircle   → 'circler'
+ *   burst      → 'chase'
+ *   sweep      → 'sweep'
+ *   spiral     → 'chase'
+ *   columns    → 'sweep'
+ *   concentric → 'circler'
+ *   miniBoss   → [] (géré par le directeur en T10, pas une formation d'ennemis)
  */
 export function placeEvent(
   kind: WaveEventKind,
@@ -87,6 +99,12 @@ export function placeEvent(
       return placeBurst(count, ringRadius, rng, behaviorOverride)
     case 'sweep':
       return placeSweep(count, ringRadius, rng, behaviorOverride, spreadOverride)
+    case 'spiral':
+      return placeSpiral(count, ringRadius, rng, behaviorOverride)
+    case 'columns':
+      return placeColumns(count, ringRadius, rng, behaviorOverride)
+    case 'concentric':
+      return placeConcentric(count, ringRadius, rng, behaviorOverride)
     case 'miniBoss':
       // Formation vide : le directeur (T10) gère le spawn du mini-boss directement,
       // sans passer par une liste de placements classique.
@@ -239,6 +257,135 @@ function placeSweep(
   return result
 }
 
+/**
+ * spiral : `count` ennemis disposés en spirale ouverte.
+ *
+ * Angle : `base + i * Δθ` (Δθ = 2π / (count + 1) pour laisser une brèche).
+ * Rayon : `r0 + i * Δr` — croissant monotone (spirale se resserre vers l'extérieur).
+ *   r0 = ringRadius × 0.35 (départ bien à l'intérieur)
+ *   rN = ringRadius × 0.85 (fin avant le bord — laisse de la marge pour éviter)
+ *
+ * La brèche angulaire (arc < 2π) est garantie par le choix de Δθ < 2π/count.
+ * Behavior défaut : 'chase'.
+ */
+function placeSpiral(
+  count: number,
+  ringRadius: number,
+  rng: Rng,
+  behaviorOverride?: EnemyBehavior
+): WavePlacement[] {
+  const behavior: EnemyBehavior = behaviorOverride ?? 'chase'
+  const base = rng.float(0, TWO_PI)
+  // Δθ légèrement inférieur à 2π/count → la spirale laisse une brèche
+  const dTheta = TWO_PI / (count + 1)
+  // Rayon : de 35 % à 85 % du ringRadius (croissant monotone)
+  const r0 = ringRadius * 0.35
+  const rMax = ringRadius * 0.85
+  const dr = count > 1 ? (rMax - r0) / (count - 1) : 0
+  const result: WavePlacement[] = []
+  for (let i = 0; i < count; i++) {
+    const angle = base + i * dTheta
+    const radius = r0 + i * dr
+    result.push({ angle, radius, behavior })
+  }
+  return result
+}
+
+/**
+ * columns : 2-3 lignes parallèles (murs segmentés) qui traversent l'arène,
+ * décalées les unes des autres avec des couloirs entre elles (esquivable).
+ *
+ * Principe :
+ *   - `dir` = direction de traversée (tiré aléatoirement).
+ *   - Les ennemis sont répartis en `nCols` colonnes (2 si count < 8, 3 sinon).
+ *   - Chaque colonne spawne du côté opposé à `dir` (angle = `dir + π ± perpOffset`).
+ *   - Le `perpOffset` de chaque colonne est DIFFÉRENT → lignes décalées et couloirs visibles.
+ *   - `bAngle = dir + perpOffset` (direction + décalage) sur tous les placements d'une colonne,
+ *     ce qui garantit ≥ 2 bAngles distincts (un par colonne).
+ *
+ * Behavior défaut : 'sweep'.
+ */
+function placeColumns(
+  count: number,
+  ringRadius: number,
+  rng: Rng,
+  behaviorOverride?: EnemyBehavior
+): WavePlacement[] {
+  const behavior: EnemyBehavior = behaviorOverride ?? 'sweep'
+  const dir = rng.float(0, TWO_PI)
+  const spawnSide = dir + Math.PI
+
+  // Nombre de colonnes : 2 si count < 8, sinon 3
+  const nCols = count < 8 ? 2 : 3
+
+  // Décalage perpendiculaire des colonnes (couloirs entre elles).
+  // Spread total = 0.55 rad ; couloir = spread/nCols ≈ 0.18-0.27 rad (esquivable).
+  const totalSpread = 0.55
+  const colSpread = totalSpread / (nCols - 1) // espacement entre colonnes
+
+  // Répartition des ennemis entre les colonnes (modulo pour équité)
+  const result: WavePlacement[] = []
+  for (let i = 0; i < count; i++) {
+    const colIdx = i % nCols
+    // Décalage perpendiculaire de cette colonne
+    const perpOffset = -totalSpread / 2 + colIdx * colSpread
+    // Jitter léger à l'intérieur de la colonne (± 0.05 rad)
+    const jitter = rng.float(-0.05, 0.05)
+    const angle = spawnSide + perpOffset + jitter
+    // bAngle = direction de traversée + décalage colonne (unique par colonne)
+    const bAngle = dir + perpOffset
+    result.push({ angle, radius: ringRadius, behavior, bAngle })
+  }
+  return result
+}
+
+/**
+ * concentric : deux anneaux `encircle` à rayons différents (double encerclement).
+ *
+ * Moitié interne : rayon = ringRadius × 0.55, behavior circler.
+ * Moitié externe : rayon = ringRadius × 0.85, légèrement retardé via bAngle décalé.
+ *   Le décalage sur `bAngle` de l'anneau externe = base + π/count (mi-secteur)
+ *   → l'anneau externe est déphasé visuellement par rapport à l'interne.
+ *
+ * Des « trous » sont garantis car les ennemis sont équirépartis par anneau
+ * (pas un mur continu) et les deux anneaux ont des déphasages différents.
+ *
+ * Behavior défaut : 'circler'.
+ */
+function placeConcentric(
+  count: number,
+  ringRadius: number,
+  rng: Rng,
+  behaviorOverride?: EnemyBehavior
+): WavePlacement[] {
+  const behavior: EnemyBehavior = behaviorOverride ?? 'circler'
+  const base = rng.float(0, TWO_PI)
+
+  const innerCount = Math.floor(count / 2)
+  const outerCount = count - innerCount
+
+  const innerRadius = ringRadius * 0.55
+  const outerRadius = ringRadius * 0.85
+
+  const result: WavePlacement[] = []
+
+  // Anneau interne : équiréparti depuis `base`
+  for (let i = 0; i < innerCount; i++) {
+    const angle = base + i * (TWO_PI / innerCount)
+    result.push({ angle, radius: innerRadius, behavior, bAngle: angle })
+  }
+
+  // Anneau externe : équiréparti, déphasé de π/outerCount (mi-secteur = brèche)
+  const outerBase = base + Math.PI / outerCount
+  for (let i = 0; i < outerCount; i++) {
+    const angle = outerBase + i * (TWO_PI / outerCount)
+    // bAngle légèrement différent de l'interne → retard visuel
+    result.push({ angle, radius: outerRadius, behavior, bAngle: angle + 0.1 })
+  }
+
+  return result
+}
+
 // ---------------------------------------------------------------------------
 // EVENT_POOL_DEFAULT
 // ---------------------------------------------------------------------------
@@ -365,55 +512,70 @@ export const EVENT_POOL_BY_PHASE: Partial<Record<ConstructionPhaseId, readonly W
   ],
 
   // Phase 6 — Échafaudages : tubes qui tombent de haut — sweep = chute de rangées
+  // T9 : spiral introduit (spirale tournante de tubes), columns (rangées parallèles).
   [ConstructionPhaseId.ECHAFAUDAGES]: [
     { kind: 'sweep',    weight: 7, countMin: 5, countMax: 8,  allowedFromSec: 90 },
     { kind: 'encircle', weight: 4, countMin: 8, countMax: 12, allowedFromSec: 80 },
     { kind: 'burst',    weight: 3, countMin: 6, countMax: 10, allowedFromSec: 0 },
     { kind: 'converge', weight: 3, countMin: 4, countMax: 7,  allowedFromSec: 0 },
     { kind: 'pincer',   weight: 2, countMin: 4, countMax: 8,  allowedFromSec: 0 },
+    { kind: 'spiral',   weight: 2, countMin: 6, countMax: 9,  allowedFromSec: 150 },
+    { kind: 'columns',  weight: 2, countMin: 6, countMax: 9,  allowedFromSec: 150 },
     { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
   ],
 
   // Phase 7 — Charpente & toiture : poutres en travers, murs qui traversent
+  // T9 : colonnes et spirales renforcées (poutres en séquence).
   [ConstructionPhaseId.CHARPENTE_TOITURE]: [
-    { kind: 'sweep',    weight: 6, countMin: 5, countMax: 8,  allowedFromSec: 80 },
-    { kind: 'encircle', weight: 5, countMin: 8, countMax: 12, allowedFromSec: 80 },
-    { kind: 'burst',    weight: 3, countMin: 6, countMax: 10, allowedFromSec: 0 },
-    { kind: 'pincer',   weight: 3, countMin: 4, countMax: 8,  allowedFromSec: 0 },
-    { kind: 'converge', weight: 2, countMin: 4, countMax: 7,  allowedFromSec: 0 },
-    { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
+    { kind: 'sweep',      weight: 6, countMin: 5, countMax: 8,  allowedFromSec: 80 },
+    { kind: 'encircle',   weight: 5, countMin: 8, countMax: 12, allowedFromSec: 80 },
+    { kind: 'columns',    weight: 3, countMin: 6, countMax: 9,  allowedFromSec: 120 },
+    { kind: 'spiral',     weight: 3, countMin: 6, countMax: 9,  allowedFromSec: 120 },
+    { kind: 'burst',      weight: 3, countMin: 6, countMax: 10, allowedFromSec: 0 },
+    { kind: 'pincer',     weight: 3, countMin: 4, countMax: 8,  allowedFromSec: 0 },
+    { kind: 'converge',   weight: 2, countMin: 4, countMax: 7,  allowedFromSec: 0 },
+    { kind: 'miniBoss',   weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
   ],
 
   // Phase 8 — Second œuvre : cloisons et gaines, cercles serrés + traversées croisées
-  // Encircle amplifié (Task 8) : anneaux plus complets (10-14 vs 8-12), densité lisible.
+  // T8 : anneaux plus complets (10-14 vs 8-12), densité lisible.
+  // T9 : concentric introduit (double cerclage cloisons), colonnes de gaines.
   [ConstructionPhaseId.SECOND_OEUVRE]: [
-    { kind: 'encircle', weight: 6, countMin: 10, countMax: 14, allowedFromSec: 70 },
-    { kind: 'sweep',    weight: 6, countMin: 5,  countMax: 8,  allowedFromSec: 70 },
-    { kind: 'burst',    weight: 3, countMin: 6,  countMax: 10, allowedFromSec: 0 },
-    { kind: 'pincer',   weight: 2, countMin: 4,  countMax: 8,  allowedFromSec: 0 },
-    { kind: 'converge', weight: 2, countMin: 4,  countMax: 7,  allowedFromSec: 0 },
-    { kind: 'miniBoss', weight: 1, countMin: 1,  countMax: 1,  allowedFromSec: 300 }
+    { kind: 'encircle',   weight: 6, countMin: 10, countMax: 14, allowedFromSec: 70 },
+    { kind: 'sweep',      weight: 6, countMin: 5,  countMax: 8,  allowedFromSec: 70 },
+    { kind: 'concentric', weight: 3, countMin: 8,  countMax: 12, allowedFromSec: 100 },
+    { kind: 'columns',    weight: 2, countMin: 6,  countMax: 9,  allowedFromSec: 100 },
+    { kind: 'burst',      weight: 3, countMin: 6,  countMax: 10, allowedFromSec: 0 },
+    { kind: 'pincer',     weight: 2, countMin: 4,  countMax: 8,  allowedFromSec: 0 },
+    { kind: 'converge',   weight: 2, countMin: 4,  countMax: 7,  allowedFromSec: 0 },
+    { kind: 'miniBoss',   weight: 1, countMin: 1,  countMax: 1,  allowedFromSec: 300 }
   ],
 
   // Phase 9 — Finitions : audit minutieux, cerclages et passages en inspection
-  // Encircle amplifié (Task 8) : anneaux denses (10-16), pression de cerclage maximale.
+  // T8 : anneaux denses (10-16), pression de cerclage maximale.
+  // T9 : concentric (double cerclage audit) + spiral (inspection tournante).
   [ConstructionPhaseId.FINITIONS]: [
-    { kind: 'encircle', weight: 7, countMin: 10, countMax: 16, allowedFromSec: 60 },
-    { kind: 'sweep',    weight: 6, countMin: 5,  countMax: 8,  allowedFromSec: 60 },
-    { kind: 'burst',    weight: 2, countMin: 6,  countMax: 10, allowedFromSec: 0 },
-    { kind: 'pincer',   weight: 2, countMin: 4,  countMax: 8,  allowedFromSec: 0 },
-    { kind: 'converge', weight: 1, countMin: 4,  countMax: 7,  allowedFromSec: 0 },
-    { kind: 'miniBoss', weight: 1, countMin: 1,  countMax: 1,  allowedFromSec: 300 }
+    { kind: 'encircle',   weight: 7, countMin: 10, countMax: 16, allowedFromSec: 60 },
+    { kind: 'sweep',      weight: 6, countMin: 5,  countMax: 8,  allowedFromSec: 60 },
+    { kind: 'concentric', weight: 4, countMin: 8,  countMax: 12, allowedFromSec: 90 },
+    { kind: 'spiral',     weight: 2, countMin: 7,  countMax: 10, allowedFromSec: 90 },
+    { kind: 'burst',      weight: 2, countMin: 6,  countMax: 10, allowedFromSec: 0 },
+    { kind: 'pincer',     weight: 2, countMin: 4,  countMax: 8,  allowedFromSec: 0 },
+    { kind: 'converge',   weight: 1, countMin: 4,  countMax: 7,  allowedFromSec: 0 },
+    { kind: 'miniBoss',   weight: 1, countMin: 1,  countMax: 1,  allowedFromSec: 300 }
   ],
 
   // Phase 10 — Livraison & audit : commission qui cerne + inspection en rang serrés
+  // T9 : concentric maximal (commission + contre-commission), colonnes d'inspecteurs.
   [ConstructionPhaseId.LIVRAISON_AUDIT]: [
-    { kind: 'encircle', weight: 8, countMin: 10, countMax: 14, allowedFromSec: 60 },
-    { kind: 'sweep',    weight: 7, countMin: 5,  countMax: 8,  allowedFromSec: 60 },
-    { kind: 'burst',    weight: 2, countMin: 6,  countMax: 10, allowedFromSec: 0 },
-    { kind: 'pincer',   weight: 2, countMin: 4,  countMax: 8,  allowedFromSec: 0 },
-    { kind: 'converge', weight: 1, countMin: 4,  countMax: 7,  allowedFromSec: 0 },
-    { kind: 'miniBoss', weight: 1, countMin: 1,  countMax: 1,  allowedFromSec: 300 }
+    { kind: 'encircle',   weight: 8, countMin: 10, countMax: 14, allowedFromSec: 60 },
+    { kind: 'concentric', weight: 5, countMin: 10, countMax: 14, allowedFromSec: 80 },
+    { kind: 'sweep',      weight: 7, countMin: 5,  countMax: 8,  allowedFromSec: 60 },
+    { kind: 'columns',    weight: 3, countMin: 6,  countMax: 9,  allowedFromSec: 90 },
+    { kind: 'burst',      weight: 2, countMin: 6,  countMax: 10, allowedFromSec: 0 },
+    { kind: 'pincer',     weight: 2, countMin: 4,  countMax: 8,  allowedFromSec: 0 },
+    { kind: 'converge',   weight: 1, countMin: 4,  countMax: 7,  allowedFromSec: 0 },
+    { kind: 'miniBoss',   weight: 1, countMin: 1,  countMax: 1,  allowedFromSec: 300 }
   ]
 } as const
 

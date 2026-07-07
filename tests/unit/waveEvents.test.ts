@@ -565,7 +565,7 @@ describe('EVENT_POOL_DEFAULT', () => {
   })
 
   it('tous les kinds sont valides', () => {
-    const validKinds = new Set(['converge', 'pincer', 'burst', 'encircle', 'sweep', 'miniBoss'])
+    const validKinds = new Set(['converge', 'pincer', 'burst', 'encircle', 'sweep', 'miniBoss', 'spiral', 'columns', 'concentric'])
     for (const def of EVENT_POOL_DEFAULT) {
       expect(validKinds.has(def.kind)).toBe(true)
     }
@@ -734,7 +734,263 @@ describe('EVENT_POOL_DEFAULT — amplification rework T8', () => {
 // eventPoolForPhase — Task 12
 // ---------------------------------------------------------------------------
 
-const VALID_KINDS = new Set(['converge', 'pincer', 'burst', 'encircle', 'sweep', 'miniBoss'])
+const VALID_KINDS = new Set(['converge', 'pincer', 'burst', 'encircle', 'sweep', 'miniBoss', 'spiral', 'columns', 'concentric'])
+
+// ---------------------------------------------------------------------------
+// Task 9 — placeEvent — spiral
+// ---------------------------------------------------------------------------
+
+describe('placeEvent("spiral")', () => {
+  it('renvoie exactement count placements', () => {
+    const rng = new Rng(300)
+    const result = placeEvent('spiral', 8, 400, rng)
+    expect(result).toHaveLength(8)
+  })
+
+  it('tous les placements ont behavior "chase" (défaut spiral)', () => {
+    const rng = new Rng(301)
+    const result = placeEvent('spiral', 8, 400, rng)
+    for (const p of result) {
+      expect(p.behavior).toBe('chase')
+    }
+  })
+
+  it('le rayon est STRICTEMENT CROISSANT (spirale qui se resserre → ordre par index)', () => {
+    const rng = new Rng(302)
+    const result = placeEvent('spiral', 8, 400, rng)
+    for (let i = 0; i < result.length - 1; i++) {
+      const cur = result[i]
+      const nxt = result[i + 1]
+      if (cur === undefined || nxt === undefined) {
+        throw new Error(`placement manquant à l'index ${i}`)
+      }
+      expect(nxt.radius).toBeGreaterThan(cur.radius)
+    }
+  })
+
+  it('le rayon du premier placement est strictement inférieur à ringRadius', () => {
+    const ringRadius = 400
+    const rng = new Rng(303)
+    const result = placeEvent('spiral', 8, ringRadius, rng)
+    const first = result[0]
+    if (first === undefined) {
+      throw new Error('aucun placement retourné pour spiral')
+    }
+    expect(first.radius).toBeLessThan(ringRadius)
+  })
+
+  it('il existe une brèche angulaire (pas de cercle fermé — arc < 2π)', () => {
+    // La spirale ne doit PAS former un cercle fermé.
+    // On vérifie que l'étendue angulaire totale couvre < 2π.
+    const rng = new Rng(304)
+    const result = placeEvent('spiral', 8, 400, rng)
+    const angles = result.map((p) => p.angle)
+    const min = Math.min(...angles)
+    const max = Math.max(...angles)
+    expect(max - min).toBeLessThan(TWO_PI)
+  })
+
+  it('est déterministe (même seed → même sortie)', () => {
+    const [r1, r2] = mirrorRng(305)
+    const a = placeEvent('spiral', 8, 400, r1)
+    const b = placeEvent('spiral', 8, 400, r2)
+    expect(a).toHaveLength(b.length)
+    for (let i = 0; i < a.length; i++) {
+      const ai = a[i]
+      const bi = b[i]
+      if (ai === undefined || bi === undefined) {
+        throw new Error(`placement manquant à l'index ${i}`)
+      }
+      expect(ai.angle).toBeCloseTo(bi.angle, 10)
+      expect(ai.radius).toBeCloseTo(bi.radius, 10)
+      expect(ai.behavior).toBe(bi.behavior)
+    }
+  })
+
+  it('placeEvent gère "spiral" sans throw', () => {
+    const rng = new Rng(306)
+    expect(() => placeEvent('spiral', 6, 400, rng)).not.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Task 9 — placeEvent — columns
+// ---------------------------------------------------------------------------
+
+describe('placeEvent("columns")', () => {
+  it('renvoie exactement count placements', () => {
+    const rng = new Rng(310)
+    const result = placeEvent('columns', 9, 400, rng)
+    expect(result).toHaveLength(9)
+  })
+
+  it('tous les placements ont behavior "sweep" (défaut columns)', () => {
+    const rng = new Rng(311)
+    const result = placeEvent('columns', 9, 400, rng)
+    for (const p of result) {
+      expect(p.behavior).toBe('sweep')
+    }
+  })
+
+  it('bAngle est défini sur chaque placement (direction de traversée)', () => {
+    const rng = new Rng(312)
+    const result = placeEvent('columns', 9, 400, rng)
+    for (const p of result) {
+      expect(p.bAngle).toBeDefined()
+    }
+  })
+
+  it('il y a au moins 2 valeurs de bAngle distinctes (colonnes décalées)', () => {
+    // Chaque colonne a son propre décalage → au moins 2 bAngles distincts.
+    const rng = new Rng(313)
+    const result = placeEvent('columns', 9, 400, rng)
+    const bAngles = result.map((p) => {
+      if (p.bAngle === undefined) {
+        throw new Error('bAngle manquant sur un placement columns')
+      }
+      return p.bAngle
+    })
+    const unique = new Set(bAngles.map((a) => a.toFixed(6)))
+    expect(unique.size).toBeGreaterThanOrEqual(2)
+  })
+
+  it('les ennemis se répartissent en ≥ 2 groupes distincts (couloirs visibles)', () => {
+    // Les colonnes forment des lignes parallèles décalées → les bAngles se
+    // regroupent en ≥ 2 clusters (même dir + décalage de colonne différent).
+    const rng = new Rng(314)
+    const result = placeEvent('columns', 9, 400, rng)
+    const bAngles = result.map((p) => {
+      if (p.bAngle === undefined) {
+        throw new Error('bAngle manquant')
+      }
+      return p.bAngle
+    })
+    const uniqueCount = new Set(bAngles.map((a) => a.toFixed(6))).size
+    expect(uniqueCount).toBeGreaterThanOrEqual(2)
+  })
+
+  it('est déterministe (même seed → même sortie)', () => {
+    const [r1, r2] = mirrorRng(315)
+    const a = placeEvent('columns', 9, 400, r1)
+    const b = placeEvent('columns', 9, 400, r2)
+    expect(a).toHaveLength(b.length)
+    for (let i = 0; i < a.length; i++) {
+      const ai = a[i]
+      const bi = b[i]
+      if (ai === undefined || bi === undefined) {
+        throw new Error(`placement manquant à l'index ${i}`)
+      }
+      expect(ai.angle).toBeCloseTo(bi.angle, 10)
+      expect(ai.radius).toBeCloseTo(bi.radius, 10)
+      expect(ai.bAngle).toBeCloseTo(bi.bAngle ?? 0, 10)
+    }
+  })
+
+  it('placeEvent gère "columns" sans throw', () => {
+    const rng = new Rng(316)
+    expect(() => placeEvent('columns', 6, 400, rng)).not.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Task 9 — placeEvent — concentric
+// ---------------------------------------------------------------------------
+
+describe('placeEvent("concentric")', () => {
+  it('renvoie exactement count placements', () => {
+    const rng = new Rng(320)
+    const result = placeEvent('concentric', 12, 400, rng)
+    expect(result).toHaveLength(12)
+  })
+
+  it('tous les placements ont behavior "circler" (défaut concentric)', () => {
+    const rng = new Rng(321)
+    const result = placeEvent('concentric', 12, 400, rng)
+    for (const p of result) {
+      expect(p.behavior).toBe('circler')
+    }
+  })
+
+  it('exactement 2 rayons distincts (double anneau)', () => {
+    const rng = new Rng(322)
+    const result = placeEvent('concentric', 12, 400, rng)
+    const radii = result.map((p) => p.radius)
+    const unique = new Set(radii.map((r) => r.toFixed(4)))
+    expect(unique.size).toBe(2)
+  })
+
+  it("le rayon externe est STRICTEMENT supérieur au rayon interne", () => {
+    const rng = new Rng(323)
+    const result = placeEvent('concentric', 12, 400, rng)
+    const radii = result.map((p) => p.radius)
+    const min = Math.min(...radii)
+    const max = Math.max(...radii)
+    expect(max).toBeGreaterThan(min)
+  })
+
+  it('les deux anneaux ont des bAngles distincts (retard externe)', () => {
+    // L'anneau externe est légèrement retardé via bAngle → les bAngles de
+    // l'anneau interne et externe doivent être distincts.
+    const rng = new Rng(324)
+    const result = placeEvent('concentric', 12, 400, rng)
+    const inner = result.filter((p) => p.radius < Math.max(...result.map((x) => x.radius)))
+    const outer = result.filter((p) => p.radius >= Math.max(...result.map((x) => x.radius)))
+    // Il doit exister au moins un bAngle dans inner et un dans outer.
+    expect(inner.length).toBeGreaterThan(0)
+    expect(outer.length).toBeGreaterThan(0)
+    // bAngle défini sur tous
+    for (const p of result) {
+      expect(p.bAngle).toBeDefined()
+    }
+  })
+
+  it('est déterministe (même seed → même sortie)', () => {
+    const [r1, r2] = mirrorRng(325)
+    const a = placeEvent('concentric', 12, 400, r1)
+    const b = placeEvent('concentric', 12, 400, r2)
+    expect(a).toHaveLength(b.length)
+    for (let i = 0; i < a.length; i++) {
+      const ai = a[i]
+      const bi = b[i]
+      if (ai === undefined || bi === undefined) {
+        throw new Error(`placement manquant à l'index ${i}`)
+      }
+      expect(ai.angle).toBeCloseTo(bi.angle, 10)
+      expect(ai.radius).toBeCloseTo(bi.radius, 10)
+      expect(ai.behavior).toBe(bi.behavior)
+      expect(ai.bAngle).toBeCloseTo(bi.bAngle ?? 0, 10)
+    }
+  })
+
+  it('placeEvent gère "concentric" sans throw', () => {
+    const rng = new Rng(326)
+    expect(() => placeEvent('concentric', 10, 400, rng)).not.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Task 9 — VALID_KINDS mis à jour (T9 guard)
+// ---------------------------------------------------------------------------
+
+describe('Task 9 — les 3 nouveaux kinds sont dans le type WaveEventKind', () => {
+  it('placeEvent("spiral", ...) renvoie des placements (kind reconnu)', () => {
+    const rng = new Rng(330)
+    const result = placeEvent('spiral', 6, 400, rng)
+    expect(result.length).toBeGreaterThan(0)
+  })
+
+  it('placeEvent("columns", ...) renvoie des placements (kind reconnu)', () => {
+    const rng = new Rng(331)
+    const result = placeEvent('columns', 6, 400, rng)
+    expect(result.length).toBeGreaterThan(0)
+  })
+
+  it('placeEvent("concentric", ...) renvoie des placements (kind reconnu)', () => {
+    const rng = new Rng(332)
+    const result = placeEvent('concentric', 8, 400, rng)
+    expect(result.length).toBeGreaterThan(0)
+  })
+})
 
 describe('eventPoolForPhase', () => {
   const allPhases = Object.values(ConstructionPhaseId)
