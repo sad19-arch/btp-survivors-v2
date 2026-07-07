@@ -169,43 +169,36 @@ export const SPAWN = {
 } as const
 
 /**
- * Boss de mi-parcours (PRD : apparition à 5:00). Rôle `mid` : NE déclenche PAS
- * la victoire — sa mort lâche un coffre d'évolution (cf. reap.ts) qui rend une
- * évolution atteignable EN COURS DE RUN, avant le boss final.
- */
-export const MINI_BOSS = {
-  /** Instant d'apparition, en ms de temps de jeu. */
-  atMs: 5 * 60_000,
-  /**
-   * Rayon d'apparition du boss (px), plus court que l'anneau normal (560) pour le
-   * faire entrer À L'ÉCRAN → le combat de climax est vu et engagé, pas un spawn
-   * hors-champ que le joueur fond à distance sans le remarquer.
-   */
-  spawnRadius: 320,
-  /**
-   * Multiplicateur de PV du mini-boss (× la def `contremaitre`). Le mini-boss de
-   * 5:00 est volontairement CORIACE (ne plus le fondre en 2 s une fois les armes
-   * montées/évoluées) ; comme il ne bloque PAS la victoire (sa mort = coffre), un
-   * bot non-évolué qui ne le tue pas survit quand même autour.
-   */
-  hpMult: 1.0
-} as const
-
-/**
  * Boss final (rôle `final`). Sa mort est la condition de victoire de la run
  * (remplace l'ancienne victoire au mini-boss de 5:00 — cf. Plan B1, split de boss).
  */
 export const FINAL_BOSS = {
-  /** Instant d'apparition, en ms de temps de jeu (~10:30). */
-  atMs: 630_000,
-  /** Rayon d'apparition du boss (px), même logique que MINI_BOSS : à l'écran. */
+  /** Instant d'apparition, en ms de temps de jeu (~20:00 — arc long). */
+  atMs: 1_200_000,
+  /** Rayon d'apparition du boss (px), plus court que l'anneau normal (560) : le boss entre À L'ÉCRAN, combat vu et engagé. */
   spawnRadius: 320,
   /**
-   * Multiplicateur de PV du boss FINAL (× la def `contremaitre`). Plus bas que le
-   * mini-boss : la VICTOIRE dépend de le tuer → il doit rester battable même par
-   * un build de mi-parcours (cible sim `KITE_MIN_WIN_PCT`).
+   * Multiplicateur de PV du boss FINAL (× la def `contremaitre`). La VICTOIRE
+   * dépend de le tuer → battable avec un build de fin de run complet.
+   * Arc 20 min : le joueur a pu évoluer 2-3 armes. PV ajusté pour viser 25-40 %
+   * de win (cible sim `KITE_MIN_WIN_PCT`).
    */
-  hpMult: 0.67
+  hpMult: 0.85
+} as const
+
+/**
+ * Mini-boss/reapers périodiques intermédiaires (rôle `mid`). Trois paliers :
+ * 5:00 / 10:00 / 15:00 — ponctuent l'arc long, laissent chacun un coffre d'évolution
+ * à leur mort. La condition de victoire est UNIQUEMENT le boss FINAL à 20:00.
+ *
+ * `atMs` : liste des instants d'apparition en ms. Chaque palier ne spawn qu'une fois.
+ * `hpMults` : scaling PV par palier (le boss de 10:00 est plus costaud que celui de 5:00,
+ * et celui de 15:00 encore davantage — pression croissante).
+ */
+export const MID_BOSS_WAVES = {
+  atMs: [5 * 60_000, 10 * 60_000, 15 * 60_000] as readonly number[],
+  hpMults: [1.0, 1.1, 1.5] as readonly number[],
+  spawnRadius: 320
 } as const
 
 /**
@@ -260,3 +253,24 @@ export const INTRO = {
  * joueur→ennemi est ≤ CONE_HALF_ANGLE.
  */
 export const CONE_HALF_ANGLE = 0.5 as const
+
+/**
+ * Paramètres de détection du « camping » (joueur qui ne bouge pas assez).
+ *
+ * Si la LONGUEUR DE CHEMIN CUMULÉE du joueur (somme des déplacements pas-à-pas)
+ * sur la fenêtre `windowMs` est inférieure à `minMove` px ET que le cooldown est
+ * épuisé, le directeur force un encerclement de chargeurs qui oblige à bouger.
+ * NB : métrique = chemin cumulé, PAS le déplacement net — un kiter qui tourne en
+ * cercle parcourt un long chemin et n'est donc jamais puni (cf. reactiveHook).
+ *
+ * `cooldownMs` empêche le re-déclenchement immédiat : après un événement
+ * anti-camping, au moins `cooldownMs` ms doivent s'écouler avant le suivant.
+ */
+export const CAMPER = {
+  /** Fenêtre de mesure du chemin cumulé (ms). */
+  windowMs: 6000,
+  /** Longueur de chemin cumulée minimale sur la fenêtre pour NE PAS déclencher (px). */
+  minMove: 120,
+  /** Cooldown entre deux événements anti-camping (ms). */
+  cooldownMs: 12000
+} as const

@@ -53,7 +53,7 @@ describe('reap — coffre à la mort du boss de mi-parcours', () => {
 })
 
 describe('simulation — split de boss', () => {
-  it("la victoire n'arrive PAS avant le boss final (~10:30)", () => {
+  it("la victoire n'arrive PAS avant le boss final (~20:00)", () => {
     // Le boss mid à 5:00 ne doit pas déclencher la victoire.
     const sim = new Simulation({ seed: 1, mode: 'solo' })
     // Avant tout spawn de boss, on est forcément en 'game' : aucun boss final

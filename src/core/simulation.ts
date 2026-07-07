@@ -19,7 +19,8 @@ import { tetherSystem } from './systems/tether'
 import { worldBoundsSystem } from './systems/bounds'
 import { enemyAiSystem } from './systems/enemyAi'
 import { slowSystem } from './systems/slow'
-import { spawnBoss, spawnWave } from './systems/spawn'
+import { spawnBoss, spawnGroup, spawnWave } from './systems/spawn'
+import { createWaveDirectorState, stepWaveDirector, type WaveDirectorState } from './systems/waveDirector'
 import { weaponSystem } from './systems/weapon'
 import { collisionSystem } from './systems/collision'
 import { reapDeadEnemies } from './systems/reap'
@@ -35,8 +36,9 @@ import { recomputePlayerStats } from './systems/playerStats'
 import { rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
 import { tickChestDirector, maybeDropEliteChest } from './systems/chestDirector'
-import { coopHpFactor, FINAL_BOSS, MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
-import { SPAWN_RAMP, spawnParamsAt, difficultyScaleAt } from '@content/spawnRamp'
+import { coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
+import { SPAWN_RAMP, difficultyScaleAt } from '@content/spawnRamp'
+import { eventPoolForPhase } from '@content/waveEvents'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
 import { ENEMIES, MINI_BOSS_ID } from '@content/enemies'
 import { characterDef, DEFAULT_CHARACTER_ID } from '@content/characters'
@@ -109,6 +111,10 @@ export class Simulation {
   private prisonerRng: Rng
   /** RNG dédié au directeur de coffres — séparé du RNG spawn/loot/upgrade. */
   private chestRng: Rng
+  /** RNG dédié au directeur de vagues — séparé de tous les autres flux (placement déterministe). */
+  private _waveRng: Rng
+  /** État du directeur de vagues (cadence accalmie ↔ événement). */
+  private waveDir: WaveDirectorState = createWaveDirectorState()
   /** Ms accumulées depuis le dernier coffre périodique (directeur de coffres). */
   private chestAccMs = 0
   private readonly phaseId: ConstructionPhaseId
@@ -119,10 +125,13 @@ export class Simulation {
   private scene: GameState['scene'] = 'game'
   private elapsedMs = 0
   private remainderMs = 0
-  private spawnAccMs = 0
   private score = 0
-  /** Vrai une fois le boss de mi-parcours (5:00, rôle `mid`) apparu. Ne déclenche PAS la victoire. */
-  private midBossSpawned = false
+  /**
+   * Nombre de paliers de mid-boss déjà spawné (rôle `mid`). Chaque valeur dans
+   * `MID_BOSS_WAVES.atMs` est consommée exactement une fois (palier par index).
+   * 0 = aucun spawné, 1 = 5:00 spawné, 2 = 10:00 spawné, 3 = 15:00 spawné.
+   */
+  private midBossWaveIndex = 0
   /** Vrai une fois le boss FINAL (rôle `final`) RÉELLEMENT apparu (garde-fou anti faux-positif de victoire). */
   private finalBossSpawned = false
   private pendingLevelUp: PendingLevelUp | null = null
@@ -148,6 +157,7 @@ export class Simulation {
     this.lootRng = new Rng((opts.seed ^ 0x1007) | 0)
     this.prisonerRng = new Rng((opts.seed ^ 0x2b1d) | 0)
     this.chestRng = new Rng((opts.seed ^ 0x3c7a) | 0)
+    this._waveRng = new Rng((opts.seed ^ 0x5a1e) | 0)
     this.phaseId = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
     this.phase = resolvePhase(this.phaseId)
     this.characters = opts.characters ?? []
@@ -158,6 +168,15 @@ export class Simulation {
   setSeed(seed: number): void {
     this.reset(seed)
   }
+
+  /**
+   * Expose le flux RNG dédié aux vagues — utilisé par le directeur de vagues (Task 8)
+   * pour appeler `spawnGroup` sans perturber le flux `rng` principal.
+   */
+  get waveRng(): Rng {
+    return this._waveRng
+  }
+
 
   /** Injecte l'état d'entrée d'un joueur (déplacement + attaque). */
   setInput(playerId: number, input: PlayerInput): void {
@@ -356,24 +375,24 @@ export class Simulation {
 
   /**
    * [Debug/seam] Fait apparaître immédiatement le boss du rôle demandé (`mid`
-   * ou `final`) au centroïde des joueurs, sans attendre le seuil temporel
-   * (5:00 / ~10:30). Pose le flag `*BossSpawned` correspondant, exactement
-   * comme le spawn normal, pour que `updateWin`/le coffre en mi-mort se
-   * comportent de façon identique. Réservé aux tests et au seam de debug —
-   * jamais utilisé en jeu normal.
+   * ou `final`) au centroïde des joueurs, sans attendre le seuil temporel.
+   * Pose le flag `*BossSpawned` correspondant, exactement comme le spawn normal,
+   * pour que `updateWin`/le coffre en mi-mort se comportent de façon identique.
+   * Réservé aux tests et au seam de debug — jamais utilisé en jeu normal.
    */
   debugSpawnBoss(role: 'mid' | 'final'): void {
     const def = ENEMIES[MINI_BOSS_ID]
     if (def === undefined) {
       return
     }
-    const radius = role === 'mid' ? MINI_BOSS.spawnRadius : FINAL_BOSS.spawnRadius
-    const hpMult = role === 'mid' ? MINI_BOSS.hpMult : FINAL_BOSS.hpMult
+    const radius = role === 'mid' ? MID_BOSS_WAVES.spawnRadius : FINAL_BOSS.spawnRadius
+    const hpMult = role === 'mid' ? (MID_BOSS_WAVES.hpMults[0] ?? 1.0) : FINAL_BOSS.hpMult
     const bossScale = { hp: coopHpFactor(this.playerCount()) * hpMult, contactDamage: 1, speed: 1 }
     spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), radius, role, bossScale)
     this.events.dispatchEvent(new BossSpawnedEvent(role))
     if (role === 'mid') {
-      this.midBossSpawned = true
+      // Pour le debug, marque tous les paliers mid comme spawné (évite un re-spawn automatique).
+      this.midBossWaveIndex = MID_BOSS_WAVES.atMs.length
     } else {
       this.finalBossSpawned = true
     }
@@ -417,14 +436,15 @@ export class Simulation {
     this.lootRng = new Rng((seed ^ 0x1007) | 0)
     this.prisonerRng = new Rng((seed ^ 0x2b1d) | 0)
     this.chestRng = new Rng((seed ^ 0x3c7a) | 0)
+    this._waveRng = new Rng((seed ^ 0x5a1e) | 0)
+    this.waveDir = createWaveDirectorState()
     this.phase = resolvePhase(this.phaseId)
     this.scene = 'game'
     this.elapsedMs = 0
     this.remainderMs = 0
-    this.spawnAccMs = 0
     this.chestAccMs = 0
     this.score = 0
-    this.midBossSpawned = false
+    this.midBossWaveIndex = 0
     this.finalBossSpawned = false
     this.pendingLevelUp = null
     this.inputs.clear()
@@ -515,7 +535,7 @@ export class Simulation {
     this.rebuildEnemyGrid()
     weaponSystem(this.world, dtMs, pulses, fired, this.rng, this.enemyGrid)
     slowSystem(this.world, dtMs)
-    enemyAiSystem(this.world)
+    enemyAiSystem(this.world, this.elapsedMs, dtMs)
     tetherSystem(this.world, MODE_PLAYER_COUNT[this.mode] ?? 1, TETHER.maxRadius)
     movementSystem(this.world, dtMs)
     worldBoundsSystem(this.world, WORLD)
@@ -663,35 +683,45 @@ export class Simulation {
   private runSpawns(dtMs: number): void {
     this.maybeSpawnMidBoss()
     this.maybeSpawnFinalBoss()
-    this.spawnAccMs += dtMs
-    const { intervalMs, countPerWave } = spawnParamsAt(SPAWN_RAMP, this.elapsedMs)
     const scale = difficultyScaleAt(this.elapsedMs)
     // Renforce les PV ennemis selon le nombre de joueurs (co-op) — dégâts/vitesse
     // inchangés. Solo (n=1) : `coopHpFactor(1)=1` → `scale.hp` identique à avant.
     const coopScale = { ...scale, hp: scale.hp * coopHpFactor(this.playerCount()) }
-    while (this.spawnAccMs >= intervalMs) {
-      this.spawnAccMs -= intervalMs
-      if (this.countEnemies() < SPAWN.maxActive) {
-        spawnWave(this.world, this.rng, this.phase, this.playersCentroid(), countPerWave, coopScale)
-      }
+    const center = this.playersCentroid()
+    const placements = stepWaveDirector(this.waveDir, {
+      dtMs,
+      elapsedMs: this.elapsedMs,
+      center,
+      ramp: SPAWN_RAMP,
+      events: eventPoolForPhase(this.phaseId),
+      ringRadius: SPAWN.ringRadius,
+      rng: this._waveRng
+    })
+    if (placements.length > 0 && this.countEnemies() < SPAWN.maxActive) {
+      spawnGroup(this.world, this._waveRng, this.phase, center, placements, coopScale)
     }
   }
 
   /**
-   * Invoque le boss de mi-parcours une seule fois, au seuil temporel (PRD : 5:00).
-   * Rôle `mid` : NE déclenche PAS la victoire (sa mort lâche un coffre, cf. reap.ts).
+   * Invoque le prochain palier de mid-boss périodique si son seuil temporel est
+   * atteint. Paliers : 5:00 / 10:00 / 15:00. Rôle `mid` : NE déclenche PAS la
+   * victoire (sa mort lâche un coffre d'évolution, cf. reap.ts). Déterministe :
+   * angle via `this.rng`, seuils temporels fixes dans `MID_BOSS_WAVES.atMs`.
    */
   private maybeSpawnMidBoss(): void {
-    if (this.midBossSpawned || this.elapsedMs < MINI_BOSS.atMs) {
+    const nextIndex = this.midBossWaveIndex
+    const nextAtMs = MID_BOSS_WAVES.atMs[nextIndex]
+    if (nextAtMs === undefined || this.elapsedMs < nextAtMs) {
       return
     }
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
-      const bossScale = { hp: coopHpFactor(this.playerCount()) * MINI_BOSS.hpMult, contactDamage: 1, speed: 1 }
-      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), MINI_BOSS.spawnRadius, 'mid', bossScale)
+      const hpMult = MID_BOSS_WAVES.hpMults[nextIndex] ?? 1.0
+      const bossScale = { hp: coopHpFactor(this.playerCount()) * hpMult, contactDamage: 1, speed: 1 }
+      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), MID_BOSS_WAVES.spawnRadius, 'mid', bossScale)
       this.events.dispatchEvent(new BossSpawnedEvent('mid'))
     }
-    this.midBossSpawned = true
+    this.midBossWaveIndex = nextIndex + 1
   }
 
   /** Invoque le boss FINAL une seule fois, au seuil temporel (~10:30). Sa mort = victoire. */

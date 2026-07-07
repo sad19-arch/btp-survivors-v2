@@ -4,6 +4,8 @@
  * Slice 1 : roster minimal. Les archétypes alimentent les pools de phases.
  */
 
+import type { EnemyBehavior } from '@core/types'
+
 export type EnemyArchetype = 'base' | 'fast' | 'tank' | 'elite'
 
 export interface EnemyDef {
@@ -15,6 +17,8 @@ export interface EnemyDef {
   archetype: EnemyArchetype
   /** XP lâchée à la mort. */
   xpValue: number
+  /** Comportement d'IA. Si absent, 'chase' est utilisé par défaut au spawn. */
+  behavior?: EnemyBehavior
 }
 
 /**
@@ -87,6 +91,39 @@ export const ENEMIES: Record<string, EnemyDef> = {
     xpValue: 80
   }
 }
+
+/**
+ * Paramètres de tuning pour les comportements d'ennemis.
+ * Importé par les fonctions de steering dans `src/core/systems/enemyAi.ts`.
+ */
+export const BEHAVIOR_TUNING = {
+  zigzag: {
+    /** Amplitude de l'oscillation perpendiculaire (ratio de la vitesse). */
+    amp: 0.65,
+    /** Fréquence angulaire (rad/s). 1.3 Hz ≈ oscillation rapide visible. */
+    omega: 2.0 * Math.PI * 1.3,
+  },
+  circler: {
+    /** Rayon de l'anneau orbital autour du joueur (px). */
+    orbitR: 90,
+    /** Vitesse angulaire de rotation sur l'anneau (rad/s). */
+    rotSpeed: 0.35,
+  },
+  charger: {
+    /** Durée de la phase d'approche (ms) avant de télégraphier. */
+    approachMs: 1400,
+    /** Durée du télégraphe (quasi-arrêt, mémorisation de la direction) (ms). */
+    telegraphMs: 300,
+    /** Durée du dash (ms). */
+    dashMs: 450,
+    /** Multiplicateur de vitesse pendant le dash. */
+    dashMult: 2.6,
+    /** Durée de la récupération après le dash (ms). */
+    recoverMs: 700,
+    /** Multiplicateur de vitesse pendant la récupération. */
+    recoverMult: 0.45,
+  },
+} as const
 
 /** Id du mini-boss MVP. */
 export const MINI_BOSS_ID = 'contremaitre'

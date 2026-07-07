@@ -56,6 +56,21 @@ export interface ProgressComp {
   nextThreshold: number
 }
 
+/** Comportements d'IA disponibles pour les ennemis. */
+export type EnemyBehavior = 'chase' | 'zigzag' | 'circler' | 'sweep' | 'charger'
+
+/**
+ * Placement d'un ennemi dans un groupe de vague (directeur de vagues).
+ * `angle` et `radius` définissent la position relative au centre de la vague ;
+ * `behavior` et `bAngle` surchargent les defaults de l'ennemi.
+ */
+export interface WavePlacement {
+  angle: number
+  radius: number
+  behavior: EnemyBehavior
+  bAngle?: number
+}
+
 /** Données propres à une entité ennemie. */
 export interface EnemyComp {
   type: string
@@ -67,6 +82,16 @@ export interface EnemyComp {
   contactDamage: number
   /** XP lâchée à la mort. */
   xpValue: number
+  /** Comportement d'IA. Absent sur les fixtures de test anciennes → traité comme 'chase'. */
+  behavior?: EnemyBehavior
+  /** Phase interne du comportement (utilisée par zigzag, circler…). */
+  bPhase?: number
+  /** Angle courant du comportement (utilisé par circler…). */
+  bAngle?: number
+  /** Mode interne du comportement (utilisé par charger…). */
+  bMode?: number
+  /** Timer interne du comportement (utilisé par charger…). */
+  bTimer?: number
 }
 
 /** Types de pickups ramassables. */
