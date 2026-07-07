@@ -229,8 +229,8 @@ export const RESCUE = {
   /** Nombre de prisonniers éparpillés par run. */
   count: 5,
   /** Distance min/max au centre du monde (éparpillement lointain, exploration). */
-  distMin: 1600,
-  distMax: 3800,
+  distMin: 1200,
+  distMax: 2800,
   /** Vitesse de fuite (px/s) de l'ouvrier libéré (part vers le bas hors écran). */
   fleeSpeed: 260
 } as const
