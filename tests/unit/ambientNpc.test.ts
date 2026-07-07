@@ -16,11 +16,23 @@ describe('ambientNpc (pur)', () => {
   it('ambientOffset borné + déterministe', () => {
     for (const t of [0, 500, 1234, 99999]) {
       const o = ambientOffset(7, t, 'work')
-      expect(Math.hypot(o.dx, o.dy)).toBeLessThanOrEqual(24 + 0.001)
+      expect(Math.hypot(o.dx, o.dy)).toBeLessThanOrEqual(110 + 0.001)
       expect(ambientOffset(7, t, 'work')).toEqual(o)
     }
     const p = ambientOffset(7, 1234, 'patrol')
     expect(Math.hypot(p.dx, p.dy)).toBeLessThanOrEqual(120 + 0.001)
+  })
+  it("ambientOffset 'work' déambule avec amplitude ≥ 80 px sur sa période", () => {
+    // Échantillonne sur 30 s (toutes les 200 ms) → au moins un échantillon ≥ 80 px
+    let maxAmp = 0
+    for (let ms = 0; ms <= 30_000; ms += 200) {
+      const o = ambientOffset(42, ms, 'work')
+      const amp = Math.hypot(o.dx, o.dy)
+      if (amp > maxAmp) { maxAmp = amp }
+    }
+    expect(maxAmp).toBeGreaterThanOrEqual(80)
+    // et toujours bornée
+    expect(maxAmp).toBeLessThanOrEqual(110 + 0.001)
   })
   it('shouldBubble sous 150px', () => {
     expect(shouldBubble(120)).toBe(true)
