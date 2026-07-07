@@ -63,8 +63,16 @@ Terrassement (exemple) : `cluster_excavation` (fosse `both` + 5-6 panneaux clôt
 - Consomme `SiteLayout` (exposé via getState ou fourni au boot) pour **dessiner les clusters aux mêmes positions** que la sim. Remplace le semis hero par des clusters ; garde un léger clutter streamé pour la texture.
 - Streaming : n'affiche que les clusters dont l'empreinte recoupe la vue (cull par cellule).
 
+### Vie du chantier — ouvriers navetteurs — `src/render/siteWorkers.ts` (observateur, **remplace l'errance ambiante `ambientNpc.ts`**)
+- Chaque ouvrier reçoit **2 ancres de zones** (issues de `SiteLayout`, ex. fosse ↔ benne) + un **rôle métier** + un **geste** à chaque bout. Il fait la **navette** (déterministe, temps-piloté) et joue le geste à l'arrivée.
+- **Charge visible** : un sprite de charge (brouette pleine/vide, planche, seau) attaché, qui **apparaît au chargement** (fosse) et **disparaît au déchargement** (benne) → l'aller « plein », le retour « vide ».
+- **Réactif à la horde** : si un ennemi entre dans un rayon `PANIC_R`, l'ouvrier **panique** (s'arrête/fuit à l'opposé du plus proche ennemi + emote de panique, lâche éventuellement sa charge) ; reprend la navette une fois dégagé.
+- **Lisibilité (impératif)** : gilet haute-visibilité + silhouette non-menaçante + emote de panique **distincte** de la bulle « Merci » des prisonniers → jamais confondu avec un ennemi ni un objectif de jeu.
+- **100 % cosmétique** : non-collidable, ne touche JAMAIS la sim (lit `state.enemies` seulement pour la proximité) → **`sim:check` diff 0**. Fonctions pures (navette, cycle de charge, décision de panique) testées ; le rendu Phaser observe.
+
 ## Assets à générer (PixelLab, golden-lock)
 `fence_panel` (panneau clôture chantier répétable), `road_strip` (bande route), `site_gate` (portail), `fence_post` (poteau d'angle). Calibrés DA 16-bit ; concept-lock sur 1 asset (le panneau) avant le reste. QA verte + planche.
+**Ouvriers** : pose « porte une charge » + accessoires de charge (brouette pleine/vide — `brouette` existe déjà — planche, seau) + emote de panique. Générés seulement si absents (les feuilles de marche PNJ par stage existent déjà). Gilet haute-visibilité pour la lisibilité.
 
 ## Équilibrage
 Les obstacles changent le kite (couverts, goulots, glissement horde) → **re-tune + re-baseline** obligatoire (`sim:check` re-dérivé). ⚠️ Le lot juice en pause (`feat/addiction-juice`, J8/J9 rythme+drops) touche AUSSI l'équilibrage : quand les deux fusionneront, prévoir un **re-tune combiné** (ne pas re-baseliner deux fois à l'aveugle).
@@ -85,9 +93,10 @@ Gates par tâche : tsc 0 · lint 0 · Vitest (siteLayout, collision, prefabs, in
 3. **Collision core** : `obstacleCollision.ts` (push-out `both`/`enemies`, sécurité spawn) + tests + isolation RNG.
 4. **Pathfinding** : `flowField.ts` (BFS local depuis le joueur, throttlé, déterministe) + branchement `enemyAi` (mélange flux+chase+glissement) + tests (contournement d'un obstacle, jamais coincé).
 5. **Rendu** : `siteRenderer.ts` (dessine clusters aux positions sim) + cull streaming.
-6. **Golden terrassement** : brancher, capture en jeu → **GATE user** (validation visuelle + jouabilité).
-7. **Re-tune + re-baseline** sim.
-8. **Déroulé 9 stages** : prefabs + zonage par stage (chacun : sémantique → contraintes → prefabs → ASCII → auto-vérif), stage par stage, capture.
+6. **Ouvriers navetteurs** : `siteWorkers.ts` (navette 2 zones + charge visible + panique horde ; **remplace `ambientNpc.ts`**), render-only + fonctions pures testées.
+7. **Golden terrassement** : brancher, capture en jeu → **GATE user** (validation visuelle + jouabilité).
+8. **Re-tune + re-baseline** sim.
+9. **Déroulé 9 stages** : prefabs + zonage + rôles d'ouvriers par stage (chacun : sémantique → contraintes → prefabs → ASCII → auto-vérif), stage par stage, capture.
 
 ## Hors périmètre
 A\* par ennemi / navmesh complet (le champ de flux partagé suffit). Destruction d'obstacles. Collision entre décors non-collidables. Refonte du sol en « vraies routes » de tuiles (la route = bande de décor/asset). Le lot juice (séparé).
