@@ -267,9 +267,12 @@ describe('waveDirector — conservation du budget', () => {
     }
 
     const ratio = actualPlacements / expectedBudget
-    // Tolérance ±15 % + le budget résiduel non dépensé en fin de fenêtre
-    // (peut rester en stock si le dernier slot d'événement n'est pas atteint).
-    expect(ratio).toBeGreaterThanOrEqual(0.70)
+    // Tolérance ±15 % (borne haute) + résidualité basse ≈ 5 % :
+    // le dernier événement peut rester en stock si son slot tombe en fin de fenêtre,
+    // ce qui explique que le ratio réel mesure ~0.96 (< 1.0) sur 60 s à dt=16 ms.
+    // Borne basse 0.85 = plancher défensif (~11 pts sous le réel 0.96) ;
+    // si cette assertion saute, c'est une vraie fuite de budget à investiguer.
+    expect(ratio).toBeGreaterThanOrEqual(0.85)
     expect(ratio).toBeLessThanOrEqual(1.15)
   })
 })

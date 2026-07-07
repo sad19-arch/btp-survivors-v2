@@ -54,7 +54,11 @@ test("un groupe d'ennemis (>=4) est apparu avant 120 s", async ({ page }) => {
   expect(maxEnemies).toBeGreaterThanOrEqual(4)
 })
 
-test("allowedFromSec - aucun circler avant 120 s", async ({ page }) => {
+test("allowedFromSec - pas de crash et partie toujours en cours a 119 s", async ({ page }) => {
+  // Note : le seam n'expose pas le champ `behavior` sur EnemyState, donc l'absence
+  // de 'circler' avant 120 s ne peut pas être vérifiée ici — c'est couvert par les
+  // tests unitaires (waveDirector.test.ts). Ce test vérifie uniquement l'absence de
+  // crash et que la boucle de jeu reste stable jusqu'à t=119 s.
   await page.goto('/?autostart=solo&seed=99&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
 
@@ -62,7 +66,6 @@ test("allowedFromSec - aucun circler avant 120 s", async ({ page }) => {
   const ADVANCE_MS = 119_000
   const STEP_MS = 5_000
   let elapsed = 0
-  let circlerFound = false
 
   while (elapsed < ADVANCE_MS) {
     await page.evaluate(() => {
@@ -77,16 +80,15 @@ test("allowedFromSec - aucun circler avant 120 s", async ({ page }) => {
     const chunk = Math.min(STEP_MS, ADVANCE_MS - elapsed)
     await page.evaluate((ms) => { window.__GAME__?.advanceTime(ms) }, chunk)
     elapsed += chunk
-
-    // Le seam n'expose pas le behavior directement sur EnemyState, donc on ne peut pas
-    // détecter directement 'circler'. On vérifie juste qu'il n'y a pas de crash et que
-    // le jeu est toujours en cours (le test de non-régression est dans les tests unitaires).
   }
 
   // Jeu toujours intact (pas de crash, scène toujours en cours).
+  // elapsedMs peut être légèrement inférieur à 119 000 car advanceTime s'arrête
+  // sur un pas fixe — on vérifie juste qu'on a bien avancé au-delà de 110 s.
   const s = await page.evaluate(() => window.__GAME__?.getState())
+  expect(s).toBeDefined()
   expect(s?.scene).toBe('game')
-  expect(circlerFound).toBe(false)
+  expect(s?.elapsedMs).toBeGreaterThanOrEqual(110_000)
 })
 
 test('deterministme - meme seed = meme count ennemis a t=60 s', async ({ page }) => {
