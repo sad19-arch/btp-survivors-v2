@@ -14,8 +14,11 @@
  *    un `kind` pondéré est tiré parmi les events éligibles ; le count est borné par
  *    `budgetAcc` ; `nextEventMs` est décalé d'un `gap` décroissant avec le temps.
  *
- * Hook réactif (Task 9) : `reactiveHook` est appelé à chaque pas mais reste no-op
- * ici ; il pourra être implémenté par Task 9 sans toucher au directeur.
+ * Hook réactif (Task 9) : `reactiveHook` mesure la LONGUEUR DE CHEMIN CUMULÉE du
+ * joueur sur une fenêtre glissante (`CAMPER.windowMs`). Si le joueur a peu parcouru
+ * (chemin < `CAMPER.minMove`) ET le cooldown est épuisé, un encerclement de chargeurs
+ * est déclenché. La métrique chemin (vs déplacement net) évite les faux positifs sur
+ * un kiter serré : un joueur en cercle rapide a un long chemin, pas de pénalité.
  */
 
 import type { Rng } from '../rng'
@@ -230,9 +233,13 @@ function triggerEvent(
  * Hook réactif anti-camping (Task 9).
  *
  * Échantillonne la position du joueur dans `state.playerTrail` (fenêtre glissante
- * de `CAMPER.windowMs` ms). Quand la fenêtre est pleine ET le déplacement net sur
- * la fenêtre est inférieur à `CAMPER.minMove` ET le cooldown est épuisé, force un
- * encerclement de chargeurs qui oblige le joueur à bouger.
+ * de `CAMPER.windowMs` ms). Quand la fenêtre est pleine ET la LONGUEUR DE CHEMIN
+ * CUMULÉE sur la fenêtre est inférieure à `CAMPER.minMove` ET le cooldown est
+ * épuisé, force un encerclement de chargeurs qui oblige le joueur à bouger.
+ *
+ * Métrique = longueur de chemin (somme des déplacements pas-à-pas), PAS le
+ * déplacement net. Un kiter qui tourne en cercle a un long chemin → pas de
+ * pénalité même si sa position revient près du point de départ.
  *
  * Retourne un tableau vide (pas de déclenchement) ou les placements agressifs.
  * `stepWaveDirector` utilisera ce retour et court-circuitera le slot normal.
@@ -261,24 +268,32 @@ function reactiveHook(state: WaveDirectorState, input: WaveDirectorInput): WaveP
     return []
   }
 
-  // Déplacement net : distance entre la position la plus ancienne et la plus récente.
-  const oldest = state.playerTrail[0]
-  if (oldest === undefined) {
-    return []
+  // Longueur de chemin cumulée : somme des déplacements pas-à-pas sur la fenêtre.
+  // Évite les faux positifs sur un kiter en cercle serré (déplacement net faible
+  // mais chemin long → pas campeur).
+  let pathLength = 0
+  for (let i = 1; i < state.playerTrail.length; i++) {
+    const a = state.playerTrail[i - 1]
+    const b = state.playerTrail[i]
+    if (a === undefined || b === undefined) {
+      continue
+    }
+    const ddx = b.x - a.x
+    const ddy = b.y - a.y
+    pathLength += Math.sqrt(ddx * ddx + ddy * ddy)
   }
-  const dx = center.x - oldest.x
-  const dy = center.y - oldest.y
-  const displacement = Math.sqrt(dx * dx + dy * dy)
 
-  if (displacement >= CAMPER.minMove) {
+  // Campeur = a peu parcouru sur la fenêtre.
+  if (pathLength >= CAMPER.minMove) {
     // Le joueur bouge suffisamment — pas de punition.
     return []
   }
 
   // Déclenchement : encerclement de chargeurs.
   // Count = plancher garanti (8), éventuellement complété par budgetAcc disponible.
+  // Math.max(MIN_COUNT, …) est superflu car budgetAcc ≥ 0 → le min est MIN_COUNT.
   const MIN_COUNT = 8
-  const count = Math.max(MIN_COUNT, Math.min(MIN_COUNT + Math.floor(state.budgetAcc), 12))
+  const count = Math.min(MIN_COUNT + Math.floor(state.budgetAcc), 12)
   // On ne consomme PAS le budgetAcc pour cet événement agressif (budget hors-cycle).
 
   // Pose le cooldown avant de construire les placements (déterministe : même ordre

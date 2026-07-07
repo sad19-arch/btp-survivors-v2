@@ -490,6 +490,55 @@ describe('waveDirector — anti-camping', () => {
     expect(chargerFound).toBe(false)
   })
 
+  it('kite serré — joueur en petit cercle rapide : chemin cumulé >> minMove → pas de chargeur', () => {
+    // Cas de régression : avec l'ancienne métrique (déplacement NET), un kiter
+    // tournant en petit cercle revenait près de son point de départ → net faible
+    // → faux positif. La métrique CHEMIN doit l'exclure.
+    //
+    // Paramètres : rayon 50 px, vitesse angulaire 3 rad/s (~0.5 tour/s).
+    // Sur windowMs=6000 ms → ~3 tours → chemin ≈ 2π×50×3 ≈ 942 px >> minMove=120.
+    // Déplacement NET sur la fenêtre ≈ 0 (revenu au point de départ).
+    const DT_MS = 16
+    const DURATION_MS = CAMPER.windowMs * 3
+    const SMALL_RADIUS = 50    // px — petit cercle
+    const ANGULAR_SPEED = 3    // rad/s — rapide
+
+    const state = createWaveDirectorState()
+    const rng = new Rng(42)
+    let chargerFound = false
+
+    let t = 0
+    while (t < DURATION_MS) {
+      // Kite en cercle serré rapide : chemin >> minMove, net ≈ 0.
+      const angle = (t / 1000) * ANGULAR_SPEED
+      const kiteCenter = {
+        x: 800 + Math.cos(angle) * SMALL_RADIUS,
+        y: 600 + Math.sin(angle) * SMALL_RADIUS
+      }
+      const placements = stepWaveDirector(state, {
+        dtMs: DT_MS,
+        elapsedMs: t,
+        center: kiteCenter,
+        ramp: SPAWN_RAMP,
+        events: EVENT_POOL_DEFAULT,
+        ringRadius: SPAWN.ringRadius,
+        rng
+      })
+      if (placements === undefined) {
+        throw new Error('stepWaveDirector a retourné undefined')
+      }
+      for (const p of placements) {
+        if (p.behavior === 'charger') {
+          chargerFound = true
+        }
+      }
+      t += DT_MS
+    }
+
+    // Un kiter mobile ne doit JAMAIS être pénalisé par l'anti-camping.
+    expect(chargerFound).toBe(false)
+  })
+
   it('déterminisme — même seed + même centre → même déclenchement', () => {
     const DT_MS = 16
     const DURATION_MS = CAMPER.windowMs * 2
