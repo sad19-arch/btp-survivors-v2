@@ -9,7 +9,8 @@
  */
 import { describe, it, expect } from 'vitest'
 import { Rng } from '@core/rng'
-import { placeEvent, EVENT_POOL_DEFAULT } from '@content/waveEvents'
+import { placeEvent, EVENT_POOL_DEFAULT, eventPoolForPhase } from '@content/waveEvents'
+import { ConstructionPhaseId } from '@content/phases'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -388,6 +389,127 @@ describe('EVENT_POOL_DEFAULT', () => {
     expect(lateKinds.length).toBeGreaterThan(0)
     for (const def of lateKinds) {
       expect(def.allowedFromSec).toBeGreaterThanOrEqual(120)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// eventPoolForPhase — Task 12
+// ---------------------------------------------------------------------------
+
+const VALID_KINDS = new Set(['converge', 'pincer', 'burst', 'encircle', 'sweep', 'miniBoss'])
+
+describe('eventPoolForPhase', () => {
+  const allPhases = Object.values(ConstructionPhaseId)
+
+  it('renvoie un pool non vide pour chaque phase', () => {
+    for (const phaseId of allPhases) {
+      const pool = eventPoolForPhase(phaseId)
+      expect(pool.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('tous les kinds sont valides pour chaque phase', () => {
+    for (const phaseId of allPhases) {
+      const pool = eventPoolForPhase(phaseId)
+      for (const def of pool) {
+        expect(VALID_KINDS.has(def.kind)).toBe(true)
+      }
+    }
+  })
+
+  it('weight ≥ 1 pour toutes les définitions de chaque phase', () => {
+    for (const phaseId of allPhases) {
+      const pool = eventPoolForPhase(phaseId)
+      for (const def of pool) {
+        expect(def.weight).toBeGreaterThanOrEqual(1)
+      }
+    }
+  })
+
+  it('countMin ≤ countMax pour toutes les définitions de chaque phase', () => {
+    for (const phaseId of allPhases) {
+      const pool = eventPoolForPhase(phaseId)
+      for (const def of pool) {
+        expect(def.countMin).toBeLessThanOrEqual(def.countMax)
+      }
+    }
+  })
+
+  it('allowedFromSec ≥ 0 pour toutes les définitions de chaque phase', () => {
+    for (const phaseId of allPhases) {
+      const pool = eventPoolForPhase(phaseId)
+      for (const def of pool) {
+        expect(def.allowedFromSec).toBeGreaterThanOrEqual(0)
+      }
+    }
+  })
+
+  // ---------------------------------------------------------------------------
+  // Lock d'équilibrage (garde-fou sim:check)
+  // ---------------------------------------------------------------------------
+
+  it('TERRAIN_VIERGE est content-identique à EVENT_POOL_DEFAULT (garde-fou sim)', () => {
+    const pool = eventPoolForPhase(ConstructionPhaseId.TERRAIN_VIERGE)
+    expect(pool).toHaveLength(EVENT_POOL_DEFAULT.length)
+    for (let i = 0; i < EVENT_POOL_DEFAULT.length; i++) {
+      const expected = EVENT_POOL_DEFAULT[i]
+      const actual = pool[i]
+      if (expected === undefined || actual === undefined) {
+        throw new Error(`entrée manquante à l'index ${i}`)
+      }
+      expect(actual.kind).toBe(expected.kind)
+      expect(actual.weight).toBe(expected.weight)
+      expect(actual.countMin).toBe(expected.countMin)
+      expect(actual.countMax).toBe(expected.countMax)
+      expect(actual.allowedFromSec).toBe(expected.allowedFromSec)
+    }
+  })
+
+  // ---------------------------------------------------------------------------
+  // Identité des phases : encircle + sweep plus présents sur les phases tardives
+  // ---------------------------------------------------------------------------
+
+  function totalEncircleSweepWeight(phaseId: ConstructionPhaseId): number {
+    const pool = eventPoolForPhase(phaseId)
+    let total = 0
+    for (const def of pool) {
+      if (def.kind === 'encircle' || def.kind === 'sweep') {
+        total += def.weight
+      }
+    }
+    return total
+  }
+
+  it('poids encircle+sweep est STRICTEMENT supérieur sur ECHAFAUDAGES vs TERRAIN_VIERGE', () => {
+    const early = totalEncircleSweepWeight(ConstructionPhaseId.TERRAIN_VIERGE)
+    const late = totalEncircleSweepWeight(ConstructionPhaseId.ECHAFAUDAGES)
+    expect(late).toBeGreaterThan(early)
+  })
+
+  it('poids encircle+sweep est STRICTEMENT supérieur sur LIVRAISON_AUDIT vs TERRAIN_VIERGE', () => {
+    const early = totalEncircleSweepWeight(ConstructionPhaseId.TERRAIN_VIERGE)
+    const late = totalEncircleSweepWeight(ConstructionPhaseId.LIVRAISON_AUDIT)
+    expect(late).toBeGreaterThan(early)
+  })
+
+  it('poids encircle+sweep est STRICTEMENT supérieur sur SECOND_OEUVRE vs TERRASSEMENT', () => {
+    const early = totalEncircleSweepWeight(ConstructionPhaseId.TERRASSEMENT)
+    const late = totalEncircleSweepWeight(ConstructionPhaseId.SECOND_OEUVRE)
+    expect(late).toBeGreaterThan(early)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Hygiène : pas de phase sans pool défini silencieusement
+  // ---------------------------------------------------------------------------
+
+  it('toutes les phases connues renvoient un tableau (pas undefined)', () => {
+    for (const phaseId of allPhases) {
+      const pool = eventPoolForPhase(phaseId)
+      expect(pool).toBeDefined()
+      if (pool === undefined) {
+        throw new Error(`pool undefined pour la phase ${phaseId}`)
+      }
     }
   })
 })

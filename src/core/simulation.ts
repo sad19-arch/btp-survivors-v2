@@ -38,7 +38,7 @@ import { tryEvolve } from './systems/evolution'
 import { tickChestDirector, maybeDropEliteChest } from './systems/chestDirector'
 import { coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
 import { SPAWN_RAMP, difficultyScaleAt } from '@content/spawnRamp'
-import { EVENT_POOL_DEFAULT } from '@content/waveEvents'
+import { eventPoolForPhase } from '@content/waveEvents'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
 import { ENEMIES, MINI_BOSS_ID } from '@content/enemies'
 import { characterDef, DEFAULT_CHARACTER_ID } from '@content/characters'
@@ -693,7 +693,7 @@ export class Simulation {
       elapsedMs: this.elapsedMs,
       center,
       ramp: SPAWN_RAMP,
-      events: EVENT_POOL_DEFAULT,
+      events: eventPoolForPhase(this.phaseId),
       ringRadius: SPAWN.ringRadius,
       rng: this._waveRng
     })

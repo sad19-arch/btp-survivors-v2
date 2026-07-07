@@ -10,6 +10,7 @@
 
 import { Rng } from '@core/rng'
 import type { EnemyBehavior, WavePlacement } from '@core/types'
+import { ConstructionPhaseId } from '@content/phases'
 
 // ---------------------------------------------------------------------------
 // Types publics
@@ -281,3 +282,132 @@ export const EVENT_POOL_DEFAULT: readonly WaveEventDef[] = [
     allowedFromSec: 300
   }
 ] as const
+
+// ---------------------------------------------------------------------------
+// EVENT_POOL_BY_PHASE
+// ---------------------------------------------------------------------------
+
+/**
+ * Pools d'événements de horde par phase de chantier (Task 12).
+ *
+ * Identité de chaque phase exprimée par les POIDS et les seuils `allowedFromSec` :
+ *   - Phases précoces (1-3) : formations directes (converge/pincer/burst dominants).
+ *   - Phases intermédiaires (4-7) : montée progressive des formations complexes.
+ *   - Phases tardives (8-10) : encircle + sweep prédominants, seuils abaissés.
+ *
+ * CONTRAINTE D'ÉQUILIBRAGE (critique) :
+ *   `TERRAIN_VIERGE` n'est PAS dans ce map → repli sur `EVENT_POOL_DEFAULT` garanti.
+ *   `npm run sim:check` ne mesure que `terrain_vierge` → baseline conservée exacte.
+ *
+ * Note : `miniBoss` est INERTE dans le pool (filtré par `triggerEvent`) — les
+ * reapers de mi-parcours viennent du mécanisme `MID_BOSS_WAVES` dans simulation.ts.
+ * On le conserve par cohérence de forme, avec un poids décoratif.
+ */
+export const EVENT_POOL_BY_PHASE: Partial<Record<ConstructionPhaseId, readonly WaveEventDef[]>> = {
+  // terrain_vierge intentionnellement ABSENT → repli EVENT_POOL_DEFAULT
+  // (garde-fou sim:check diff 0)
+
+  // Phase 2 — Terrassement : bulldozers et tranchées, afflux frontaux par groupes
+  [ConstructionPhaseId.TERRASSEMENT]: [
+    { kind: 'converge', weight: 6, countMin: 4, countMax: 7, allowedFromSec: 0 },
+    { kind: 'pincer',   weight: 5, countMin: 4, countMax: 8, allowedFromSec: 0 },
+    { kind: 'burst',    weight: 3, countMin: 6, countMax: 10, allowedFromSec: 0 },
+    { kind: 'encircle', weight: 2, countMin: 8, countMax: 12, allowedFromSec: 120 },
+    { kind: 'sweep',    weight: 2, countMin: 4, countMax: 7,  allowedFromSec: 180 },
+    { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
+  ],
+
+  // Phase 3 — Fondations : coulages en série, vagues denses de masse
+  [ConstructionPhaseId.FONDATIONS]: [
+    { kind: 'burst',    weight: 6, countMin: 6, countMax: 10, allowedFromSec: 0 },
+    { kind: 'converge', weight: 5, countMin: 4, countMax: 7,  allowedFromSec: 0 },
+    { kind: 'pincer',   weight: 4, countMin: 4, countMax: 8,  allowedFromSec: 0 },
+    { kind: 'encircle', weight: 2, countMin: 8, countMax: 12, allowedFromSec: 110 },
+    { kind: 'sweep',    weight: 2, countMin: 4, countMax: 7,  allowedFromSec: 170 },
+    { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
+  ],
+
+  // Phase 4 — Réseaux enterrés : tranchées et gaines qui surgissent de partout
+  [ConstructionPhaseId.RESEAUX_ENTERRES]: [
+    { kind: 'burst',    weight: 5, countMin: 6, countMax: 10, allowedFromSec: 0 },
+    { kind: 'converge', weight: 4, countMin: 4, countMax: 7,  allowedFromSec: 0 },
+    { kind: 'encircle', weight: 4, countMin: 8, countMax: 12, allowedFromSec: 100 },
+    { kind: 'pincer',   weight: 3, countMin: 4, countMax: 8,  allowedFromSec: 0 },
+    { kind: 'sweep',    weight: 3, countMin: 4, countMax: 7,  allowedFromSec: 160 },
+    { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
+  ],
+
+  // Phase 5 — Gros œuvre : murs et planchers, formations encadrantes en montée
+  [ConstructionPhaseId.GROS_OEUVRE]: [
+    { kind: 'converge', weight: 4, countMin: 4, countMax: 7,  allowedFromSec: 0 },
+    { kind: 'burst',    weight: 4, countMin: 6, countMax: 10, allowedFromSec: 0 },
+    { kind: 'encircle', weight: 4, countMin: 8, countMax: 12, allowedFromSec: 90 },
+    { kind: 'pincer',   weight: 3, countMin: 4, countMax: 8,  allowedFromSec: 0 },
+    { kind: 'sweep',    weight: 4, countMin: 4, countMax: 7,  allowedFromSec: 150 },
+    { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
+  ],
+
+  // Phase 6 — Échafaudages : tubes qui tombent de haut — sweep = chute de rangées
+  [ConstructionPhaseId.ECHAFAUDAGES]: [
+    { kind: 'sweep',    weight: 7, countMin: 5, countMax: 8,  allowedFromSec: 90 },
+    { kind: 'encircle', weight: 4, countMin: 8, countMax: 12, allowedFromSec: 80 },
+    { kind: 'burst',    weight: 3, countMin: 6, countMax: 10, allowedFromSec: 0 },
+    { kind: 'converge', weight: 3, countMin: 4, countMax: 7,  allowedFromSec: 0 },
+    { kind: 'pincer',   weight: 2, countMin: 4, countMax: 8,  allowedFromSec: 0 },
+    { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
+  ],
+
+  // Phase 7 — Charpente & toiture : poutres en travers, murs qui traversent
+  [ConstructionPhaseId.CHARPENTE_TOITURE]: [
+    { kind: 'sweep',    weight: 6, countMin: 5, countMax: 8,  allowedFromSec: 80 },
+    { kind: 'encircle', weight: 5, countMin: 8, countMax: 12, allowedFromSec: 80 },
+    { kind: 'burst',    weight: 3, countMin: 6, countMax: 10, allowedFromSec: 0 },
+    { kind: 'pincer',   weight: 3, countMin: 4, countMax: 8,  allowedFromSec: 0 },
+    { kind: 'converge', weight: 2, countMin: 4, countMax: 7,  allowedFromSec: 0 },
+    { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
+  ],
+
+  // Phase 8 — Second œuvre : cloisons et gaines, cercles serrés + traversées croisées
+  [ConstructionPhaseId.SECOND_OEUVRE]: [
+    { kind: 'encircle', weight: 6, countMin: 8, countMax: 12, allowedFromSec: 70 },
+    { kind: 'sweep',    weight: 6, countMin: 5, countMax: 8,  allowedFromSec: 70 },
+    { kind: 'burst',    weight: 3, countMin: 6, countMax: 10, allowedFromSec: 0 },
+    { kind: 'pincer',   weight: 2, countMin: 4, countMax: 8,  allowedFromSec: 0 },
+    { kind: 'converge', weight: 2, countMin: 4, countMax: 7,  allowedFromSec: 0 },
+    { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
+  ],
+
+  // Phase 9 — Finitions : audit minutieux, cerclages et passages en inspection
+  [ConstructionPhaseId.FINITIONS]: [
+    { kind: 'encircle', weight: 7, countMin: 8, countMax: 13, allowedFromSec: 60 },
+    { kind: 'sweep',    weight: 6, countMin: 5, countMax: 8,  allowedFromSec: 60 },
+    { kind: 'burst',    weight: 2, countMin: 6, countMax: 10, allowedFromSec: 0 },
+    { kind: 'pincer',   weight: 2, countMin: 4, countMax: 8,  allowedFromSec: 0 },
+    { kind: 'converge', weight: 1, countMin: 4, countMax: 7,  allowedFromSec: 0 },
+    { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
+  ],
+
+  // Phase 10 — Livraison & audit : commission qui cerne + inspection en rang serrés
+  [ConstructionPhaseId.LIVRAISON_AUDIT]: [
+    { kind: 'encircle', weight: 8, countMin: 10, countMax: 14, allowedFromSec: 60 },
+    { kind: 'sweep',    weight: 7, countMin: 5,  countMax: 8,  allowedFromSec: 60 },
+    { kind: 'burst',    weight: 2, countMin: 6,  countMax: 10, allowedFromSec: 0 },
+    { kind: 'pincer',   weight: 2, countMin: 4,  countMax: 8,  allowedFromSec: 0 },
+    { kind: 'converge', weight: 1, countMin: 4,  countMax: 7,  allowedFromSec: 0 },
+    { kind: 'miniBoss', weight: 1, countMin: 1,  countMax: 1,  allowedFromSec: 300 }
+  ]
+} as const
+
+// ---------------------------------------------------------------------------
+// eventPoolForPhase
+// ---------------------------------------------------------------------------
+
+/**
+ * Renvoie le pool d'événements correspondant à une phase de chantier.
+ *
+ * Repli sur `EVENT_POOL_DEFAULT` si la phase n'a pas de pool dédié
+ * (`terrain_vierge` intentionnellement absent → baseline sim:check préservée).
+ */
+export function eventPoolForPhase(phaseId: ConstructionPhaseId): readonly WaveEventDef[] {
+  return EVENT_POOL_BY_PHASE[phaseId] ?? EVENT_POOL_DEFAULT
+}
