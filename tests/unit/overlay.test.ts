@@ -256,3 +256,121 @@ describe('Overlay — HUD multi-joueur (co-op)', () => {
     expect(hud?.textContent).toContain('XP ')
   })
 })
+
+// ── Helpers pour les tests du Rapport de chantier ────────────────────────────
+
+function makeDeathReport(overrides: Partial<import('@/app/appState').DeathReport> = {}): import('@/app/appState').DeathReport {
+  return {
+    elapsedMs: 300_000,   // 5:00
+    kills: 1248,
+    progressRatio: 0.25,
+    progressPercent: 25,
+    remainingSeconds: 900,
+    stageDurationMs: 1_200_000, // 20:00
+    quote: 'Meme les cachalots ne survivent pas ici.',
+    ...overrides
+  }
+}
+
+function makeGameoverState(
+  report: import('@/app/appState').DeathReport | null
+): import('@/app/appState').AppViewState {
+  const app = new App({ seed: 42, mode: 'solo', autostart: false })
+  const base = app.getState()
+  return {
+    ...base,
+    screen: 'gameover',
+    deathReport: report,
+    menu: {
+      screen: 'gameover',
+      items: [
+        { id: 'recommencer', label: 'Recommencer', hint: null },
+        { id: 'titre', label: 'Menu titre', hint: null }
+      ],
+      index: 0
+    }
+  }
+}
+
+describe('Overlay — Rapport de chantier (game-over)', () => {
+  it('rend le titre CHANTIER INTERROMPU, la phrase, la barre, les stats et les boutons', () => {
+    const report = makeDeathReport({ progressPercent: 84, progressRatio: 0.84, quote: 'Vous etiez si pres.' })
+    const state = makeGameoverState(report)
+    const { root, overlay } = mount()
+    overlay.sync(state)
+
+    // 1. Titre
+    expect(root.querySelector('.report__title')?.textContent).toBe('CHANTIER INTERROMPU')
+
+    // 2. Phrase — culte car ratio > 0.8
+    const quoteEl = root.querySelector('.report__quote')
+    expect(quoteEl).not.toBeNull()
+    expect(quoteEl?.textContent).toContain('Vous etiez si pres.')
+    expect(quoteEl?.classList.contains('report__quote--cult')).toBe(true)
+
+    // 3. Barre
+    const bar = root.querySelector('.report__bar')
+    expect(bar).not.toBeNull()
+    // Marqueur : clamp(84, 3, 94) = 84 → left: 84%
+    const marker = root.querySelector<HTMLElement>('.report__marker')
+    expect(marker).not.toBeNull()
+    expect(marker?.style.left).toBe('84%')
+
+    // 4. Stats : 4 lignes
+    const stats = root.querySelector('.report__stats')
+    expect(stats).not.toBeNull()
+    // pourcentage
+    expect(stats?.textContent).toContain('84 %')
+    // kills formaté
+    expect(stats?.textContent).toContain('1 248')
+    // temps tenu
+    expect(stats?.textContent).toContain('5:00')
+    // durée totale
+    expect(stats?.textContent).toContain('20:00')
+
+    // 5. Boutons
+    const items = root.querySelectorAll('.menu__item')
+    expect(items.length).toBe(2)
+    expect(items[0]?.textContent).toBe('Recommencer')
+  })
+
+  it('progressPercent 2 → marqueur clampé à 3%', () => {
+    const report = makeDeathReport({ progressPercent: 2, progressRatio: 0.02 })
+    const state = makeGameoverState(report)
+    const { root, overlay } = mount()
+    overlay.sync(state)
+
+    const marker = root.querySelector<HTMLElement>('.report__marker')
+    expect(marker).not.toBeNull()
+    expect(marker?.style.left).toBe('3%')
+  })
+
+  it('progressPercent 95 → marqueur clampé à 94%', () => {
+    const report = makeDeathReport({ progressPercent: 95, progressRatio: 0.95 })
+    const state = makeGameoverState(report)
+    const { root, overlay } = mount()
+    overlay.sync(state)
+
+    const marker = root.querySelector<HTMLElement>('.report__marker')
+    expect(marker?.style.left).toBe('94%')
+  })
+
+  it('progressRatio <= 0.8 → phrase sans classe --cult', () => {
+    const report = makeDeathReport({ progressPercent: 50, progressRatio: 0.50 })
+    const state = makeGameoverState(report)
+    const { root, overlay } = mount()
+    overlay.sync(state)
+
+    const quoteEl = root.querySelector('.report__quote')
+    expect(quoteEl).not.toBeNull()
+    expect(quoteEl?.classList.contains('report__quote--cult')).toBe(false)
+  })
+
+  it('garde-fou : deathReport null → panneau minimal avec titre, sans crash', () => {
+    const state = makeGameoverState(null)
+    const { root, overlay } = mount()
+    expect(() => overlay.sync(state)).not.toThrow()
+    expect(root.querySelector('.panel__title')?.textContent).toBe('CHANTIER INTERROMPU')
+    expect(root.querySelector('.report__bar')).toBeNull()
+  })
+})

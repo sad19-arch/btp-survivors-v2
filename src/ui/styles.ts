@@ -514,6 +514,80 @@ const CSS = `
   background: ${PALETTE.jauneSecurite};
   border: 1px solid ${PALETTE.orangeDanger};
 }
+/* ── Rapport de chantier (écran de mort) ─────────────────────────────────── */
+#ui-root .report__title {
+  color: ${PALETTE.rougeAlerte};
+  font-size: 28px;
+  font-weight: bold;
+  margin: 0;
+  text-shadow: 3px 3px 0 ${PALETTE.contour};
+  letter-spacing: 2px;
+}
+#ui-root .report__quote {
+  color: ${PALETTE.solSable};
+  font-size: 14px;
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: 0;
+  text-align: center;
+  max-width: 400px;
+  line-height: 1.4;
+  border: 2px solid ${PALETTE.brunSombre};
+  padding: 6px 12px;
+}
+#ui-root .report__quote--cult {
+  color: ${PALETTE.orangeDanger};
+  font-size: 16px;
+  font-weight: bold;
+  border-color: ${PALETTE.rougeAlerte};
+  text-shadow: 1px 1px 0 ${PALETTE.contour};
+}
+/* Rail de la barre Cuphead. */
+#ui-root .report__bar {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  height: 64px;
+  background: ${PALETTE.brunSombre};
+  border: 3px solid ${PALETTE.contour};
+  box-shadow: 4px 4px 0 ${PALETTE.contour};
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  padding: 0;
+}
+/* Icônes gauche / droite : ancrées aux bords, par-dessus le rail. */
+#ui-root .report__start,
+#ui-root .report__end {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+/* Marqueur : positionné en absolu sur le rail. */
+#ui-root .report__marker {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+  transform: translateX(-50%);
+  z-index: 3;
+  top: 0;
+}
+/* Zone de stats. */
+#ui-root .report__stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  color: ${PALETTE.blanc};
+  text-align: center;
+  text-transform: none;
+  letter-spacing: 0;
+}
 `
 
 let injected = false
