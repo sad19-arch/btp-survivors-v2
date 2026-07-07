@@ -107,6 +107,13 @@ export class AudioDirector {
   private lastEnemyDownMs = -Infinity
   /** Contexte WebAudio partagé (celui de Phaser) pour les SFX procéduraux zzfx ; null si HTML5. */
   private readonly audioCtx: AudioContext | null
+  /**
+   * Garde anti-chevauchement : priorité de la voix déjà lancée dans ce tick.
+   * Remis à 0 au début de chaque observe(). Toute nouvelle voix de priorité ≤ cette valeur
+   * est droppée silencieusement. Les événements injectés HORS observe() (ex. bossSpawned
+   * depuis le bus) obtiennent un tick propre dès que observe() tourne.
+   */
+  private voicePriorityThisTick = 0
 
   constructor(sound: Phaser.Sound.BaseSoundManager, events: EventTarget, getSettings: () => AudioLevels) {
     this.sound = sound
@@ -129,7 +136,7 @@ export class AudioDirector {
       const now = performance.now()
       if (now - this.lastEnemyDownMs > 18000 && !this.voiceActive()) {
         this.lastEnemyDownMs = now
-        this.playVoice(VOICE.enemyDown)
+        this.playVoice(VOICE.enemyDown, 1)
       }
     })
     on('playerHurt', () => { this.playCue('playerHurt') })
@@ -142,23 +149,27 @@ export class AudioDirector {
       if (kind === 'xp') {
         // B4 : ding zzfx cristallin throttlé 50ms (remplace le cue collect générique).
         this.playXpDing()
+      } else if (kind === 'coffre') {
+        // Le coffre déclenche sa propre fanfare + voix via l'événement `evolved` —
+        // ne pas doubler avec VOICE.bonus ici.
+        this.playCue('bonus')
       } else {
         this.playCue('bonus')
-        this.playVoice(VOICE.bonus)
+        this.playVoice(VOICE.bonus, 3)
       }
     })
     on('bossSpawned', (e) => {
       this.playCue('bossSpawned')
       // Le boss final a une réplique dédiée (plus forte) — le mid-boss garde le pool générique.
       const role = (e as BossSpawnedEvent).role
-      this.playVoice(role === 'final' ? VOICE.bossFinal : VOICE.boss)
+      this.playVoice(role === 'final' ? VOICE.bossFinal : VOICE.boss, 2)
     })
     // (Plus de SFX générique sur `auraPulse` : aura/sweep/strike/cône sonnent
     // désormais par ARME via `weaponFired`/zzfx. L'auraPulse reste pour les VFX.)
-    on('prisonerFreed', () => { this.playCue('prisonerFreed'); this.playVoice(VOICE.thankyou) })
+    on('prisonerFreed', () => { this.playCue('prisonerFreed'); this.playVoice(VOICE.thankyou, 2) })
     // B5 — Fanfare d'évolution (coffre ramassé + conditions réunies) : fanfare zzfx en accord
     // majeur + voix triomphante. Remplace le cue 'bonus' générique par une fanfare dédiée.
-    on('evolved', () => { this.playChestFanfare(); this.playVoice(VOICE.evolved) })
+    on('evolved', () => { this.playChestFanfare(); this.playVoice(VOICE.evolved, 4) })
     on('upgradePick', () => { this.playCue('upgradePick') })
     on('menuMove', () => { this.playCue('menuMove') })
     on('menuConfirm', () => { this.playCue('menuConfirm') })
@@ -258,15 +269,29 @@ export class AudioDirector {
     playZzfx(this.audioCtx, gain * 0.7, GEM_DING_ZZFX)
   }
 
-  /** Joue une réplique de voix (canal unique : coupe la précédente, pas de chevauchement). */
-  private playVoice(pool: readonly string[]): void {
+  /**
+   * Joue une réplique de voix (canal unique : coupe la précédente, pas de chevauchement).
+   *
+   * @param pool     Pool de clés parmi lequel piocher.
+   * @param priority Priorité de la voix (évolution=4, bonus=3, défaut=2, enemyDown=1).
+   *                 Si une voix de priorité ≥ priority a déjà joué dans ce tick (observe()),
+   *                 la nouvelle est droppée silencieusement — jamais deux voix simultanées.
+   *                 La garde est un booléen par tick (PAS Date.now / Math.random) :
+   *                 `voicePriorityThisTick` est remis à 0 au début de chaque observe().
+   */
+  private playVoice(pool: readonly string[], priority: number): void {
     if (this.isLocked()) {
+      return
+    }
+    // Garde anti-chevauchement : drop si une voix de priorité ≥ déjà planifiée ce tick.
+    if (priority <= this.voicePriorityThisTick) {
       return
     }
     const key = pick(pool)
     if (key === undefined || !this.hasAudio(key)) {
       return
     }
+    this.voicePriorityThisTick = priority
     this.stopVoice()
     const snd = this.sound.add(key, { volume: VOICE_LEVEL * sfxGain(this.settings) }) as unknown as SoundInstance
     // Auto-nettoyage en fin de réplique → relâche le ducking (voix devient inactive).
@@ -301,10 +326,12 @@ export class AudioDirector {
     if (this.isLocked()) {
       return // attend le déverrouillage WebAudio (1er geste utilisateur)
     }
+    // Réinitialise la garde anti-chevauchement de voix au début de chaque frame.
+    this.voicePriorityThisTick = 0
     // Jingle « AIL Entertainment presents » au premier affichage du titre.
     if (state.screen === 'title' && !this.presentsPlayed) {
       this.presentsPlayed = true
-      this.playVoice(VOICE.intro)
+      this.playVoice(VOICE.intro, 2)
     }
     // Voix + stingers au CHANGEMENT d'écran.
     if (state.screen !== this.prevScreen) {
@@ -332,24 +359,24 @@ export class AudioDirector {
     switch (state.screen) {
       case 'gameover':
         this.playCue('gameOver')
-        this.playVoice(VOICE.gameover)
+        this.playVoice(VOICE.gameover, 2)
         break
       case 'victory': {
         this.playCue('stageClear')
         const p = state.players[0]
         const flawless = p !== undefined && p.hp >= p.maxHp - 0.5
-        this.playVoice(flawless ? VOICE.flawless : VOICE.victory)
+        this.playVoice(flawless ? VOICE.flawless : VOICE.victory, 2)
         break
       }
       case 'upgrade': {
         // Joue systématiquement une voix à chaque level-up, en alternant les deux clips.
         const key = pickUpgradeVoice(this.upgradeVoiceCount++)
-        this.playVoice([key])
+        this.playVoice([key], 2)
         break
       }
       case 'game':
         if (RUN_START_FROM.has(this.prevScreen)) {
-          this.playVoice(voiceRunStart(state.stageOrder))
+          this.playVoice(voiceRunStart(state.stageOrder), 2)
         }
         break
       default:
@@ -366,7 +393,7 @@ export class AudioDirector {
     if (boss !== undefined) {
       if (!this.bossFinishSaid && boss.maxHp > 0 && boss.hp / boss.maxHp <= 0.20) {
         this.bossFinishSaid = true
-        this.playVoice(VOICE.bossLowHp)
+        this.playVoice(VOICE.bossLowHp, 2)
       }
     } else {
       this.bossFinishSaid = false
@@ -376,7 +403,7 @@ export class AudioDirector {
       const frac = p.hp / p.maxHp
       if (!this.playerLowSaid && frac > 0 && frac <= 0.25) {
         this.playerLowSaid = true
-        this.playVoice(VOICE.playerLow)
+        this.playVoice(VOICE.playerLow, 2)
       } else if (frac > 0.4) {
         this.playerLowSaid = false
       }
