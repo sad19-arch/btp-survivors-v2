@@ -40,7 +40,7 @@ export function enemyAiSystem(world: World, elapsedMs = 0, dtMs = 16): void {
         steerCircler(pos, vel, enemy, nearest, dtMs)
         break
       case 'sweep':
-        steerSweep(pos, vel, enemy, nearest)
+        steerSweep(vel, enemy)
         break
       case 'charger':
         steerCharger(pos, vel, enemy, nearest, dtMs)
@@ -115,9 +115,11 @@ function steerCircler(pos: Vec2, vel: Vec2, enemy: EnemyComp, nearest: Vec2 | nu
   enemy.bAngle = a + rotSpeed * (dtMs / 1000)
 }
 
-/** Stub — sera implémenté à la tâche 4. */
-function steerSweep(pos: Vec2, vel: Vec2, enemy: EnemyComp, nearest: Vec2 | null): void {
-  steerChase(pos, vel, enemy, nearest)
+/** Traversée rectiligne : direction fixe assignée au spawn, ignore le joueur. */
+function steerSweep(vel: Vec2, enemy: EnemyComp): void {
+  const a = enemy.bAngle ?? 0
+  vel.x = Math.cos(a) * enemy.speed
+  vel.y = Math.sin(a) * enemy.speed
 }
 
 /** Stub — sera implémenté à la tâche 5. */

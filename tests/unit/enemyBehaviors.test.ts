@@ -80,12 +80,54 @@ describe('enemyAiSystem — dispatch', () => {
     expect(enemyAfter.bAngle).not.toBe(0) // a dérivé
   })
 
-  it('stub sweep: délègue à chase (tâche 4 non implémentée)', () => {
+  it('sweep: va tout droit dans bAngle, ignore le joueur', () => {
     const { w, e } = withPlayerAndEnemy('sweep', 100, 0)
+    const enemy = w.get(e, 'enemy')
+    expect(enemy).toBeDefined()
+    if (enemy === undefined) { throw new Error('enemy component manquant') }
+    enemy.bAngle = 0
     enemyAiSystem(w, 0, 16)
     const v = w.get(e, 'velocity')
-    expect(v?.x ?? 0).toBeCloseTo(-150, 5)
-    expect(v?.y ?? 0).toBeCloseTo(0, 5)
+    expect(v).toBeDefined()
+    if (v === undefined) { throw new Error('velocity component manquant') }
+    expect(v.x).toBeCloseTo(150, 5)
+    expect(v.y).toBeCloseTo(0, 5)
+  })
+
+  it('sweep: ignorer le joueur — déplacer le joueur ne change pas la vel', () => {
+    // Ennemi à droite du joueur (100,0), joueur à (0,0), bAngle=Math.PI/4
+    const { w, e } = withPlayerAndEnemy('sweep', 100, 0)
+    const enemy = w.get(e, 'enemy')
+    expect(enemy).toBeDefined()
+    if (enemy === undefined) { throw new Error('enemy component manquant') }
+    enemy.bAngle = Math.PI / 4
+    enemyAiSystem(w, 0, 16)
+    const v1 = w.get(e, 'velocity')
+    expect(v1).toBeDefined()
+    if (v1 === undefined) { throw new Error('velocity component manquant') }
+    const snap1x = v1.x
+    const snap1y = v1.y
+    // Déplacer le joueur très loin
+    const playerPos = (() => {
+      for (const pid of w.query('player', 'position')) {
+        const pos = w.get(pid, 'position')
+        if (pos !== undefined) { return pos }
+      }
+      return undefined
+    })()
+    expect(playerPos).toBeDefined()
+    if (playerPos === undefined) { throw new Error('position joueur manquante') }
+    playerPos.x = 9999
+    playerPos.y = 9999
+    // Reset velocity pour bien observer le recalcul
+    v1.x = 0
+    v1.y = 0
+    enemyAiSystem(w, 0, 16)
+    const v2 = w.get(e, 'velocity')
+    expect(v2).toBeDefined()
+    if (v2 === undefined) { throw new Error('velocity component manquant (2e tick)') }
+    expect(v2.x).toBeCloseTo(snap1x, 5)
+    expect(v2.y).toBeCloseTo(snap1y, 5)
   })
 
   it('stub charger: délègue à chase (tâche 5 non implémentée)', () => {
