@@ -109,6 +109,20 @@ export const BEHAVIOR_TUNING = {
     /** Vitesse angulaire de rotation sur l'anneau (rad/s). */
     rotSpeed: 0.35,
   },
+  charger: {
+    /** Durée de la phase d'approche (ms) avant de télégraphier. */
+    approachMs: 1400,
+    /** Durée du télégraphe (quasi-arrêt, mémorisation de la direction) (ms). */
+    telegraphMs: 300,
+    /** Durée du dash (ms). */
+    dashMs: 450,
+    /** Multiplicateur de vitesse pendant le dash. */
+    dashMult: 2.6,
+    /** Durée de la récupération après le dash (ms). */
+    recoverMs: 700,
+    /** Multiplicateur de vitesse pendant la récupération. */
+    recoverMult: 0.45,
+  },
 } as const
 
 /** Id du mini-boss MVP. */

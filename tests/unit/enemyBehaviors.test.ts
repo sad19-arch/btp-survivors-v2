@@ -130,12 +130,31 @@ describe('enemyAiSystem — dispatch', () => {
     expect(v2.y).toBeCloseTo(snap1y, 5)
   })
 
-  it('stub charger: délègue à chase (tâche 5 non implémentée)', () => {
-    const { w, e } = withPlayerAndEnemy('charger', 100, 0)
+  it('charger: approche → télégraphe → dash → récup', () => {
+    const { w, e } = withPlayerAndEnemy('charger', 200, 0)
+    const en = w.get(e, 'enemy')
+    expect(en).toBeDefined()
+    if (en === undefined) { throw new Error('enemy component manquant') }
+    // approche initiale : bMode doit valoir 0 (ou undefined → init 0)
     enemyAiSystem(w, 0, 16)
+    expect(en.bMode ?? 0).toBe(0)
+    // avance jusqu'au télégraphe (approachMs = 1400 ms → après 1500 ms cumulés)
+    for (let t = 16; t <= 1500; t += 16) { enemyAiSystem(w, t, 16) }
+    expect(en.bMode).toBe(1)
     const v = w.get(e, 'velocity')
-    expect(v?.x ?? 0).toBeCloseTo(-150, 5)
-    expect(v?.y ?? 0).toBeCloseTo(0, 5)
+    expect(v).toBeDefined()
+    if (v === undefined) { throw new Error('velocity component manquant') }
+    const vTele = Math.hypot(v.x, v.y)
+    expect(vTele).toBeLessThan(150 * 0.2) // quasi-arrêt (×0.05)
+    // avance jusqu'au dash (telegraphMs = 300 ms)
+    for (let t = 1516; t <= 1900; t += 16) { enemyAiSystem(w, t, 16) }
+    expect(en.bMode).toBe(2)
+    const vDash = w.get(e, 'velocity')
+    expect(vDash).toBeDefined()
+    if (vDash === undefined) { throw new Error('velocity component manquant (dash)') }
+    const dashSpeed = Math.hypot(vDash.x, vDash.y)
+    // dashMult = 2.6 → |vel| ≈ speed * dashMult = 150 * 2.6 = 390
+    expect(dashSpeed).toBeGreaterThan(150 * 2.0)
   })
 })
 
