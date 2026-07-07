@@ -42,6 +42,17 @@ const CSS = `
 #ui-root .hud__bar-fill { height: 100%; }
 #ui-root .hud__bar--hp .hud__bar-fill { background: ${PALETTE.vertBonus}; }
 #ui-root .hud__bar--xp .hud__bar-fill { background: ${PALETTE.cyanAccent}; }
+/* Flash de level-up : pulse net palette (DA 16-bit, pas de glow flou). */
+@keyframes xp-level-up-flash {
+  0%   { border-color: ${PALETTE.jauneSecurite}; box-shadow: 2px 2px 0 ${PALETTE.contour}; }
+  25%  { border-color: ${PALETTE.jauneSecurite}; box-shadow: 2px 2px 0 ${PALETTE.contour}; }
+  50%  { border-color: ${PALETTE.vertBonus};     box-shadow: 2px 2px 0 ${PALETTE.contour}; }
+  75%  { border-color: ${PALETTE.vertBonus};     box-shadow: 2px 2px 0 ${PALETTE.contour}; }
+  100% { border-color: ${PALETTE.contour};       box-shadow: 2px 2px 0 ${PALETTE.contour}; }
+}
+#ui-root .hud__bar--xp-flash {
+  animation: xp-level-up-flash 0.2s steps(2, end);
+}
 #ui-root .hud__players {
   display: flex;
   flex-direction: row;

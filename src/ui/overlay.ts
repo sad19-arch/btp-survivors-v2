@@ -4,6 +4,7 @@ import { formatTime, formatNumber } from './format'
 import { playerColor } from '@content/players'
 import { gamepadHudModel } from './gamepadHud'
 import { Minimap } from './minimap'
+import { approach } from './anim'
 import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView } from '@/app/appState'
 
 /**
@@ -55,6 +56,20 @@ export class Overlay {
   private lastJackpotWeaponName: string | null = null
   /** Callback de sélection d'un item par index (clic souris) ; route vers l'App. */
   private readonly onSelect: ((index: number) => void) | undefined
+  /**
+   * Ratio XP affiché (lissé via `approach`) par joueur (clé = playerId).
+   * Permet une montée en douceur de la barre XP à chaque frame.
+   */
+  private readonly xpDisplayed = new Map<number, number>()
+  /**
+   * Dernier niveau mémorisé par joueur — détecter les level-ups pour déclencher le flash.
+   */
+  private readonly lastLevel = new Map<number, number>()
+  /**
+   * Timestamp (performance.now) du dernier appel à sync() — calcul du dt inter-frame
+   * côté rendu. Initialisé à -1 (jamais vu) → dt=16ms nominal au premier appel.
+   */
+  private lastFrameTimeMs = -1
 
   constructor(root: HTMLElement, onSelect?: (index: number) => void) {
     injectStyles()
@@ -85,7 +100,11 @@ export class Overlay {
 
   /** Met à jour l'overlay depuis l'état applicatif. */
   sync(state: AppViewState): void {
-    this.syncHud(state)
+    // Calcul du delta inter-frame côté rendu (performance.now, pas dans l'util pur).
+    const now = performance.now()
+    const dtMs = this.lastFrameTimeMs < 0 ? 16 : Math.min(now - this.lastFrameTimeMs, 100)
+    this.lastFrameTimeMs = now
+    this.syncHud(state, dtMs)
     this.syncScreen(state)
     this.syncBanner(state)
     this.syncIntroCard(state)
@@ -169,12 +188,15 @@ export class Overlay {
     )
   }
 
-  private syncHud(state: AppViewState): void {
+  private syncHud(state: AppViewState, dtMs: number): void {
     // HUD visible en run, mais masqué pendant l'intro (le héros entre en scène).
     const inRun =
       (state.screen === 'game' || state.screen === 'paused' || state.screen === 'upgrade') && !state.introActive
     this.hud.style.display = inRun ? 'flex' : 'none'
     if (!inRun) {
+      // Réinitialise l'état XP animé pour ne pas polluer la prochaine run.
+      this.xpDisplayed.clear()
+      this.lastLevel.clear()
       return
     }
     const p = state.players[0]
@@ -182,7 +204,34 @@ export class Overlay {
     const maxHp = p?.maxHp ?? 1
     const xp = p?.xp ?? 0
     const threshold = p?.nextThreshold ?? 1
+    const level = p?.level ?? 1
+    const playerId = p?.id ?? 1
+
+    // --- Barre XP lissée (lerp via approach) ---
+    const xpTarget = threshold > 0 ? xp / threshold : 0
+    const prevDisplayed = this.xpDisplayed.get(playerId) ?? xpTarget
+    const displayed = approach(prevDisplayed, xpTarget, dtMs)
+    this.xpDisplayed.set(playerId, displayed)
+
+    // --- Flash de level-up ---
+    const prevLevel = this.lastLevel.get(playerId)
+    let xpBarModifier = 'hud__bar--xp'
+    if (prevLevel !== undefined && level > prevLevel) {
+      // Level-up : la barre repart de 0 (reset propre)
+      this.xpDisplayed.set(playerId, 0)
+      xpBarModifier = 'hud__bar--xp hud__bar--xp-flash'
+    }
+    this.lastLevel.set(playerId, level)
+
     clear(this.hud)
+    const xpBar = this.bar(displayed, xpBarModifier)
+    // Retire la classe de flash après l'animation (CSS ~200ms) pour pouvoir la ré-ajouter.
+    if (xpBarModifier.includes('hud__bar--xp-flash')) {
+      window.setTimeout(() => {
+        xpBar.classList.remove('hud__bar--xp-flash')
+      }, 220)
+    }
+
     this.hud.append(
       h(
         'div',
@@ -196,7 +245,7 @@ export class Overlay {
         { className: 'hud__row' },
         h('span', { className: 'hud__time', text: formatTime(state.elapsedMs) }),
         h('span', { className: 'hud__sep', text: '·' }),
-        h('span', { text: `Niv. ${p?.level ?? 1}` }),
+        h('span', { text: `Niv. ${level}` }),
         h('span', { className: 'hud__sep', text: '·' }),
         h('span', { text: `Score ${state.score}` })
       ),
@@ -206,7 +255,7 @@ export class Overlay {
         h('span', { className: 'hud__hp', text: `PV ${Math.ceil(hp)}/${Math.round(maxHp)}` }),
         this.bar(hp / maxHp, 'hud__bar--hp'),
         h('span', { className: 'hud__xp', text: `XP ${Math.floor(xp)}/${threshold}` }),
-        this.bar(xp / threshold, 'hud__bar--xp')
+        xpBar
       )
     )
     // Co-op (>1 joueur) : bandeau de mini-HUD par joueur (pastille couleur + PV + niveau).
