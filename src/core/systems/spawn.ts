@@ -1,6 +1,6 @@
 import type { World } from '../world'
 import type { Rng } from '../rng'
-import type { Vec2 } from '../types'
+import type { Vec2, EnemyBehavior } from '../types'
 import type { ConstructionPhase } from '@content/phases'
 import { phasePoolIds } from '@content/phases'
 import { ENEMIES } from '@content/enemies'
@@ -76,14 +76,29 @@ export function spawnBoss(
   )
 }
 
-/** Fabrique une entité ennemie à partir d'une définition, avec renforcement temporel. */
-function spawnEnemy(
+/** Paramètres d'init optionnels pour surcharger le comportement au spawn
+ *  (utilisé par le directeur de vague pour les comportements spéciaux). */
+export interface SpawnInit {
+  behavior?: EnemyBehavior
+  bPhase?: number
+  bAngle?: number
+}
+
+/**
+ * Fabrique une entité ennemie à partir d'une définition, avec renforcement temporel.
+ * Exportée pour permettre les tests unitaires et le directeur de vague.
+ *
+ * `init` permet de surcharger `behavior`, `bPhase`, `bAngle` après résolution
+ * du défaut `def.behavior ?? 'chase'`.
+ */
+export function spawnEnemy(
   world: World,
   def: EnemyDef,
   pos: Vec2,
   isBoss = false,
   scale: DifficultyScale = NO_SCALE,
-  bossRole?: 'mid' | 'final'
+  bossRole?: 'mid' | 'final',
+  init?: SpawnInit
 ): void {
   const hp = Math.round(def.hp * scale.hp)
   const e = world.spawn()
@@ -97,6 +112,9 @@ function spawnEnemy(
     isBoss,
     ...(bossRole !== undefined ? { bossRole } : {}),
     contactDamage: def.contactDamage * scale.contactDamage,
-    xpValue: def.xpValue
+    xpValue: def.xpValue,
+    behavior: init?.behavior ?? def.behavior ?? 'chase',
+    ...(init?.bPhase !== undefined ? { bPhase: init.bPhase } : {}),
+    ...(init?.bAngle !== undefined ? { bAngle: init.bAngle } : {})
   })
 }

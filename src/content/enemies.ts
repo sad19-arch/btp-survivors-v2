@@ -4,6 +4,8 @@
  * Slice 1 : roster minimal. Les archétypes alimentent les pools de phases.
  */
 
+import type { EnemyBehavior } from '@core/types'
+
 export type EnemyArchetype = 'base' | 'fast' | 'tank' | 'elite'
 
 export interface EnemyDef {
@@ -15,6 +17,8 @@ export interface EnemyDef {
   archetype: EnemyArchetype
   /** XP lâchée à la mort. */
   xpValue: number
+  /** Comportement d'IA. Si absent, 'chase' est utilisé par défaut au spawn. */
+  behavior?: EnemyBehavior
 }
 
 /**

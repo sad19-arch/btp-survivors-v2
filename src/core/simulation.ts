@@ -515,7 +515,7 @@ export class Simulation {
     this.rebuildEnemyGrid()
     weaponSystem(this.world, dtMs, pulses, fired, this.rng, this.enemyGrid)
     slowSystem(this.world, dtMs)
-    enemyAiSystem(this.world)
+    enemyAiSystem(this.world, this.elapsedMs, dtMs)
     tetherSystem(this.world, MODE_PLAYER_COUNT[this.mode] ?? 1, TETHER.maxRadius)
     movementSystem(this.world, dtMs)
     worldBoundsSystem(this.world, WORLD)
