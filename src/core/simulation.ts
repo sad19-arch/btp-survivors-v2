@@ -38,6 +38,7 @@ import { tryEvolve } from './systems/evolution'
 import { tickChestDirector, maybeDropEliteChest } from './systems/chestDirector'
 import { resolveObstacleCollisions } from './systems/obstacleCollision'
 import { buildSiteLayout, type Obstacle } from './siteLayout'
+import { buildFlowField, CELL_FLOW, HALF_FLOW, type FlowField } from './systems/flowField'
 import { CHEST, coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
 import { SPAWN_RAMP, difficultyScaleAt } from '@content/spawnRamp'
 import { eventPoolForPhase } from '@content/waveEvents'
@@ -162,6 +163,12 @@ export class Simulation {
   private readonly enemyGrid = new SpatialGrid(64)
   /** Obstacles statiques du site (calculés UNE fois au reset, vide pour terrain_vierge). */
   private obstacles: readonly Obstacle[] = []
+  /** Champ de flux courant (null si aucun obstacle ou pas encore construit). */
+  private flowField: FlowField | null = null
+  /** Colonne de la cellule du joueur lors du dernier build du champ de flux. */
+  private lastFlowCol = -1
+  /** Ligne de la cellule du joueur lors du dernier build du champ de flux. */
+  private lastFlowRow = -1
 
   constructor(opts: SimOptions) {
     this.mode = opts.mode
@@ -509,6 +516,10 @@ export class Simulation {
     // Calcul du layout UNE fois — RNG interne isolé (seed ^ 0x51e0), n'affecte PAS le
     // flux RNG de la sim. Pour terrain_vierge : obstacles = [] → no-op garanti.
     this.obstacles = buildSiteLayout(seed, WORLD.width, WORLD.height, this.phaseId).obstacles
+    // Réinitialise le champ de flux (sera reconstruit au premier pas si obstacles > 0).
+    this.flowField = null
+    this.lastFlowCol = -1
+    this.lastFlowRow = -1
     this.spawnPlayers()
     this.spawnPrisoners()
     this.prevHpTotal = this.totalPlayerHp()
@@ -597,7 +608,24 @@ export class Simulation {
     this.rebuildEnemyGrid()
     weaponSystem(this.world, dtMs, pulses, fired, this.rng, this.enemyGrid)
     slowSystem(this.world, dtMs)
-    enemyAiSystem(this.world, this.elapsedMs, dtMs)
+    // Champ de flux : construit UNIQUEMENT si obstacles présents.
+    // Gate déterminisme : terrain_vierge (obstacles=[]) → flowField reste null
+    // → enemyAiSystem reçoit null → chemin de code actuel INCHANGÉ → sim:check diff 0.
+    if (this.obstacles.length > 0) {
+      const leaderPos = this.getLeaderPosition()
+      if (leaderPos !== null) {
+        // Cellule absolue du joueur dans la grille mondiale (throttle = rebuild uniquement
+        // quand le joueur franchit une frontière de cellule CELL_FLOW).
+        const col = Math.floor(leaderPos.x / CELL_FLOW)
+        const row = Math.floor(leaderPos.y / CELL_FLOW)
+        if (this.flowField === null || col !== this.lastFlowCol || row !== this.lastFlowRow) {
+          this.flowField = buildFlowField(leaderPos.x, leaderPos.y, this.obstacles, CELL_FLOW, HALF_FLOW)
+          this.lastFlowCol = col
+          this.lastFlowRow = row
+        }
+      }
+    }
+    enemyAiSystem(this.world, this.elapsedMs, dtMs, this.flowField)
     tetherSystem(this.world, MODE_PLAYER_COUNT[this.mode] ?? 1, TETHER.maxRadius)
     movementSystem(this.world, dtMs)
     worldBoundsSystem(this.world, WORLD)
@@ -1023,6 +1051,32 @@ export class Simulation {
       }
     }
     return positions
+  }
+
+  /**
+   * Retourne la position du joueur leader (playerId=1, ou premier vivant).
+   * Utilisé pour centrer la fenêtre du champ de flux.
+   * Retourne null si aucun joueur vivant.
+   */
+  private getLeaderPosition(): Vec2 | null {
+    // Tente d'abord le joueur 1
+    const e1 = this.playerEntities.get(1)
+    if (e1 !== undefined) {
+      const pos = this.world.get(e1, 'position')
+      const health = this.world.get(e1, 'health')
+      if (pos !== undefined && health !== undefined && health.hp > 0) {
+        return { x: pos.x, y: pos.y }
+      }
+    }
+    // Fallback : premier joueur vivant
+    for (const [, e] of this.playerEntities) {
+      const pos = this.world.get(e, 'position')
+      const health = this.world.get(e, 'health')
+      if (pos !== undefined && health !== undefined && health.hp > 0) {
+        return { x: pos.x, y: pos.y }
+      }
+    }
+    return null
   }
 
   private playersCentroid(): Vec2 {
