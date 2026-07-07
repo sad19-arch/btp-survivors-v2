@@ -458,7 +458,11 @@ export class App {
       characterSelect: this.charSelectOpen
         ? { player: this.charSelectPlayer, total: this.selectedPlayers }
         : null,
-      minimapVisible: this.minimapVisible
+      minimapVisible: this.minimapVisible,
+      justEvolvedWeaponName:
+        base.justEvolved !== null
+          ? (WEAPONS[base.justEvolved]?.name ?? base.justEvolved)
+          : null
     }
   }
 
@@ -784,7 +788,8 @@ function emptyState(seed: number, stageId: ConstructionPhaseId): GameState {
     prisoners: [],
     rescue: { total: 0, rescued: 0 },
     hazards: [],
-    pendingLevelUp: null
+    pendingLevelUp: null,
+    justEvolved: null
   }
 }
 

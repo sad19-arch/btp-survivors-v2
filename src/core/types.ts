@@ -352,4 +352,12 @@ export interface GameState {
   /** Flaques de goudron actives (pour le rendu — Task 7/8). */
   hazards: HazardState[]
   pendingLevelUp: PendingLevelUp | null
+  /**
+   * Transitoire (one-shot) : id de l'arme évoluée pendant exactement une frame
+   * (le pas où une évolution vient d'être déclenchée) ; `null` sinon.
+   * Remis à `null` au pas suivant / après lecture dans `getState`.
+   * Consommé par `overlay.sync` côté rendu pour lancer le jackpot — ne jamais
+   * lire deux fois sans avancer le temps.
+   */
+  justEvolved: string | null
 }

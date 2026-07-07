@@ -46,6 +46,12 @@ export class Overlay {
   private bannerTimer: number | null = null
   /** Carton d'intro affiché (évite de le reconstruire chaque frame). */
   private introShown = false
+  /**
+   * Nom de l'arme pour laquelle le jackpot+bandeau ont déjà été déclenchés
+   * (null = pas encore ou déjà consommé). Garde contre les appels répétés dans
+   * la fenêtre d'un même pas sim où `justEvolvedWeaponName` est non-null.
+   */
+  private lastJackpotWeaponName: string | null = null
   /** Callback de sélection d'un item par index (clic souris) ; route vers l'App. */
   private readonly onSelect: ((index: number) => void) | undefined
 
@@ -86,6 +92,17 @@ export class Overlay {
     this.syncInventory(state)
     this.syncGamepads(state)
     this.syncMinimap(state)
+    // Jackpot coffre : déclenché une seule fois par évolution (garde sur le nom
+    // pour éviter de rejouer l'animation sur chaque rAF frame tant que le flag
+    // transitoire est non-null). Le nom est résolu côté App (overlay sans dep content).
+    if (state.justEvolvedWeaponName !== null && state.justEvolvedWeaponName !== this.lastJackpotWeaponName) {
+      this.lastJackpotWeaponName = state.justEvolvedWeaponName
+      this.showJackpot(state.justEvolvedWeaponName)
+      this.showEvolutionBanner(state.justEvolvedWeaponName)
+    } else if (state.justEvolvedWeaponName === null) {
+      // Flag remis à null (nouveau pas sim) : réinitialise le verrou pour la prochaine évolution.
+      this.lastJackpotWeaponName = null
+    }
   }
 
   /**

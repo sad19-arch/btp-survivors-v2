@@ -33,10 +33,10 @@ import { boomerangSystem } from './systems/boomerang'
 import { consumeLevelUp, initialProgress } from './systems/leveling'
 import { allPlayersDead } from './systems/gameRules'
 import { recomputePlayerStats } from './systems/playerStats'
-import { rollCards, type Inventory } from './systems/cards'
+import { eligibleCards, rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
 import { tickChestDirector, maybeDropEliteChest } from './systems/chestDirector'
-import { coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
+import { CHEST, coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
 import { SPAWN_RAMP, difficultyScaleAt } from '@content/spawnRamp'
 import { eventPoolForPhase } from '@content/waveEvents'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
@@ -139,6 +139,13 @@ export class Simulation {
   private prevHpTotal = 0
   /** Nombre de prisonniers libérés depuis le début de la run (progression des sauvetages). */
   private rescuedTotal = 0
+  /**
+   * Flag transitoire (one-shot) : id de l'arme évoluée, posé dans
+   * `handleChestPickups` ; remis à `null` par `getState()` après lecture
+   * (une seule frame). Exposé dans `GameState.justEvolved` pour que
+   * `overlay.sync` lance le jackpot sans event ad hoc.
+   */
+  private _justEvolved: string | null = null
   private readonly inputs = new Map<number, PlayerInput>()
   private readonly playerEntities = new Map<number, EntityId>()
   /** Index spatial des ennemis (positions courantes, post-mouvement), reconstruit chaque pas
@@ -187,11 +194,21 @@ export class Simulation {
    * Avance la simulation de `ms` millisecondes logiques, par pas fixes.
    * Le temps est gelé tant que la partie n'est pas en cours (pause, game over)
    * ou qu'un choix de carte est en attente → déterministe via le seam.
+   *
+   * Réinitialise `_justEvolved` en entrée (one-shot pour cet appel) : si une
+   * évolution survient dans l'un des pas, le flag est positionné et conservé
+   * jusqu'au prochain `advanceTime`. Cela garantit que `getState()` retourne
+   * `justEvolved !== null` jusqu'à la prochaine avance, quelle que soit la durée
+   * des pas ou leur nombre dans cet appel.
    */
   advanceTime(ms: number): void {
     if (this.isFrozen()) {
       return
     }
+    // Réinitialise le flag transitoire : valide SEULEMENT pour cet appel.
+    // Si une évolution survient dans n'importe quel pas, le flag est posé et
+    // NE SERA PAS remis à null avant le prochain `advanceTime`.
+    this._justEvolved = null
     this.remainderMs += ms
     while (this.remainderMs >= STEP_MS) {
       this.remainderMs -= STEP_MS
@@ -304,7 +321,11 @@ export class Simulation {
       prisoners: this.collectPrisoners(),
       rescue: { total: RESCUE.count, rescued: this.rescuedTotal },
       hazards: this.collectHazards(),
-      pendingLevelUp: this.choiceQueue[0] ?? null
+      pendingLevelUp: this.choiceQueue[0] ?? null,
+      // Flag transitoire : non null pendant tout le pas où une évolution vient d'être
+      // déclenchée ; remis à null par `step()` au pas SUIVANT. Toutes les lectures de
+      // `getState()` dans la même fenêtre de pas voient la même valeur (pas de reset ici).
+      justEvolved: this._justEvolved
     }
   }
 
@@ -518,6 +539,9 @@ export class Simulation {
     if (this.scene !== 'game') {
       return
     }
+    // Note : `_justEvolved` n'est PAS remis à null ici. Il est réinitialisé en
+    // début d'`advanceTime` (avant les pas) pour durer exactement un appel
+    // `advanceTime` complet, même si plusieurs pas sont exécutés en séquence.
     const pulses: AuraPulse[] = []
     const freed: Vec2[] = []
     const fired: string[] = []
@@ -587,30 +611,55 @@ export class Simulation {
   }
 
   /**
-   * Traite les coffres d'évolution ramassés ce pas, crédités au ramasseur réel
-   * (identifié par `pickupSystem` via le composant `player` de l'entité qui a
-   * touché le coffre — plus de joueur 1 codé en dur) : évolution si éligible
-   * (`tryEvolve` + `EvolvedEvent`), sinon bonus de soin de repli (30 PV bornés
-   * à `maxHp`). En solo, un seul ramasseur possible (joueur 1) → comportement
-   * inchangé.
+   * Traite les coffres d'évolution ramassés ce pas — garantit TOUJOURS un effet :
+   *
+   * 1. Évolution : `tryEvolve` ≠ null → `EvolvedEvent` + pose `_justEvolved`
+   *    (jackpot + voix, 1 frame).
+   * 2. Choix de cartes : construit l'inventaire → `rollCards` → si cartes dispo
+   *    → push dans `choiceQueue` (gel + écran Upgrade existants).
+   * 3. Secours (tout maxé) : soin `CHEST.fallbackHealPct * maxHp`, borné à maxHp.
+   *
+   * Boucle intentionnelle : chaque coffre réévalue l'inventaire APRÈS la mutation
+   * du coffre précédent (une évolution consommée ce tour ne doit pas retenter
+   * d'évoluer la même arme deux fois dans la même frame). En solo, un seul
+   * ramasseur possible (joueur 1) → comportement inchangé.
    */
   private handleChestPickups(collectors: number[]): void {
-    // Boucle intentionnelle : chaque coffre réévalue l'inventaire APRÈS la
-    // mutation du coffre précédent (une évolution consommée ce tour ne doit
-    // pas retenter d'évoluer la même arme deux fois dans la même frame).
     for (const playerId of collectors) {
-      const player = this.playerEntities.get(playerId)
-      if (player === undefined) {
+      const playerEntity = this.playerEntities.get(playerId)
+      if (playerEntity === undefined) {
         continue
       }
-      const evolvedId = tryEvolve(this.world, player)
+
+      // Branche 1 : évolution disponible.
+      const evolvedId = tryEvolve(this.world, playerEntity)
       if (evolvedId !== null) {
         this.events.dispatchEvent(new EvolvedEvent(evolvedId, playerId))
-      } else {
-        const health = this.world.get(player, 'health')
-        if (health !== undefined) {
-          health.hp = Math.min(health.maxHp, health.hp + 30)
+        this._justEvolved = evolvedId
+        continue
+      }
+
+      // Branche 2 : pas d'évolution — proposer des cartes si l'inventaire n'est pas maxé.
+      const loadout = this.world.get(playerEntity, 'weapons')
+      const passives = this.world.get(playerEntity, 'passives')
+      const inv: Inventory = {
+        weapons: loadout?.slots.map((s) => ({ id: s.id, level: s.level })) ?? [],
+        passives: passives?.list.map((p) => ({ id: p.id, level: p.level })) ?? []
+      }
+      // eligibleCards vérifie si quelque chose est upgradeable ; rollCards échantillonne.
+      const eligible = eligibleCards(inv)
+      if (eligible.length > 0) {
+        const choices = rollCards(this.rng, inv, PROGRESSION.choices)
+        if (choices.length > 0) {
+          this.choiceQueue.push({ playerId, choices })
+          continue
         }
+      }
+
+      // Branche 3 : secours déterministe (tout maxé, rien à tirer).
+      const health = this.world.get(playerEntity, 'health')
+      if (health !== undefined) {
+        health.hp = Math.min(health.maxHp, health.hp + health.maxHp * CHEST.fallbackHealPct)
       }
     }
   }

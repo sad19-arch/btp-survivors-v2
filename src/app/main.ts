@@ -7,8 +7,6 @@ import { AudioDirector } from '@/audio/audioDirector'
 import { parseBootOptions } from './bootOptions'
 import { phaseIdFromLevel } from '@content/phases'
 import { createSeam, installSeam } from './seam'
-import type { EvolvedEvent } from '@core/events'
-import { WEAPONS } from '@content/weapons'
 
 /**
  * Point d'entrée (couche rendu). Lit les options de boot, instancie l'App (qui
@@ -73,16 +71,8 @@ const uiRoot = document.getElementById('ui-root')
 if (uiRoot !== null) {
   // Clic souris sur un item de menu → sélection+validation via l'App.
   const overlay = new Overlay(uiRoot, (i) => app.clickItem(i))
-  // B5 — Jackpot coffre + bandeau d'évolution : résout le nom via WEAPONS (composition root)
-  // pour garder l'Overlay libre de toute dépendance à `src/content`.
-  // Le panneau jackpot (~1.5s cosmétique) s'affiche en premier ; le bandeau d'évolution
-  // suit immédiatement (l'évolution est déjà appliquée par la sim, pas de gel gameplay ici).
-  app.events.addEventListener('evolved', (e) => {
-    const weaponId = (e as EvolvedEvent).weaponId
-    const weaponName = WEAPONS[weaponId]?.name ?? weaponId
-    overlay.showJackpot(weaponName)
-    overlay.showEvolutionBanner(weaponName)
-  })
+  // B5 — Jackpot coffre + bandeau d'évolution : câblés dans overlay.sync via
+  // state.justEvolvedWeaponName (flag transitoire, one-shot). Plus d'event ad hoc ici.
   const tick = (): void => {
     const state = app.getStateForFrame(app.frameId)
     overlay.sync(state)

@@ -81,4 +81,10 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   characterSelect: { player: number; total: number } | null
   /** Mini-carte affichée (bas-gauche) — bascule clavier M / manette Back/Select. */
   minimapVisible: boolean
+  /**
+   * Transitoire (one-shot) : nom lisible de l'arme évoluée ce pas (résolu via WEAPONS
+   * dans `App.getState()`), ou `null`. Miroir de `GameState.justEvolved` enrichi du
+   * nom lisible pour l'overlay (qui ne dépend pas de `src/content`).
+   */
+  justEvolvedWeaponName: string | null
 }

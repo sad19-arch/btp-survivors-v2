@@ -90,7 +90,18 @@ export const CHEST = {
   /** Nombre maximum de coffres actifs simultanément (inclut le coffre mini-boss). */
   maxActive: 5,
   /** Rayon d'apparition (px) autour du joueur vivant le plus proche. */
-  spawnRadius: 260
+  spawnRadius: 260,
+  /**
+   * Soin de repli si aucune évolution ET aucune carte éligible (tout maxé).
+   * Fraction de maxHp rendue. Ex : 0.30 → +30 % des PV max, borné à maxHp.
+   */
+  fallbackHealPct: 0.30,
+  /**
+   * Gemmes d'XP à faire apparaître si les PV sont déjà au max (repli ultime).
+   * Actuellement non utilisé (soin brut toujours appliqué, même sur PV pleins).
+   * Conservé pour extension future sans churn.
+   */
+  fallbackGems: 0
 } as const
 
 /** Nombre de joueurs selon le mode. */
