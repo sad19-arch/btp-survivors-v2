@@ -4,15 +4,27 @@ import type { PickupKind, Vec2 } from '../types'
 import { PICKUP, PICKUP_DROPS } from '@content/config'
 
 /**
+ * Résultat de `reapDeadEnemies` : nombre total tués + kills attribués par joueur.
+ * `killsByPlayer` : map `playerId → nombre de kills` pour les ennemis dont `lastHitBy`
+ * est défini. Les ennemis morts sans attribution (contact ennemi→joueur uniquement,
+ * ou spawn sans dégâts reçus) ne figurent pas dans cette map mais comptent dans `total`.
+ */
+export interface ReapResult {
+  total: number
+  killsByPlayer: Map<number, number>
+}
+
+/**
  * Récolte les ennemis morts, quelle que soit la source de dégâts (projectile,
  * onde de marteau, lame de scie…). Centralise la mort en un seul endroit :
  * lâche une gemme d'XP (+ parfois un bonus), supprime l'entité et compte le kill.
  *
  * `lootRng` est un RNG DÉDIÉ au loot (séparé du RNG de spawn/upgrade) pour ne pas
  * perturber la séquence d'équilibrage. S'il est absent, seule la gemme d'XP tombe.
- * Retourne le nombre d'ennemis récoltés (pour le score).
+ * Retourne un `ReapResult` : total kills + map kills par joueur (attribution par
+ * dernier frappeur — `lastHitBy` posé aux sites de dégât).
  */
-export function reapDeadEnemies(world: World, lootRng?: Rng): number {
+export function reapDeadEnemies(world: World, lootRng?: Rng): ReapResult {
   const dead: number[] = []
   for (const en of world.query('enemy', 'health')) {
     const health = world.get(en, 'health')
@@ -20,6 +32,7 @@ export function reapDeadEnemies(world: World, lootRng?: Rng): number {
       dead.push(en)
     }
   }
+  const killsByPlayer = new Map<number, number>()
   for (const en of dead) {
     const epos = world.get(en, 'position')
     const ecomp = world.get(en, 'enemy')
@@ -33,10 +46,14 @@ export function reapDeadEnemies(world: World, lootRng?: Rng): number {
       if (lootRng !== undefined) {
         maybeDropBonus(world, lootRng, epos)
       }
+      // Attribution du kill au dernier joueur ayant infligé des dégâts.
+      if (ecomp.lastHitBy !== undefined) {
+        killsByPlayer.set(ecomp.lastHitBy, (killsByPlayer.get(ecomp.lastHitBy) ?? 0) + 1)
+      }
     }
     world.despawn(en)
   }
-  return dead.length
+  return { total: dead.length, killsByPlayer }
 }
 
 /** Tire au plus UN bonus (soin / aimant / coffre) selon les chances configurées. */

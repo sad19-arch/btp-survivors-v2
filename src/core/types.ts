@@ -93,6 +93,15 @@ export interface EnemyComp {
   bMode?: number
   /** Timer interne du comportement (utilisé par charger…). */
   bTimer?: number
+  /**
+   * PlayerId du dernier joueur ayant infligé des dégâts à cet ennemi.
+   * Posé à chaque site de dégât (projectile, aura, orbital, sweep, strike, cone, hazard).
+   * Utilisé par `reapDeadEnemies` pour attribuer le kill au bon joueur.
+   * Absent si l'ennemi n'a encore reçu aucun dégât de joueur (ex. contact ennemi→joueur
+   * uniquement). Un ennemi mort sans `lastHitBy` est compté dans le score global mais
+   * n'est pas attribué à un joueur individuel.
+   */
+  lastHitBy?: number
 }
 
 /** Types de pickups ramassables. */
@@ -279,6 +288,8 @@ export interface PlayerState {
   weapons: string[]
   weaponLevels: number[]
   passives: { id: string; level: number }[]
+  /** Nombre d'ennemis tués par ce joueur (attribution par dernier frappeur). */
+  kills: number
 }
 
 export interface EnemyState {

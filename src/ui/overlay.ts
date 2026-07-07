@@ -561,12 +561,31 @@ export class Overlay {
 
   private gameOverPanel(state: AppViewState): HTMLElement {
     const p = state.players[0]
+    const isMulti = state.players.length >= 2
+
+    // Lignes de kills par joueur (multi) ou total (solo).
+    const killLines: HTMLElement[] = []
+    if (isMulti) {
+      // Trouver le joueur avec le plus de kills pour le label VAINQUEUR/PERDANT.
+      const maxKills = Math.max(...state.players.map((pl) => pl.kills))
+      for (const pl of state.players) {
+        const isWinner = pl.kills === maxKills
+        const label = isWinner ? 'VAINQUEUR' : 'PERDANT'
+        killLines.push(
+          h('span', { text: `J${pl.id} — ${pl.kills} kill${pl.kills !== 1 ? 's' : ''} [${label}]` })
+        )
+      }
+    } else {
+      killLines.push(h('span', { text: `Ennemis tués : ${state.score}` }))
+    }
+
     const stats = h(
       'div',
       { className: 'stats' },
       h('span', { text: `Temps survécu : ${formatTime(state.elapsedMs)}` }),
       h('span', { text: `Niveau atteint : ${p?.level ?? 1}` }),
-      h('span', { text: `Score : ${state.score}` })
+      h('span', { text: `Score : ${state.score}` }),
+      ...killLines
     )
     return h(
       'div',

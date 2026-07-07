@@ -60,8 +60,8 @@ describe('collisionSystem', () => {
     addProjectile(w, 0, 0, 6)
     collisionSystem(w, 16, grid(w))
     expect(w.get(enemy, 'health')?.hp).toBeLessThanOrEqual(0)
-    const kills = reapDeadEnemies(w)
-    expect(kills).toBe(1)
+    const result = reapDeadEnemies(w)
+    expect(result.total).toBe(1)
     expect(w.alive(enemy)).toBe(false)
     // Une gemme d'XP a été lâchée.
     const gems = [...w.query('pickup')]

@@ -23,7 +23,7 @@ import { spawnBoss, spawnGroup, spawnWave } from './systems/spawn'
 import { createWaveDirectorState, stepWaveDirector, type WaveDirectorState } from './systems/waveDirector'
 import { weaponSystem } from './systems/weapon'
 import { collisionSystem } from './systems/collision'
-import { reapDeadEnemies } from './systems/reap'
+import { reapDeadEnemies, type ReapResult } from './systems/reap'
 import { pickupSystem } from './systems/pickup'
 import { rescueSystem } from './systems/rescue'
 import { reviveSystem } from './systems/revive'
@@ -127,6 +127,8 @@ export class Simulation {
   private elapsedMs = 0
   private remainderMs = 0
   private score = 0
+  /** Tally cumulatif de kills par joueur (attribution par dernier frappeur). */
+  private killsByPlayer = new Map<number, number>()
   /**
    * Nombre de paliers de mid-boss déjà spawné (rôle `mid`). Chaque valeur dans
    * `MID_BOSS_WAVES.atMs` est consommée exactement une fois (palier par index).
@@ -477,6 +479,7 @@ export class Simulation {
     this.remainderMs = 0
     this.chestAccMs = 0
     this.score = 0
+    this.killsByPlayer = new Map<number, number>()
     this.midBossWaveIndex = 0
     this.finalBossSpawned = false
     this.choiceQueue = []
@@ -579,12 +582,16 @@ export class Simulation {
     this.rebuildEnemyGrid()
     collisionSystem(this.world, dtMs, this.enemyGrid)
     const deadElitePositions = this.collectDeadElitePositions()
-    const killed = reapDeadEnemies(this.world, this.lootRng)
+    const reap: ReapResult = reapDeadEnemies(this.world, this.lootRng)
     // Drop coffre sur mort d'élite (RNG dédié, ne perturbe pas lootRng/rng).
     for (const pos of deadElitePositions) {
       maybeDropEliteChest(this.world, this.chestRng, pos)
     }
-    this.score += killed
+    this.score += reap.total
+    // Cumul des kills par joueur (attribution par dernier frappeur).
+    for (const [pid, n] of reap.killsByPlayer) {
+      this.killsByPlayer.set(pid, (this.killsByPlayer.get(pid) ?? 0) + n)
+    }
     pickupSystem(this.world, dtMs, collected, chestCollectors)
     this.handleChestPickups(chestCollectors)
     rescueSystem(this.world, freed)
@@ -605,8 +612,8 @@ export class Simulation {
       this.events.dispatchEvent(new PlayerHurtEvent())
     }
     this.prevHpTotal = hpNow
-    if (killed > 0) {
-      this.events.dispatchEvent(new EnemyKilledEvent(killed))
+    if (reap.total > 0) {
+      this.events.dispatchEvent(new EnemyKilledEvent(reap.total))
     }
     for (const k of fired) {
       this.events.dispatchEvent(new WeaponFiredEvent(k))
@@ -850,7 +857,8 @@ export class Simulation {
         characterId: player.characterId ?? DEFAULT_CHARACTER_ID,
         weapons: loadout === undefined ? [] : loadout.slots.map((s) => s.id),
         weaponLevels: loadout === undefined ? [] : loadout.slots.map((s) => s.level),
-        passives: passives === undefined ? [] : passives.list.map((p) => ({ id: p.id, level: p.level }))
+        passives: passives === undefined ? [] : passives.list.map((p) => ({ id: p.id, level: p.level })),
+        kills: this.killsByPlayer.get(id) ?? 0
       })
     }
     players.sort((a, b) => a.id - b.id)
