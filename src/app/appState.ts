@@ -1,6 +1,27 @@
 import type { GameState, PlayerState } from '@core/types'
 import type { CardKind } from '@core/systems/cards'
 
+/**
+ * Rapport figé généré UNE SEULE FOIS à l'entrée du game-over.
+ * Jamais recalculé entre deux appels à `getState()` : la phrase est stable.
+ */
+export interface DeathReport {
+  /** Temps écoulé au moment de la mort (ms). */
+  elapsedMs: number
+  /** Nombre d'ennemis tués (= score). */
+  kills: number
+  /** Progression [0, 1] dans le stage. */
+  progressRatio: number
+  /** Progression arrondie en % entier. */
+  progressPercent: number
+  /** Secondes restantes avant la fin du stage (≥ 0). */
+  remainingSeconds: number
+  /** Durée totale du stage (ms). */
+  stageDurationMs: number
+  /** Phrase de mort sélectionnée une seule fois. */
+  quote: string
+}
+
 /** Écran applicatif courant (dérivé de l'état de la simulation + surcouche Options). */
 export type Screen =
   | 'title'
@@ -87,4 +108,10 @@ export interface AppViewState extends Omit<GameState, 'players'> {
    * nom lisible pour l'overlay (qui ne dépend pas de `src/content`).
    */
   justEvolvedWeaponName: string | null
+  /**
+   * Rapport de mort figé — calculé UNE SEULE FOIS quand `screen === 'gameover'`,
+   * stable entre les appels à `getState()`. `null` tant que le game-over n'est pas
+   * atteint ; redevient `null` après `restart()` / `start()`.
+   */
+  deathReport: DeathReport | null
 }

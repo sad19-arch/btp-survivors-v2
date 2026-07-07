@@ -42,6 +42,8 @@ export interface GameSeam {
   debugSpawnBoss(role: 'mid' | 'final'): void
   /** [Debug] Fait apparaître `n` ennemis autour des joueurs (stress test horde). */
   debugSpawnEnemies(n: number): void
+  /** [Debug] Met les PV de tous les joueurs à 0 → game-over au prochain pas. */
+  debugKillPlayer(): void
   /** [Debug] Audition d'un SFX d'arme (procédural) par ID d'arme. */
   debugPlayWeaponSfx(id: string): void
   /**
@@ -141,6 +143,9 @@ export function createSeam(app: App): GameSeam {
     },
     debugSpawnEnemies: (n: number) => {
       app.debugSpawnEnemies(n)
+    },
+    debugKillPlayer: () => {
+      app.debugKillPlayer()
     },
     debugPlayWeaponSfx: (id: string) => {
       app.debugPlayWeaponSfx(id)
