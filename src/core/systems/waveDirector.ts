@@ -223,7 +223,7 @@ function triggerEvent(
     return []
   }
 
-  const placements = placeEvent(chosen.kind, count, ringRadius, rng, chosen.behaviorOverride)
+  const placements = placeEvent(chosen.kind, count, ringRadius, rng, chosen.behaviorOverride, chosen.spreadOverride)
   state.budgetAcc -= count
 
   return placements

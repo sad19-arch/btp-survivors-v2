@@ -611,6 +611,126 @@ describe('EVENT_POOL_DEFAULT', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Task 8 rework — spreadOverride câblé : mur condensé vs mur par défaut
+// ---------------------------------------------------------------------------
+
+describe('placeEvent("sweep") — spreadOverride (rework T8)', () => {
+  it('spread 0.25 produit des écarts perpendiculaires PLUS SERRÉS que le défaut 0.4', () => {
+    const count = 9
+    const ringRadius = 500
+    // Spread condensé
+    const rngTight = new Rng(200)
+    const tight = placeEvent('sweep', count, ringRadius, rngTight, undefined, 0.25)
+    // Spread par défaut (0.4) — même seed pour neutraliser le tirage de dir
+    const rngDefault = new Rng(200)
+    const dflt = placeEvent('sweep', count, ringRadius, rngDefault, undefined)
+    // Mesure : amplitude totale (max angle - min angle) — PLUS PETITE pour tight
+    const amplitudeTight = (() => {
+      const angles = tight.map((p) => p.angle).sort((a, b) => a - b)
+      const lo = angles[0]
+      const hi = angles[angles.length - 1]
+      if (lo === undefined || hi === undefined) {
+        throw new Error('tableau tight vide')
+      }
+      return hi - lo
+    })()
+    const amplitudeDefault = (() => {
+      const angles = dflt.map((p) => p.angle).sort((a, b) => a - b)
+      const lo = angles[0]
+      const hi = angles[angles.length - 1]
+      if (lo === undefined || hi === undefined) {
+        throw new Error('tableau défaut vide')
+      }
+      return hi - lo
+    })()
+    expect(amplitudeTight).toBeLessThan(amplitudeDefault)
+  })
+
+  it('spread total = 2×spreadOverride quand spreadOverride=0.25', () => {
+    const count = 7
+    const rng = new Rng(201)
+    const result = placeEvent('sweep', count, 500, rng, undefined, 0.25)
+    const angles = result.map((p) => p.angle).sort((a, b) => a - b)
+    const lo = angles[0]
+    const hi = angles[angles.length - 1]
+    if (lo === undefined || hi === undefined) {
+      throw new Error('tableau vide')
+    }
+    expect(hi - lo).toBeCloseTo(2 * 0.25, 8)
+  })
+
+  it('est déterministe avec spreadOverride (même seed → même sortie)', () => {
+    const [r1, r2] = mirrorRng(202)
+    const a = placeEvent('sweep', 9, 500, r1, undefined, 0.25)
+    const b = placeEvent('sweep', 9, 500, r2, undefined, 0.25)
+    for (let i = 0; i < a.length; i++) {
+      const ai = a[i]
+      const bi = b[i]
+      if (ai === undefined || bi === undefined) {
+        throw new Error(`placement manquant à l'index ${i}`)
+      }
+      expect(ai.angle).toBeCloseTo(bi.angle, 10)
+      expect(ai.bAngle).toBeCloseTo(bi.bAngle ?? 0, 10)
+    }
+  })
+})
+
+describe('EVENT_POOL_DEFAULT — amplification rework T8', () => {
+  it('encircle countMin ≥ 9 (anneau dense et fermé)', () => {
+    const encircle = EVENT_POOL_DEFAULT.find((d) => d.kind === 'encircle')
+    if (encircle === undefined) {
+      throw new Error('encircle absent de EVENT_POOL_DEFAULT')
+    }
+    expect(encircle.countMin).toBeGreaterThanOrEqual(9)
+  })
+
+  it('encircle countMax ≥ 11 (anneau complet)', () => {
+    const encircle = EVENT_POOL_DEFAULT.find((d) => d.kind === 'encircle')
+    if (encircle === undefined) {
+      throw new Error('encircle absent de EVENT_POOL_DEFAULT')
+    }
+    expect(encircle.countMax).toBeGreaterThanOrEqual(11)
+  })
+
+  it('sweep a un spreadOverride défini (mur condensé câblé)', () => {
+    const sweep = EVENT_POOL_DEFAULT.find((d) => d.kind === 'sweep')
+    if (sweep === undefined) {
+      throw new Error('sweep absent de EVENT_POOL_DEFAULT')
+    }
+    expect(sweep.spreadOverride).toBeDefined()
+  })
+
+  it('sweep spreadOverride < 0.4 (mur plus serré que défaut)', () => {
+    const sweep = EVENT_POOL_DEFAULT.find((d) => d.kind === 'sweep')
+    if (sweep === undefined) {
+      throw new Error('sweep absent de EVENT_POOL_DEFAULT')
+    }
+    const so = sweep.spreadOverride
+    if (so === undefined) {
+      throw new Error('spreadOverride non défini sur sweep de EVENT_POOL_DEFAULT')
+    }
+    // Doit être strictement inférieur au défaut (0.4) — le mur est condensé
+    expect(so).toBeLessThan(0.4)
+  })
+
+  it('sweep countMin ≥ 4 (ligne dense qui traverse)', () => {
+    const sweep = EVENT_POOL_DEFAULT.find((d) => d.kind === 'sweep')
+    if (sweep === undefined) {
+      throw new Error('sweep absent de EVENT_POOL_DEFAULT')
+    }
+    expect(sweep.countMin).toBeGreaterThanOrEqual(4)
+  })
+
+  it('sweep countMax ≥ 6 (mur imposant)', () => {
+    const sweep = EVENT_POOL_DEFAULT.find((d) => d.kind === 'sweep')
+    if (sweep === undefined) {
+      throw new Error('sweep absent de EVENT_POOL_DEFAULT')
+    }
+    expect(sweep.countMax).toBeGreaterThanOrEqual(6)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // eventPoolForPhase — Task 12
 // ---------------------------------------------------------------------------
 

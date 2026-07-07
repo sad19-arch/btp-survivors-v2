@@ -34,6 +34,14 @@ export interface WaveEventDef {
    * Reporté ici sur le WaveEventDef ; `placeEvent` l'accepte aussi en 5e arg.
    */
   behaviorOverride?: EnemyBehavior
+  /**
+   * Surcharge optionnelle du spread perpendiculaire pour la formation `sweep`
+   * (demi-angle, rad). Ignoré pour les autres kinds.
+   * Si absent, `placeSweep` utilise son défaut (0.4 rad).
+   * Passer `FORMATION.sweepSpreadTight` (0.25) pour un mur condensé.
+   * Passer `FORMATION.sweepSpreadLoose` (0.55) pour une vague aérée.
+   */
+  spreadOverride?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -65,7 +73,8 @@ export function placeEvent(
   count: number,
   ringRadius: number,
   rng: Rng,
-  behaviorOverride?: EnemyBehavior
+  behaviorOverride?: EnemyBehavior,
+  spreadOverride?: number
 ): WavePlacement[] {
   switch (kind) {
     case 'converge':
@@ -77,7 +86,7 @@ export function placeEvent(
     case 'burst':
       return placeBurst(count, ringRadius, rng, behaviorOverride)
     case 'sweep':
-      return placeSweep(count, ringRadius, rng, behaviorOverride)
+      return placeSweep(count, ringRadius, rng, behaviorOverride, spreadOverride)
     case 'miniBoss':
       // Formation vide : le directeur (T10) gère le spawn du mini-boss directement,
       // sans passer par une liste de placements classique.
@@ -270,8 +279,8 @@ export const EVENT_POOL_DEFAULT: readonly WaveEventDef[] = [
   {
     kind: 'encircle',
     weight: 3,
-    countMin: 8,
-    countMax: 12,
+    countMin: 9,
+    countMax: 13,
     allowedFromSec: 120
   },
   {
@@ -279,7 +288,8 @@ export const EVENT_POOL_DEFAULT: readonly WaveEventDef[] = [
     weight: 3,
     countMin: 4,
     countMax: 7,
-    allowedFromSec: 180
+    allowedFromSec: 180,
+    spreadOverride: 0.35
   },
   {
     kind: 'miniBoss',
