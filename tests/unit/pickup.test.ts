@@ -3,6 +3,7 @@ import { World } from '@core/world'
 import { pickupSystem } from '@core/systems/pickup'
 import { PICKUP } from '@content/config'
 import { HITBOX } from '@content/config'
+import { BASE_STATS } from '@content/passives'
 
 /** Crée un joueur de test avec un rayon d'aimantation donné. */
 function makePlayer(world: World, x: number, y: number, pickupRadius: number, playerId = 1): number {
@@ -218,4 +219,28 @@ describe('pickupSystem', () => {
     })
   })
 
+  it('coop : l’aimant crédite chaque gemme au joueur le plus proche (pas tout au déclencheur, avec son propre growth)', () => {
+    const world = new World()
+    // p1 déclenche l'aimant (au contact) ; p2 est loin à droite.
+    const p1 = makePlayer(world, 0, 0, 100, 1)
+    const p2 = makePlayer(world, 2000, 0, 100, 2)
+    // p2 a un growth ×2 : sa gemme doit être créditée avec SON growth, pas celui de p1.
+    world.add(p2, 'stats', { ...BASE_STATS, growth: 2 })
+
+    // Gemme proche de p1 (hors rayon/contact) → doit revenir à p1.
+    const gemNearP1 = makeGem(world, 300, 0, 5)
+    // Gemme lointaine pour p1 mais proche de p2 → NE doit PAS être aspirée par p1.
+    const gemNearP2 = makeGem(world, 1700, 0, 8)
+
+    // p1 ramasse l'aimant au contact → déclenche l'aspiration globale.
+    makePickup(world, COLLECT_X, 0, 'magnet', 0)
+    pickupSystem(world, 16)
+
+    // Les deux gemmes sont consommées...
+    expect(world.alive(gemNearP1)).toBe(false)
+    expect(world.alive(gemNearP2)).toBe(false)
+    // ...mais chacune créditée au bon joueur, avec le growth de ce joueur.
+    expect(world.get(p1, 'progress')?.xp).toBe(5) // gemNearP1 (5) × growth 1
+    expect(world.get(p2, 'progress')?.xp).toBe(16) // gemNearP2 (8) × growth 2 de p2
+  })
 })
