@@ -34,16 +34,19 @@ Trois retours = **un seul** problème : **la boucle de puissance est inaccessibl
 - **Garde-fous** : (a) si des armes sont possédées mais non maxées, la probabilité d'en proposer au moins une doit être forte (test ci-dessous) ; (b) garder assez de `weapon-new` accessibles pour constituer un arsenal (early game). Les poids sont dans `config.ts` (`CARD_WEIGHT`) → re-tunables sans toucher au système.
 - **Test** : sur un inventaire représentatif (1 arme niv 1 + 0 passif ; puis 2 armes + 1 passif), sur N seeds, l'offre de 4 cartes **contient une montée d'arme possédée dans ≥ ~70 %** des cas (vs ~40 % avant). Déterminisme conservé (même seed+inv ⇒ mêmes cartes). Ordre stable.
 
-## P0.2 — Le coffre garantit toujours un effet + bandeau jackpot
+## P0.2 — Le coffre garantit toujours un effet : évolution OU carte au choix
 
-**Fichiers** : `src/core/simulation.ts` (`handleChestPickups`), `src/core/systems/evolve.ts` (ou équivalent `tryEvolve`), `src/content/config.ts` (fallback), `src/core/types.ts` (event/état), `src/ui/overlay.ts` (`showJackpot`), câblage `src/app` + `GameScene`. Tests unit sur le fallback.
+**Décision utilisateur** : quand le coffre ne peut rien évoluer, il **ouvre un choix de cartes** (comme un level-up) plutôt qu'un effet automatique — plus de contrôle joueur, **réutilise le flux level-up existant** (écran de cartes + `chooseUpgrade` du seam + navigation manette/clavier), zéro nouvelle UI.
 
-- **Fallback déterministe** : si `tryEvolve` n'évolue rien (aucune arme prête), le coffre lâche un **effet garanti**, dans cet ordre de priorité :
-  1. **Montée de niveau** d'une arme possédée non maxée (choisie déterministe via un `Rng` seedé) — nourrit la boucle de puissance.
-  2. sinon (tout maxé) : **soin** (ex. +30 % PV) ou **volée de gemmes** (valeur `CHEST.fallbackGems`).
-- **Événement unifié** : `handleChestPickups` émet toujours un event décrivant la récompense (`chestReward: { kind: 'evolution'|'weaponLevel'|'heal'|'gems', label }`) — pour que voix + VFX + bandeau se déclenchent UNE fois (voir P1.1 pour l'audio).
-- **Bandeau jackpot câblé** : `overlay.showJackpot(label)` déclenché sur cet event (relayé `sim → app.events → overlay`, ou flag `justChest` transitoire dans `getState()` consommé par `overlay.sync`). Choisir la voie **observateur** (flag transitoire) pour rester cohérent avec l'archi overlay.
-- **Test** : coffre ramassé sans arme évoluable ⇒ une arme possédée monte d'un niveau (déterministe) ; l'event récompense est émis exactement une fois.
+**Fichiers** : `src/core/simulation.ts` (`handleChestPickups`), le `tryEvolve` (localiser : appelé par `handleChestPickups`), `src/core/types.ts` (état/queue de choix), `src/content/config.ts` (secours tout-maxé), `src/ui/overlay.ts` (`showJackpot` pour le cas évolution), câblage `src/app` + `GameScene`. Tests unit.
+
+- **Deux issues, toujours un effet** :
+  1. Une arme est prête à évoluer → `tryEvolve` évolue (comportement actuel) + **bandeau jackpot** + voix d'évolution (voir P1.1).
+  2. Aucune évolution possible → le coffre **pose un choix de cartes** en réutilisant le mécanisme `pendingLevelUp` (cartes **pondérées** P0.1, biaisées vers les montées d'arme). Le temps est **gelé** pendant le choix (comme un level-up) ; le joueur choisit via `chooseUpgrade(index)`, la carte s'applique.
+- **Queue** : si un `pendingLevelUp` est déjà en cours (level-up même frame), le choix « coffre » se **met en file** derrière (réutiliser/étendre le mécanisme de file de `pendingLevelUp` existant — vérifier au plan comment les level-ups multiples sont empilés).
+- **Secours tout-maxé** : si vraiment **aucune carte éligible** (tout maxé) ET pas d'évolution, effet garanti minimal : **soin** (`CHEST.fallbackHealPct`) ou **volée de gemmes** (`CHEST.fallbackGems`) — pour ne jamais avoir un coffre inerte.
+- **Bandeau jackpot câblé** (cas évolution) : `overlay.showJackpot(label)` déclenché via un flag transitoire `justEvolved` dans `getState()` consommé par `overlay.sync` (voie **observateur**, cohérente avec l'archi overlay). Le cas « carte » n'a pas besoin de jackpot (l'écran de choix suffit).
+- **Test** : coffre ramassé **sans arme évoluable** et inventaire non-maxé ⇒ `pendingLevelUp` devient non-null (cartes proposées) ; coffre **avec arme prête** ⇒ évolution + `justEvolved` posé une fois ; coffre **tout maxé** ⇒ effet de secours (soin/gemmes) déterministe.
 
 ## P0.3 — Les coffres ne sont plus aimantés
 
