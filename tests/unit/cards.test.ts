@@ -25,7 +25,7 @@ describe('cartes de level-up (pur)', () => {
     expect(a.length).toBeLessThanOrEqual(4)
   })
 
-  describe('rollCards pondéré (weighted draw without replacement)', () => {
+  describe('rollCards — garantie + mélange (remplace tirage pondéré)', () => {
     it('déterminisme : même seed ⇒ même résultat (ids et ordre)', () => {
       const inventory = inv([{ id: 'cloueur', level: 1 }], [])
       const a = rollCards(new Rng(42), inventory, 4)
@@ -33,8 +33,13 @@ describe('cartes de level-up (pur)', () => {
       expect(a.map(c => c.kind + ':' + c.id)).toEqual(b.map(c => c.kind + ':' + c.id))
     })
 
-    it('taux d\'offre weapon-up ≥ 70% sur 200 seeds', () => {
+    it('garantie 100% : chaque tirage contient ≥1 weapon-up quand éligible (200 seeds)', () => {
+      // inv avec cloueur niv 1 → weapon-up éligible ; ≥10 autres éligibles (weapon-new) → all.length > count=4
       const inventory = inv([{ id: 'cloueur', level: 1 }], [])
+      const eligible = eligibleCards(inventory)
+      // Précondition : s'assurer que all.length > count pour activer le chemin garanti
+      expect(eligible.length).toBeGreaterThan(4)
+
       let hits = 0
       for (let seed = 0; seed < 200; seed++) {
         const cards = rollCards(new Rng(seed), inventory, 4)
@@ -42,8 +47,24 @@ describe('cartes de level-up (pur)', () => {
           hits++
         }
       }
-      const rate = hits / 200
-      expect(rate).toBeGreaterThanOrEqual(0.70)
+      // Garantie 100 % : tous les tirages contiennent le weapon-up garanti
+      expect(hits).toBe(200)
+    })
+
+    it('position variée : le weapon-up garanti n\'est pas toujours en slot 0 (≥2 positions distinctes)', () => {
+      const inventory = inv([{ id: 'cloueur', level: 1 }], [])
+      const indicesObserved = new Set<number>()
+
+      for (let seed = 0; seed < 200; seed++) {
+        const cards = rollCards(new Rng(seed), inventory, 4)
+        const wuIdx = cards.findIndex(c => c.kind === 'weapon-up')
+        if (wuIdx !== -1) {
+          indicesObserved.add(wuIdx)
+        }
+      }
+
+      // Le mélange final distribue le weapon-up sur au moins 2 positions distinctes
+      expect(indicesObserved.size).toBeGreaterThanOrEqual(2)
     })
 
     it('sans remise : toutes les cartes ont un combo id+kind distinct', () => {
@@ -53,36 +74,25 @@ describe('cartes de level-up (pur)', () => {
       expect(new Set(keys).size).toBe(keys.length)
     })
 
-    it('cas limite : eligibleCards ≤ 4 → rollCards retourne tout sans crash', () => {
-      // Inventaire vide avec inventaire armes plein → pas de weapon-new, mais des weapon-up si possédées
-      // Avec un seul passif : eligibleCards retourne juste 1 passive-up et les weapon-new (9 armes non possédées)
-      // Forçons un cas où eligibleCards retourne peu de cartes : 1 arme possédée non-maxée, inventaire armes=1/6
-      // et aucun passif. Les weapon-new seront toutes les autres armes de base (9 cartes) + 1 weapon-up = 10.
-      // Pour vraiment forcer ≤4, utilisons une inv avec armes quasi-maxées.
-      // On ne peut pas contrôler directement le nb d'éligibles sans dépendre du contenu.
-      // À la place, on vérifie que si on demande count=100, on obtient bien au plus eligibleCards.length cartes.
+    it('cas limite : all.length ≤ count → rollCards retourne tout sans crash', () => {
+      // Demander 100 cartes avec un inventaire qui en a nettement moins
       const inventory = inv([{ id: 'cloueur', level: 1 }], [])
       const eligible = eligibleCards(inventory)
       const cards = rollCards(new Rng(1), inventory, 100)
-      expect(cards.length).toBeLessThanOrEqual(eligible.length)
+      expect(cards.length).toBe(eligible.length)
       expect(cards.length).toBeGreaterThan(0)
     })
 
     it('cas extrême : inventaire sans aucune carte éligible → tableau vide', () => {
-      // Un seul passif : eligibleCards retourne juste des weapon-new (si inv armes vide)
-      // Pour forcer 0 éligibles : inventaire complètement plein avec tous maxés
-      // Simulons : inv full d'armes (aucune weapon-new), pas de passifs, toutes armes au max
+      // inv full d'armes maxées → weapon-new bloqué (INVENTORY.weapons=6), weapon-up bloqué (tout maxé)
       const fullWeapons = [
-        { id: 'cloueur', level: 8 },   // maxLevel=8, maxé
+        { id: 'cloueur', level: 8 },
         { id: 'scie', level: 8 },
         { id: 'marteau', level: 8 },
         { id: 'boulons', level: 8 },
         { id: 'brouette', level: 8 },
         { id: 'goudron', level: 8 }
       ]
-      // Avec 6 armes possédées, weapon-new est bloqué (INVENTORY.weapons=6)
-      // Mais ces armes peuvent ne pas être au max réel (def.maxLevel peut différer)
-      // On teste juste que rollCards ne plante pas avec un inventaire plein
       const inventory = inv(fullWeapons, [])
       const eligible = eligibleCards(inventory)
       const cards = rollCards(new Rng(1), inventory, 4)
