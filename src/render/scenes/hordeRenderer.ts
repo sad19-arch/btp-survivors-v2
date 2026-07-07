@@ -78,6 +78,12 @@ export class HordeRenderer {
   private readonly chestAura = new Map<number, Phaser.GameObjects.Arc>()
   private readonly chestSparkleEpoch = new Map<number, number>()
   private readonly xpSparkleEpoch = new Map<number, number>()
+  /**
+   * Aura argentée (Arc strokeStyle) derrière chaque ennemi élite.
+   * Même cycle de vie que `enemySprites` : créée à la première frame de l'élite,
+   * détruite dès que l'ennemi disparaît de l'état. Pas d'aura sur les non-élites.
+   */
+  private readonly eliteAuras = new Map<number, Phaser.GameObjects.Arc>()
   /** HP de l'ennemi à la frame précédente (diff → feedback de coup). */
   private readonly prevEnemyHp = new Map<number, number>()
   /** Fin de la fenêtre de flash blanc par ennemi touché. */
@@ -162,6 +168,24 @@ export class HordeRenderer {
         }
       }
       sprite.setPosition(en.x, en.y)
+      // ── Aura argentée (élite) : anneau pixel net derrière le sprite ──
+      if (en.isElite) {
+        let aura = this.eliteAuras.get(en.id)
+        if (aura === undefined) {
+          // Arc creux (strokeOnly) : épaisseur 3 px, couleur argent (blanc palette 16-bit).
+          // Depth négatif : DERRIÈRE le sprite ennemi.
+          aura = this.scene.add
+            .arc(en.x, en.y, 22, 0, 360, false, PALETTE_HEX.blanc, 0)
+            .setStrokeStyle(3, PALETTE_HEX.blanc, 1)
+            .setDepth(sprite.depth - 0.5)
+          this.eliteAuras.set(en.id, aura)
+        }
+        aura.setPosition(en.x, en.y)
+        // Pulsation légère bornée : alpha [0.55 – 0.85], rayon [20 – 24].
+        const pulse = 0.5 + 0.5 * Math.sin(this.scene.time.now / 420 + en.id * 1.7)
+        aura.setAlpha(0.55 + 0.3 * pulse)
+        aura.setRadius(20 + 4 * pulse)
+      }
       if (sprite instanceof Phaser.GameObjects.Sprite) {
         // L'ennemi poursuit le joueur → il regarde vers lui (pas de vx/vy exposé).
         const row = leader !== undefined ? dirRow(leader.x - en.x, leader.y - en.y) : 0
@@ -215,6 +239,12 @@ export class HordeRenderer {
         // Nettoie les ids disparus pour éviter les fuites mémoire.
         this.prevEnemyHp.delete(id)
         this.enemyFlashUntil.delete(id)
+        // Aura argentée élite : détruite avec le sprite (jamais de fuite).
+        const deadAura = this.eliteAuras.get(id)
+        if (deadAura !== undefined) {
+          deadAura.destroy()
+          this.eliteAuras.delete(id)
+        }
       }
     }
 

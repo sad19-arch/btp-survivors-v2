@@ -88,17 +88,17 @@ export function difficultyScaleAt(elapsedMs: number): DifficultyScale {
   //  [17, 20+ min] : coup de fouet (climax avant boss final)
   let hp: number
   if (min <= 9) {
-    hp = 0.7 + 0.09 * min   // plus doux : 9:00→hp=1.51 (vs 1.78 avant)
+    hp = 0.7 + 0.07 * min   // T5b allégé (0.09→0.07) : 9:00→hp=1.33
   } else if (min <= 17) {
-    hp = 0.7 + 0.09 * 9 + 0.10 * (min - 9)  // montée soutenue sur la longue zone
+    hp = 0.7 + 0.07 * 9 + 0.09 * (min - 9)  // T5b allégé (0.10→0.09)
   } else {
-    hp = 0.7 + 0.09 * 9 + 0.10 * 8 + 0.55 * (min - 17)  // coup de fouet final prononcé
+    hp = 0.7 + 0.07 * 9 + 0.09 * 8 + 0.55 * (min - 17)  // coup de fouet final inchangé
   }
   return {
     hp,
     // Contact punitif mais moins rapide que l'arc 10:30 — le kite doit pouvoir
-    // tenir 20 min. Pente douce en early, plus punitive en late.
-    contactDamage: 0.5 + 0.11 * min,
+    // tenir 20 min. T5b : pente légèrement adoucie (0.11→0.09).
+    contactDamage: 0.5 + 0.09 * min,
     // Vitesse plafonnée à 1.30 — les ennemis poursuivent mais restent fuyables.
     speed: Math.min(1.30, 1.0 + 0.030 * min)
   }

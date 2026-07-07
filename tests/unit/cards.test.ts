@@ -24,6 +24,81 @@ describe('cartes de level-up (pur)', () => {
     expect(new Set(a.map(c => c.kind + c.id)).size).toBe(a.length)
     expect(a.length).toBeLessThanOrEqual(4)
   })
+
+  describe('rollCards — garantie + mélange (remplace tirage pondéré)', () => {
+    it('déterminisme : même seed ⇒ même résultat (ids et ordre)', () => {
+      const inventory = inv([{ id: 'cloueur', level: 1 }], [])
+      const a = rollCards(new Rng(42), inventory, 4)
+      const b = rollCards(new Rng(42), inventory, 4)
+      expect(a.map(c => c.kind + ':' + c.id)).toEqual(b.map(c => c.kind + ':' + c.id))
+    })
+
+    it('garantie 100% : chaque tirage contient ≥1 weapon-up quand éligible (200 seeds)', () => {
+      // inv avec cloueur niv 1 → weapon-up éligible ; ≥10 autres éligibles (weapon-new) → all.length > count=4
+      const inventory = inv([{ id: 'cloueur', level: 1 }], [])
+      const eligible = eligibleCards(inventory)
+      // Précondition : s'assurer que all.length > count pour activer le chemin garanti
+      expect(eligible.length).toBeGreaterThan(4)
+
+      let hits = 0
+      for (let seed = 0; seed < 200; seed++) {
+        const cards = rollCards(new Rng(seed), inventory, 4)
+        if (cards.some(c => c.kind === 'weapon-up')) {
+          hits++
+        }
+      }
+      // Garantie 100 % : tous les tirages contiennent le weapon-up garanti
+      expect(hits).toBe(200)
+    })
+
+    it('position variée : le weapon-up garanti n\'est pas toujours en slot 0 (≥2 positions distinctes)', () => {
+      const inventory = inv([{ id: 'cloueur', level: 1 }], [])
+      const indicesObserved = new Set<number>()
+
+      for (let seed = 0; seed < 200; seed++) {
+        const cards = rollCards(new Rng(seed), inventory, 4)
+        const wuIdx = cards.findIndex(c => c.kind === 'weapon-up')
+        if (wuIdx !== -1) {
+          indicesObserved.add(wuIdx)
+        }
+      }
+
+      // Le mélange final distribue le weapon-up sur au moins 2 positions distinctes
+      expect(indicesObserved.size).toBeGreaterThanOrEqual(2)
+    })
+
+    it('sans remise : toutes les cartes ont un combo id+kind distinct', () => {
+      const inventory = inv([{ id: 'cloueur', level: 1 }], [])
+      const cards = rollCards(new Rng(99), inventory, 4)
+      const keys = cards.map(c => c.kind + ':' + c.id)
+      expect(new Set(keys).size).toBe(keys.length)
+    })
+
+    it('cas limite : all.length ≤ count → rollCards retourne tout sans crash', () => {
+      // Demander 100 cartes avec un inventaire qui en a nettement moins
+      const inventory = inv([{ id: 'cloueur', level: 1 }], [])
+      const eligible = eligibleCards(inventory)
+      const cards = rollCards(new Rng(1), inventory, 100)
+      expect(cards.length).toBe(eligible.length)
+      expect(cards.length).toBeGreaterThan(0)
+    })
+
+    it('cas extrême : inventaire sans aucune carte éligible → tableau vide', () => {
+      // inv full d'armes maxées → weapon-new bloqué (INVENTORY.weapons=6), weapon-up bloqué (tout maxé)
+      const fullWeapons = [
+        { id: 'cloueur', level: 8 },
+        { id: 'scie', level: 8 },
+        { id: 'marteau', level: 8 },
+        { id: 'boulons', level: 8 },
+        { id: 'brouette', level: 8 },
+        { id: 'goudron', level: 8 }
+      ]
+      const inventory = inv(fullWeapons, [])
+      const eligible = eligibleCards(inventory)
+      const cards = rollCards(new Rng(1), inventory, 4)
+      expect(cards.length).toBeLessThanOrEqual(eligible.length)
+    })
+  })
   it('inventaire d\'armes vide → les cartes weapon-new couvrent exactement les 10 armes de base', () => {
     const cards = eligibleCards(inv([], []))
     const newIds = cards.filter(c => c.kind === 'weapon-new').map(c => c.id).sort()

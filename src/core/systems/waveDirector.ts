@@ -25,8 +25,8 @@ import type { Rng } from '../rng'
 import type { WavePlacement } from '../types'
 import type { SpawnRampStep } from '@content/spawnRamp'
 import { spawnParamsAt } from '@content/spawnRamp'
-import { placeEvent, type WaveEventDef } from '@content/waveEvents'
-import { CAMPER } from '@content/config'
+import { placeEvent, type WaveEventDef, type WaveEventKind } from '@content/waveEvents'
+import { CAMPER, TELEGRAPH_LEAD_MS } from '@content/config'
 
 // ---------------------------------------------------------------------------
 // Types publics
@@ -36,6 +36,28 @@ import { CAMPER } from '@content/config'
 export interface TrailPoint {
   x: number
   y: number
+}
+
+/**
+ * Formation annoncée en attente de spawn (télégraphe, Task 10).
+ * Produite quand une formation est décidée ; consommée quand `elapsedMs >= triggersAtMs`.
+ */
+export interface UpcomingFormation {
+  /** Type de formation (détermine le marqueur au sol côté rendu). */
+  kind: WaveEventKind
+  /** Angle de référence de la formation (px, déterminé au moment de l'annonce). */
+  angle: number
+  /** Rayon de référence de la formation (px, déterminé au moment de l'annonce). */
+  radius: number
+  /** Timestamp (ms) auquel la formation spawne réellement. */
+  triggersAtMs: number
+  /**
+   * Snapshot déterministe des paramètres de tirage (count + overrides)
+   * pour reproduire exactement les placements au moment du spawn.
+   */
+  count: number
+  behaviorOverride: WaveEventDef['behaviorOverride']
+  spreadOverride: WaveEventDef['spreadOverride']
 }
 
 /** État interne du directeur de vagues (mutable, passé par référence). */
@@ -48,6 +70,13 @@ export interface WaveDirectorState {
   camperCooldownMs: number
   /** Trail de positions du joueur (anti-camping, Task 9). */
   playerTrail: TrailPoint[]
+  /**
+   * Formation annoncée en attente de spawn (télégraphe, Task 10).
+   * `null` quand aucune formation n'est en attente.
+   * Au plus 1 simultanément (le directeur attend que la précédente spawne avant
+   * d'en annoncer une autre via le slot d'événement normal).
+   */
+  upcoming: UpcomingFormation | null
 }
 
 // ---------------------------------------------------------------------------
@@ -83,7 +112,8 @@ export function createWaveDirectorState(): WaveDirectorState {
     budgetAcc: 0,
     nextEventMs: GAP_INITIAL_MS,
     camperCooldownMs: 0,
-    playerTrail: []
+    playerTrail: [],
+    upcoming: null
   }
 }
 
@@ -133,15 +163,33 @@ export function stepWaveDirector(
     state.camperCooldownMs = Math.max(0, state.camperCooldownMs - dtMs)
   }
 
+  // 1b. Télégraphe (Task 10) : si une formation est annoncée et que son échéance
+  //     est atteinte, on la matérialise maintenant (spawne les placements).
+  //     On le fait AVANT l'anti-camping pour que la formation annoncée ait la
+  //     priorité sur un encerclement réactif ce même pas.
+  if (state.upcoming !== null && elapsedMs >= state.upcoming.triggersAtMs) {
+    const u = state.upcoming
+    state.upcoming = null
+    const placements = placeEvent(u.kind, u.count, u.radius, rng, u.behaviorOverride, u.spreadOverride)
+    return placements
+  }
+
   // Hook réactif (Task 9) : anti-camping. Retourne des placements si déclenché.
+  // Immédiat (pas de télégraphe) — le hook est une punition réactive, pas une
+  // formation prévisible.
   const reactive = reactiveHook(state, input)
   if (reactive.length > 0) {
     // Garde-fou : priorité à l'anti-camping — on saute le slot normal ce pas.
     return reactive
   }
 
-  // 2. Slot d'événement ?
-  if (elapsedMs >= state.nextEventMs && state.budgetAcc >= EVENT_BUDGET_THRESHOLD) {
+  // 2. Slot d'événement ? On ne déclenche PAS si une formation est déjà en attente
+  //    (au plus 1 upcoming à la fois — pas de file d'attente).
+  if (
+    state.upcoming === null &&
+    elapsedMs >= state.nextEventMs &&
+    state.budgetAcc >= EVENT_BUDGET_THRESHOLD
+  ) {
     return triggerEvent(state, elapsedMs, events, ringRadius, rng)
   }
 
@@ -178,7 +226,7 @@ function triggerEvent(
 ): WavePlacement[] {
   const elapsedSec = elapsedMs / 1000
 
-  // Filtre les events éligibles par le temps (ignore miniBoss ici — géré en T10).
+  // Filtre les events éligibles par le temps (ignore miniBoss ici — géré par la sim).
   const eligible = events.filter((e) => e.kind !== 'miniBoss' && e.allowedFromSec <= elapsedSec)
 
   // Recalcule le nextEventMs dans tous les cas (même si aucun event éligible).
@@ -186,7 +234,7 @@ function triggerEvent(
   state.nextEventMs = elapsedMs + gap
 
   if (eligible.length === 0) {
-    // Aucun event éligible : filet de secours si budget suffisant.
+    // Aucun event éligible : filet de secours IMMÉDIAT (pas de télégraphe).
     if (state.budgetAcc >= 1) {
       state.budgetAcc -= 1
       const angle = rng.float(0, 2 * Math.PI)
@@ -215,7 +263,7 @@ function triggerEvent(
     return []
   }
 
-  // Count borné par le budget disponible.
+  // Count borné par le budget disponible — tiré maintenant (déterministe).
   const rawCount = rng.int(chosen.countMin, chosen.countMax)
   const count = Math.min(rawCount, Math.floor(state.budgetAcc))
 
@@ -223,10 +271,33 @@ function triggerEvent(
     return []
   }
 
-  const placements = placeEvent(chosen.kind, count, ringRadius, rng, chosen.behaviorOverride)
+  // Angle de référence de la formation — tiré maintenant via _waveRng (déterministe).
+  // Ce tirage AVANCE le RNG de la même façon que le ferait `placeEvent` pour son
+  // premier rng.float : les formations qui tirent un `base` en premier appel (converge,
+  // pincer, encircle, burst, spiral, concentric) consomment exactement 1 float ici
+  // → même séquence RNG qu'avant l'introduction du télégraphe.
+  const angle = rng.float(0, 2 * Math.PI)
+
+  // Consomme le budget immédiatement (le budget reste conservé dans le temps).
   state.budgetAcc -= count
 
-  return placements
+  // ANNONCER la formation (télégraphe) : stockage dans `upcoming`.
+  // `placeEvent` sera appelé UNIQUEMENT quand `elapsedMs >= triggersAtMs`
+  // dans le prochain pas de `stepWaveDirector` qui satisfera la condition.
+  // On passe `angle` et `radius` pour que le rendu puisse dessiner le marqueur au sol
+  // dès maintenant, AVANT que les ennemis apparaissent.
+  state.upcoming = {
+    kind: chosen.kind,
+    angle,
+    radius: ringRadius,
+    triggersAtMs: elapsedMs + TELEGRAPH_LEAD_MS,
+    count,
+    behaviorOverride: chosen.behaviorOverride,
+    spreadOverride: chosen.spreadOverride
+  }
+
+  // Ce pas-ci : aucun placement (la formation est annoncée, pas encore spawnée).
+  return []
 }
 
 /**

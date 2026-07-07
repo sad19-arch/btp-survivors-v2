@@ -13,3 +13,4 @@
 *.woff binary
 *.woff2 binary
 *.ttf binary
+public/audio/music/*.mp3 filter=lfs diff=lfs merge=lfs -text

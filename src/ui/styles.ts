@@ -478,12 +478,25 @@ const CSS = `
   background: ${PALETTE.blanc};
   box-sizing: border-box;
 }
-#ui-root .minimap__dot--player {
-  width: 8px;
-  height: 8px;
-  margin-left: -4px;
-  margin-top: -4px;
-  border: 2px solid ${PALETTE.contour};
+/* Wrapper du chevron joueur : centrage géométrique (translate -50% -50% en JS). */
+#ui-root .minimap__player {
+  position: absolute;
+}
+/*
+ * Chevron joueur — triangle CSS via bordures.
+ * Principe : élément 0×0 avec des bordures épaisses ; border-bottom coloré = triangle
+ * pointant vers le HAUT (par défaut, avant rotation JS). border-left/right en
+ * transparent forment les côtés. border-top absent (triangle plein vers le haut).
+ * Contour sombre via box-shadow (DA 16-bit, pas de border supplémentaire pour ne
+ * pas casser la forme triangulaire).
+ */
+#ui-root .minimap__player__chevron {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid ${PALETTE.blanc}; /* couleur surchargée en JS via style.borderBottomColor */
+  filter: drop-shadow(1px 1px 0 ${PALETTE.contour});
 }
 #ui-root .minimap__dot--prisoner {
   background: ${PALETTE.vertBonus};

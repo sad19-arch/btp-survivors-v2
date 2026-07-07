@@ -23,7 +23,7 @@ import { spawnBoss, spawnGroup, spawnWave } from './systems/spawn'
 import { createWaveDirectorState, stepWaveDirector, type WaveDirectorState } from './systems/waveDirector'
 import { weaponSystem } from './systems/weapon'
 import { collisionSystem } from './systems/collision'
-import { reapDeadEnemies } from './systems/reap'
+import { reapDeadEnemies, type ReapResult } from './systems/reap'
 import { pickupSystem } from './systems/pickup'
 import { rescueSystem } from './systems/rescue'
 import { reviveSystem } from './systems/revive'
@@ -36,7 +36,7 @@ import { recomputePlayerStats } from './systems/playerStats'
 import { rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
 import { tickChestDirector, maybeDropEliteChest } from './systems/chestDirector'
-import { coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
+import { CHEST, coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
 import { SPAWN_RAMP, difficultyScaleAt } from '@content/spawnRamp'
 import { eventPoolForPhase } from '@content/waveEvents'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
@@ -49,6 +49,7 @@ import type {
   GameMode,
   GameState,
   HazardState,
+  PendingFormation,
   PendingLevelUp,
   PickupState,
   PickupKind,
@@ -126,6 +127,8 @@ export class Simulation {
   private elapsedMs = 0
   private remainderMs = 0
   private score = 0
+  /** Tally cumulatif de kills par joueur (attribution par dernier frappeur). */
+  private killsByPlayer = new Map<number, number>()
   /**
    * Nombre de paliers de mid-boss déjà spawné (rôle `mid`). Chaque valeur dans
    * `MID_BOSS_WAVES.atMs` est consommée exactement une fois (palier par index).
@@ -134,11 +137,18 @@ export class Simulation {
   private midBossWaveIndex = 0
   /** Vrai une fois le boss FINAL (rôle `final`) RÉELLEMENT apparu (garde-fou anti faux-positif de victoire). */
   private finalBossSpawned = false
-  private pendingLevelUp: PendingLevelUp | null = null
+  private choiceQueue: PendingLevelUp[] = []
   /** PV totaux des joueurs au pas précédent → détecte les dégâts (SFX, observation pure). */
   private prevHpTotal = 0
   /** Nombre de prisonniers libérés depuis le début de la run (progression des sauvetages). */
   private rescuedTotal = 0
+  /**
+   * Flag transitoire (one-shot) : id de l'arme évoluée, posé dans
+   * `handleChestPickups` ; remis à `null` par `getState()` après lecture
+   * (une seule frame). Exposé dans `GameState.justEvolved` pour que
+   * `overlay.sync` lance le jackpot sans event ad hoc.
+   */
+  private _justEvolved: string | null = null
   private readonly inputs = new Map<number, PlayerInput>()
   private readonly playerEntities = new Map<number, EntityId>()
   /** Index spatial des ennemis (positions courantes, post-mouvement), reconstruit chaque pas
@@ -187,11 +197,21 @@ export class Simulation {
    * Avance la simulation de `ms` millisecondes logiques, par pas fixes.
    * Le temps est gelé tant que la partie n'est pas en cours (pause, game over)
    * ou qu'un choix de carte est en attente → déterministe via le seam.
+   *
+   * Réinitialise `_justEvolved` en entrée (one-shot pour cet appel) : si une
+   * évolution survient dans l'un des pas, le flag est positionné et conservé
+   * jusqu'au prochain `advanceTime`. Cela garantit que `getState()` retourne
+   * `justEvolved !== null` jusqu'à la prochaine avance, quelle que soit la durée
+   * des pas ou leur nombre dans cet appel.
    */
   advanceTime(ms: number): void {
     if (this.isFrozen()) {
       return
     }
+    // Réinitialise le flag transitoire : valide SEULEMENT pour cet appel.
+    // Si une évolution survient dans n'importe quel pas, le flag est posé et
+    // NE SERA PAS remis à null avant le prochain `advanceTime`.
+    this._justEvolved = null
     this.remainderMs += ms
     while (this.remainderMs >= STEP_MS) {
       this.remainderMs -= STEP_MS
@@ -207,7 +227,7 @@ export class Simulation {
 
   /** Vrai si le temps de jeu ne doit pas s'écouler. */
   private isFrozen(): boolean {
-    return this.scene !== 'game' || this.pendingLevelUp !== null
+    return this.scene !== 'game' || this.choiceQueue.length > 0
   }
 
   /** Met la partie en pause (depuis l'état en jeu). */
@@ -234,8 +254,8 @@ export class Simulation {
    * vérifie si un palier supplémentaire a été atteint (XP banque).
    */
   chooseUpgrade(index: number): void {
-    const pending = this.pendingLevelUp
-    if (pending === null) {
+    const pending = this.choiceQueue[0]
+    if (pending === undefined) {
       return
     }
     const choice = pending.choices[index]
@@ -245,7 +265,7 @@ export class Simulation {
         this.applyCard(e, choice)
       }
     }
-    this.pendingLevelUp = null
+    this.choiceQueue.shift()
     this.checkLevelUp()
   }
 
@@ -304,8 +324,23 @@ export class Simulation {
       prisoners: this.collectPrisoners(),
       rescue: { total: RESCUE.count, rescued: this.rescuedTotal },
       hazards: this.collectHazards(),
-      pendingLevelUp: this.pendingLevelUp
+      pendingLevelUp: this.choiceQueue[0] ?? null,
+      pendingFormations: this.collectPendingFormations(),
+      // Flag transitoire : non null pendant tout le pas où une évolution vient d'être
+      // déclenchée ; remis à null par `step()` au pas SUIVANT. Toutes les lectures de
+      // `getState()` dans la même fenêtre de pas voient la même valeur (pas de reset ici).
+      justEvolved: this._justEvolved
     }
+  }
+
+  /** Expose les formations annoncées non encore spawnées (télégraphe, Task 10). */
+  private collectPendingFormations(): readonly PendingFormation[] {
+    const u = this.waveDir.upcoming
+    if (u === null) {
+      return []
+    }
+    const triggersInMs = Math.max(0, u.triggersAtMs - this.elapsedMs)
+    return [{ kind: u.kind, angle: u.angle, radius: u.radius, triggersInMs }]
   }
 
   /**
@@ -444,9 +479,10 @@ export class Simulation {
     this.remainderMs = 0
     this.chestAccMs = 0
     this.score = 0
+    this.killsByPlayer = new Map<number, number>()
     this.midBossWaveIndex = 0
     this.finalBossSpawned = false
-    this.pendingLevelUp = null
+    this.choiceQueue = []
     this.inputs.clear()
     this.playerEntities.clear()
     this.rescuedTotal = 0
@@ -518,6 +554,9 @@ export class Simulation {
     if (this.scene !== 'game') {
       return
     }
+    // Note : `_justEvolved` n'est PAS remis à null ici. Il est réinitialisé en
+    // début d'`advanceTime` (avant les pas) pour durer exactement un appel
+    // `advanceTime` complet, même si plusieurs pas sont exécutés en séquence.
     const pulses: AuraPulse[] = []
     const freed: Vec2[] = []
     const fired: string[] = []
@@ -543,12 +582,16 @@ export class Simulation {
     this.rebuildEnemyGrid()
     collisionSystem(this.world, dtMs, this.enemyGrid)
     const deadElitePositions = this.collectDeadElitePositions()
-    const killed = reapDeadEnemies(this.world, this.lootRng)
+    const reap: ReapResult = reapDeadEnemies(this.world, this.lootRng)
     // Drop coffre sur mort d'élite (RNG dédié, ne perturbe pas lootRng/rng).
     for (const pos of deadElitePositions) {
       maybeDropEliteChest(this.world, this.chestRng, pos)
     }
-    this.score += killed
+    this.score += reap.total
+    // Cumul des kills par joueur (attribution par dernier frappeur).
+    for (const [pid, n] of reap.killsByPlayer) {
+      this.killsByPlayer.set(pid, (this.killsByPlayer.get(pid) ?? 0) + n)
+    }
     pickupSystem(this.world, dtMs, collected, chestCollectors)
     this.handleChestPickups(chestCollectors)
     rescueSystem(this.world, freed)
@@ -569,8 +612,8 @@ export class Simulation {
       this.events.dispatchEvent(new PlayerHurtEvent())
     }
     this.prevHpTotal = hpNow
-    if (killed > 0) {
-      this.events.dispatchEvent(new EnemyKilledEvent(killed))
+    if (reap.total > 0) {
+      this.events.dispatchEvent(new EnemyKilledEvent(reap.total))
     }
     for (const k of fired) {
       this.events.dispatchEvent(new WeaponFiredEvent(k))
@@ -587,40 +630,64 @@ export class Simulation {
   }
 
   /**
-   * Traite les coffres d'évolution ramassés ce pas, crédités au ramasseur réel
-   * (identifié par `pickupSystem` via le composant `player` de l'entité qui a
-   * touché le coffre — plus de joueur 1 codé en dur) : évolution si éligible
-   * (`tryEvolve` + `EvolvedEvent`), sinon bonus de soin de repli (30 PV bornés
-   * à `maxHp`). En solo, un seul ramasseur possible (joueur 1) → comportement
-   * inchangé.
+   * Traite les coffres d'évolution ramassés ce pas — garantit TOUJOURS un effet :
+   *
+   * 1. Évolution : `tryEvolve` ≠ null → `EvolvedEvent` + pose `_justEvolved`
+   *    (jackpot + voix, 1 frame).
+   * 2. Choix de cartes : construit l'inventaire → `rollCards` → si cartes dispo
+   *    → push dans `choiceQueue` (gel + écran Upgrade existants).
+   * 3. Secours (tout maxé) : soin `CHEST.fallbackHealPct * maxHp`, borné à maxHp.
+   *
+   * Boucle intentionnelle : chaque coffre réévalue l'inventaire APRÈS la mutation
+   * du coffre précédent (une évolution consommée ce tour ne doit pas retenter
+   * d'évoluer la même arme deux fois dans la même frame). En solo, un seul
+   * ramasseur possible (joueur 1) → comportement inchangé.
    */
   private handleChestPickups(collectors: number[]): void {
-    // Boucle intentionnelle : chaque coffre réévalue l'inventaire APRÈS la
-    // mutation du coffre précédent (une évolution consommée ce tour ne doit
-    // pas retenter d'évoluer la même arme deux fois dans la même frame).
     for (const playerId of collectors) {
-      const player = this.playerEntities.get(playerId)
-      if (player === undefined) {
+      const playerEntity = this.playerEntities.get(playerId)
+      if (playerEntity === undefined) {
         continue
       }
-      const evolvedId = tryEvolve(this.world, player)
+
+      // Branche 1 : évolution disponible.
+      const evolvedId = tryEvolve(this.world, playerEntity)
       if (evolvedId !== null) {
         this.events.dispatchEvent(new EvolvedEvent(evolvedId, playerId))
-      } else {
-        const health = this.world.get(player, 'health')
-        if (health !== undefined) {
-          health.hp = Math.min(health.maxHp, health.hp + 30)
-        }
+        this._justEvolved = evolvedId
+        continue
+      }
+
+      // Branche 2 : pas d'évolution — proposer des cartes si l'inventaire n'est pas maxé.
+      const loadout = this.world.get(playerEntity, 'weapons')
+      const passives = this.world.get(playerEntity, 'passives')
+      const inv: Inventory = {
+        weapons: loadout?.slots.map((s) => ({ id: s.id, level: s.level })) ?? [],
+        passives: passives?.list.map((p) => ({ id: p.id, level: p.level })) ?? []
+      }
+      // rollCards vérifie lui-même l'éligibilité (via eligibleCards) puis échantillonne :
+      // s'il renvoie ≥ 1 carte, l'inventaire n'est pas maxé → on propose un choix.
+      // (Pas de double-vérification eligibleCards : évite une fenêtre logique non testée.)
+      const choices = rollCards(this.rng, inv, PROGRESSION.choices)
+      if (choices.length > 0) {
+        this.choiceQueue.push({ playerId, choices })
+        continue
+      }
+
+      // Branche 3 : secours déterministe (tout maxé, rien à tirer).
+      const health = this.world.get(playerEntity, 'health')
+      if (health !== undefined) {
+        health.hp = Math.min(health.maxHp, health.hp + health.maxHp * CHEST.fallbackHealPct)
       }
     }
   }
 
   /**
-   * Vérifie si un joueur a atteint un palier d'XP. Le cas échéant, prépare la
-   * carte d'upgrade en attente (1 joueur à la fois → gel jusqu'au choix).
+   * Vérifie si un joueur a atteint un palier d'XP. Le cas échéant, pousse un
+   * élément dans la file de choix (1 palier à la fois → gel jusqu'au choix).
    */
   private checkLevelUp(): void {
-    if (this.pendingLevelUp !== null) {
+    if (this.choiceQueue.length > 0) {
       return
     }
     for (const [playerId, e] of this.playerEntities) {
@@ -642,7 +709,7 @@ export class Simulation {
         // (`consumeLevelUp` ci-dessus), mais on ne gèle PAS le temps sur un écran
         // à 0 carte — ce serait un soft-lock (aucun moyen de le lever). On continue.
         if (choices.length > 0) {
-          this.pendingLevelUp = { playerId, choices }
+          this.choiceQueue.push({ playerId, choices })
           return
         }
         continue
@@ -790,7 +857,8 @@ export class Simulation {
         characterId: player.characterId ?? DEFAULT_CHARACTER_ID,
         weapons: loadout === undefined ? [] : loadout.slots.map((s) => s.id),
         weaponLevels: loadout === undefined ? [] : loadout.slots.map((s) => s.level),
-        passives: passives === undefined ? [] : passives.list.map((p) => ({ id: p.id, level: p.level }))
+        passives: passives === undefined ? [] : passives.list.map((p) => ({ id: p.id, level: p.level })),
+        kills: this.killsByPlayer.get(id) ?? 0
       })
     }
     players.sort((a, b) => a.id - b.id)

@@ -90,7 +90,18 @@ export const CHEST = {
   /** Nombre maximum de coffres actifs simultanément (inclut le coffre mini-boss). */
   maxActive: 5,
   /** Rayon d'apparition (px) autour du joueur vivant le plus proche. */
-  spawnRadius: 260
+  spawnRadius: 260,
+  /**
+   * Soin de repli si aucune évolution ET aucune carte éligible (tout maxé).
+   * Fraction de maxHp rendue. Ex : 0.30 → +30 % des PV max, borné à maxHp.
+   */
+  fallbackHealPct: 0.30,
+  /**
+   * Gemmes d'XP à faire apparaître si les PV sont déjà au max (repli ultime).
+   * Actuellement non utilisé (soin brut toujours appliqué, même sur PV pleins).
+   * Conservé pour extension future sans churn.
+   */
+  fallbackGems: 0
 } as const
 
 /** Nombre de joueurs selon le mode. */
@@ -218,8 +229,8 @@ export const RESCUE = {
   /** Nombre de prisonniers éparpillés par run. */
   count: 5,
   /** Distance min/max au centre du monde (éparpillement lointain, exploration). */
-  distMin: 1600,
-  distMax: 3800,
+  distMin: 1200,
+  distMax: 2800,
   /** Vitesse de fuite (px/s) de l'ouvrier libéré (part vers le bas hors écran). */
   fleeSpeed: 260
 } as const
@@ -255,6 +266,35 @@ export const INTRO = {
 export const CONE_HALF_ANGLE = 0.5 as const
 
 /**
+ * Paramètres de compacité des formations de horde (Task 8).
+ *
+ * `encircleRadiusFactor` : facteur appliqué au `ringRadius` pour l'encirclement
+ *   (< 1 ⇒ anneau plus proche du joueur, plus menaçant).
+ *
+ * `sweepSpreadTight` : demi-angle perpendiculaire (rad) utilisé par les entrées
+ *   de pool CONDENSÉES — elles forment un mur serré, visuellement impactant.
+ *
+ * `sweepSpreadLoose` : demi-angle perpendiculaire (rad) des entrées AÉRÉES —
+ *   plus d'espace entre les ennemis, rythme relâché (contraste).
+ *
+ * L'alternance tight / loose dans le pool crée un contraste de densité perçu.
+ */
+export const FORMATION = {
+  /** Facteur de rayon pour encircle (0.7 = resserré vs ringRadius). */
+  encircleRadiusFactor: 0.7,
+  /**
+   * Demi-angle perpendiculaire du mur CONDENSÉ (spread total = 2×).
+   * Était 0.4 (T7). Réduit à 0.25 pour un mur nettement plus serré.
+   */
+  sweepSpreadTight: 0.25,
+  /**
+   * Demi-angle perpendiculaire du mur AÉRÉ (spread total = 2×).
+   * Plus large que tight pour créer un contraste de rythme.
+   */
+  sweepSpreadLoose: 0.55
+} as const
+
+/**
  * Paramètres de détection du « camping » (joueur qui ne bouge pas assez).
  *
  * Si la LONGUEUR DE CHEMIN CUMULÉE du joueur (somme des déplacements pas-à-pas)
@@ -274,3 +314,15 @@ export const CAMPER = {
   /** Cooldown entre deux événements anti-camping (ms). */
   cooldownMs: 12000
 } as const
+
+/**
+ * Délai d'annonce du télégraphe de formation (ms).
+ *
+ * Quand le directeur décide une formation (encircle, sweep, spiral, etc.), il
+ * l'ANNONCE `TELEGRAPH_LEAD_MS` ms à l'avance (stockage dans `upcoming`) au lieu
+ * de spawner immédiatement. Le spawn survient quand `elapsedMs >= triggersAtMs`.
+ *
+ * Ce délai ne change NI qui NI combien d'ennemis spawne — il décale seulement
+ * l'instant. Impact sim neutre ; re-baseliné si les cibles bougent légèrement.
+ */
+export const TELEGRAPH_LEAD_MS = 800 as const

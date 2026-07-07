@@ -391,23 +391,26 @@ export class PlayerRenderer {
       let worker = this.prisonerWorkers.get(pr.id)
       if (worker === undefined) {
         worker = this.scene.textures.exists('prisoner')
-          ? this.scene.add.sprite(pr.x, pr.y, 'prisoner').setScale(0.5)
-          : this.scene.add.circle(pr.x, pr.y, 12, 0xcfa15a)
+          ? this.scene.add.sprite(pr.x, pr.y, 'prisoner').setScale(0.62)
+          : this.scene.add.circle(pr.x, pr.y, 16, 0xcfa15a)
         worker.setDepth(2)
         this.prisonerWorkers.set(pr.id, worker)
       }
 
       // Cage assez grande pour enfermer l'ouvrier (~96 px), barreaux devant.
+      // Alpha 0.6 : les barreaux restent lisibles mais l'ouvrier transparaît à travers.
       let cage = this.prisonerCages.get(pr.id)
       if (cage === undefined) {
         cage = this.scene.textures.exists('cage')
-          ? this.scene.add.image(pr.x, pr.y, 'cage').setScale(1.2)
+          ? this.scene.add.image(pr.x, pr.y, 'cage').setScale(1.2).setAlpha(0.6)
           : this.scene.add.circle(pr.x, pr.y, 30, 0x8a8a8a, 0).setStrokeStyle(3, 0x8a8a8a)
         cage.setDepth(3)
         this.prisonerCages.set(pr.id, cage)
       }
       cage.setVisible(!pr.freed)
+      // Repositionner worker ET cage à chaque frame (le prisonnier peut bouger/fuir).
       worker.setPosition(pr.x, pr.y)
+      cage.setPosition(pr.x, pr.y)
       if (worker instanceof Phaser.GameObjects.Sprite) {
         // Libéré → animation de marche (il s'enfuit vers le bas) ; sinon immobile en cage.
         worker.setFrame(pr.freed ? walkFrame(0, this.scene.time.now) : idleFrame(0))

@@ -7,6 +7,7 @@
 
 import type { PlayerStats } from '@content/passives'
 import type { Card } from '@core/systems/cards'
+import type { WaveEventKind } from '@content/waveEvents'
 
 export type EntityId = number
 
@@ -92,6 +93,15 @@ export interface EnemyComp {
   bMode?: number
   /** Timer interne du comportement (utilisé par charger…). */
   bTimer?: number
+  /**
+   * PlayerId du dernier joueur ayant infligé des dégâts à cet ennemi.
+   * Posé à chaque site de dégât (projectile, aura, orbital, sweep, strike, cone, hazard).
+   * Utilisé par `reapDeadEnemies` pour attribuer le kill au bon joueur.
+   * Absent si l'ennemi n'a encore reçu aucun dégât de joueur (ex. contact ennemi→joueur
+   * uniquement). Un ennemi mort sans `lastHitBy` est compté dans le score global mais
+   * n'est pas attribué à un joueur individuel.
+   */
+  lastHitBy?: number
 }
 
 /** Types de pickups ramassables. */
@@ -278,6 +288,8 @@ export interface PlayerState {
   weapons: string[]
   weaponLevels: number[]
   passives: { id: string; level: number }[]
+  /** Nombre d'ennemis tués par ce joueur (attribution par dernier frappeur). */
+  kills: number
 }
 
 export interface EnemyState {
@@ -331,6 +343,24 @@ export interface PendingLevelUp {
   choices: Card[]
 }
 
+/**
+ * Formation annoncée non encore spawnée (télégraphe, Task 10).
+ * Exposée dans `GameState.pendingFormations` pour le rendu (marqueur au sol + flèche).
+ */
+export interface PendingFormation {
+  /** Type de formation (détermine la forme du marqueur : anneau, ligne, spirale…). */
+  kind: WaveEventKind
+  /**
+   * Angle de référence de la formation, en radians (tiré par `_waveRng`
+   * au moment de l'annonce — déterministe).
+   */
+  angle: number
+  /** Rayon de l'anneau de spawn (px), identique à `SPAWN.ringRadius`. */
+  radius: number
+  /** Temps restant avant le spawn (ms). `max(0, triggersAtMs - elapsedMs)`. */
+  triggersInMs: number
+}
+
 export interface GameState {
   scene: SceneName
   seed: number
@@ -352,4 +382,19 @@ export interface GameState {
   /** Flaques de goudron actives (pour le rendu — Task 7/8). */
   hazards: HazardState[]
   pendingLevelUp: PendingLevelUp | null
+  /**
+   * Formations annoncées non encore spawnées (télégraphe, Task 10).
+   * 0 ou 1 élément (le directeur n'annonce qu'une formation à la fois).
+   * `triggersInMs = max(0, triggersAtMs - elapsedMs)`.
+   * Consommé par `telegraphRenderer` pour dessiner marqueur au sol + flèche de bord.
+   */
+  pendingFormations: readonly PendingFormation[]
+  /**
+   * Transitoire (one-shot) : id de l'arme évoluée pendant exactement une frame
+   * (le pas où une évolution vient d'être déclenchée) ; `null` sinon.
+   * Remis à `null` au pas suivant / après lecture dans `getState`.
+   * Consommé par `overlay.sync` côté rendu pour lancer le jackpot — ne jamais
+   * lire deux fois sans avancer le temps.
+   */
+  justEvolved: string | null
 }

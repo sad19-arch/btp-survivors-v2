@@ -46,7 +46,7 @@ export function hazardSystem(world: World, dtMs: number, grid?: SpatialGrid): vo
     // Pour couvrir plusieurs ticks dans un grand dtMs, on boucle.
     while (haz.tickLeftMs < 0) {
       haz.tickLeftMs += haz.tickMs
-      damageEnemiesInRadius(world, pos, haz.radius, haz.damagePerTick, grid)
+      damageEnemiesInRadius(world, pos, haz.radius, haz.damagePerTick, grid, haz.ownerId)
     }
   }
 

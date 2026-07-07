@@ -1,9 +1,8 @@
 /**
- * Cartes de level-up (tirage pur).
+ * Cartes de level-up (tirage garanti + mélange).
  *
  * Système de sélection d'upgrades : pour chaque niveau gagné, le joueur choisit
- * parmi `PROGRESSION.choices` cartes (défaut : 4) tirées sans remise (Fisher-Yates
- * seedé) parmi les éligibles.
+ * parmi `PROGRESSION.choices` cartes tirées sans remise parmi les éligibles.
  *
  * Éligibilité :
  * - `weapon-up` : chaque arme possédée avec level < maxLevel
@@ -11,7 +10,12 @@
  * - `passive-up` : chaque passif possédé avec level < maxLevel
  * - `passive-new` : si inv.passives.length < INVENTORY.passives, une par passif non possédé
  *
- * Déterminisme : même seed + mêmes inputs ⇒ mêmes cartes.
+ * Algorithme rollCards :
+ * - Si all.length ≤ count → renvoyer tout mélangé (Fisher-Yates seedé).
+ * - Sinon : GARANTIE qu'au moins un `weapon-up` figure dans le résultat (si éligible),
+ *   à une position ALÉATOIRE (mélange final Fisher-Yates). Le reste tiré uniformément.
+ *
+ * Déterminisme : même seed + mêmes inputs ⇒ mêmes cartes ET même ordre.
  */
 
 import { WEAPONS } from '@content/weapons'
@@ -135,23 +139,76 @@ export function eligibleCards(inv: Inventory): Card[] {
 }
 
 /**
- * Tire jusqu'à `count` cartes distinctes sans remise depuis les cartes éligibles,
- * via un mélange Fisher-Yates seedé.
+ * Mélange en place un tableau par Fisher-Yates avec le Rng fourni (déterministe).
+ * Conforme à `noUncheckedIndexedAccess` : chaque accès est gardé.
+ */
+function fisherYates<T>(arr: T[], rng: Rng): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = rng.int(0, i)
+    const a = arr[i]
+    const b = arr[j]
+    if (a !== undefined && b !== undefined) {
+      arr[i] = b
+      arr[j] = a
+    }
+  }
+}
+
+/**
+ * Tire jusqu'à `count` cartes distinctes sans remise depuis les cartes éligibles.
  *
- * Déterministe : même seed + même inventaire ⇒ même ordre.
+ * Algorithme GARANTIE + MÉLANGE (remplace l'ancien tirage pondéré) :
+ *
+ * 1. `all = eligibleCards(inv)`
+ * 2. Si `all.length ≤ count` → renvoyer `all` mélangé (Fisher-Yates seedé).
+ * 3. Sinon :
+ *    a. GARANTIE : si des `weapon-up` sont éligibles, en choisir un aléatoirement
+ *       (via `rng.int`) et le placer dans `result` ; le retirer du pool.
+ *    b. REMPLISSAGE : tant que `result.length < count && pool.length > 0`,
+ *       tirer un index aléatoire uniforme dans le pool (splice → sans remise).
+ *    c. MÉLANGE FINAL : Fisher-Yates seedé sur `result` → le weapon-up garanti
+ *       n'est PAS toujours en slot 0.
+ *
+ * Déterministe : même seed + même inventaire ⇒ mêmes cartes ET même ordre.
  */
 export function rollCards(rng: Rng, inv: Inventory, count: number): Card[] {
   const all = eligibleCards(inv)
 
-  // Mélange Fisher-Yates in-place (destructif, donc copie d'abord)
-  const shuffled = [...all]
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = rng.int(0, i)
-    const tmp = shuffled[i] as Card
-    shuffled[i] = shuffled[j] as Card
-    shuffled[j] = tmp
+  // Cas court : moins d'éligibles que demandés → tout renvoyer mélangé
+  if (all.length <= count) {
+    fisherYates(all, rng)
+    return all
   }
 
-  // Prendre jusqu'à `count`
-  return shuffled.slice(0, count)
+  const result: Card[] = []
+  const pool: Card[] = [...all]
+
+  // ── Garantie weapon-up ───────────────────────────────────────────────────
+  const weaponUps = all.filter(c => c.kind === 'weapon-up')
+  if (weaponUps.length > 0) {
+    const pickedWu = weaponUps[rng.int(0, weaponUps.length - 1)]
+    if (pickedWu !== undefined) {
+      result.push(pickedWu)
+      // Retirer du pool (par référence d'objet)
+      const poolIdx = pool.indexOf(pickedWu)
+      if (poolIdx !== -1) {
+        pool.splice(poolIdx, 1)
+      }
+    }
+  }
+
+  // ── Remplissage uniforme sans remise ─────────────────────────────────────
+  while (result.length < count && pool.length > 0) {
+    const idx = rng.int(0, pool.length - 1)
+    const card = pool[idx]
+    if (card !== undefined) {
+      result.push(card)
+      pool.splice(idx, 1)
+    }
+  }
+
+  // ── Mélange final (weapon-up garanti à position aléatoire) ────────────────
+  fisherYates(result, rng)
+
+  return result
 }

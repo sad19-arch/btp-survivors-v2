@@ -59,22 +59,22 @@ export function weaponSystem(
           tickProjectile(world, slot, def, eff, pos, player, dtMs)
           break
         case 'aura':
-          tickAura(slot, eff, pos, dtMs, world, def.kind, pulses, grid)
+          tickAura(slot, eff, pos, dtMs, world, def.kind, pulses, grid, player.playerId)
           break
         case 'orbital':
           tickOrbital(world, slot, def, eff, e, pos, player, dtMs, grid)
           break
         case 'sweep':
-          tickSweep(slot, eff, pos, dtMs, world, def.kind, pulses, grid)
+          tickSweep(slot, eff, pos, dtMs, world, def.kind, pulses, grid, player.playerId)
           break
         case 'strike':
-          tickStrike(slot, eff, dtMs, world, def.kind, rng, pulses, grid)
+          tickStrike(slot, eff, dtMs, world, def.kind, rng, pulses, grid, player.playerId)
           break
         case 'hazard':
           tickHazard(world, slot, def, eff, pos, player.playerId, dtMs, world.get(e, 'velocity'))
           break
         case 'cone':
-          tickCone(slot, eff, pos, dtMs, world, def.kind, pulses, grid)
+          tickCone(slot, eff, pos, dtMs, world, def.kind, pulses, grid, player.playerId)
           break
       }
       // Une arme qui vient de TIRER ce pas a rechargé son cooldown (valeur > celle
@@ -188,7 +188,8 @@ function tickAura(
   world: World,
   kind: string,
   pulses?: AuraPulse[],
-  grid?: SpatialGrid
+  grid?: SpatialGrid,
+  ownerId?: number
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -196,7 +197,7 @@ function tickAura(
   }
   slot.cooldownLeftMs = eff.cooldownMs
   const reach = eff.area + HITBOX.enemy
-  damageEnemiesInRadius(world, pos, reach, eff.damage, grid)
+  damageEnemiesInRadius(world, pos, reach, eff.damage, grid, ownerId)
   pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind })
 }
 
@@ -215,7 +216,8 @@ function tickSweep(
   world: World,
   kind: string,
   pulses?: AuraPulse[],
-  grid?: SpatialGrid
+  grid?: SpatialGrid,
+  ownerId?: number
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -225,7 +227,7 @@ function tickSweep(
   const reach = eff.area + HITBOX.enemy
   const passes = Math.max(1, Math.round(eff.count))
   for (let i = 0; i < passes; i++) {
-    damageEnemiesInRadius(world, pos, reach, eff.damage, grid)
+    damageEnemiesInRadius(world, pos, reach, eff.damage, grid, ownerId)
   }
   pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind })
 }
@@ -273,7 +275,8 @@ function tickStrike(
   kind: string,
   rng?: Rng,
   pulses?: AuraPulse[],
-  grid?: SpatialGrid
+  grid?: SpatialGrid,
+  ownerId?: number
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -287,7 +290,7 @@ function tickStrike(
     if (tpos === undefined) {
       continue
     }
-    damageEnemiesInRadius(world, tpos, eff.area, eff.damage, grid)
+    damageEnemiesInRadius(world, tpos, eff.area, eff.damage, grid, ownerId)
     // Retour visuel : une onde à chaque ennemi frappé (VFX propre = passe DA).
     pulses?.push({ x: tpos.x, y: tpos.y, radius: eff.area, kind })
   }
@@ -335,7 +338,7 @@ function tickOrbital(
   }
   slot.cooldownLeftMs = eff.cooldownMs
   for (const b of blades) {
-    damageEnemiesInRadius(world, b, hitRadius + HITBOX.enemy, eff.damage, grid)
+    damageEnemiesInRadius(world, b, hitRadius + HITBOX.enemy, eff.damage, grid, player.playerId)
   }
 }
 
@@ -481,7 +484,8 @@ function tickCone(
   world: World,
   kind: string,
   pulses?: AuraPulse[],
-  grid?: SpatialGrid
+  grid?: SpatialGrid,
+  ownerId?: number
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -513,11 +517,11 @@ function tickCone(
     coneScratch.length = 0
     grid.queryCircle(pos.x, pos.y, reach, coneScratch)
     for (const en of coneScratch) {
-      applyConeDamage(world, en, pos, reach, dirX, dirY, eff.damage, slowMult, slowMs)
+      applyConeDamage(world, en, pos, reach, dirX, dirY, eff.damage, slowMult, slowMs, ownerId)
     }
   } else {
     for (const en of world.query('enemy', 'position', 'health')) {
-      applyConeDamage(world, en, pos, reach, dirX, dirY, eff.damage, slowMult, slowMs)
+      applyConeDamage(world, en, pos, reach, dirX, dirY, eff.damage, slowMult, slowMs, ownerId)
     }
   }
 
@@ -543,7 +547,8 @@ function applyConeDamage(
   dirY: number,
   damage: number,
   slowMult: number,
-  slowMs: number
+  slowMs: number,
+  ownerId?: number
 ): void {
   const epos = world.get(en, 'position')
   const eh = world.get(en, 'health')
@@ -571,6 +576,14 @@ function applyConeDamage(
 
   // Dégâts.
   eh.hp -= damage
+
+  // Attribution du dernier frappeur pour le tally de kills par joueur.
+  if (ownerId !== undefined) {
+    const eenemy = world.get(en, 'enemy')
+    if (eenemy !== undefined) {
+      eenemy.lastHitBy = ownerId
+    }
+  }
 
   // Pose ou rafraîchit le slow (garde le plus fort + le plus long).
   if (slowMs > 0) {
@@ -604,8 +617,11 @@ const radiusQueryScratch: number[] = []
  * candidats n'affecte pas l'ensemble endommagé (contrairement à `collisionSystem`, qui doit
  * retrier par id). Sans `grid` (tests existants, appels sans grille) : repli linéaire
  * inchangé — comportement identique bit à bit.
+ *
+ * `ownerId` : si fourni, pose `lastHitBy` sur chaque ennemi touché (attribution des kills
+ * par joueur). Absent = pas d'attribution (ex. appels de test sans propriétaire).
  */
-export function damageEnemiesInRadius(world: World, center: Vec2, reach: number, damage: number, grid?: SpatialGrid): void {
+export function damageEnemiesInRadius(world: World, center: Vec2, reach: number, damage: number, grid?: SpatialGrid, ownerId?: number): void {
   const r2 = reach * reach
   if (grid !== undefined) {
     grid.queryCircle(center.x, center.y, reach, radiusQueryScratch)
@@ -617,6 +633,12 @@ export function damageEnemiesInRadius(world: World, center: Vec2, reach: number,
       }
       if ((epos.x - center.x) ** 2 + (epos.y - center.y) ** 2 <= r2) {
         eh.hp -= damage
+        if (ownerId !== undefined) {
+          const eenemy = world.get(en, 'enemy')
+          if (eenemy !== undefined) {
+            eenemy.lastHitBy = ownerId
+          }
+        }
       }
     }
     return
@@ -629,6 +651,12 @@ export function damageEnemiesInRadius(world: World, center: Vec2, reach: number,
     }
     if ((epos.x - center.x) ** 2 + (epos.y - center.y) ** 2 <= r2) {
       eh.hp -= damage
+      if (ownerId !== undefined) {
+        const eenemy = world.get(en, 'enemy')
+        if (eenemy !== undefined) {
+          eenemy.lastHitBy = ownerId
+        }
+      }
     }
   }
 }

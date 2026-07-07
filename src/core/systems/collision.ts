@@ -55,6 +55,11 @@ export function collisionSystem(world: World, dtMs: number, grid: SpatialGrid): 
           proj.hitIds.push(en)
         }
         eh.hp -= proj.damage
+        // Attribution du dernier frappeur pour le tally de kills par joueur.
+        const eenemy = world.get(en, 'enemy')
+        if (eenemy !== undefined) {
+          eenemy.lastHitBy = proj.ownerId
+        }
         // Un seul ennemi touché par ce projectile CE pas (break) : l'ennemi visé ici
         // ne peut pas être re-touché par le même projectile dans cette même itération.
         if ((proj.bounces ?? 0) > 0) {

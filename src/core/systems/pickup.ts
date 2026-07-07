@@ -58,7 +58,9 @@ export function pickupSystem(
       continue
     }
 
-    if (dist <= target.pickupRadius && dist > 0) {
+    // Les coffres d'évolution ne sont PAS aimantés : le joueur doit aller les chercher.
+    const isMagnetable = pickup.type !== 'coffre' && pickup.type !== 'chest'
+    if (isMagnetable && dist <= target.pickupRadius && dist > 0) {
       const step = Math.min(PICKUP.magnetSpeed * dt, dist)
       gpos.x += (dx / dist) * step
       gpos.y += (dy / dist) * step

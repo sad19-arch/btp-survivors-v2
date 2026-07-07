@@ -180,4 +180,42 @@ describe('pickupSystem', () => {
     expect(world.get(p1, 'progress')?.xp).toBe(5)
     expect(world.get(p2, 'progress')?.xp).toBe(9)
   })
+  describe('aimantation selective : coffres exclus', () => {
+    /**
+     * Distance d dans la zone d'aimantation uniquement :
+     *   collectDist < d <= pickupRadius
+     * On place le pickup a d = pickupRadius - 10 (dans le rayon, hors contact).
+     */
+    const MAGNET_RADIUS = 200 // valeur > COLLECT_X pour etre dans la zone d'aimantation
+    const D_IN_MAGNET = MAGNET_RADIUS - 10 // dans le rayon, hors contact
+
+    it("un coffre 'coffre' dans la zone d'aimantation ne bouge PAS", () => {
+      const world = new World()
+      makePlayer(world, 0, 0, MAGNET_RADIUS)
+      const chest = world.spawn()
+      world.add(chest, 'position', { x: D_IN_MAGNET, y: 0 })
+      world.add(chest, 'pickup', { type: 'coffre', value: 0 })
+      pickupSystem(world, 16)
+      const pos = world.get(chest, 'position')
+      if (pos === undefined) {
+        throw new Error('Le coffre doit encore exister (pas au contact, donc non collecte)')
+      }
+      // Le coffre ne doit PAS avoir ete attire : sa position x reste inchangee.
+      expect(pos.x).toBe(D_IN_MAGNET)
+    })
+
+    it("une gemme 'xp' dans la meme zone d'aimantation se RAPPROCHE du joueur", () => {
+      const world = new World()
+      makePlayer(world, 0, 0, MAGNET_RADIUS)
+      const gem = makeGem(world, D_IN_MAGNET, 0, 5)
+      pickupSystem(world, 16)
+      const pos = world.get(gem, 'position')
+      if (pos === undefined) {
+        throw new Error('La gemme doit encore exister (pas au contact, donc non collectee)')
+      }
+      // La gemme XP doit s'etre rapprochee (x a diminue).
+      expect(pos.x).toBeLessThan(D_IN_MAGNET)
+    })
+  })
+
 })

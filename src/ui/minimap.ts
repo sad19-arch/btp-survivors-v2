@@ -1,7 +1,7 @@
 import { h, clear } from './h'
 import { playerColor } from '@content/players'
 import { WORLD } from '@content/config'
-import type { GameState } from '@core/types'
+import type { GameState, PlayerState } from '@core/types'
 
 /** Mappe une position monde vers le panneau mini-carte (clampée). PURE. */
 export function worldToMinimap(
@@ -42,6 +42,11 @@ export class Minimap {
   readonly el: HTMLElement
   private readonly field: HTMLElement
   private readonly counter: HTMLElement
+  /**
+   * Mémorise le dernier angle (radians) par joueur pour conserver l'orientation
+   * quand vx===0 && vy===0 (joueur immobile). Clé = playerId.
+   */
+  private readonly lastAngle = new Map<number, number>()
 
   constructor() {
     this.counter = h('div', { className: 'minimap__counter', text: 'Prisonniers 0/0' })
@@ -74,12 +79,10 @@ export class Minimap {
         this.field.append(this.dot(e.x, e.y, 'minimap__dot minimap__dot--boss'))
       }
     }
-    // Joueur(s) vivants (chevron couleur joueur) — dessinés en dernier (dessus).
+    // Joueur(s) vivants — chevron orienté, couleur par joueur — dessinés en dernier (dessus).
     for (const player of state.players) {
       if (player.alive) {
-        const dot = this.dot(player.x, player.y, 'minimap__dot minimap__dot--player')
-        dot.style.backgroundColor = playerColor(player.id).hex
-        this.field.append(dot)
+        this.field.append(this.playerChevron(player))
       }
     }
   }
@@ -87,6 +90,55 @@ export class Minimap {
   /** Affiche/masque le panneau (toggle mini-carte). */
   setVisible(visible: boolean): void {
     this.el.style.display = visible ? 'flex' : 'none'
+  }
+
+  /**
+   * Construit un chevron orienté selon la direction du joueur.
+   *
+   * Forme : triangle CSS (bordures) pointant vers le haut par défaut, tourné
+   * par `transform: rotate(angle)` calculé depuis `atan2(vy, vx)`.
+   * Le triangle CSS (bordures) pointe vers le HAUT (−90° / −π/2 dans le repère
+   * atan2 standard où 0 = droite) donc on ajoute −π/2 pour que l'angle 0 rad
+   * (→ droite) corresponde à un chevron pointant vers la droite.
+   *
+   * Si vx===0 && vy===0 (joueur immobile), on conserve le dernier angle connu
+   * (ou 0 rad — vers le haut — si aucun historique).
+   *
+   * Coloré par `playerColor(player.id).hex`.
+   */
+  private playerChevron(player: PlayerState): HTMLElement {
+    const { mx, my } = worldToMinimap(player.x, player.y, WORLD.width, WORLD.height, FIELD_W, FIELD_H)
+    const color = playerColor(player.id).hex
+
+    // Calcul de l'angle d'orientation.
+    let angle: number
+    if (player.vx !== 0 || player.vy !== 0) {
+      // atan2(vy, vx) donne l'angle depuis l'axe +x (droite).
+      // Le triangle CSS pointe vers le HAUT (−π/2 dans ce repère) par défaut,
+      // donc on décale de +π/2 pour que l'angle corresponde à la direction réelle.
+      angle = Math.atan2(player.vy, player.vx) + Math.PI / 2
+      this.lastAngle.set(player.id, angle)
+    } else {
+      // Immobile : dernier angle connu ou 0 (chevron vers le haut).
+      angle = this.lastAngle.get(player.id) ?? 0
+    }
+
+    const deg = (angle * 180) / Math.PI
+
+    // Wrapper positionné (centré sur mx, my) — classe stable pour les tests.
+    const wrapper = h('div', { className: 'minimap__player' })
+    wrapper.style.left = `${mx}px`
+    wrapper.style.top = `${my}px`
+    wrapper.style.transform = `translate(-50%, -50%) rotate(${deg}deg)`
+
+    // Triangle CSS : bordures colorées simulant un chevron (triangle plein).
+    // La couleur du joueur est appliquée sur borderBottomColor
+    // (le triangle pointe vers le haut quand deg=0).
+    const chevron = h('div', { className: 'minimap__player__chevron' })
+    chevron.style.borderBottomColor = color
+
+    wrapper.append(chevron)
+    return wrapper
   }
 
   /** Construit un marqueur positionné (absolu) via `worldToMinimap`. */
