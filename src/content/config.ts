@@ -169,36 +169,13 @@ export const SPAWN = {
 } as const
 
 /**
- * Boss de mi-parcours (PRD : apparition à 5:00). Rôle `mid` : NE déclenche PAS
- * la victoire — sa mort lâche un coffre d'évolution (cf. reap.ts) qui rend une
- * évolution atteignable EN COURS DE RUN, avant le boss final.
- */
-export const MINI_BOSS = {
-  /** Instant d'apparition, en ms de temps de jeu. */
-  atMs: 5 * 60_000,
-  /**
-   * Rayon d'apparition du boss (px), plus court que l'anneau normal (560) pour le
-   * faire entrer À L'ÉCRAN → le combat de climax est vu et engagé, pas un spawn
-   * hors-champ que le joueur fond à distance sans le remarquer.
-   */
-  spawnRadius: 320,
-  /**
-   * Multiplicateur de PV du mini-boss (× la def `contremaitre`). Le mini-boss de
-   * 5:00 est volontairement CORIACE (ne plus le fondre en 2 s une fois les armes
-   * montées/évoluées) ; comme il ne bloque PAS la victoire (sa mort = coffre), un
-   * bot non-évolué qui ne le tue pas survit quand même autour.
-   */
-  hpMult: 1.0
-} as const
-
-/**
  * Boss final (rôle `final`). Sa mort est la condition de victoire de la run
  * (remplace l'ancienne victoire au mini-boss de 5:00 — cf. Plan B1, split de boss).
  */
 export const FINAL_BOSS = {
   /** Instant d'apparition, en ms de temps de jeu (~20:00 — arc long). */
   atMs: 1_200_000,
-  /** Rayon d'apparition du boss (px), même logique que MINI_BOSS : à l'écran. */
+  /** Rayon d'apparition du boss (px), plus court que l'anneau normal (560) : le boss entre À L'ÉCRAN, combat vu et engagé. */
   spawnRadius: 320,
   /**
    * Multiplicateur de PV du boss FINAL (× la def `contremaitre`). La VICTOIRE

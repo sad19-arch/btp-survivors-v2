@@ -62,24 +62,24 @@ test("allowedFromSec - pas de crash et partie toujours en cours a 119 s", async 
   await page.goto('/?autostart=solo&seed=99&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
 
-  // Avancer jusqu'à 119 s (1 s sous le seuil encircle=120 s).
-  const ADVANCE_MS = 119_000
-  const STEP_MS = 5_000
-  let elapsed = 0
-
-  while (elapsed < ADVANCE_MS) {
-    await page.evaluate(() => {
+  // Avancer jusqu'à ~119 s de TEMPS DE JEU (1 s sous le seuil encircle=120 s).
+  // advanceTime GÈLE le temps pendant un level-up : les pas gelés ne font pas
+  // avancer elapsedMs. On ne peut donc pas se fier à un budget d'appels — on
+  // boucle sur l'elapsedMs RÉEL en purgeant les cartes à chaque tour, jusqu'à la
+  // cible OU un changement d'écran (mort). Le plafond d'itérations est un
+  // garde-fou anti-boucle-infinie (chaque tour avance ≥1 pas de jeu utile).
+  const TARGET_MS = 119_000
+  for (let i = 0; i < 80; i++) {
+    const done = await page.evaluate((target) => {
       const g = window.__GAME__
-      if (!g) { return }
+      if (!g) { return true }
       const s = g.getState()
-      if (s.pendingLevelUp !== null) {
-        g.chooseUpgrade(0)
-      }
-    })
-
-    const chunk = Math.min(STEP_MS, ADVANCE_MS - elapsed)
-    await page.evaluate((ms) => { window.__GAME__?.advanceTime(ms) }, chunk)
-    elapsed += chunk
+      if (s.pendingLevelUp !== null) { g.chooseUpgrade(0) }
+      if (s.scene !== 'game') { return true }
+      return s.elapsedMs >= target
+    }, TARGET_MS)
+    if (done) { break }
+    await page.evaluate(() => { window.__GAME__?.advanceTime(5_000) })
   }
 
   // Jeu toujours intact (pas de crash, scène toujours en cours).

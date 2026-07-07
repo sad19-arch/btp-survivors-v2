@@ -76,9 +76,9 @@ export interface DifficultyScale {
  * le boss final à 20:00. Les dégâts de contact et la vitesse (plafonnée) croissent
  * linéairement avec le temps. Déterministe (fonction pure du temps).
  *
- * Arc 20 min :
- *   3:00 → hp≈1,06   6:00 → hp≈1,42   9:00 → hp≈1,78
- *  12:00 → hp≈2,36  15:00 → hp≈3,12  18:00 → hp≈4,14  20:00 → hp≈5,00
+ * Arc 20 min (PV de vague, valeurs réelles produites ci-dessous) :
+ *   3:00 → hp≈0,97   6:00 → hp≈1,24   9:00 → hp≈1,51
+ *  12:00 → hp≈1,81  15:00 → hp≈2,11  18:00 → hp≈2,86  20:00 → hp≈3,96
  */
 export function difficultyScaleAt(elapsedMs: number): DifficultyScale {
   const min = Math.max(0, elapsedMs) / 60000
