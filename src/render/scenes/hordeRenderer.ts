@@ -8,6 +8,7 @@ import { computeHitEvents } from '@render/hitDiff'
 import { hitFlashUntil, DamageNumberPool } from '@render/damageNumbers'
 import { SpritePool } from '@render/spritePool'
 import { VfxManager } from '@render/scenes/vfxManager'
+import { boomScale } from '@render/boomScale'
 
 /** Sprite de personnage : feuille pixel-art si l'asset existe, sinon cercle de repli. */
 type CharSprite = Phaser.GameObjects.Sprite | Phaser.GameObjects.Arc
@@ -57,6 +58,12 @@ const PICKUP_RADIUS = 5
  * tint, lui, n'est PAS capé — il n'alloue rien).
  */
 export const FEEDBACK_MAX_PER_FRAME = 16
+
+/**
+ * Cap par frame du boom complet à la mort d'un ennemi (J6). Au-delà, repli sur
+ * un seul pixel-pop (wipe de horde → ne pas exploser le nombre d'objets Phaser).
+ */
+const DEATH_BOOM_MAX_PER_FRAME = 12
 
 /**
  * Rendu de la HORDE (ennemis, hazards/goudron, projectiles, pickups/coffres/gemmes),
@@ -148,6 +155,8 @@ export class HordeRenderer {
     const hitById = new Map(hitEvents.map((e) => [e.id, e.amount]))
     // Compteur d'allocations de feedback (chiffres + pops) — borne le pic par frame.
     let feedbackEmittedThisFrame = 0
+    // Compteur de booms de mort complets — capé à DEATH_BOOM_MAX_PER_FRAME (J6).
+    let boomsEmittedThisFrame = 0
     for (const en of state.enemies) {
       seen.add(en.id)
       let sprite = this.enemySprites.get(en.id)
@@ -223,13 +232,17 @@ export class HordeRenderer {
       // Mémorise les HP courants pour la comparaison de la prochaine frame.
       this.prevEnemyHp.set(en.id, en.hp)
     }
-    // Retire les sprites des ennemis disparus (mort → poussière + éclair + scale-pop).
+    // Retire les sprites des ennemis disparus (mort → boom escalé ou repli minimal).
     for (const [id, sprite] of this.enemySprites) {
       if (!seen.has(id)) {
-        this.vfx.spawnVfx('vfx_dust', sprite.x, sprite.y, 0.2, 1.8, 380)
-        this.vfx.spawnFlash(sprite.x, sprite.y)
-        // Pixel-pop orange (impact satisfaction) — DA-safe.
-        this.vfx.spawnPixelPop(sprite.x, sprite.y, PALETTE_HEX.orangeDanger, 8, 160)
+        if (boomsEmittedThisFrame < DEATH_BOOM_MAX_PER_FRAME) {
+          // Boom complet escalé selon le temps écoulé (J6 — power fantasy late-game).
+          this.vfx.spawnDeathBoom(sprite.x, sprite.y, boomScale(state.elapsedMs))
+          boomsEmittedThisFrame++
+        } else {
+          // Repli minimal (wipe de horde) : effet léger, pas d'explosion complète.
+          this.vfx.spawnPixelPop(sprite.x, sprite.y, PALETTE_HEX.orangeDanger, 8, 160)
+        }
         if (sprite instanceof Phaser.GameObjects.Sprite) {
           this.pool.release(sprite)
         } else {
