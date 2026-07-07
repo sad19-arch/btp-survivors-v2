@@ -6,32 +6,29 @@ export interface TargetReport {
 }
 
 /**
- * Cibles « tendu ET GAGNABLE » (refonte playtest : le jeu doit pouvoir se
- * gagner). Le kite-bot est un joueur moyen (choisit toujours la 1re carte) ; un
- * humain fait mieux. On vise donc :
- *  - le kite GAGNE une part des runs (tue le boss final) — la gagnabilité est
- *    la cible n°1 (avant : 0 %, jeu injouable) ; mais PAS toujours (tension),
- *  - il atteint la fin de run sans mort punitive au tout début,
- *  - ses PV plongent (climax),
- *  - idle (immobile) meurt toujours ; greedy (imprudent) meurt le plus souvent
- *    mais un build chanceux peut occasionnellement passer (jeu gagnable ⇒ ce
- *    n'est plus « toujours mourir »).
+ * Cibles « ARC LONG 20 MIN — GAGNABLE & PROFOND » (refonte arc long).
+ * Le kite-bot est un joueur moyen (choisit toujours la 1re carte) ; un humain fait
+ * mieux. L'arc dure ~20 min avec 3 mid-boss périodiques (5/10/15 min) + boss final
+ * à 20:00. On vise :
+ *  - survie médiane ≥ 13 min (le kite moyen atteint bien le milieu de l'arc long),
+ *  - gagnabilité ≥ 20 % (tue le boss final — la cible n°1 ; vise 25-40 % réel),
+ *  - PV qui plongent (climax 15-20 min),
+ *  - pas trivial (≤ 60 % survive full), idle meurt, greedy reste punissable.
  * Oracle final = playtest humain ; ces seuils sont un garde-fou de régression.
  */
-const KITE_MIN_WIN_PCT = 12 // DOIT gagner au moins ceci (sinon jeu injouable — cible n°1)
+const KITE_MIN_WIN_PCT = 20 // DOIT gagner au moins ceci sur l'arc 20 min (cible n°1)
 const KITE_MAX_WIN_PCT = 65 // mais pas trivialement toujours (tension)
-const KITE_MIN_SURVIVAL_MEDIAN_MS = 300000 // survie médiane ≥ 5:00 (atteint le boss de mi-parcours)
+const KITE_MIN_SURVIVAL_MEDIAN_MS = 780000 // survie médiane ≥ 13:00 (vise 13-16 min réel)
 const KITE_MAX_SURVIVE_FULL_PCT = 60 // ne doit PAS survivre/gagner passivement trop souvent
 const KITE_MIN_FIRST_DEATH_MS = 60000 // aucune run ne meurt avant 1:00 (départ non punitif)
-const KITE_MAX_HP_DIP_PCT = 40 // les PV médians doivent plonger sous ce seuil (climax 9-11 min)
+const KITE_MAX_HP_DIP_PCT = 40 // les PV doivent plonger sous ce seuil (climax 15-20 min)
 /** Greedy (imprudent) : peut survivre par chance mais pas de façon fiable. */
 const GREEDY_MAX_SURVIVE_FULL_PCT = 25
 /**
  * Idle (immobile) : doit mourir la GRANDE majorité du temps. Tolérance faible
- * (~8% mesuré sur le monde agrandi 3200×2400) : dans une grande arène, les
- * projectiles portent leur pleine distance (le petit monde les clampait au mur)
- * → l'auto-tir du joueur planté nettoie parfois l'anneau convergent. Reste très
- * strict (idle meurt 85%+) ; l'oracle final = playtest humain.
+ * (~8% mesuré sur le monde agrandi) : dans une grande arène, les projectiles
+ * portent leur pleine distance → l'auto-tir nettoie parfois l'anneau convergent.
+ * Reste très strict (idle meurt 85%+) ; l'oracle final = playtest humain.
  */
 const IDLE_MAX_SURVIVE_FULL_PCT = 15
 /** Un bot non-skillé meurt, mais pas dans les toutes premières secondes. */

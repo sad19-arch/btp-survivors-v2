@@ -1,12 +1,13 @@
 /**
  * Rampe de spawn temporelle (data-driven). Définit comment la pression
- * ennemie monte dans le temps sur une run de ~10:30 :
- *  - 0-3 min : calme (PRD apprentissage), greedy/idle ne sont pas wipés d'emblée.
- *  - 3-9 min : phase de puissance — la PRESSION monte via le NOMBRE (densité de
- *    spawn en forte hausse) pendant que les PV des ennemis montent doucement
- *    (ils fondent encore) ; mini-boss dans cette fenêtre.
- *  - 9-10:30 min : mur — PV en coup de fouet (cf. `difficultyScaleAt`), densité
- *    au maximum → climax qui encercle même un kiter avant le boss final.
+ * ennemie monte dans le temps sur un arc de ~20 min :
+ *  - 0-3 min   : calme (PRD apprentissage), greedy/idle ne sont pas wipés d'emblée.
+ *  - 3-9 min   : phase de puissance — la PRESSION monte via le NOMBRE (densité de
+ *    spawn en forte hausse) pendant que les PV des ennemis montent doucement.
+ *    Mini-boss périodiques à 5:00/10:00/15:00 ponctuent l'arc.
+ *  - 9-15 min  : montée soutenue — densité croissante, PV en hausse continue.
+ *  - 15-20 min : climax final — densité maximum, coup de fouet PV → encerclement
+ *    inévitable avant le boss final à 20:00.
  *
  * Un palier = un seuil de temps. Tuné via le harness sim (cibles « skill récompensé »).
  */
@@ -20,17 +21,26 @@ export interface SpawnRampStep {
 }
 
 export const SPAWN_RAMP: readonly SpawnRampStep[] = [
-  { fromSec: 0, intervalMs: 3000, countPerWave: 1 }, // 0-3 min : fuite, apprentissage
-  { fromSec: 45, intervalMs: 2200, countPerWave: 1 },
-  { fromSec: 100, intervalMs: 1600, countPerWave: 1 },
-  { fromSec: 180, intervalMs: 1100, countPerWave: 2 }, // 3:00 : la puissance commence, densité ↑
-  { fromSec: 260, intervalMs: 850, countPerWave: 2 },
-  { fromSec: 340, intervalMs: 650, countPerWave: 3 }, // ~4,6/s
-  { fromSec: 420, intervalMs: 520, countPerWave: 4 }, // ~7,7/s — on fauche
-  { fromSec: 500, intervalMs: 430, countPerWave: 5 },
-  { fromSec: 540, intervalMs: 330, countPerWave: 7 }, // 9:00 : tension
-  { fromSec: 600, intervalMs: 280, countPerWave: 8 }, // 10:00
-  { fromSec: 630, intervalMs: 230, countPerWave: 9 } // 10:30 : climax + boss final
+  { fromSec: 0,    intervalMs: 3000, countPerWave: 1 }, // 0-3 min : fuite, apprentissage
+  { fromSec: 45,   intervalMs: 2200, countPerWave: 1 },
+  { fromSec: 100,  intervalMs: 1600, countPerWave: 1 },
+  { fromSec: 180,  intervalMs: 1200, countPerWave: 2 }, // 3:00 : la puissance commence
+  { fromSec: 260,  intervalMs: 950,  countPerWave: 2 },
+  { fromSec: 340,  intervalMs: 750,  countPerWave: 3 }, // ~4/s
+  { fromSec: 420,  intervalMs: 620,  countPerWave: 3 }, // 7:00 — arc long, pression raisonnable
+  { fromSec: 500,  intervalMs: 520,  countPerWave: 4 },
+  { fromSec: 540,  intervalMs: 450,  countPerWave: 5 }, // 9:00 : tension progressive
+  { fromSec: 600,  intervalMs: 440,  countPerWave: 6 }, // 10:00 + boss mid
+  { fromSec: 660,  intervalMs: 340,  countPerWave: 8 }, // 11:00 : montée progressive
+  { fromSec: 720,  intervalMs: 295,  countPerWave: 9 }, // 12:00
+  { fromSec: 780,  intervalMs: 215,  countPerWave: 10 }, // 13:00
+  { fromSec: 840,  intervalMs: 185,  countPerWave: 11 }, // 14:00
+  { fromSec: 900,  intervalMs: 160,  countPerWave: 12 }, // 15:00 : boss mid + accélération
+  { fromSec: 960,  intervalMs: 138,  countPerWave: 13 }, // 16:00 : vague serrée
+  { fromSec: 1020, intervalMs: 118,  countPerWave: 14 }, // 17:00
+  { fromSec: 1080, intervalMs: 100,  countPerWave: 15 }, // 18:00
+  { fromSec: 1140, intervalMs: 85,   countPerWave: 16 }, // 19:00 : climax final
+  { fromSec: 1185, intervalMs: 72,   countPerWave: 17 }  // 19:45 : horde de fin avant boss @20:00
 ]
 
 /** Palier courant : le dernier dont `fromSec` est ≤ au temps écoulé. */
@@ -62,22 +72,34 @@ export interface DifficultyScale {
 /**
  * Montée en puissance temporelle des ennemis de vague (pas le boss) : les PV
  * croissent doucement (les ennemis fondent) pendant la phase de puissance (≤9:00)
- * puis en coup de fouet après (mur de fin de run) ; les dégâts de contact et la
- * vitesse (plafonnée) croissent linéairement avec le temps. Déterministe (fonction
- * pure du temps).
+ * puis de façon soutenue sur l'arc 9-19 min, avec un dernier coup de fouet avant
+ * le boss final à 20:00. Les dégâts de contact et la vitesse (plafonnée) croissent
+ * linéairement avec le temps. Déterministe (fonction pure du temps).
+ *
+ * Arc 20 min :
+ *   3:00 → hp≈1,06   6:00 → hp≈1,42   9:00 → hp≈1,78
+ *  12:00 → hp≈2,36  15:00 → hp≈3,12  18:00 → hp≈4,14  20:00 → hp≈5,00
  */
 export function difficultyScaleAt(elapsedMs: number): DifficultyScale {
   const min = Math.max(0, elapsedMs) / 60000
-  // PV : montée DOUCE pendant la puissance (fondent) puis coup de fouet après 8:30
-  // (mur de fin). Pente adoucie (playtest : le jeu doit être GAGNABLE — on doit
-  // pouvoir atteindre et battre le boss final, cf. cible sim `KITE_MIN_WIN_PCT`).
-  const hp = min <= 8.5 ? 0.7 + 0.12 * min : 0.7 + 0.12 * 8.5 + 0.85 * (min - 8.5)
+  // PV : montée en trois phases —
+  //  [0, 9 min]    : douce (ennemis fondent, apprentissage / montée de build)
+  //  [9, 17 min]   : soutenue (build abouti mais horde qui presse)
+  //  [17, 20+ min] : coup de fouet (climax avant boss final)
+  let hp: number
+  if (min <= 9) {
+    hp = 0.7 + 0.09 * min   // plus doux : 9:00→hp=1.51 (vs 1.78 avant)
+  } else if (min <= 17) {
+    hp = 0.7 + 0.09 * 9 + 0.10 * (min - 9)  // montée soutenue sur la longue zone
+  } else {
+    hp = 0.7 + 0.09 * 9 + 0.10 * 8 + 0.55 * (min - 17)  // coup de fouet final prononcé
+  }
   return {
-    hp, // 3:00→1,06 · 6:00→1,42 · 8:30→1,72 · 11:00→3,85
-    // Contact plus punitif (découple « tuable » de « létal ») : le mur de PV
-    // adouci laisse le kite atteindre le boss, mais l'imprudent qui encaisse le
-    // contact meurt quand même — garde-fou greedy/idle.
-    contactDamage: 0.5 + 0.26 * min,
-    speed: Math.min(1.25, 1.0 + 0.045 * min)
+    hp,
+    // Contact punitif mais moins rapide que l'arc 10:30 — le kite doit pouvoir
+    // tenir 20 min. Pente douce en early, plus punitive en late.
+    contactDamage: 0.5 + 0.11 * min,
+    // Vitesse plafonnée à 1.30 — les ennemis poursuivent mais restent fuyables.
+    speed: Math.min(1.30, 1.0 + 0.030 * min)
   }
 }

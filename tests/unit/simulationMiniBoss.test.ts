@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { Simulation } from '@core/simulation'
-import { MINI_BOSS } from '@content/config'
+import { MID_BOSS_WAVES } from '@content/config'
+
+/** Premier palier de mid-boss : 5:00. */
+const FIRST_MID_BOSS_MS = MID_BOSS_WAVES.atMs[0] ?? 300_000
 
 /**
  * Contrôleur « kite » : fuit l'ennemi le plus proche et se recentre près des
@@ -49,9 +52,9 @@ describe('Simulation — mini-boss', () => {
   it('aucun mini-boss avant 5:00', () => {
     const sim = new Simulation({ seed: 42, mode: 'solo' })
     sim.setInput(1, { move: { x: 1, y: 0 }, attack: false })
-    // Avance loin mais avant le seuil (le joueur file vers le bord, peu d'enjeu).
+    // Avance loin mais avant le seuil du premier palier (5:00).
     let t = 0
-    while (t < MINI_BOSS.atMs - 1000 && sim.getState().scene === 'game') {
+    while (t < FIRST_MID_BOSS_MS - 1000 && sim.getState().scene === 'game') {
       if (sim.getState().pendingLevelUp !== null) {
         sim.chooseUpgrade(0)
         continue
@@ -63,21 +66,20 @@ describe('Simulation — mini-boss', () => {
   })
 
   it('le mini-boss apparaît à 5:00 quand le joueur survit jusque-là', () => {
-    // Avec l'équilibrage « tendu mais gagnable », un kiter survit au climax sur
-    // la plupart des seeds (mais pas toutes). On cherche une run survivante et
-    // on vérifie le seuil d'apparition exact du mini-boss.
+    // Avec l'équilibrage « arc long », un kiter survit au climax sur la plupart
+    // des seeds. On cherche une run survivante et on vérifie le seuil d'apparition.
     let found = false
     for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
       const sim = new Simulation({ seed, mode: 'solo' })
       const { bossAt, aliveAtBoss } = surviveUntilBoss(sim, 330_000)
       if (bossAt >= 0) {
-        expect(bossAt).toBeGreaterThanOrEqual(MINI_BOSS.atMs)
-        expect(bossAt).toBeLessThan(MINI_BOSS.atMs + 1000)
+        expect(bossAt).toBeGreaterThanOrEqual(FIRST_MID_BOSS_MS)
+        expect(bossAt).toBeLessThan(FIRST_MID_BOSS_MS + 1000)
         expect(aliveAtBoss).toBe(true)
         found = true
         break
       }
     }
-    expect(found).toBe(true) // au moins une run habile atteint le climax
+    expect(found).toBe(true) // au moins une run habile atteint le premier climax
   })
 })

@@ -36,7 +36,7 @@ import { recomputePlayerStats } from './systems/playerStats'
 import { rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
 import { tickChestDirector, maybeDropEliteChest } from './systems/chestDirector'
-import { coopHpFactor, FINAL_BOSS, MINI_BOSS, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
+import { coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
 import { SPAWN_RAMP, difficultyScaleAt } from '@content/spawnRamp'
 import { EVENT_POOL_DEFAULT } from '@content/waveEvents'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
@@ -126,8 +126,12 @@ export class Simulation {
   private elapsedMs = 0
   private remainderMs = 0
   private score = 0
-  /** Vrai une fois le boss de mi-parcours (5:00, rôle `mid`) apparu. Ne déclenche PAS la victoire. */
-  private midBossSpawned = false
+  /**
+   * Nombre de paliers de mid-boss déjà spawné (rôle `mid`). Chaque valeur dans
+   * `MID_BOSS_WAVES.atMs` est consommée exactement une fois (palier par index).
+   * 0 = aucun spawné, 1 = 5:00 spawné, 2 = 10:00 spawné, 3 = 15:00 spawné.
+   */
+  private midBossWaveIndex = 0
   /** Vrai une fois le boss FINAL (rôle `final`) RÉELLEMENT apparu (garde-fou anti faux-positif de victoire). */
   private finalBossSpawned = false
   private pendingLevelUp: PendingLevelUp | null = null
@@ -371,24 +375,24 @@ export class Simulation {
 
   /**
    * [Debug/seam] Fait apparaître immédiatement le boss du rôle demandé (`mid`
-   * ou `final`) au centroïde des joueurs, sans attendre le seuil temporel
-   * (5:00 / ~10:30). Pose le flag `*BossSpawned` correspondant, exactement
-   * comme le spawn normal, pour que `updateWin`/le coffre en mi-mort se
-   * comportent de façon identique. Réservé aux tests et au seam de debug —
-   * jamais utilisé en jeu normal.
+   * ou `final`) au centroïde des joueurs, sans attendre le seuil temporel.
+   * Pose le flag `*BossSpawned` correspondant, exactement comme le spawn normal,
+   * pour que `updateWin`/le coffre en mi-mort se comportent de façon identique.
+   * Réservé aux tests et au seam de debug — jamais utilisé en jeu normal.
    */
   debugSpawnBoss(role: 'mid' | 'final'): void {
     const def = ENEMIES[MINI_BOSS_ID]
     if (def === undefined) {
       return
     }
-    const radius = role === 'mid' ? MINI_BOSS.spawnRadius : FINAL_BOSS.spawnRadius
-    const hpMult = role === 'mid' ? MINI_BOSS.hpMult : FINAL_BOSS.hpMult
+    const radius = role === 'mid' ? MID_BOSS_WAVES.spawnRadius : FINAL_BOSS.spawnRadius
+    const hpMult = role === 'mid' ? (MID_BOSS_WAVES.hpMults[0] ?? 1.0) : FINAL_BOSS.hpMult
     const bossScale = { hp: coopHpFactor(this.playerCount()) * hpMult, contactDamage: 1, speed: 1 }
     spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), radius, role, bossScale)
     this.events.dispatchEvent(new BossSpawnedEvent(role))
     if (role === 'mid') {
-      this.midBossSpawned = true
+      // Pour le debug, marque tous les paliers mid comme spawné (évite un re-spawn automatique).
+      this.midBossWaveIndex = MID_BOSS_WAVES.atMs.length
     } else {
       this.finalBossSpawned = true
     }
@@ -440,7 +444,7 @@ export class Simulation {
     this.remainderMs = 0
     this.chestAccMs = 0
     this.score = 0
-    this.midBossSpawned = false
+    this.midBossWaveIndex = 0
     this.finalBossSpawned = false
     this.pendingLevelUp = null
     this.inputs.clear()
@@ -699,20 +703,25 @@ export class Simulation {
   }
 
   /**
-   * Invoque le boss de mi-parcours une seule fois, au seuil temporel (PRD : 5:00).
-   * Rôle `mid` : NE déclenche PAS la victoire (sa mort lâche un coffre, cf. reap.ts).
+   * Invoque le prochain palier de mid-boss périodique si son seuil temporel est
+   * atteint. Paliers : 5:00 / 10:00 / 15:00. Rôle `mid` : NE déclenche PAS la
+   * victoire (sa mort lâche un coffre d'évolution, cf. reap.ts). Déterministe :
+   * angle via `this.rng`, seuils temporels fixes dans `MID_BOSS_WAVES.atMs`.
    */
   private maybeSpawnMidBoss(): void {
-    if (this.midBossSpawned || this.elapsedMs < MINI_BOSS.atMs) {
+    const nextIndex = this.midBossWaveIndex
+    const nextAtMs = MID_BOSS_WAVES.atMs[nextIndex]
+    if (nextAtMs === undefined || this.elapsedMs < nextAtMs) {
       return
     }
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
-      const bossScale = { hp: coopHpFactor(this.playerCount()) * MINI_BOSS.hpMult, contactDamage: 1, speed: 1 }
-      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), MINI_BOSS.spawnRadius, 'mid', bossScale)
+      const hpMult = MID_BOSS_WAVES.hpMults[nextIndex] ?? 1.0
+      const bossScale = { hp: coopHpFactor(this.playerCount()) * hpMult, contactDamage: 1, speed: 1 }
+      spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), MID_BOSS_WAVES.spawnRadius, 'mid', bossScale)
       this.events.dispatchEvent(new BossSpawnedEvent('mid'))
     }
-    this.midBossSpawned = true
+    this.midBossWaveIndex = nextIndex + 1
   }
 
   /** Invoque le boss FINAL une seule fois, au seuil temporel (~10:30). Sa mort = victoire. */

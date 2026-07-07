@@ -196,16 +196,32 @@ export const MINI_BOSS = {
  * (remplace l'ancienne victoire au mini-boss de 5:00 — cf. Plan B1, split de boss).
  */
 export const FINAL_BOSS = {
-  /** Instant d'apparition, en ms de temps de jeu (~10:30). */
-  atMs: 630_000,
+  /** Instant d'apparition, en ms de temps de jeu (~20:00 — arc long). */
+  atMs: 1_200_000,
   /** Rayon d'apparition du boss (px), même logique que MINI_BOSS : à l'écran. */
   spawnRadius: 320,
   /**
-   * Multiplicateur de PV du boss FINAL (× la def `contremaitre`). Plus bas que le
-   * mini-boss : la VICTOIRE dépend de le tuer → il doit rester battable même par
-   * un build de mi-parcours (cible sim `KITE_MIN_WIN_PCT`).
+   * Multiplicateur de PV du boss FINAL (× la def `contremaitre`). La VICTOIRE
+   * dépend de le tuer → battable avec un build de fin de run complet.
+   * Arc 20 min : le joueur a pu évoluer 2-3 armes. PV ajusté pour viser 25-40 %
+   * de win (cible sim `KITE_MIN_WIN_PCT`).
    */
-  hpMult: 0.67
+  hpMult: 0.85
+} as const
+
+/**
+ * Mini-boss/reapers périodiques intermédiaires (rôle `mid`). Trois paliers :
+ * 5:00 / 10:00 / 15:00 — ponctuent l'arc long, laissent chacun un coffre d'évolution
+ * à leur mort. La condition de victoire est UNIQUEMENT le boss FINAL à 20:00.
+ *
+ * `atMs` : liste des instants d'apparition en ms. Chaque palier ne spawn qu'une fois.
+ * `hpMults` : scaling PV par palier (le boss de 10:00 est plus costaud que celui de 5:00,
+ * et celui de 15:00 encore davantage — pression croissante).
+ */
+export const MID_BOSS_WAVES = {
+  atMs: [5 * 60_000, 10 * 60_000, 15 * 60_000] as readonly number[],
+  hpMults: [1.0, 1.1, 1.5] as readonly number[],
+  spawnRadius: 320
 } as const
 
 /**
