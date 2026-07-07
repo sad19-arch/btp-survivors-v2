@@ -19,6 +19,7 @@ import { SpeechBubbleManager } from '@render/scenes/speechBubbleManager'
 import { CameraController } from '@render/scenes/cameraController'
 import { HordeRenderer, FEEDBACK_MAX_PER_FRAME } from '@render/scenes/hordeRenderer'
 import { PlayerRenderer } from '@render/scenes/playerRenderer'
+import { TelegraphRenderer } from '@render/scenes/telegraphRenderer'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
 import { PALETTE_HEX } from '@ui/palette'
@@ -95,6 +96,8 @@ export class GameScene extends Phaser.Scene {
   }> = []
   /** Bulles râleuses des PNJ d'ambiance (état + cooldowns) — extraites de GameScene. */
   private readonly bubbles = new SpeechBubbleManager(this)
+  /** Rendu du télégraphe des formations (marqueur au sol + flèche de bord) — Task 10. */
+  private telegraph!: TelegraphRenderer
   /**
    * VFX des armes à impulsion (marteau/pied-de-biche/court-circuit), déclenché
    * par l'événement d'aura de la sim. Une forme dédiée par `kind` — pas de
@@ -294,6 +297,8 @@ export class GameScene extends Phaser.Scene {
     this.horde = new HordeRenderer(this, this.pool, this.vfx, this.damageNumbers)
     // Rendu du joueur/prisonniers/intro : instance fraîche par scène (détient les Maps/état joueur).
     this.players = new PlayerRenderer(this, this.vfx, this.camera, this.lite)
+    // Rendu du télégraphe des formations (Task 10) : instance fraîche par scène.
+    this.telegraph = new TelegraphRenderer(this)
     // Sol : base tuilée (TileSprite, O(1)) + streamer de décalques/props par chunks.
     // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
     const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
@@ -471,6 +476,7 @@ export class GameScene extends Phaser.Scene {
       this.app.events.removeEventListener('auraPulse', this.onAuraPulse)
       this.app.events.removeEventListener('prisonerFreed', this.onPrisonerFreed)
       this.app.events.removeEventListener('evolved', this.onEvolved)
+      this.telegraph.dispose()
     })
 
     if (this.input.keyboard !== null) {
@@ -551,6 +557,9 @@ export class GameScene extends Phaser.Scene {
     this.players.sync(state)
 
     this.horde.sync(state, this.stage)
+
+    // Télégraphe des formations (Task 10) : marqueur au sol + flèche de bord d'écran.
+    this.telegraph.sync(state, this.cameras.main)
 
     // PNJ(s) d'ambiance : errance douce (B3) + animation de geste (boucle lente).
     for (const npc of this.ambientSprites) {

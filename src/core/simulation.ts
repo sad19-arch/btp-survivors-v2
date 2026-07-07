@@ -49,6 +49,7 @@ import type {
   GameMode,
   GameState,
   HazardState,
+  PendingFormation,
   PendingLevelUp,
   PickupState,
   PickupKind,
@@ -322,11 +323,22 @@ export class Simulation {
       rescue: { total: RESCUE.count, rescued: this.rescuedTotal },
       hazards: this.collectHazards(),
       pendingLevelUp: this.choiceQueue[0] ?? null,
+      pendingFormations: this.collectPendingFormations(),
       // Flag transitoire : non null pendant tout le pas où une évolution vient d'être
       // déclenchée ; remis à null par `step()` au pas SUIVANT. Toutes les lectures de
       // `getState()` dans la même fenêtre de pas voient la même valeur (pas de reset ici).
       justEvolved: this._justEvolved
     }
+  }
+
+  /** Expose les formations annoncées non encore spawnées (télégraphe, Task 10). */
+  private collectPendingFormations(): readonly PendingFormation[] {
+    const u = this.waveDir.upcoming
+    if (u === null) {
+      return []
+    }
+    const triggersInMs = Math.max(0, u.triggersAtMs - this.elapsedMs)
+    return [{ kind: u.kind, angle: u.angle, radius: u.radius, triggersInMs }]
   }
 
   /**

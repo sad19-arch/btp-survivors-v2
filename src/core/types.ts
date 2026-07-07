@@ -7,6 +7,7 @@
 
 import type { PlayerStats } from '@content/passives'
 import type { Card } from '@core/systems/cards'
+import type { WaveEventKind } from '@content/waveEvents'
 
 export type EntityId = number
 
@@ -331,6 +332,24 @@ export interface PendingLevelUp {
   choices: Card[]
 }
 
+/**
+ * Formation annoncée non encore spawnée (télégraphe, Task 10).
+ * Exposée dans `GameState.pendingFormations` pour le rendu (marqueur au sol + flèche).
+ */
+export interface PendingFormation {
+  /** Type de formation (détermine la forme du marqueur : anneau, ligne, spirale…). */
+  kind: WaveEventKind
+  /**
+   * Angle de référence de la formation, en radians (tiré par `_waveRng`
+   * au moment de l'annonce — déterministe).
+   */
+  angle: number
+  /** Rayon de l'anneau de spawn (px), identique à `SPAWN.ringRadius`. */
+  radius: number
+  /** Temps restant avant le spawn (ms). `max(0, triggersAtMs - elapsedMs)`. */
+  triggersInMs: number
+}
+
 export interface GameState {
   scene: SceneName
   seed: number
@@ -352,6 +371,13 @@ export interface GameState {
   /** Flaques de goudron actives (pour le rendu — Task 7/8). */
   hazards: HazardState[]
   pendingLevelUp: PendingLevelUp | null
+  /**
+   * Formations annoncées non encore spawnées (télégraphe, Task 10).
+   * 0 ou 1 élément (le directeur n'annonce qu'une formation à la fois).
+   * `triggersInMs = max(0, triggersAtMs - elapsedMs)`.
+   * Consommé par `telegraphRenderer` pour dessiner marqueur au sol + flèche de bord.
+   */
+  pendingFormations: readonly PendingFormation[]
   /**
    * Transitoire (one-shot) : id de l'arme évoluée pendant exactement une frame
    * (le pas où une évolution vient d'être déclenchée) ; `null` sinon.

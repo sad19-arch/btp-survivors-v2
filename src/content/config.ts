@@ -314,3 +314,15 @@ export const CAMPER = {
   /** Cooldown entre deux événements anti-camping (ms). */
   cooldownMs: 12000
 } as const
+
+/**
+ * Délai d'annonce du télégraphe de formation (ms).
+ *
+ * Quand le directeur décide une formation (encircle, sweep, spiral, etc.), il
+ * l'ANNONCE `TELEGRAPH_LEAD_MS` ms à l'avance (stockage dans `upcoming`) au lieu
+ * de spawner immédiatement. Le spawn survient quand `elapsedMs >= triggersAtMs`.
+ *
+ * Ce délai ne change NI qui NI combien d'ennemis spawne — il décale seulement
+ * l'instant. Impact sim neutre ; re-baseliné si les cibles bougent légèrement.
+ */
+export const TELEGRAPH_LEAD_MS = 800 as const

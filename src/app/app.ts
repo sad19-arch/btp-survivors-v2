@@ -789,6 +789,7 @@ function emptyState(seed: number, stageId: ConstructionPhaseId): GameState {
     rescue: { total: 0, rescued: 0 },
     hazards: [],
     pendingLevelUp: null,
+    pendingFormations: [],
     justEvolved: null
   }
 }
