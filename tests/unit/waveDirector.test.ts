@@ -15,7 +15,7 @@ import type { WavePlacement } from '@core/types'
 import { createWaveDirectorState, stepWaveDirector } from '@core/systems/waveDirector'
 import { SPAWN_RAMP, spawnParamsAt } from '@content/spawnRamp'
 import { EVENT_POOL_DEFAULT } from '@content/waveEvents'
-import { SPAWN } from '@content/config'
+import { SPAWN, CAMPER } from '@content/config'
 
 function terrainVierge(): ConstructionPhase {
   const phase = PHASES[ConstructionPhaseId.TERRAIN_VIERGE]
@@ -234,7 +234,6 @@ describe('waveDirector — conservation du budget', () => {
   it('Σ placements ≈ Σ rampe plate (±15 %) sur 60 s à dt=16 ms', () => {
     const DURATION_MS = 60_000
     const DT_MS = 16
-    const CENTER = { x: 800, y: 600 }
 
     // Budget attendu par la rampe plate.
     let expectedBudget = 0
@@ -248,15 +247,19 @@ describe('waveDirector — conservation du budget', () => {
     }
 
     // Budget émis par le directeur.
+    // Utilise un centre MOBILE (cercle de rayon 400 px, vitesse ~0.5 rad/s)
+    // pour éviter le déclenchement de l'anti-camping (le joueur bouge > minMove).
     const state = createWaveDirectorState()
     const rng = new Rng(42)
     let actualPlacements = 0
     let t = 0
     while (t < DURATION_MS) {
+      const angle = (t / 1000) * 0.5
+      const movingCenter = { x: 800 + Math.cos(angle) * 400, y: 600 + Math.sin(angle) * 400 }
       const placements = stepWaveDirector(state, {
         dtMs: DT_MS,
         elapsedMs: t,
-        center: CENTER,
+        center: movingCenter,
         ramp: SPAWN_RAMP,
         events: EVENT_POOL_DEFAULT,
         ringRadius: SPAWN.ringRadius,
@@ -343,26 +346,29 @@ describe('waveDirector — déterminisme', () => {
     expect(maxGroupSize).toBeGreaterThanOrEqual(4)
   })
 
-  it("allowedFromSec respecté — aucun encircle avant 120 s", () => {
+  it("allowedFromSec respecté — aucun encircle normal avant 120 s", () => {
+    // encircle NORMAL (via le slot événement) donne behavior 'circler'.
+    // L'anti-camping donne behavior 'charger' — test ciblé sur 'circler' uniquement.
     const DURATION_MS = 119_000
     const DT_MS = 16
-    const CENTER = { x: 800, y: 600 }
-
+    // Centre MOBILE pour ne pas déclencher l'anti-camping (ce test cible le slot normal).
     const state = createWaveDirectorState()
     const rng = new Rng(99)
     let encircleFound = false
     let t = 0
     while (t < DURATION_MS) {
+      const angle = (t / 1000) * 0.5
+      const movingCenter = { x: 800 + Math.cos(angle) * 400, y: 600 + Math.sin(angle) * 400 }
       const placements = stepWaveDirector(state, {
         dtMs: DT_MS,
         elapsedMs: t,
-        center: CENTER,
+        center: movingCenter,
         ramp: SPAWN_RAMP,
         events: EVENT_POOL_DEFAULT,
         ringRadius: SPAWN.ringRadius,
         rng
       })
-      // encircle donne behavior 'circler' (placeEncircle).
+      // encircle NORMAL donne behavior 'circler' (placeEncircle sans override).
       for (const p of placements) {
         if (p.behavior === 'circler') {
           encircleFound = true
@@ -372,5 +378,151 @@ describe('waveDirector — déterminisme', () => {
     }
 
     expect(encircleFound).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Task 9 — réactif anti-camping
+// ---------------------------------------------------------------------------
+
+describe('waveDirector — anti-camping', () => {
+  it('joueur immobile > windowMs → encerclement de chargeurs déclenché', () => {
+    const DT_MS = 16
+    // Durée = windowMs + une frame de marge pour garantir le trail plein.
+    const DURATION_MS = CAMPER.windowMs + DT_MS * 2
+    const IMMOBILE_CENTER = { x: 800, y: 600 }
+
+    const state = createWaveDirectorState()
+    const rng = new Rng(42)
+    const chargerPlacements: WavePlacement[] = []
+
+    let t = 0
+    while (t < DURATION_MS) {
+      const placements = stepWaveDirector(state, {
+        dtMs: DT_MS,
+        elapsedMs: t,
+        center: IMMOBILE_CENTER,
+        ramp: SPAWN_RAMP,
+        events: EVENT_POOL_DEFAULT,
+        ringRadius: SPAWN.ringRadius,
+        rng
+      })
+      for (const p of placements) {
+        if (p.behavior === 'charger') {
+          chargerPlacements.push(p)
+        }
+      }
+      t += DT_MS
+    }
+
+    // Au moins un pas déclenche des chargeurs (encerclement anti-camping).
+    expect(chargerPlacements.length).toBeGreaterThan(0)
+    // L'événement est un encirclement complet : ≥ 8 chargeurs en une salve.
+    expect(chargerPlacements.length).toBeGreaterThanOrEqual(8)
+  })
+
+  it('cooldown empêche le re-déclenchement immédiat', () => {
+    const DT_MS = 16
+    // On couvre 2× windowMs + marge — sans dépasser le cooldown.
+    const DURATION_MS = CAMPER.windowMs * 2 + DT_MS * 4
+    const IMMOBILE_CENTER = { x: 800, y: 600 }
+
+    const state = createWaveDirectorState()
+    const rng = new Rng(42)
+    let triggerCount = 0
+
+    let t = 0
+    while (t < DURATION_MS) {
+      const placements = stepWaveDirector(state, {
+        dtMs: DT_MS,
+        elapsedMs: t,
+        center: IMMOBILE_CENTER,
+        ramp: SPAWN_RAMP,
+        events: EVENT_POOL_DEFAULT,
+        ringRadius: SPAWN.ringRadius,
+        rng
+      })
+      // Compte les salves (pas les placements individuels).
+      const hasCharger = placements.some((p) => p.behavior === 'charger')
+      if (hasCharger) {
+        triggerCount++
+      }
+      t += DT_MS
+    }
+
+    // Pendant 2×windowMs (< cooldownMs=12s), le cooldown est actif :
+    // un seul déclenchement est possible.
+    expect(triggerCount).toBe(1)
+  })
+
+  it('joueur qui bouge > minMove → pas de déclenchement anti-camping', () => {
+    const DT_MS = 16
+    // On couvre bien au-delà de windowMs.
+    const DURATION_MS = CAMPER.windowMs * 3
+    const RADIUS = 500 // déplacement bien supérieur à minMove=120
+
+    const state = createWaveDirectorState()
+    const rng = new Rng(42)
+    let chargerFound = false
+
+    let t = 0
+    while (t < DURATION_MS) {
+      // Centre se déplace en cercle large → déplacement net sur windowMs >> minMove.
+      const angle = (t / 1000) * 0.5
+      const movingCenter = { x: 800 + Math.cos(angle) * RADIUS, y: 600 + Math.sin(angle) * RADIUS }
+      const placements = stepWaveDirector(state, {
+        dtMs: DT_MS,
+        elapsedMs: t,
+        center: movingCenter,
+        ramp: SPAWN_RAMP,
+        events: EVENT_POOL_DEFAULT,
+        ringRadius: SPAWN.ringRadius,
+        rng
+      })
+      for (const p of placements) {
+        if (p.behavior === 'charger') {
+          chargerFound = true
+        }
+      }
+      t += DT_MS
+    }
+
+    expect(chargerFound).toBe(false)
+  })
+
+  it('déterminisme — même seed + même centre → même déclenchement', () => {
+    const DT_MS = 16
+    const DURATION_MS = CAMPER.windowMs * 2
+    const IMMOBILE_CENTER = { x: 800, y: 600 }
+    const SEED = 77
+
+    const runLog = (): string[] => {
+      const state = createWaveDirectorState()
+      const rng = new Rng(SEED)
+      const log: string[] = []
+      let t = 0
+      while (t < DURATION_MS) {
+        const placements = stepWaveDirector(state, {
+          dtMs: DT_MS,
+          elapsedMs: t,
+          center: IMMOBILE_CENTER,
+          ramp: SPAWN_RAMP,
+          events: EVENT_POOL_DEFAULT,
+          ringRadius: SPAWN.ringRadius,
+          rng
+        })
+        if (placements.length > 0) {
+          log.push(`t=${t}:n=${placements.length}:b0=${placements[0]?.behavior ?? '?'}`)
+        }
+        t += DT_MS
+      }
+      return log
+    }
+
+    const run1 = runLog()
+    const run2 = runLog()
+    expect(run1).toEqual(run2)
+    // Sanity : l'anti-camping doit s'être déclenché au moins une fois.
+    expect(run1.some((e) => e.includes('charger'))).toBe(true)
   })
 })

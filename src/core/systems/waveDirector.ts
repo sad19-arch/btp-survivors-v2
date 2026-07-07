@@ -23,6 +23,7 @@ import type { WavePlacement } from '../types'
 import type { SpawnRampStep } from '@content/spawnRamp'
 import { spawnParamsAt } from '@content/spawnRamp'
 import { placeEvent, type WaveEventDef } from '@content/waveEvents'
+import { CAMPER } from '@content/config'
 
 // ---------------------------------------------------------------------------
 // Types publics
@@ -129,8 +130,12 @@ export function stepWaveDirector(
     state.camperCooldownMs = Math.max(0, state.camperCooldownMs - dtMs)
   }
 
-  // Hook réactif no-op (Task 9 implémentera la logique ici sans modifier le directeur).
-  reactiveHook(state, input)
+  // Hook réactif (Task 9) : anti-camping. Retourne des placements si déclenché.
+  const reactive = reactiveHook(state, input)
+  if (reactive.length > 0) {
+    // Garde-fou : priorité à l'anti-camping — on saute le slot normal ce pas.
+    return reactive
+  }
 
   // 2. Slot d'événement ?
   if (elapsedMs >= state.nextEventMs && state.budgetAcc >= EVENT_BUDGET_THRESHOLD) {
@@ -222,10 +227,63 @@ function triggerEvent(
 }
 
 /**
- * Hook réactif no-op (réservé pour Task 9 — anti-camping / détection de camping).
- * Task 9 peut remplacer ce corps sans modifier `stepWaveDirector`.
+ * Hook réactif anti-camping (Task 9).
+ *
+ * Échantillonne la position du joueur dans `state.playerTrail` (fenêtre glissante
+ * de `CAMPER.windowMs` ms). Quand la fenêtre est pleine ET le déplacement net sur
+ * la fenêtre est inférieur à `CAMPER.minMove` ET le cooldown est épuisé, force un
+ * encerclement de chargeurs qui oblige le joueur à bouger.
+ *
+ * Retourne un tableau vide (pas de déclenchement) ou les placements agressifs.
+ * `stepWaveDirector` utilisera ce retour et court-circuitera le slot normal.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function reactiveHook(_state: WaveDirectorState, _input: WaveDirectorInput): void {
-  // no-op en T8
+function reactiveHook(state: WaveDirectorState, input: WaveDirectorInput): WavePlacement[] {
+  const { dtMs, center, ringRadius, rng } = input
+
+  // Calcule le nombre maximal de samples pour couvrir la fenêtre.
+  const maxSamples = Math.ceil(CAMPER.windowMs / dtMs)
+
+  // Pousse la position courante dans le trail.
+  state.playerTrail.push({ x: center.x, y: center.y })
+
+  // Retire les samples excédentaires (glissement de fenêtre).
+  while (state.playerTrail.length > maxSamples) {
+    state.playerTrail.shift()
+  }
+
+  // Le trail doit être PLEIN (fenêtre complète écoulée) avant de mesurer.
+  if (state.playerTrail.length < maxSamples) {
+    return []
+  }
+
+  // Vérifie le cooldown.
+  if (state.camperCooldownMs > 0) {
+    return []
+  }
+
+  // Déplacement net : distance entre la position la plus ancienne et la plus récente.
+  const oldest = state.playerTrail[0]
+  if (oldest === undefined) {
+    return []
+  }
+  const dx = center.x - oldest.x
+  const dy = center.y - oldest.y
+  const displacement = Math.sqrt(dx * dx + dy * dy)
+
+  if (displacement >= CAMPER.minMove) {
+    // Le joueur bouge suffisamment — pas de punition.
+    return []
+  }
+
+  // Déclenchement : encerclement de chargeurs.
+  // Count = plancher garanti (8), éventuellement complété par budgetAcc disponible.
+  const MIN_COUNT = 8
+  const count = Math.max(MIN_COUNT, Math.min(MIN_COUNT + Math.floor(state.budgetAcc), 12))
+  // On ne consomme PAS le budgetAcc pour cet événement agressif (budget hors-cycle).
+
+  // Pose le cooldown avant de construire les placements (déterministe : même ordre
+  // d'appels rng quel que soit le chemin).
+  state.camperCooldownMs = CAMPER.cooldownMs
+
+  return placeEvent('encircle', count, ringRadius, rng, 'charger')
 }

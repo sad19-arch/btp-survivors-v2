@@ -260,3 +260,22 @@ export const INTRO = {
  * joueur→ennemi est ≤ CONE_HALF_ANGLE.
  */
 export const CONE_HALF_ANGLE = 0.5 as const
+
+/**
+ * Paramètres de détection du « camping » (joueur qui ne bouge pas assez).
+ *
+ * Si le déplacement net du joueur sur la fenêtre `windowMs` est inférieur à
+ * `minMove` px ET que le cooldown est épuisé, le directeur force un encerclement
+ * de chargeurs qui oblige à bouger.
+ *
+ * `cooldownMs` empêche le re-déclenchement immédiat : après un événement
+ * anti-camping, au moins `cooldownMs` ms doivent s'écouler avant le suivant.
+ */
+export const CAMPER = {
+  /** Fenêtre de mesure du déplacement (ms). */
+  windowMs: 6000,
+  /** Déplacement net minimal requis sur la fenêtre pour NE PAS déclencher (px). */
+  minMove: 120,
+  /** Cooldown entre deux événements anti-camping (ms). */
+  cooldownMs: 12000
+} as const
