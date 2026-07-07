@@ -64,6 +64,7 @@ Terrassement (exemple) : `cluster_excavation` (fosse `both` + 5-6 panneaux clôt
 - Streaming : n'affiche que les clusters dont l'empreinte recoupe la vue (cull par cellule).
 
 ### Vie du chantier — ouvriers navetteurs — `src/render/siteWorkers.ts` (observateur, **remplace l'errance ambiante `ambientNpc.ts`**)
+- **Densité : ~10 ouvriers actifs dans la région autour du joueur** (streamés comme le décor : ré-ancrés sur les clusters proches quand le joueur se déplace — PAS 10 figés au spawn dans un monde de 10240×7680). Répartis sur plusieurs paires de zones + rôles métier. Perf négligeable (cosmétique).
 - Chaque ouvrier reçoit **2 ancres de zones** (issues de `SiteLayout`, ex. fosse ↔ benne) + un **rôle métier** + un **geste** à chaque bout. Il fait la **navette** (déterministe, temps-piloté) et joue le geste à l'arrivée.
 - **Charge visible** : un sprite de charge (brouette pleine/vide, planche, seau) attaché, qui **apparaît au chargement** (fosse) et **disparaît au déchargement** (benne) → l'aller « plein », le retour « vide ».
 - **Réactif à la horde** : si un ennemi entre dans un rayon `PANIC_R`, l'ouvrier **panique** (s'arrête/fuit à l'opposé du plus proche ennemi + emote de panique, lâche éventuellement sa charge) ; reprend la navette une fois dégagé.
