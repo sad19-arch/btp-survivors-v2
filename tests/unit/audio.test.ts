@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { musicForState, MUSIC, SFX, VOICE, voiceStage, SFX_FILES, MUSIC_FILES, VOICE_FILES } from '@/audio/manifest'
+import { musicForState, MUSIC, SFX, VOICE, voiceStage, SFX_FILES, MUSIC_FILES_SHARED, VOICE_FILES } from '@/audio/manifest'
 import { clamp01, musicGain, sfxGain, duckedGain, type AudioLevels } from '@/audio/settings'
 import { Simulation } from '@core/simulation'
 import { WEAPONS } from '@content/weapons'
@@ -21,17 +21,17 @@ describe('audio — musique par état (pure)', () => {
     expect(g('game', 'finitions', true)).toBe(MUSIC.boss)
   })
 
-  it('rotation des 4 pistes par phase', () => {
-    expect(g('game', 'terrain_vierge')).toBe(MUSIC.stage_a)
-    expect(g('game', 'fondations')).toBe(MUSIC.stage_b)
-    expect(g('game', 'gros_oeuvre')).toBe(MUSIC.stage_alt)
-    expect(g('game', 'livraison_audit')).toBe(MUSIC.stage_alt)
-    expect(g('game', 'charpente_toiture')).toBe(MUSIC.stage_c)
-    expect(g('game', 'finitions')).toBe(MUSIC.stage_c)
+  it('musique dédiée par phase (10 pistes)', () => {
+    expect(g('game', 'terrain_vierge')).toBe(MUSIC.stage_01)
+    expect(g('game', 'fondations')).toBe(MUSIC.stage_03)
+    expect(g('game', 'gros_oeuvre')).toBe(MUSIC.stage_05)
+    expect(g('game', 'livraison_audit')).toBe(MUSIC.stage_10)
+    expect(g('game', 'charpente_toiture')).toBe(MUSIC.stage_07)
+    expect(g('game', 'finitions')).toBe(MUSIC.stage_09)
   })
 
   it("l'upgrade garde la musique de jeu (pas de switch à chaque niveau)", () => {
-    expect(g('upgrade', 'terrain_vierge')).toBe(MUSIC.stage_a)
+    expect(g('upgrade', 'terrain_vierge')).toBe(MUSIC.stage_01)
   })
 })
 
@@ -46,10 +46,13 @@ describe('audio — cohérence manifeste ↔ préchargement', () => {
     }
   })
 
-  it('chaque musique référencée est préchargée', () => {
-    const loaded = new Set(MUSIC_FILES.map(([k]) => k))
-    for (const key of Object.values(MUSIC)) {
-      expect(loaded.has(key), `${key} non préchargé`).toBe(true)
+  it('chaque musique partagée référencée est dans MUSIC_FILES_SHARED', () => {
+    // Les pistes de stage sont lazy-loadées (non préchargées au boot) — seules les
+    // musiques partagées (titre/menu/boss/victoire/gameover/ambiance) doivent être dans SHARED.
+    const sharedLoaded = new Set(MUSIC_FILES_SHARED.map(([k]) => k))
+    const sharedKeys = [MUSIC.title, MUSIC.menu, MUSIC.boss, MUSIC.victory, MUSIC.gameover] as const
+    for (const key of sharedKeys) {
+      expect(sharedLoaded.has(key), `${key} non préchargé`).toBe(true)
     }
   })
 

@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { MUSIC_FILES, SFX_FILES, VOICE_FILES } from '@/audio/manifest'
+import { MUSIC_FILES_SHARED, SFX_FILES, VOICE_FILES } from '@/audio/manifest'
 import type { GameSceneData } from './GameScene'
 
 /**
@@ -23,7 +23,7 @@ export class BootScene extends Phaser.Scene {
       return // pas d'audio en test/headless (déterminisme + perf)
     }
     const base = import.meta.env.BASE_URL
-    for (const [key, file] of [...MUSIC_FILES, ...SFX_FILES, ...VOICE_FILES]) {
+    for (const [key, file] of [...MUSIC_FILES_SHARED, ...SFX_FILES, ...VOICE_FILES]) {
       this.load.audio(key, base + file)
     }
   }

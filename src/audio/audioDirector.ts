@@ -1,10 +1,13 @@
 import type Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
 import type { WeaponFiredEvent, PickupCollectedEvent, BossSpawnedEvent } from '@core/events'
-import { SFX, VOICE, voiceRunStart, musicForState, MUSIC, AMB, type MusicKey } from './manifest'
+import { SFX, VOICE, voiceRunStart, musicForState, MUSIC, AMB, MUSIC_FILES_STAGE, type MusicKey } from './manifest'
 import { musicGain, sfxGain, duckedGain, type AudioLevels } from './settings'
 import { playZzfx } from './zzfx'
 import { weaponZzfx } from './weaponSfx'
+
+/** Table clé → url pour les pistes de stage (lazy-load). */
+const STAGE_TRACK_URLS: ReadonlyMap<string, string> = new Map(MUSIC_FILES_STAGE)
 
 /**
  * Retourne la clé de voix à jouer au Nième level-up (compteur 0-based).
@@ -95,6 +98,8 @@ export class AudioDirector {
   private amb: SoundInstance | null = null
   private voice: SoundInstance | null = null
   private readonly lastSfx = new Map<string, number>()
+  /** Pistes de stage en cours de chargement (anti-double-load). */
+  private readonly loadingKeys = new Set<string>()
   private prevScreen = ''
   private presentsPlayed = false
   /** Compteur de level-ups, pour l'alternance des voix (pair/impair). */
@@ -420,13 +425,62 @@ export class AudioDirector {
       this.current = null
     }
     this.currentKey = next
-    if (next !== null && this.hasAudio(next)) {
-      // La musique de game-over est un jingle court : une seule lecture (pas de boucle).
-      const loop = !NON_LOOPING_MUSIC.has(next)
-      const snd = this.sound.add(next, { loop, volume: 0 }) as unknown as SoundInstance
-      snd.play()
-      this.current = snd
+    if (next === null) {
+      return
     }
+    if (this.hasAudio(next)) {
+      this.startMusicTrack(next)
+      return
+    }
+    // Piste de stage non encore dans le cache → lazy-load.
+    const url = STAGE_TRACK_URLS.get(next)
+    if (url === undefined || this.loadingKeys.has(next)) {
+      return // piste inconnue ou déjà en cours de chargement → silence
+    }
+    this.loadingKeys.add(next)
+    this.loadStageTrackRuntime(next, url)
+  }
+
+  /**
+   * Chargement runtime d'une piste de stage via le ScenePlugin Phaser.
+   * Récupère une scène active (boot ou game) qui possède un LoaderPlugin,
+   * démarre le chargement, puis joue la piste quand elle est prête.
+   * Si `currentKey` a changé entre-temps (l'utilisateur a changé d'écran),
+   * la piste est abandonnée silencieusement.
+   */
+  private loadStageTrackRuntime(key: MusicKey, url: string): void {
+    // Utilise la scène 'game' (active pendant un run) ou 'boot' comme support de chargement.
+    // `getScene` retourne null si la scène n'existe pas encore — on tente les deux.
+    const sceneManager = this.sound.game.scene
+    const loader = (sceneManager.getScene('game') ?? sceneManager.getScene('boot')) as
+      | (Phaser.Scene & { load: Phaser.Loader.LoaderPlugin })
+      | null
+    if (loader === null) {
+      this.loadingKeys.delete(key)
+      return
+    }
+    // Le LoaderPlugin applique sa propre baseURL — on passe le chemin relatif tel quel.
+    loader.load.audio(key, url)
+    loader.load.once('complete', () => {
+      this.loadingKeys.delete(key)
+      // Jouer uniquement si c'est toujours la piste désirée et qu'aucune piste ne joue déjà.
+      if (this.currentKey === key && this.current === null) {
+        this.startMusicTrack(key)
+      }
+    })
+    loader.load.once('loaderror', () => {
+      this.loadingKeys.delete(key)
+    })
+    loader.load.start()
+  }
+
+  /** Crée et lance l'instance sonore (cache déjà présent). */
+  private startMusicTrack(next: MusicKey): void {
+    // La musique de game-over est un jingle court : une seule lecture (pas de boucle).
+    const loop = !NON_LOOPING_MUSIC.has(next)
+    const snd = this.sound.add(next, { loop, volume: 0 }) as unknown as SoundInstance
+    snd.play()
+    this.current = snd
   }
 
   private rampMusic(): void {

@@ -24,10 +24,16 @@ export const MUSIC = {
   boss: 'music_boss',
   victory: 'music_victory',
   gameover: 'music_gameover',
-  stage_a: 'music_stage_a',
-  stage_b: 'music_stage_b',
-  stage_c: 'music_stage_c',
-  stage_alt: 'music_stage_alt'
+  stage_01: 'music_stage_01',
+  stage_02: 'music_stage_02',
+  stage_03: 'music_stage_03',
+  stage_04: 'music_stage_04',
+  stage_05: 'music_stage_05',
+  stage_06: 'music_stage_06',
+  stage_07: 'music_stage_07',
+  stage_08: 'music_stage_08',
+  stage_09: 'music_stage_09',
+  stage_10: 'music_stage_10'
 } as const
 
 export type MusicKey = (typeof MUSIC)[keyof typeof MUSIC]
@@ -35,18 +41,43 @@ export type MusicKey = (typeof MUSIC)[keyof typeof MUSIC]
 /** Clé de l'ambiance de chantier (nappe loopée sous la musique de jeu). */
 export const AMB = 'amb_chantier'
 
-/** Fichiers musique + ambiance à précharger (clé Phaser → chemin sous public/). */
-export const MUSIC_FILES: ReadonlyArray<readonly [string, string]> = [
-  [MUSIC.title, 'audio/music/title.ogg'],
-  [MUSIC.menu, 'audio/music/menu.ogg'],
-  [MUSIC.stage_a, 'audio/music/stage_a.ogg'],
-  [MUSIC.stage_b, 'audio/music/stage_b.ogg'],
-  [MUSIC.stage_c, 'audio/music/stage_c.ogg'],
-  [MUSIC.stage_alt, 'audio/music/stage_alt.ogg'],
-  [MUSIC.boss, 'audio/music/boss.ogg'],
-  [MUSIC.victory, 'audio/music/victory.ogg'],
+/**
+ * Fichiers audio PARTAGÉS à précharger au boot (titre/menus/boss/victoire/gameover/ambiance).
+ * Ne contient AUCUNE piste de stage (chargement lazy à la demande).
+ */
+export const MUSIC_FILES_SHARED: ReadonlyArray<readonly [string, string]> = [
+  [MUSIC.title, 'audio/music/title.mp3'],
+  [MUSIC.menu, 'audio/music/menu.mp3'],
+  [MUSIC.boss, 'audio/music/boss.mp3'],
+  [MUSIC.victory, 'audio/music/victory.mp3'],
   [MUSIC.gameover, 'audio/music/gameover.ogg'],
   [AMB, 'audio/amb/chantier.ogg']
+]
+
+/**
+ * Pistes de stage (lazy-load : chargées à la demande, pas au boot).
+ * Clé Phaser → chemin sous public/.
+ */
+export const MUSIC_FILES_STAGE: ReadonlyArray<readonly [string, string]> = [
+  [MUSIC.stage_01, 'audio/music/stage_01.mp3'],
+  [MUSIC.stage_02, 'audio/music/stage_02.mp3'],
+  [MUSIC.stage_03, 'audio/music/stage_03.mp3'],
+  [MUSIC.stage_04, 'audio/music/stage_04.mp3'],
+  [MUSIC.stage_05, 'audio/music/stage_05.mp3'],
+  [MUSIC.stage_06, 'audio/music/stage_06.mp3'],
+  [MUSIC.stage_07, 'audio/music/stage_07.mp3'],
+  [MUSIC.stage_08, 'audio/music/stage_08.mp3'],
+  [MUSIC.stage_09, 'audio/music/stage_09.mp3'],
+  [MUSIC.stage_10, 'audio/music/stage_10.mp3']
+]
+
+/**
+ * @deprecated Utiliser `MUSIC_FILES_SHARED` pour le boot et `MUSIC_FILES_STAGE` pour le lazy-load.
+ * Conservé pour rétrocompatibilité des imports existants (tests, etc.).
+ */
+export const MUSIC_FILES: ReadonlyArray<readonly [string, string]> = [
+  ...MUSIC_FILES_SHARED,
+  ...MUSIC_FILES_STAGE
 ]
 
 const SFX_NAMES: readonly string[] = [
@@ -179,18 +210,18 @@ export function voiceRunStart(order: number): string[] {
   return pool
 }
 
-/** Rotation des 4 pistes gameplay par phase (clé = id de phase). */
+/** Musique dédiée par phase (une piste unique par stage, en ordre de phase). */
 const STAGE_MUSIC: Readonly<Record<string, MusicKey>> = {
-  terrain_vierge: MUSIC.stage_a,
-  terrassement: MUSIC.stage_a,
-  fondations: MUSIC.stage_b,
-  reseaux_enterres: MUSIC.stage_b,
-  echafaudages: MUSIC.stage_b,
-  gros_oeuvre: MUSIC.stage_alt,
-  livraison_audit: MUSIC.stage_alt,
-  charpente_toiture: MUSIC.stage_c,
-  second_oeuvre: MUSIC.stage_c,
-  finitions: MUSIC.stage_c
+  terrain_vierge: MUSIC.stage_01,
+  terrassement: MUSIC.stage_02,
+  fondations: MUSIC.stage_03,
+  reseaux_enterres: MUSIC.stage_04,
+  gros_oeuvre: MUSIC.stage_05,
+  echafaudages: MUSIC.stage_06,
+  charpente_toiture: MUSIC.stage_07,
+  second_oeuvre: MUSIC.stage_08,
+  finitions: MUSIC.stage_09,
+  livraison_audit: MUSIC.stage_10
 }
 
 export interface MusicContext {
@@ -214,6 +245,6 @@ export function musicForState(ctx: MusicContext): MusicKey | null {
       if (ctx.bossPresent) {
         return MUSIC.boss
       }
-      return STAGE_MUSIC[ctx.stageId] ?? MUSIC.stage_a
+      return STAGE_MUSIC[ctx.stageId] ?? MUSIC.stage_01
   }
 }
