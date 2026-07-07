@@ -103,6 +103,12 @@ export const BEHAVIOR_TUNING = {
     /** Fréquence angulaire (rad/s). 1.3 Hz ≈ oscillation rapide visible. */
     omega: 2.0 * Math.PI * 1.3,
   },
+  circler: {
+    /** Rayon de l'anneau orbital autour du joueur (px). */
+    orbitR: 90,
+    /** Vitesse angulaire de rotation sur l'anneau (rad/s). */
+    rotSpeed: 0.35,
+  },
 } as const
 
 /** Id du mini-boss MVP. */

@@ -95,10 +95,24 @@ function steerZigzag(pos: Vec2, vel: Vec2, enemy: EnemyComp, nearest: Vec2 | nul
   vel.y = (uy + py * osc) * enemy.speed
 }
 
-/** Stub — sera implémenté à la tâche 3. */
+/** Encerclement orbital : vise un point sur un anneau autour du joueur et fait dériver l'angle. */
 function steerCircler(pos: Vec2, vel: Vec2, enemy: EnemyComp, nearest: Vec2 | null, dtMs: number): void {
-  void dtMs
-  steerChase(pos, vel, enemy, nearest)
+  if (nearest === null) { vel.x = 0; vel.y = 0; return }
+  const { orbitR, rotSpeed } = BEHAVIOR_TUNING.circler
+  const a = enemy.bAngle ?? 0
+  const tx = nearest.x + Math.cos(a) * orbitR
+  const ty = nearest.y + Math.sin(a) * orbitR
+  const dx = tx - pos.x
+  const dy = ty - pos.y
+  const len = Math.hypot(dx, dy)
+  if (len < 1) {
+    vel.x = 0
+    vel.y = 0
+  } else {
+    vel.x = (dx / len) * enemy.speed
+    vel.y = (dy / len) * enemy.speed
+  }
+  enemy.bAngle = a + rotSpeed * (dtMs / 1000)
 }
 
 /** Stub — sera implémenté à la tâche 4. */

@@ -61,12 +61,23 @@ describe('enemyAiSystem — dispatch', () => {
     expect(v3.y).toBeCloseTo(v2y, 6)
   })
 
-  it('stub circler: délègue à chase (tâche 3 non implémentée)', () => {
-    const { w, e } = withPlayerAndEnemy('circler', 100, 0)
+  it('circler: vise un point sur l\'anneau autour du joueur', () => {
+    const { w, e } = withPlayerAndEnemy('circler', 400, 400)
+    const enemy = w.get(e, 'enemy')
+    expect(enemy).toBeDefined()
+    if (enemy === undefined) { throw new Error('enemy component manquant') }
+    enemy.bAngle = 0
     enemyAiSystem(w, 0, 16)
     const v = w.get(e, 'velocity')
-    expect(v?.x ?? 0).toBeCloseTo(-150, 5)
-    expect(v?.y ?? 0).toBeCloseTo(0, 5)
+    expect(v).toBeDefined()
+    if (v === undefined) { throw new Error('velocity component manquant') }
+    // cible ≈ (90,0) depuis (400,400) → direction majoritairement -x et -y
+    expect(v.x).toBeLessThan(0)
+    expect(v.y).toBeLessThan(0)
+    const enemyAfter = w.get(e, 'enemy')
+    expect(enemyAfter).toBeDefined()
+    if (enemyAfter === undefined) { throw new Error('enemy component manquant après tick') }
+    expect(enemyAfter.bAngle).not.toBe(0) // a dérivé
   })
 
   it('stub sweep: délègue à chase (tâche 4 non implémentée)', () => {
