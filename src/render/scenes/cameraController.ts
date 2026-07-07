@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
+import { shakeForDamage } from '@render/shakeForDamage'
 
 /** Zoom cible en solo / dernier survivant (identique au zoom initial de `create()` = 1.2). */
 const SOLO_ZOOM = 1.2
@@ -29,12 +30,20 @@ const GROUP_ZOOM_FAR = 0.66
  */
 export class CameraController {
   private following = false
+  /** −1 = non initialisé (avant la première frame de jeu). */
+  private lastTotalHp = -1
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  /** Somme des PV de tous les joueurs de l'état courant. */
+  private totalHp(state: AppViewState): number {
+    return state.players.reduce((sum, p) => sum + p.hp, 0)
+  }
 
   /** Coupe le suivi (nouvelle run / ré-armement de l'intro). */
   reset(): void {
     this.following = false
+    this.lastTotalHp = -1
     this.scene.cameras.main.stopFollow()
   }
 
@@ -49,6 +58,17 @@ export class CameraController {
     if (state.introActive) {
       return
     }
+
+    // Screenshake : suivi des PV totaux, déclenche le shake natif Phaser sur dégât.
+    const curTotalHp = this.totalHp(state)
+    if (this.lastTotalHp >= 0) {
+      const s = shakeForDamage(this.lastTotalHp, curTotalHp)
+      if (s !== null) {
+        this.scene.cameras.main.shake(s.durationMs, s.intensity)
+      }
+    }
+    this.lastTotalHp = curTotalHp
+
     const alive = state.players.filter((p) => p.alive)
 
     if (alive.length <= 1) {
