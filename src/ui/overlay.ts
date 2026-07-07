@@ -1,5 +1,6 @@
 import { h, clear } from './h'
 import { injectStyles } from './styles'
+import { formatTime, formatNumber } from './format'
 import { playerColor } from '@content/players'
 import { gamepadHudModel } from './gamepadHud'
 import { Minimap } from './minimap'
@@ -560,43 +561,63 @@ export class Overlay {
   }
 
   private gameOverPanel(state: AppViewState): HTMLElement {
-    const p = state.players[0]
-    const isMulti = state.players.length >= 2
-
-    // Lignes de kills par joueur (multi) ou total (solo).
-    const killLines: HTMLElement[] = []
-    if (isMulti) {
-      // Trouver le joueur avec le plus de kills pour le label VAINQUEUR/PERDANT.
-      const maxKills = Math.max(...state.players.map((pl) => pl.kills))
-      for (const pl of state.players) {
-        const isWinner = pl.kills === maxKills
-        const label = isWinner ? 'VAINQUEUR' : 'PERDANT'
-        killLines.push(
-          h('span', { text: `J${pl.id} — ${pl.kills} kill${pl.kills !== 1 ? 's' : ''} [${label}]` })
+    const report = state.deathReport
+    // Garde-fou : si le rapport est absent, panneau minimal sans crash.
+    if (report === null) {
+      return h(
+        'div',
+        { className: 'screen' },
+        h(
+          'div',
+          { className: 'panel' },
+          h('h1', { className: 'panel__title', text: 'CHANTIER INTERROMPU' }),
+          this.menuList(state)
         )
-      }
-    } else {
-      killLines.push(h('span', { text: `Ennemis tués : ${state.score}` }))
+      )
     }
 
+    // 1. Titre.
+    const title = h('h1', { className: 'report__title', text: 'CHANTIER INTERROMPU' })
+
+    // 2. Phrase culte ou moquerie (emphase si progressRatio > 0.8).
+    const isCult = report.progressRatio > 0.8
+    const quoteEl = h(
+      'p',
+      { className: isCult ? 'report__quote report__quote--cult' : 'report__quote' },
+      `« ${report.quote} »`
+    )
+
+    // 3. Barre Cuphead — marqueur clampé dans [3, 94] pour ne jamais sortir du rail.
+    const markerPct = Math.max(3, Math.min(report.progressPercent, 94))
+    const markerImg = h('img', {
+      className: 'report__marker',
+      attrs: { src: 'ui_death_marker.png', alt: '' }
+    })
+    markerImg.style.left = `${markerPct}%`
+
+    const bar = h(
+      'div',
+      { className: 'report__bar' },
+      h('img', { className: 'report__start', attrs: { src: 'ui_death_start.png', alt: '' } }),
+      markerImg,
+      h('img', { className: 'report__end', attrs: { src: 'ui_death_flag.png', alt: '' } })
+    )
+
+    // 4. Stats.
     const stats = h(
       'div',
-      { className: 'stats' },
-      h('span', { text: `Temps survécu : ${formatTime(state.elapsedMs)}` }),
-      h('span', { text: `Niveau atteint : ${p?.level ?? 1}` }),
-      h('span', { text: `Score : ${state.score}` }),
-      ...killLines
+      { className: 'report__stats' },
+      h('span', { text: `${report.progressPercent} % terminé` }),
+      h('span', { text: `Temps tenu : ${formatTime(report.elapsedMs)} / ${formatTime(report.stageDurationMs)}` }),
+      h('span', { text: `Ennemis tués : ${formatNumber(report.kills)}` }),
+      h('span', { text: `Plus que ${formatTime(report.remainingSeconds * 1000)} avant validation.` })
     )
+
+    // 5. Boutons via menuList (inchangé).
     return h(
       'div',
       { className: 'screen' },
-      h(
-        'div',
-        { className: 'panel' },
-        h('h1', { className: 'panel__title', text: 'Game Over' }),
-        stats,
-        this.menuList(state)
-      )
+      h('div', { className: 'panel' }, title, quoteEl, bar, stats, this.menuList(state))
     )
   }
 
@@ -749,13 +770,6 @@ export class Overlay {
   }
 }
 
-/** Formate un temps en ms vers `m:ss`. */
-function formatTime(ms: number): string {
-  const total = Math.floor(ms / 1000)
-  const m = Math.floor(total / 60)
-  const s = total % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
 
 const MONOGRAM_STOPWORDS = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'a', 'au', 'aux', 'et'])
 

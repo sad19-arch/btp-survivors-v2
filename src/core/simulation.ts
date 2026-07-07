@@ -444,6 +444,22 @@ export class Simulation {
     spawnWave(this.world, this.rng, this.phase, this.playersCentroid(), n, difficultyScaleAt(this.elapsedMs))
   }
 
+  /**
+   * [Debug/seam] Met les PV de tous les joueurs à 0.
+   * Au prochain pas de simulation, le système de mort détecte les PV ≤ 0 et
+   * bascule la scène en `'gameover'`. Helper pur : aucun random, aucun effet
+   * secondaire hors du composant `health`. Réservé aux tests e2e et au seam
+   * de debug — jamais appelé en jeu normal.
+   */
+  debugKillPlayer(): void {
+    for (const e of this.playerEntities.values()) {
+      const health = this.world.get(e, 'health')
+      if (health !== undefined) {
+        health.hp = 0
+      }
+    }
+  }
+
   /** Vue texte lisible pour « jouer à l'aveugle ». */
   renderToText(): string {
     const s = this.getState()

@@ -12,14 +12,15 @@ import {
 } from '@core/events'
 import { FocusModel } from '@ui/focusModel'
 import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
-import { INTRO, MODE_PLAYER_COUNT, modeForCount } from '@content/config'
+import { FINAL_BOSS, INTRO, MODE_PLAYER_COUNT, modeForCount } from '@content/config'
 import { WEAPONS } from '@content/weapons'
 import { PASSIVES, aggregatePassives } from '@content/passives'
 import { describeWeaponLevelDelta } from '@content/weaponDelta'
 import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
-import type { AppViewState, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
+import type { AppViewState, DeathReport, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
+import { selectDeathQuote } from '@content/deathQuotes'
 
 export interface AppOptions {
   seed: number
@@ -117,6 +118,12 @@ export class App {
    * clavier `M` / bouton manette Back/Select via `toggleMinimap()`. Défaut visible.
    */
   minimapVisible = true
+  /**
+   * Rapport de mort figé — calculé une seule fois à la première entrée en game-over,
+   * remis à `null` à chaque `start()` / `restart()`. Le roll (phrase) est tiré ici
+   * (composition root — `Math.random` AUTORISÉ hors `src/core`).
+   */
+  private _deathReport: DeathReport | null = null
 
   constructor(opts: AppOptions) {
     this.seed = opts.seed
@@ -138,6 +145,7 @@ export class App {
    */
   start(mode: GameMode = this.mode, characters: readonly string[] = this.selectedCharacters): void {
     this.bumpState()
+    this._deathReport = null
     const wasStarted = this.started // RE-démarrage ? (partie déjà en cours)
     this.mode = mode
     this.selectedCharacters = [...characters] // persiste pour restart/stage suivant/setSeed
@@ -415,6 +423,16 @@ export class App {
     this.sim?.debugSpawnEnemies(n)
   }
 
+  /**
+   * [Debug/seam] Met les PV de tous les joueurs à 0 → game-over au prochain pas.
+   * Permet d'atteindre l'écran de mort de façon déterministe dans les tests e2e.
+   * Réservé aux tests et au seam de debug — jamais appelé en jeu normal.
+   */
+  debugKillPlayer(): void {
+    this.bumpState()
+    this.sim?.debugKillPlayer()
+  }
+
   // --- état exposé ----------------------------------------------------------
 
   /**
@@ -442,6 +460,21 @@ export class App {
     this.refreshFocus()
     const base = this.sim?.getState() ?? emptyState(this.seed, this.selectedPhase)
     const screen = this.screen
+    // Calcul figé du rapport de mort : une seule fois à l'entrée du game-over.
+    if (screen === 'gameover' && this._deathReport === null) {
+      const stageDurationMs = FINAL_BOSS.atMs
+      const elapsedMs = base.elapsedMs
+      const kills = base.score
+      const progressRatio = Math.max(0, Math.min(elapsedMs / stageDurationMs, 1))
+      const progressPercent = Math.floor(progressRatio * 100)
+      const remainingSeconds = Math.max(0, Math.floor(stageDurationMs / 1000) - Math.floor(elapsedMs / 1000))
+      const quote = selectDeathQuote({
+        elapsedSeconds: Math.floor(elapsedMs / 1000),
+        stageDurationSeconds: stageDurationMs / 1000,
+        roll: Math.random()
+      })
+      this._deathReport = { elapsedMs, kills, progressRatio, progressPercent, remainingSeconds, stageDurationMs, quote }
+    }
     const phase = ORDERED_PHASES.find((p) => (p.id as string) === base.stageId)
     return {
       ...base,
@@ -462,7 +495,8 @@ export class App {
       justEvolvedWeaponName:
         base.justEvolved !== null
           ? (WEAPONS[base.justEvolved]?.name ?? base.justEvolved)
-          : null
+          : null,
+      deathReport: screen === 'gameover' ? this._deathReport : null
     }
   }
 
