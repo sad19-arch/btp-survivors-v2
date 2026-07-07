@@ -9,7 +9,7 @@ Les stages sont « jolis mais en vrac » : le décor est placé par **zones + de
 1. **Modèle** : **clusters prefab procéduraux**. On garde le monde streamé (10240×7680) ; on place des **blocs cohérents** (Lego) via une **carte de zones grossière seedée**, avec espacement anti-chevauchement. La méthode « plan de site » sert à concevoir chaque cluster + la grille de zones.
 2. **Assets** : **générer le set manquant** (PixelLab) — panneau de clôture chantier (répétable), bande de route/piste, portail d'accès, poteau d'angle. Golden-lock du style d'abord.
 3. **Terrain tactique** : le décor devient **collidable** → connu de la **sim** (`src/core`). Change le gameplay et l'équilibrage.
-4. **Clôtures & IA** : **enclos ouverts en U** (jamais fermés), ennemis avec **glissement léger** le long des obstacles (PAS de pathfinding), **spawn et lanes garantis sans blocage**.
+4. **Clôtures & IA** : **champ de flux** (pathfinding léger, déterministe, partagé) → les ennemis **contournent** les obstacles et rejoignent le **portail**. Les enclos peuvent donc être des **anneaux quasi-fermés avec une ouverture (gate)** — plus fidèles au vrai chantier. Push-out + glissement en complément. **Spawn et lanes garantis sans blocage.**
 5. **Déroulé** : **golden terrassement** (compo + collision + assets + capture → validation) **puis** les 9 stages.
 
 ## Contraintes d'architecture (impératives)
@@ -47,10 +47,17 @@ Terrassement (exemple) : `cluster_excavation` (fosse `both` + 5-6 panneaux clôt
 
 ### Collision — `src/core/systems/obstacleCollision.ts`
 - Après le déplacement de chaque entité (joueur + ennemis), **push-out** hors des obstacles chevauchés (résolution de pénétration circle↔circle / circle↔segment), déterministe.
-- **Glissement ennemi** : la vitesse de poursuite qui pénètre un obstacle est **projetée sur la tangente** (l'ennemi glisse le long au lieu de se bloquer). Pas de pathfinding.
+- **Navigation ennemie** : direction = **champ de flux** (cf. ci-dessous) mélangée au chase direct ; la vitesse qui pénètre encore un obstacle est **projetée sur la tangente** (glissement) en complément.
 - **Par cible** : `collide: 'both'` bloque joueur+ennemis ; `'enemies'` bloque seulement les ennemis ; `'none'` = cosmétique (non collidable).
 - Requête via `SpatialGrid` (obstacles insérés une fois au reset).
-- **Le joueur n'est jamais piégé** : enclos ouverts + spawn/lanes sûrs (garantis par le zonage).
+- **Le joueur n'est jamais piégé** : tout enclos a un **portail**, spawn/lanes sûrs (garantis par le zonage).
+
+### Pathfinding — champ de flux — `src/core/systems/flowField.ts`
+- **UN seul BFS/Dijkstra depuis le joueur** sur une **grille locale grossière** (fenêtre ~4096² autour du joueur, cellule ~128 px → ~32×32 cellules) → un **champ de directions** vers le joueur en **contournant les obstacles**. Partagé par TOUS les ennemis (échantillonnage **O(1)/ennemi**) → coût ~indépendant du nombre d'ennemis.
+- **Throttle** : rebâti seulement quand le joueur **change de cellule** (~toutes les 6–10 frames), pas chaque frame.
+- **Déterministe** : grille + obstacles + ordre de voisins fixes, **zéro RNG** → même coût en headless (`sim:check`).
+- **Repli** : un ennemi **hors de la fenêtre locale** (loin du joueur) suit le chase direct (les obstacles sont locaux aux clusters proches).
+- **Anti-escalier** : la direction du flux est **mélangée** au vecteur chase direct pour lisser les coins.
 
 ### Rendu — `src/render/siteRenderer.ts` (observateur)
 - Consomme `SiteLayout` (exposé via getState ou fourni au boot) pour **dessiner les clusters aux mêmes positions** que la sim. Remplace le semis hero par des clusters ; garde un léger clutter streamé pour la texture.
@@ -64,7 +71,7 @@ Les obstacles changent le kite (couverts, goulots, glissement horde) → **re-tu
 
 ## Sécurité / anti-frustration (invariants à tester)
 - Aucun obstacle `both` dans `SPAWN_SAFE_R` du spawn.
-- Tout enclos a une **ouverture** (jamais 4 côtés fermés) — testé sur les prefabs.
+- Tout enclos a **au moins un portail** (le champ de flux y route les ennemis) — testé sur les prefabs.
 - Le joueur ne peut pas être enfermé (au moins une lane libre depuis toute cellule) — testé sur le zonage.
 - Déterminisme : même seed ⇒ obstacles identiques (test).
 - `siteRng` n'altère pas le flux RNG de la sim (test : liste d'ennemis/loot identique avec/sans site — comme l'isolation `_waveRng`/`chestRng`).
@@ -75,11 +82,12 @@ Gates par tâche : tsc 0 · lint 0 · Vitest (siteLayout, collision, prefabs, in
 ## Séquencement (golden-first)
 1. **Assets golden** (panneau clôture d'abord → set) + QA.
 2. **Data** : `clusters.ts` (prefabs terrassement) + `siteLayout.ts` (zonage pur seedé) + tests.
-3. **Collision core** : `obstacleCollision.ts` + glissement + push-out + sécurité spawn + tests + isolation RNG.
-4. **Rendu** : `siteRenderer.ts` (dessine clusters aux positions sim) + cull streaming.
-5. **Golden terrassement** : brancher, capture en jeu → **GATE user** (validation visuelle + jouabilité).
-6. **Re-tune + re-baseline** sim.
-7. **Déroulé 9 stages** : prefabs + zonage par stage (chacun : sémantique → contraintes → prefabs → ASCII → auto-vérif), stage par stage, capture.
+3. **Collision core** : `obstacleCollision.ts` (push-out `both`/`enemies`, sécurité spawn) + tests + isolation RNG.
+4. **Pathfinding** : `flowField.ts` (BFS local depuis le joueur, throttlé, déterministe) + branchement `enemyAi` (mélange flux+chase+glissement) + tests (contournement d'un obstacle, jamais coincé).
+5. **Rendu** : `siteRenderer.ts` (dessine clusters aux positions sim) + cull streaming.
+6. **Golden terrassement** : brancher, capture en jeu → **GATE user** (validation visuelle + jouabilité).
+7. **Re-tune + re-baseline** sim.
+8. **Déroulé 9 stages** : prefabs + zonage par stage (chacun : sémantique → contraintes → prefabs → ASCII → auto-vérif), stage par stage, capture.
 
 ## Hors périmètre
-Pathfinding A\*/navmesh (glissement suffit). Destruction d'obstacles. Collision entre décors non-collidables. Refonte du sol en « vraies routes » de tuiles (la route = bande de décor/asset). Le lot juice (séparé).
+A\* par ennemi / navmesh complet (le champ de flux partagé suffit). Destruction d'obstacles. Collision entre décors non-collidables. Refonte du sol en « vraies routes » de tuiles (la route = bande de décor/asset). Le lot juice (séparé).
