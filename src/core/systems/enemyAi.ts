@@ -1,5 +1,6 @@
 import type { World } from '../world'
 import type { Vec2, EnemyComp } from '../types'
+import { BEHAVIOR_TUNING } from '@content/enemies'
 
 /**
  * IA d'ennemi : dispatch vers le comportement de chaque ennemi, puis applique
@@ -81,10 +82,17 @@ export function steerChase(pos: Vec2, vel: Vec2, enemy: EnemyComp, nearest: Vec2
 // tests de non-régression passent. Les signatures définitives seront posées
 // aux tâches 2-5.
 
-/** Stub — sera implémenté à la tâche 2. */
+/** Ondulation Medusa : homing + composante perpendiculaire sinusoïdale (déterministe). */
 function steerZigzag(pos: Vec2, vel: Vec2, enemy: EnemyComp, nearest: Vec2 | null, elapsedMs: number): void {
-  void elapsedMs
-  steerChase(pos, vel, enemy, nearest)
+  if (nearest === null) { vel.x = 0; vel.y = 0; return }
+  const dx = nearest.x - pos.x, dy = nearest.y - pos.y, len = Math.hypot(dx, dy)
+  if (len === 0) { vel.x = 0; vel.y = 0; return }
+  const ux = dx / len, uy = dy / len            // direction joueur (normalisée)
+  const px = -uy, py = ux                        // perpendiculaire (rotation 90°)
+  const { amp, omega } = BEHAVIOR_TUNING.zigzag
+  const osc = amp * Math.sin(omega * (elapsedMs / 1000) + (enemy.bPhase ?? 0))
+  vel.x = (ux + px * osc) * enemy.speed
+  vel.y = (uy + py * osc) * enemy.speed
 }
 
 /** Stub — sera implémenté à la tâche 3. */

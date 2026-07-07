@@ -36,12 +36,29 @@ describe('enemyAiSystem — dispatch', () => {
     expect(v?.y ?? 0).toBeCloseTo(0, 5)
   })
 
-  it('stub zigzag: délègue à chase (tâche 2 non implémentée)', () => {
+  it('zigzag: oscillation perpendiculaire bornée + déterministe', () => {
     const { w, e } = withPlayerAndEnemy('zigzag', 100, 0)
-    enemyAiSystem(w, 0, 16)
+    const enemy = w.get(e, 'enemy')
+    expect(enemy).toBeDefined()
+    if (enemy === undefined) { return }
+    enemy.bPhase = 0
+    enemyAiSystem(w, 250, 16) // t=0.25s
     const v = w.get(e, 'velocity')
-    expect(v?.x ?? 0).toBeCloseTo(-150, 5)
-    expect(v?.y ?? 0).toBeCloseTo(0, 5)
+    expect(v).toBeDefined()
+    if (v === undefined) { return }
+    const speed = Math.hypot(v.x, v.y)
+    expect(speed).toBeGreaterThan(0)
+    expect(Math.abs(v.y)).toBeGreaterThan(1)          // composante perpendiculaire réelle
+    expect(speed).toBeLessThanOrEqual(150 * 1.8)      // borné
+    // déterministe : même elapsedMs → même résultat
+    const v2x = v.x, v2y = v.y
+    v.x = 0; v.y = 0
+    enemyAiSystem(w, 250, 16)
+    const v3 = w.get(e, 'velocity')
+    expect(v3).toBeDefined()
+    if (v3 === undefined) { return }
+    expect(v3.x).toBeCloseTo(v2x, 6)
+    expect(v3.y).toBeCloseTo(v2y, 6)
   })
 
   it('stub circler: délègue à chase (tâche 3 non implémentée)', () => {
