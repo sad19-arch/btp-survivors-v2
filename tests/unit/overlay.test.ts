@@ -177,6 +177,84 @@ describe('Overlay — inventaire HUD (armes/passifs + niveaux)', () => {
     overlay.sync(app.getState())
     expect(root.querySelectorAll('.inv__tile').length).toBe(0)
   })
+
+  it('tuile arme evolveReady:true porte inv__tile--evolve-ready + .inv__evolve-mark', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({
+      weapons: [{ id: 'scie', level: 3 }]
+    })
+    const { root, overlay } = mount()
+    // Forge un état avec evolveReady sur la première arme.
+    const state = app.getState()
+    const patched = {
+      ...state,
+      players: state.players.map((p, i) =>
+        i === 0
+          ? {
+              ...p,
+              inventory: {
+                ...p.inventory,
+                weapons: p.inventory.weapons.map((w, j) =>
+                  j === 0
+                    ? { ...w, evolveReady: true, evolveHint: 'Prête à évoluer !' }
+                    : w
+                )
+              }
+            }
+          : p
+      )
+    }
+    overlay.sync(patched)
+    const weaponTiles = root.querySelectorAll('.inv__row:not(.inv__row--passives) .inv__tile')
+    expect(weaponTiles.length).toBeGreaterThan(0)
+    const firstTile = weaponTiles[0]
+    expect(firstTile?.classList.contains('inv__tile--evolve-ready')).toBe(true)
+    expect(firstTile?.querySelector('.inv__evolve-mark')).not.toBeNull()
+  })
+
+  it('tuile arme evolveReady:false/absent ne porte PAS inv__tile--evolve-ready', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({
+      weapons: [{ id: 'scie', level: 2 }]
+    })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+    const tiles = root.querySelectorAll('.inv__tile')
+    tiles.forEach((tile) => {
+      expect(tile.classList.contains('inv__tile--evolve-ready')).toBe(false)
+      expect(tile.querySelector('.inv__evolve-mark')).toBeNull()
+    })
+  })
+
+  it('evolveReady trigger un rebuild de signature (sig change)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({ weapons: [{ id: 'scie', level: 3 }] })
+    const { root, overlay } = mount()
+    const state = app.getState()
+    // Premier sync sans evolveReady.
+    overlay.sync(state)
+    const countBefore = root.querySelectorAll('.inv__tile--evolve-ready').length
+    expect(countBefore).toBe(0)
+    // Deuxième sync avec evolveReady:true — même niveau, donc la sig DOIT changer grâce au :${e.evolveReady ? 1 : 0}.
+    const patched = {
+      ...state,
+      players: state.players.map((p, i) =>
+        i === 0
+          ? {
+              ...p,
+              inventory: {
+                ...p.inventory,
+                weapons: p.inventory.weapons.map((w, j) =>
+                  j === 0 ? { ...w, evolveReady: true } : w
+                )
+              }
+            }
+          : p
+      )
+    }
+    overlay.sync(patched)
+    expect(root.querySelectorAll('.inv__tile--evolve-ready').length).toBe(1)
+  })
 })
 
 describe('Overlay — identité du boss (mid vs final)', () => {

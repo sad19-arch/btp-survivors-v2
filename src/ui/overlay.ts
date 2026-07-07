@@ -598,7 +598,7 @@ export class Overlay {
       return
     }
     const inv = state.players[0]?.inventory ?? { weapons: [], passives: [] }
-    const sig = [...inv.weapons, ...inv.passives].map((e) => `${e.id}:${e.level}`).join(',')
+    const sig = [...inv.weapons, ...inv.passives].map((e) => `${e.id}:${e.level}:${e.evolveReady ? 1 : 0}`).join(',')
     if (sig === this.inventorySignature) {
       return
     }
@@ -622,13 +622,20 @@ export class Overlay {
    * @param small - true pour la rangée passifs (~56×56, classe `inv__tile--sm`)
    */
   private invTile(entry: InventoryEntry, small: boolean): HTMLElement {
-    const tileClass = small ? 'inv__tile inv__tile--sm' : 'inv__tile'
-    return h(
-      'div',
-      { className: tileClass },
+    const evolveReady = entry.evolveReady === true
+    const baseClass = small ? 'inv__tile inv__tile--sm' : 'inv__tile'
+    const tileClass = evolveReady ? `${baseClass} inv__tile--evolve-ready` : baseClass
+    const children: HTMLElement[] = [
       icon(entry.id, entry.name, 'inv__icon', 'inv__img', 'inv__mono'),
       h('div', { className: 'inv__lvl', text: `${entry.level}/${entry.maxLevel ?? entry.level}` })
-    )
+    ]
+    if (evolveReady) {
+      children.push(h('div', { className: 'inv__evolve-mark' }))
+    }
+    if (evolveReady && entry.evolveHint !== undefined) {
+      return h('div', { className: tileClass, attrs: { title: entry.evolveHint } }, ...children)
+    }
+    return h('div', { className: tileClass }, ...children)
   }
 
   /**

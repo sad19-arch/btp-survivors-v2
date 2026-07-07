@@ -348,6 +348,29 @@ const CSS = `
   line-height: 1;
   padding: 3px 5px;
 }
+/* J7 — Tuile d'arme prête à évoluer : halo/bordure pixel qui pulse (DA 16-bit).
+   Pas de blur, pas de gradient, coins carrés, palette imposée. */
+@keyframes inv-evolve-pulse {
+  0%   { border-color: ${PALETTE.vertBonus}; box-shadow: 2px 2px 0 ${PALETTE.contour}, 0 0 0 2px ${PALETTE.vertBonus}; }
+  50%  { border-color: ${PALETTE.jauneSecurite}; box-shadow: 2px 2px 0 ${PALETTE.contour}, 0 0 0 2px ${PALETTE.jauneSecurite}; }
+  100% { border-color: ${PALETTE.vertBonus}; box-shadow: 2px 2px 0 ${PALETTE.contour}, 0 0 0 2px ${PALETTE.vertBonus}; }
+}
+#ui-root .inv__tile--evolve-ready {
+  border: 3px solid ${PALETTE.vertBonus};
+  box-shadow: 2px 2px 0 ${PALETTE.contour}, 0 0 0 2px ${PALETTE.vertBonus};
+  animation: inv-evolve-pulse 0.6s steps(2, end) infinite;
+}
+/* Petit carré de marqueur en coin haut-droit de la tuile prête à évoluer. */
+#ui-root .inv__evolve-mark {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  background: ${PALETTE.vertBonus};
+  border: 2px solid ${PALETTE.contour};
+  box-shadow: 1px 1px 0 ${PALETTE.contour};
+}
 /* B5 — Panneau jackpot « machine à sous » (coffre d'évolution ramassé).
    DA-safe : panneaux pixel, palette palette.ts, coins carrés, ombre décalée,
    pas d'emoji/glow/gradient/coins-arrondis. Couche indépendante, pointer-events:none. */
