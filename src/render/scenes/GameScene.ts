@@ -112,6 +112,8 @@ export class GameScene extends Phaser.Scene {
   private cinemaStage!: CinemaStageImpl
   /** Séquenceur d'intro (T5) — dispatche les IntroCommand vers cinemaStage. Instance fraîche par scène. */
   private intro!: IntroSequencer
+  /** Suivi de la transition introActive (T6) — pour déclencher dispose() dès la fin de l'intro. */
+  private prevIntroActive = false
   /**
    * VFX des armes à impulsion (marteau/pied-de-biche/court-circuit), déclenché
    * par l'événement d'aura de la sim. Une forme dédiée par `kind` — pas de
@@ -659,6 +661,13 @@ export class GameScene extends Phaser.Scene {
     if (st.introActive && !this.lite) {
       this.intro.update(st.introElapsedMs)
     }
+    // Transition introActive true→false : nettoyage immédiat des acteurs cosmétiques.
+    // Sans ce dispose(), les sprites spawné par le script restent dans la scène
+    // après skipIntro() (jusqu'au prochain shutdown de scène).
+    if (this.prevIntroActive && !st.introActive) {
+      this.intro.dispose()
+    }
+    this.prevIntroActive = st.introActive
     this.syncSprites()
     this.camera.update(st, this.players.sprites)
     // Streamer de décor : throttlé toutes les 4 frames pour éviter un scan de Map
