@@ -21,7 +21,8 @@ const app = new App({
   autostart: opts.autostart !== null,
   phaseId: phaseIdFromLevel(opts.level),
   // Intro cosmétique pour le vrai joueur ; jamais en test/e2e/capture (seam).
-  intro: !opts.test
+  // Exception : ?intro=1 force l'intro même en test (e2e de la plomberie cinéma).
+  intro: opts.intro || !opts.test
 })
 const seam = createSeam(app)
 

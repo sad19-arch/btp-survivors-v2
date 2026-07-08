@@ -22,10 +22,13 @@ import { PlayerRenderer } from '@render/scenes/playerRenderer'
 import { TelegraphRenderer } from '@render/scenes/telegraphRenderer'
 import { SiteRenderer } from '@render/scenes/siteRenderer'
 import { SiteWorkers } from '@render/scenes/siteWorkers'
+import { IntroSequencer } from '@render/scenes/introSequencer'
+import { CinemaStageImpl, type CinemaDeps } from '@render/scenes/cinemaStageImpl'
 import { buildSiteLayout } from '@core/siteLayout'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
 import { PALETTE_HEX } from '@ui/palette'
+import { INTRO_SCRIPTS } from '@content/introScripts'
 
 /** Feuille PARTAGÉE (tous stages) : le joueur. Ennemis ET boss sont PAR STAGE (voir stages.ts). */
 const SHARED_SHEETS: ReadonlyArray<readonly [string, string, number]> = [['player', 'player_j1.png', 192]]
@@ -105,6 +108,10 @@ export class GameScene extends Phaser.Scene {
   private siteRenderer!: SiteRenderer
   /** Ouvriers navetteurs (T6) — module dédié, GameScene délègue. */
   private siteWorkers!: SiteWorkers
+  /** Façade cinématique (T5) — implémentation Phaser des CinemaDeps, instance fraîche par scène. */
+  private cinemaStage!: CinemaStageImpl
+  /** Séquenceur d'intro (T5) — dispatche les IntroCommand vers cinemaStage. Instance fraîche par scène. */
+  private intro!: IntroSequencer
   /**
    * VFX des armes à impulsion (marteau/pied-de-biche/court-circuit), déclenché
    * par l'événement d'aura de la sim. Une forme dédiée par `kind` — pas de
@@ -317,6 +324,53 @@ export class GameScene extends Phaser.Scene {
     this.siteRenderer = new SiteRenderer(this)
     // Ouvriers navetteurs (T6) : instance fraîche par scène.
     this.siteWorkers = new SiteWorkers(this)
+    // Cinématique d'intro (T5) : façade Phaser + séquenceur. Instance fraîche par scène.
+    const cinemaDeps: CinemaDeps = {
+      camCut: (cx, cy, z) => this.camera.camCut(cx, cy, z),
+      camZoomTo: (cx, cy, z, ms, ease) => this.camera.camZoomTo(cx, cy, z, ms, ease),
+      camPunchIn: (cx, cy, z, ms) => this.camera.camPunchIn(cx, cy, z, ms),
+      camWhipPan: (cx, cy, ms) => this.camera.camWhipPan(cx, cy, ms),
+      slowmo: (scale, ms) => {
+        this.tweens.timeScale = scale
+        this.time.delayedCall(ms, () => { this.tweens.timeScale = 1 })
+      },
+      banner: () => {
+        // no-op : le bandeau de phase existant est géré par l'overlay DOM — cosmétique T6.
+      },
+      voice: () => {
+        // no-op : les voix passent par l'AudioDirector (listener events) — câblé en T6.
+      },
+      sfx: () => {
+        // no-op : les SFX passent par l'AudioDirector — câblé en T6.
+      },
+      flash: () => {
+        // Flash plein écran blanc bref (cosmétique) : rectangle blanc centré sur le monde.
+        const cam = this.cameras.main
+        const w = cam.width / cam.zoom
+        const h = cam.height / cam.zoom
+        const cx = cam.scrollX + w / 2
+        const cy = cam.scrollY + h / 2
+        const rect = this.add.rectangle(cx, cy, w * 4, h * 4, 0xffffff, 1).setDepth(70)
+        this.tweens.add({ targets: rect, alpha: 0, duration: 180, onComplete: () => { rect.destroy() } })
+      },
+      shake: (intensity) => { this.cameras.main.shake(200, intensity * 0.01) },
+      makeActor: (key, x, y, scale) => {
+        const spr = this.add.sprite(x, y, key).setScale(scale).setDepth(60)
+        return {
+          setPosition: (nx, ny) => { spr.setPosition(nx, ny) },
+          moveTo: (nx, ny, ms) => { this.tweens.add({ targets: spr, x: nx, y: ny, duration: ms }) },
+          play: (anim) => {
+            if (this.textures.exists(key)) {
+              try { spr.play(anim) } catch { /* anim absente : no-op */ }
+            }
+          },
+          destroy: () => { spr.destroy() },
+        }
+      },
+    }
+    this.cinemaStage = new CinemaStageImpl(cinemaDeps)
+    this.intro = new IntroSequencer(this.cinemaStage)
+    this.intro.load(INTRO_SCRIPTS[this.loadedStageId] ?? [])
     // Sol : base tuilée (TileSprite, O(1)) + streamer de décalques/props par chunks.
     // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
     const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
@@ -520,6 +574,7 @@ export class GameScene extends Phaser.Scene {
       this.telegraph.dispose()
       this.siteRenderer.dispose()
       this.siteWorkers.dispose()
+      this.intro.dispose()
     })
 
     if (this.input.keyboard !== null) {
@@ -564,6 +619,13 @@ export class GameScene extends Phaser.Scene {
       this.seam.debugWorkers = (): { count: number } => ({
         count: this.siteWorkers.workerCount
       })
+      // T5 — Sonde cinématique d'intro (test-only) : état actif + elapsed + actorCount + zoom.
+      this.seam.debugIntroInfo = (): { active: boolean; elapsedMs: number; actorCount: number; cameraZoom: number } => ({
+        active: this.app.getState().introActive,
+        elapsedMs: this.app.getState().introElapsedMs,
+        actorCount: this.cinemaStage.actorCount,
+        cameraZoom: this.cameras.main.zoom,
+      })
       this.seam.debugCameraOverview = (zoom: number, cx: number, cy: number): void => {
         this.camera.setOverview({ zoom, cx, cy })
       }
@@ -583,6 +645,19 @@ export class GameScene extends Phaser.Scene {
     if (!this.testMode) {
       routeInput(this.app, this.readPlayerInputs(st.players.length))
       this.app.advanceTime(Math.min(delta, MAX_FRAME_MS))
+    }
+    // Skip intro sur n'importe quelle entrée (non-test uniquement : en test le seam pilote).
+    if (st.introActive && !this.testMode) {
+      const inputs = this.readPlayerInputs(1)
+      const p1 = inputs.get(1)
+      if ((p1 !== undefined && (p1.pressed.length > 0 || p1.action || p1.move.x !== 0 || p1.move.y !== 0))) {
+        this.app.skipIntro()
+      }
+    }
+    // Séquenceur d'intro : dispatche les commandes cinématiques à la façade Phaser.
+    // Sauté en mode lite (pas de textures ni de sprites chargés).
+    if (st.introActive && !this.lite) {
+      this.intro.update(st.introElapsedMs)
     }
     this.syncSprites()
     this.camera.update(st, this.players.sprites)

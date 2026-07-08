@@ -26,6 +26,8 @@ export interface GameSeam {
   restart(): void
   /** Bascule l'affichage de la mini-carte (équivalent touche M / bouton Back manette). */
   toggleMinimap(): void
+  /** Saute l'intro de run (consomme le gel cosmétique). */
+  skipIntro(): void
   chooseUpgrade(index: number): void
   events: EventTarget
   // --- helpers de debug (test-only : fast-forward pour Playwright/e2e) ---
@@ -93,6 +95,11 @@ export interface GameSeam {
   debugWorkers?(): { count: number }
   /** Fige la caméra en vue d'ensemble (outil de revue visuelle, render-only). */
   debugCameraOverview?(zoom: number, cx: number, cy: number): void
+  /**
+   * [Debug/T5] État courant du moteur cinématique d'intro.
+   * Absente tant que la scène n'est pas montée.
+   */
+  debugIntroInfo?(): { active: boolean; elapsedMs: number; actorCount: number; cameraZoom: number }
 }
 
 declare global {
@@ -139,6 +146,9 @@ export function createSeam(app: App): GameSeam {
     },
     toggleMinimap: () => {
       app.toggleMinimap()
+    },
+    skipIntro: () => {
+      app.skipIntro()
     },
     chooseUpgrade: (index: number) => {
       app.chooseUpgrade(index)

@@ -3,7 +3,7 @@ import { parseBootOptions } from '@/app/bootOptions'
 
 describe('parseBootOptions', () => {
   it('renvoie des valeurs par défaut sans paramètres', () => {
-    expect(parseBootOptions('')).toEqual({ autostart: null, seed: 1, test: false, level: null, lite: false })
+    expect(parseBootOptions('')).toEqual({ autostart: null, seed: 1, test: false, level: null, lite: false, intro: false })
   })
 
   it('lit autostart, seed et test', () => {
@@ -12,7 +12,8 @@ describe('parseBootOptions', () => {
       seed: 42,
       test: true,
       level: null,
-      lite: false
+      lite: false,
+      intro: false
     })
   })
 
@@ -22,7 +23,8 @@ describe('parseBootOptions', () => {
       seed: 1,
       test: false,
       level: 'fondations',
-      lite: false
+      lite: false,
+      intro: false
     })
   })
 
