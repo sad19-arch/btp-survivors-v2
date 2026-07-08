@@ -26,15 +26,17 @@ describe('siteLayout — determinisme', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. terrain_vierge -> layout vide (garde sim:check diff 0)
+// 2. terrain_vierge a désormais des clusters (rollout complet, phase 8) ;
+//    la garde « layout vide » ne concerne plus que les stages INCONNUS.
 // ─────────────────────────────────────────────────────────────────────────────
 describe('siteLayout — terrain_vierge', () => {
-  it('2. terrain_vierge retourne clusters:[] et obstacles:[]', () => {
+  it('2. terrain_vierge produit des clusters ET des obstacles (compo installation de chantier)', () => {
     const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, 'terrain_vierge')
-    expect(layout).toEqual({ clusters: [], obstacles: [] })
+    expect(layout.clusters.length).toBeGreaterThan(0)
+    expect(layout.obstacles.length).toBeGreaterThan(0)
   })
 
-  it('2b. stage inconnu retourne clusters:[] et obstacles:[]', () => {
+  it('2b. stage inconnu retourne clusters:[] et obstacles:[] (garde générique)', () => {
     const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, 'stage_inexistant')
     expect(layout).toEqual({ clusters: [], obstacles: [] })
   })

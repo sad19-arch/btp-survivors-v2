@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test'
  *
  * Verifie :
  *   1. Stage 02 (terrassement) : des ouvriers sont affiches (count > 0).
- *   2. Stage 01 (terrain_vierge) : aucun ouvrier (count = 0, pas de clusters).
+ *   2. Stage 01 (terrain_vierge) : des ouvriers aussi (count > 0, rollout complet).
  *   3. Pas de fuite au restart : count reste > 0 et ne s'accumule pas.
  */
 
@@ -26,15 +26,17 @@ test('siteWorkers - stage02 terrassement : des ouvriers affiches (count > 0)', a
   console.log(`[siteWorkers] stage02 workerCount = ${info?.count ?? 'n/a'}`)
 })
 
-test('siteWorkers - stage01 terrain_vierge : aucun ouvrier (count = 0)', async ({ page }) => {
-  await page.goto('/?autostart=solo&level=1&seed=1&test=1&lite=1')
-  await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 20000 })
+test('siteWorkers - stage01 terrain_vierge : des ouvriers aussi (count > 0)', async ({ page }) => {
+  // NON-lite : le stage 01 a désormais des clusters (base-vie) → des ouvriers
+  // navetteurs, comme les autres stages. Rendu exige les vraies feuilles PNJ.
+  test.setTimeout(120000)
+  await page.goto('/?autostart=solo&level=1&seed=1&test=1')
+  await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 90000 })
 
-  await page.waitForTimeout(500)
+  await page.waitForTimeout(800)
 
   const info = await page.evaluate(() => window.__GAME__?.debugWorkers?.())
-  // terrain_vierge = pas de clusters -> pas d'ouvriers
-  expect(info?.count ?? 0).toBe(0)
+  expect(info?.count ?? 0).toBeGreaterThan(0)
   console.log(`[siteWorkers] stage01 workerCount = ${info?.count ?? 'n/a'}`)
 })
 

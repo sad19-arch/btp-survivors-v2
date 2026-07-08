@@ -8,7 +8,7 @@ import * as fs from 'fs'
  * Vérifie :
  *   1. Stage 02 (terrassement) : des sprites de cluster sont créés (count > 0).
  *   2. Pas de fuite au restart : le count reste borné après restart.
- *   3. Stage 01 (terrain_vierge) : aucun sprite de cluster (count === 0).
+ *   3. Stage 01 (terrain_vierge) : clusters dessinés aussi (count > 0, rollout complet).
  *   4. Capture visuelle du terrain terrassement pour inspection manuelle.
  */
 
@@ -32,15 +32,18 @@ test('siteRender — stage 02 terrassement : clusters dessinés (count > 0)', as
   console.log(`[siteRender] stage02 spriteCount = ${siteInfo?.spriteCount ?? 'n/a'}`)
 })
 
-test('siteRender — stage 01 terrain_vierge : aucun sprite de cluster', async ({ page }) => {
-  await page.goto('/?autostart=solo&level=1&seed=1&test=1&lite=1')
-  await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 20000 })
+test('siteRender — stage 01 terrain_vierge : clusters dessinés (installation de chantier, count > 0)', async ({ page }) => {
+  // NON-lite : depuis le rollout complet, le stage 01 a lui aussi une compo
+  // (base-vie clôturée). Le rendu exige les vraies textures → non-lite.
+  test.setTimeout(90000)
+  await page.goto('/?autostart=solo&level=1&seed=1&test=1')
+  await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 60000 })
 
   await page.waitForTimeout(300)
 
   const siteInfo = await page.evaluate(() => window.__GAME__?.debugSiteInfo?.())
-  // terrain_vierge = pas de clusters → 0 sprites
-  expect(siteInfo?.spriteCount ?? 0).toBe(0)
+  // terrain_vierge a désormais des clusters → au moins 1 sprite
+  expect(siteInfo?.spriteCount ?? 0).toBeGreaterThan(0)
   console.log(`[siteRender] stage01 spriteCount = ${siteInfo?.spriteCount ?? 'n/a'}`)
 })
 

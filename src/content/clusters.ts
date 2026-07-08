@@ -291,6 +291,22 @@ export const CLUSTERS: Record<string, ClusterDef> = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Stage 01 — Terrain vierge (INSTALLATION DE CHANTIER)
+  // Sémantique : la parcelle vient d'être prise ; le chantier s'INSTALLE.
+  // Pas encore d'engins lourds (ils arrivent au terrassement) → la « zone de
+  // travail » est la BASE-VIE clôturée (algeco au centre, panneau de chantier,
+  // piquets de bornage, premier tas de cailloux) ; le « stockage » = premiers
+  // approvisionnements (cailloux/terre/broussailles dégagées) ; le « parc » =
+  // barrières de périmètre + parcelle piquetée. Réutilise les assets premium
+  // stage 01 (site_cabin/site_sign/boundary_tape/plot + prop_stakes/rocks/…).
+  // ─────────────────────────────────────────────────────────────────────────
+  ...Object.fromEntries([
+    workCluster('cluster_work_terrain', 'struct_stage01_cabin', 'struct_stage01_sign', 'prop_stakes', 'prop_rocks'),
+    storageCluster('cluster_storage_terrain', ['prop_rocks', 'prop_soft', 'prop_weeds']),
+    plantCluster('cluster_plant_terrain', ['struct_stage01_tape', 'struct_stage01_plot'])
+  ].map((c) => [c.id, c])),
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Stage 03 — Fondations
   // ─────────────────────────────────────────────────────────────────────────
   ...Object.fromEntries([
@@ -375,9 +391,17 @@ export interface StageClusterEntry {
 }
 
 export const STAGE_CLUSTERS: Record<string, StageClusterEntry[]> = {
-  // ⚠️ IMPÉRATIF : terrain_vierge = [] garantit que sim:check (stage 01) ne voit
-  // aucun cluster → aucune collision/modification de flux → diff 0.
-  terrain_vierge: [],
+  // Stage 01 (installation de chantier). NB : depuis que terrain_vierge a des
+  // clusters, sim:check (qui tourne sur le stage 01) voit collision + flux →
+  // la baseline a été re-dérivée (phase 8 du plan terrain). Ce n'est PLUS la
+  // garde diff-0 ; le déterminisme reste assuré par le RNG isolé (seed^0x51e0).
+  terrain_vierge: [
+    { role: 'route',      clusterId: 'cluster_route' },
+    { role: 'excavation', clusterId: 'cluster_work_terrain' },
+    { role: 'spoil',      clusterId: 'cluster_storage_terrain' },
+    { role: 'plant',      clusterId: 'cluster_plant_terrain' },
+    { role: 'pause',      clusterId: 'cluster_plant_terrain' }
+  ],
   terrassement: [
     { role: 'route', clusterId: 'cluster_route' },
     { role: 'excavation', clusterId: 'cluster_excavation' },

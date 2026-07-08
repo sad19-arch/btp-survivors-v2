@@ -64,8 +64,23 @@ describe('CLUSTERS — intégrité des définitions', () => {
 })
 
 describe('STAGE_CLUSTERS — intégrité', () => {
-  it('5. STAGE_CLUSTERS["terrain_vierge"] est [] (garde sim:check)', () => {
-    expect(STAGE_CLUSTERS['terrain_vierge']).toEqual([])
+  it('5. STAGE_CLUSTERS["terrain_vierge"] a désormais des clusters (installation de chantier, rollout complet)', () => {
+    // Depuis le rollout complet (phase 8), le stage 01 a lui aussi une compo
+    // tactique (base-vie clôturée). Il n'est PLUS la garde diff-0 de sim:check
+    // (baseline re-dérivée). On vérifie qu'il expose les 5 rôles standards.
+    const entries = STAGE_CLUSTERS['terrain_vierge']
+    expect(entries).toBeDefined()
+    expect(entries?.map((e) => e.role)).toEqual(['route', 'excavation', 'spoil', 'plant', 'pause'])
+  })
+
+  it('5b. les 10 stages ont tous une compo de clusters (aucun vide)', () => {
+    const STAGES = [
+      'terrain_vierge', 'terrassement', 'fondations', 'reseaux_enterres', 'gros_oeuvre',
+      'echafaudages', 'charpente_toiture', 'second_oeuvre', 'finitions', 'livraison_audit'
+    ]
+    for (const s of STAGES) {
+      expect(STAGE_CLUSTERS[s]?.length ?? 0, `stage "${s}" sans clusters`).toBeGreaterThan(0)
+    }
   })
 
   it('6a. tout clusterId référencé dans STAGE_CLUSTERS existe dans CLUSTERS', () => {
