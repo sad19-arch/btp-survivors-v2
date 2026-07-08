@@ -25,7 +25,7 @@ test('golden overview — arène composée stage 02', async ({ page }) => {
   // Zoom sur un cluster d'excavation (seed 1 → ancre ~1386,1632) : vérifier la
   // cohérence (fosse + anneau de clôture + pelleteuse groupés).
   await page.evaluate(() => {
-    window.__GAME__?.debugCameraOverview?.(0.55, 1386, 1632)
+    window.__GAME__?.debugCameraOverview?.(0.55, 4233, 694)
   })
   await page.waitForTimeout(400)
   await page.screenshot({ path: 'test-results/golden-stage02-cluster.png' })
