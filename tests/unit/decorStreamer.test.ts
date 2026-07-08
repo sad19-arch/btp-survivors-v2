@@ -114,15 +114,29 @@ describe('chunkPlacements', () => {
     expect(a.props[0]).not.toEqual(b.props[0])
   })
 
-  it('les positions des décalques sont dans les bornes du chunk', () => {
+  it('les positions des décalques restent proches du chunk (une grappe peut légèrement déborder de son rayon)', () => {
     const { decals } = chunkPlacements(seed, cx, cy, CS, W, H, 5, [])
     const x0 = cx * CS
     const y0 = cy * CS
+    // Les grappes sont centrées DANS le chunk mais leurs décalques peuvent déborder
+    // du bord du chunk jusqu'à CLUMP_RADIUS (130) — voulu, le rendu ne clippe pas.
+    const margin = 130
     for (const d of decals) {
-      expect(d.x).toBeGreaterThanOrEqual(x0)
-      expect(d.x).toBeLessThan(x0 + CS)
-      expect(d.y).toBeGreaterThanOrEqual(y0)
-      expect(d.y).toBeLessThan(y0 + CS)
+      expect(d.x).toBeGreaterThanOrEqual(x0 - margin)
+      expect(d.x).toBeLessThan(x0 + CS + margin)
+      expect(d.y).toBeGreaterThanOrEqual(y0 - margin)
+      expect(d.y).toBeLessThan(y0 + CS + margin)
+    }
+  })
+
+  it('les décalques sont regroupés en grappes serrées autour d\'un prop (pas de scatter uniforme)', () => {
+    const { decals, props } = chunkPlacements(seed, cx, cy, CS, W, H, 4, [6])
+    const flatProps = props.flat()
+    expect(flatProps.length).toBeGreaterThan(0)
+    for (const d of decals) {
+      const minDist = Math.min(...flatProps.map((p) => Math.hypot(d.x - p.x, d.y - p.y)))
+      // Rayon de grappe (CLUMP_RADIUS = 130) + marge flottante minime.
+      expect(minDist).toBeLessThanOrEqual(130 + 1e-6)
     }
   })
 
@@ -148,11 +162,13 @@ describe('chunkPlacements', () => {
     }
   })
 
-  it('le nombre de props est borné (proportionnel à la surface du chunk)', () => {
-    // Un chunk 1024×1024 sur un monde 10240×7680, baseCount=10 :
-    // count = round(10 * 1024*1024 / (1600*1200)) ≈ round(10 * 0.546) ≈ 5.
+  it('le nombre de props est borné (une pièce maîtresse par grappe, proportionnel à la surface du chunk)', () => {
+    // Un chunk 1024×1024 : clumpCount = round(1024*1024 / (800*800)) = round(1.638) = 2.
+    // Avec un seul groupe de props ([10] → longueur 1), chaque grappe réussie y pousse
+    // exactement 1 prop (la valeur du baseCount n'influence plus le compte, seule la
+    // LONGUEUR de propCounts sert à choisir l'indice de groupe).
     const { props } = chunkPlacements(seed, 0, 0, CS, W, H, 0, [10])
-    expect(props[0]?.length).toBeLessThanOrEqual(10) // inférieur ou égal au baseCount
+    expect(props[0]?.length).toBeLessThanOrEqual(2) // ≤ clumpCount
     expect(props[0]?.length).toBeGreaterThanOrEqual(0)
   })
 
@@ -162,9 +178,10 @@ describe('chunkPlacements', () => {
     expect(props.length).toBe(propCounts.length)
   })
 
-  it('produit un nombre de décalques raisonnable (≈ chunkArea / 260²)', () => {
+  it('produit un nombre de décalques raisonnable (≈ clumpCount × 3-6 par grappe)', () => {
     const { decals } = chunkPlacements(seed, cx, cy, CS, W, H, 3, [])
-    // Pour chunk 1024×1024 : attendu ≈ round(1024*1024 / 67600) ≈ 16
+    // Pour chunk 1024×1024 : clumpCount ≈ round(1024*1024 / (800*800)) = 2 grappes,
+    // chacune 3 à 6 décalques ⇒ attendu entre 6 et 12 (avant exclusion/collision spawn).
     // On borne par une plage large (exclusion centrale peut réduire).
     expect(decals.length).toBeGreaterThan(0)
     expect(decals.length).toBeLessThan(50)

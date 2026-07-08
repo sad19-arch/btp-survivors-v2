@@ -129,15 +129,18 @@ describe('positions dans les bornes du chunk (avec zones)', () => {
     { angleCenter: 0, angleSpread: 180, distMin: 0, distMax: 9999 }
   ]
 
-  it('décalques restent dans les bornes du chunk', () => {
+  it('décalques restent proches des bornes du chunk (grappe peut déborder de son rayon)', () => {
     const { decals } = chunkPlacements(SEED, CX, CY, CS, W, H, 4, [], { zones })
     const x0 = CX * CS
     const y0 = CY * CS
+    // Placement en grappes : le CENTRE d'une grappe est dans le chunk, mais ses
+    // décalques peuvent déborder du bord jusqu'à CLUMP_RADIUS (130) — voulu.
+    const margin = 130
     for (const d of decals) {
-      expect(d.x).toBeGreaterThanOrEqual(x0)
-      expect(d.x).toBeLessThan(x0 + CS)
-      expect(d.y).toBeGreaterThanOrEqual(y0)
-      expect(d.y).toBeLessThan(y0 + CS)
+      expect(d.x).toBeGreaterThanOrEqual(x0 - margin)
+      expect(d.x).toBeLessThan(x0 + CS + margin)
+      expect(d.y).toBeGreaterThanOrEqual(y0 - margin)
+      expect(d.y).toBeLessThan(y0 + CS + margin)
     }
   })
 
@@ -274,9 +277,10 @@ describe('resolvePlacement — 2 items co-scriptés ne se chevauchent pas', () =
 
 // ── structureAnchors : anti-chevauchement des props streamés ──────────────────
 // Correctif playtest : les props streamés se posaient sur les engins/héros. On
-// passe désormais les positions des structures/landmark/PNJ comme ANCRES ; les
-// props qui tomberaient dessus (ou trop près d'un autre prop) sont retirés — SANS
-// consommer de RNG, donc la séquence reste identique au chemin sans ancres.
+// passe désormais les positions des structures/landmark/PNJ comme ANCRES ; le
+// CENTRE d'une grappe qui tomberait dessus (ou trop près d'une autre grappe) est
+// écarté au moment du choix du centre — ce qui retire la grappe ENTIÈRE (le prop
+// pièce-maîtresse ET ses décalques associés), pas seulement le prop.
 describe('chunkPlacements avec structureAnchors — anti-chevauchement', () => {
   // Constantes internes du module (dupliquées ici pour documenter le contrat).
   const PROP_ANCHOR_CLEAR = 60
@@ -328,14 +332,16 @@ describe('chunkPlacements avec structureAnchors — anti-chevauchement', () => {
     }
   })
 
-  it('une ancre couvrant tout le chunk retire tous les props (décalques intacts)', () => {
+  it('une ancre couvrant tout le chunk retire toute la grappe (props ET décalques)', () => {
     const bigAnchor = [{ x: x0 + CS / 2, y: y0 + CS / 2, r: CS }]
-    const withA = chunkPlacements(SEED, CX, CY, CS, W, H, 4, [15, 10], { structureAnchors: bigAnchor })
-    const noA = chunkPlacements(SEED, CX, CY, CS, W, H, 4, [15, 10])
-    const totalProps = withA.props.reduce((s, g) => s + g.length, 0)
+    const { decals, props } = chunkPlacements(SEED, CX, CY, CS, W, H, 4, [15, 10], { structureAnchors: bigAnchor })
+    const totalProps = props.reduce((s, g) => s + g.length, 0)
     expect(totalProps).toBe(0)
-    // Les décalques ne dépendent PAS des ancres → identiques.
-    expect(withA.decals).toEqual(noA.decals)
+    // En grappes, les décalques sont RATTACHÉS au centre de leur grappe (pas
+    // indépendants comme avant) : une ancre qui bloque tout centre possible dans
+    // le chunk (r + CLUMP_RADIUS >= toute distance au chunk) retire donc aussi
+    // les décalques — plus aucune grappe ne peut se placer.
+    expect(decals.length).toBe(0)
   })
 })
 

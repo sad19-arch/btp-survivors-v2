@@ -11,13 +11,13 @@ export const DEFAULT_CHUNK_SIZE = 1024
 /** Centre autour duquel aucun décalque/prop n'est émis (spawn joueur). */
 const CENTER_EXCLUSION_RADIUS = 300
 
-/**
- * Dégagement min entre le CENTRE d'un prop streamé et le bord d'une ancre de
- * structure (engin/landmark/PNJ). Empêche les props de se poser SUR les héros.
- */
-const PROP_ANCHOR_CLEAR = 60
-/** Distance min entre les centres de deux props streamés d'un même chunk. */
-const PROP_MIN_SPACING = 92
+/** Surface de référence pour la densité de grappes : ~1 grappe / 800px de côté (sol dégagé entre). */
+const CLUMP_REF_AREA = 800 * 800
+/** Rayon d'une grappe (serrée). */
+const CLUMP_RADIUS = 130
+/** Bornes du nombre de décalques par grappe. */
+const CLUMP_DECAL_MIN = 3
+const CLUMP_DECAL_MAX = 6
 
 /** PRNG seedé (mulberry32) — identique à ground.ts / props.ts pour cohérence. */
 function mulberry32(seed: number): () => number {
@@ -188,102 +188,81 @@ export function chunkPlacements(
   const zones = opts?.zones
   const densityMul = opts?.decalDensityMultiplier ?? 1.0
 
-  // ── Décalques ──────────────────────────────────────────────────────────────
+  // ── Grappes (décalques + props) ─────────────────────────────────────────────
+  // Au lieu de disperser décalques/props en position aléatoire uniforme (confettis
+  // sur toute la carte), on regroupe le décor en petites grappes serrées (un prop
+  // "pièce maîtresse" + quelques décalques autour) avec du sol dégagé entre elles.
   const decalResult: Array<{ decalIndex: number; x: number; y: number }> = []
-  if (decalCount > 0) {
-    const decalTotal = Math.max(0, Math.round(chunkArea / (260 * 260) * densityMul))
-    for (let i = 0; i < decalTotal; i++) {
-      const x = x0 + rng() * chunkW
-      const y = y0 + rng() * chunkH
-      const dx = x - worldCx
-      const dy = y - worldCy
-      if (dx * dx + dy * dy < excl2) {
-        // Consomme le RNG du choix d'indice pour rester déterministe malgré le skip.
-        rng()
-        continue
-      }
-      // Choisir l'indice : priorité aux décalques dominants de la zone si applicable.
-      let decalIndex: number
-      const zone = zones !== undefined ? pointInZone(x, y, worldCx, worldCy, zones) : null
-      const dominant = zone?.dominantDecalIndices
-      if (dominant !== undefined && dominant.length > 0) {
-        // 70 % de chance de choisir un indice dominant, 30 % uniforme.
-        const r = rng()
-        if (r < 0.7) {
-          decalIndex = dominant[Math.floor(rng() * dominant.length)] ?? 0
-        } else {
-          decalIndex = Math.floor(rng() * decalCount)
+  const propResult: Array<Array<{ x: number; y: number }>> = propCounts.map(() => [])
+  const placedProps: Array<{ x: number; y: number }> = []
+  const anchors = opts?.structureAnchors
+
+  const clumpCount = Math.max(0, Math.round((chunkArea / CLUMP_REF_AREA) * densityMul))
+  for (let c = 0; c < clumpCount; c++) {
+    // 1) Centre de grappe : hors exclusion centrale + hors ancres de structures
+    // (12 essais, sinon on saute cette grappe).
+    let ccx = 0
+    let ccy = 0
+    let ok = false
+    for (let t = 0; t < 12; t++) {
+      ccx = x0 + rng() * chunkW
+      ccy = y0 + rng() * chunkH
+      const dx = ccx - worldCx
+      const dy = ccy - worldCy
+      if (dx * dx + dy * dy < excl2) { continue }
+      let clash = false
+      if (anchors !== undefined) {
+        for (const a of anchors) {
+          if (Math.hypot(ccx - a.x, ccy - a.y) < a.r + CLUMP_RADIUS) { clash = true; break }
         }
-      } else {
-        decalIndex = Math.floor(rng() * decalCount)
       }
-      decalResult.push({ decalIndex, x, y })
+      // Espacement entre grappes du même chunk.
+      if (!clash) {
+        for (const pp of placedProps) {
+          if (Math.hypot(ccx - pp.x, ccy - pp.y) < CLUMP_RADIUS * 1.6) { clash = true; break }
+        }
+      }
+      if (!clash) { ok = true; break }
+    }
+    if (!ok) { continue }
+
+    const zone = zones !== undefined ? pointInZone(ccx, ccy, worldCx, worldCy, zones) : null
+
+    // 2) Pièce maîtresse : un prop au centre (dominant de la zone si dispo, sinon aléatoire).
+    if (propCounts.length > 0) {
+      const dom = zone?.dominantPropIndices
+      const pIdx = (dom !== undefined && dom.length > 0)
+        ? (dom[Math.floor(rng() * dom.length)] ?? 0)
+        : Math.floor(rng() * propCounts.length)
+      const arr = propResult[pIdx]
+      if (arr !== undefined) {
+        arr.push({ x: ccx, y: ccy })
+        placedProps.push({ x: ccx, y: ccy })
+      }
+    }
+
+    // 3) Décalques serrés autour du centre (dans CLUMP_RADIUS), biaisés dominants de la zone.
+    if (decalCount > 0) {
+      const nD = CLUMP_DECAL_MIN + Math.floor(rng() * (CLUMP_DECAL_MAX - CLUMP_DECAL_MIN + 1))
+      for (let k = 0; k < nD; k++) {
+        const ang = rng() * Math.PI * 2
+        const rad = Math.sqrt(rng()) * CLUMP_RADIUS // sqrt → répartition uniforme en disque
+        const dxp = ccx + Math.cos(ang) * rad
+        const dyp = ccy + Math.sin(ang) * rad
+        const ex = dxp - worldCx
+        const ey = dyp - worldCy
+        if (ex * ex + ey * ey < excl2) { continue }
+        const dom = zone?.dominantDecalIndices
+        let di: number
+        if (dom !== undefined && dom.length > 0 && rng() < 0.8) {
+          di = dom[Math.floor(rng() * dom.length)] ?? 0
+        } else {
+          di = Math.floor(rng() * decalCount)
+        }
+        decalResult.push({ decalIndex: di, x: dxp, y: dyp })
+      }
     }
   }
-
-  // ── Props ──────────────────────────────────────────────────────────────────
-  const refArea = 1600 * 1200
-  const anchors = opts?.structureAnchors
-  // Props déjà posés dans CE chunk (tous types confondus) → espacement mutuel.
-  const placedProps: Array<{ x: number; y: number }> = []
-  const propResult: Array<Array<{ x: number; y: number }>> = propCounts.map((baseCount, propIdx) => {
-    const count = Math.max(0, Math.round(baseCount * chunkArea / refArea))
-    const positions: Array<{ x: number; y: number }> = []
-    for (let i = 0; i < count; i++) {
-      let px = 0
-      let py = 0
-      for (let t = 0; t < 12; t++) {
-        px = x0 + rng() * chunkW
-        py = y0 + rng() * chunkH
-        const dx = px - worldCx
-        const dy = py - worldCy
-        if (dx * dx + dy * dy >= excl2) {
-          break
-        }
-      }
-      // Si les 12 tentatives sont retombées dans le rayon d'exclusion (possible
-      // pour le chunk central), on NE pose PAS le prop plutôt que d'encombrer le
-      // spawn — symétrique du `continue` des décalques. Le count cible est
-      // approximatif, et les appels RNG déjà consommés gardent le déterminisme.
-      const fdx = px - worldCx
-      const fdy = py - worldCy
-      if (fdx * fdx + fdy * fdy < excl2) {
-        continue
-      }
-      // Si zones définies et que ce prop n'est pas dominant dans la zone de ce point,
-      // on réduit la probabilité de le placer (50 % de chance de skip).
-      if (zones !== undefined && zones.length > 0) {
-        const zone = pointInZone(px, py, worldCx, worldCy, zones)
-        if (zone !== null) {
-          const isDominant = zone.dominantPropIndices?.includes(propIdx) ?? false
-          // Dans une zone : les props dominants passent toujours ; les autres ont 40 % de chance.
-          if (!isDominant && rng() > 0.4) {
-            continue
-          }
-        }
-      }
-      // Anti-chevauchement : si des ancres de structures sont fournies, on écarte
-      // les props qui tomberaient SUR un engin/landmark/PNJ ou trop près d'un autre
-      // prop déjà posé. AUCUN appel RNG ici → la séquence RNG est IDENTIQUE au chemin
-      // sans ancres (les tests de déterminisme existants restent verts ; seuls des
-      // props chevauchants sont retirés de la sortie quand `structureAnchors` est passé).
-      if (anchors !== undefined) {
-        let overlap = false
-        for (const a of anchors) {
-          if (Math.hypot(px - a.x, py - a.y) < a.r + PROP_ANCHOR_CLEAR) { overlap = true; break }
-        }
-        if (!overlap) {
-          for (const pp of placedProps) {
-            if (Math.hypot(px - pp.x, py - pp.y) < PROP_MIN_SPACING) { overlap = true; break }
-          }
-        }
-        if (overlap) { continue }
-        placedProps.push({ x: px, y: py })
-      }
-      positions.push({ x: px, y: py })
-    }
-    return positions
-  })
 
   return { decals: decalResult, props: propResult }
 }
