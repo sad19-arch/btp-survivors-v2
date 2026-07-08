@@ -13,8 +13,11 @@ import * as fs from 'fs'
  */
 
 test('siteRender — stage 02 terrassement : clusters dessinés (count > 0)', async ({ page }) => {
-  await page.goto('/?autostart=solo&level=2&seed=1&test=1&lite=1')
-  await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 20000 })
+  // NON-lite : le rendu des clusters exige les vraies textures (le mode lite ne
+  // charge pas les feuilles → le siteRenderer/workers ne peut pas dessiner).
+  test.setTimeout(90000)
+  await page.goto('/?autostart=solo&level=2&seed=1&test=1')
+  await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 60000 })
 
   const s0 = await page.evaluate(() => window.__GAME__?.getState())
   expect(s0?.scene).toBe('game')
@@ -42,8 +45,9 @@ test('siteRender — stage 01 terrain_vierge : aucun sprite de cluster', async (
 })
 
 test('siteRender — pas de fuite au restart (stage 02)', async ({ page }) => {
-  await page.goto('/?autostart=solo&level=2&seed=1&test=1&lite=1')
-  await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 20000 })
+  test.setTimeout(90000)
+  await page.goto('/?autostart=solo&level=2&seed=1&test=1')
+  await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 60000 })
   await page.waitForTimeout(300)
 
   const before = await page.evaluate(() => window.__GAME__?.debugSiteInfo?.())

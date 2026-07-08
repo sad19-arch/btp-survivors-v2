@@ -10,8 +10,9 @@ import { test, expect } from '@playwright/test'
  */
 
 test('siteWorkers - stage02 terrassement : des ouvriers affiches (count > 0)', async ({ page }) => {
-  await page.goto('/?autostart=solo&level=2&seed=1&test=1&lite=1')
-  await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 20000 })
+  test.setTimeout(120000)
+  await page.goto('/?autostart=solo&level=2&seed=1&test=1')
+  await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 90000 })
 
   const s0 = await page.evaluate(() => window.__GAME__?.getState())
   expect(s0?.scene).toBe('game')
@@ -38,8 +39,9 @@ test('siteWorkers - stage01 terrain_vierge : aucun ouvrier (count = 0)', async (
 })
 
 test('siteWorkers - pas de fuite au restart (stage02)', async ({ page }) => {
-  await page.goto('/?autostart=solo&level=2&seed=1&test=1&lite=1')
-  await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 20000 })
+  test.setTimeout(90000)
+  await page.goto('/?autostart=solo&level=2&seed=1&test=1')
+  await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 60000 })
   await page.waitForTimeout(800)
 
   const before = await page.evaluate(() => window.__GAME__?.debugWorkers?.())
