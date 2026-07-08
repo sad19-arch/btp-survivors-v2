@@ -93,6 +93,12 @@ interface ActiveWorker {
   fleeX: number
   fleeY: number
   inPanic: boolean
+  /**
+   * `true` si le sprite est un vrai Sprite texturé (setFrame valide).
+   * `false` pour le repli Graphics (pas de setFrame → ne jamais l'animer,
+   * sinon `setFrame is not a function` casse `create()` → `ready` jamais émis).
+   */
+  animatable: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -124,7 +130,7 @@ export class SiteWorkers {
    * Reconstruit les jobs depuis le siteLayout du stage courant.
    * Doit être appelé depuis `GameScene.create()` après `siteRenderer.reset()`.
    */
-  reset(seed: number, worldW: number, worldH: number, stageId: string): void {
+  reset(seed: number, worldW: number, worldH: number, stageId: string, npcKeys: readonly string[] = []): void {
     this._destroyAll()
     this.jobs = []
     this.worldW = worldW
@@ -159,7 +165,7 @@ export class SiteWorkers {
       if (nearestSpoil === undefined) {
         continue
       }
-      const key = this._resolveKey('porteur', stageId)
+      const key = this._resolveKey('porteur', npcKeys)
       if (key === null) {
         continue
       }
@@ -188,7 +194,7 @@ export class SiteWorkers {
       if (ra === undefined || rb === undefined) {
         continue
       }
-      const key = this._resolveKey('signaleur', stageId)
+      const key = this._resolveKey('signaleur', npcKeys)
       if (key === null) {
         continue
       }
@@ -280,9 +286,11 @@ export class SiteWorkers {
         )
         aw.sprite.setPosition(aw.fleeX, aw.fleeY)
 
-        // Direction de fuite pour l'animation.
-        const row = dirRow(pd.fx, pd.fy)
-        aw.sprite.setFrame(walkFrame(row, nowMs, 200))
+        // Direction de fuite pour l'animation (repli Graphics : pas de setFrame).
+        if (aw.animatable) {
+          const row = dirRow(pd.fx, pd.fy)
+          aw.sprite.setFrame(walkFrame(row, nowMs, 200))
+        }
 
         // Cache la charge.
         if (aw.loadSprite !== null) {
@@ -296,13 +304,15 @@ export class SiteWorkers {
         aw.inPanic = false
         aw.sprite.setPosition(pos.x, pos.y)
 
-        // Direction de marche.
+        // Direction de marche (repli Graphics : pas de setFrame).
         const dx = job.bx - job.ax
         const dy = job.by - job.ay
         const dirX = pos.leg === 'ab' ? dx : -dx
         const dirY = pos.leg === 'ab' ? dy : -dy
-        const row = dirRow(dirX, dirY)
-        aw.sprite.setFrame(walkFrame(row, nowMs, 250))
+        if (aw.animatable) {
+          const row = dirRow(dirX, dirY)
+          aw.sprite.setFrame(walkFrame(row, nowMs, 250))
+        }
 
         // Charge : visible à l'aller (A→B) seulement.
         const carrying = loadVisible(pos.leg)
@@ -424,7 +434,9 @@ export class SiteWorkers {
       panicIndicator: null,
       fleeX: x,
       fleeY: y,
-      inPanic: false
+      inPanic: false,
+      // Seul un vrai Sprite texturé accepte setFrame ; le repli Graphics non.
+      animatable: hasTexture
     }
   }
 
@@ -489,24 +501,34 @@ export class SiteWorkers {
   }
 
   /**
-   * Résout la clé de texture PNJ à utiliser selon le rôle et le stageId.
-   * Préfère les clés spécifiques au stage, repli sur la clé partagée.
-   * Retourne null si aucune texture n'est disponible (stage non déroulé).
+   * Résout la clé de texture PNJ à utiliser selon le rôle, parmi les feuilles
+   * d'ambiance RÉELLEMENT chargées du stage courant (`npcKeys`, fournies par
+   * `GameScene` depuis `stage.ambient`). Les clés PNJ sont NUMÉROTÉES par stage
+   * (`npc_stage03_*`, `npc_stage04_*`…), pas nommées par phase — d'où l'ancien
+   * bug : on cherchait `npc_<phase>_porteur` + un repli `npc_stage02_*` codé en
+   * dur, qui ne matchait QUE le stage 02. Ici on matche par indice de rôle dans
+   * la clé, avec repli déterministe sur une feuille chargée quelconque.
+   *
+   * Retourne `null` si AUCUNE feuille chargée (stage sans PNJ / mode lite) →
+   * aucun ouvrier créé (jamais de texture manquante → jamais de repli Graphics
+   * non animable → jamais de crash `setFrame`).
    */
-  private _resolveKey(role: 'porteur' | 'signaleur', stageId: string): string | null {
-    // Clés candidates : spécifique au stage d'abord, puis clé partagée générique.
-    const suffix = stageId.replace(/\//g, '_').replace(/[^a-z0-9_]/g, '')
-    const candidates: string[] =
-      role === 'porteur'
-        ? [`npc_${suffix}_porteur`, 'npc_stage02_porteur', 'npc_stage01']
-        : [`npc_${suffix}_signaleur`, 'npc_stage02_signaleur', 'npc_stage01']
-
-    for (const key of candidates) {
-      if (this.scene.textures.exists(key)) {
-        return key
-      }
+  private _resolveKey(role: 'porteur' | 'signaleur', npcKeys: readonly string[]): string | null {
+    const loaded = npcKeys.filter((k) => this.scene.textures.exists(k))
+    if (loaded.length === 0) {
+      return null
     }
-    // Aucune texture disponible : utiliser la clé de base (le sprite sera invisible).
-    return candidates[candidates.length - 1] ?? null
+    // Préfère une feuille dont le nom porte le rôle (le stage 02 nomme
+    // explicitement `npc_stage02_porteur`/`_signaleur` ; d'autres nomment
+    // `porteur_blocs`, `poseur_cable`…). `patrol` = équivalent signaleur.
+    const hints = role === 'porteur' ? ['porteur'] : ['signaleur', 'patrol']
+    const match = loaded.find((k) => hints.some((h) => k.includes(h)))
+    if (match !== undefined) {
+      return match
+    }
+    // Repli déterministe : porteur → 1re feuille, signaleur → 2e (variété
+    // visuelle) — toutes garanties chargées, donc de vrais Sprite animables.
+    const idx = role === 'porteur' ? 0 : Math.min(1, loaded.length - 1)
+    return loaded[idx] ?? loaded[0] ?? null
   }
 }

@@ -401,9 +401,18 @@ export class GameScene extends Phaser.Scene {
 
     // Clusters de terrain (T5) : dessinés après le sol, avant les PNJ/streamer.
     // Utilise la MÊME seed brute que la sim (buildSiteLayout dérive son propre sel).
-    this.siteRenderer.reset(this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId)
-    // Ouvriers navetteurs (T6) : construits depuis le même layout que le siteRenderer.
-    this.siteWorkers.reset(this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId)
+    // En mode lite (e2e sim-only), ni les feuilles PNJ ni les skins ne sont chargés,
+    // donc siteWorkers ne peut pas dessiner (setFrame sur une texture absente → throw
+    // qui bloquerait create() → `ready` jamais émis). On saute le rendu des clusters/
+    // ouvriers (purement cosmétique) ; la COLLISION reste gérée par la sim.
+    if (!this.lite) {
+      this.siteRenderer.reset(this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId)
+      // Ouvriers navetteurs (T6) : construits depuis le même layout que le siteRenderer.
+      // On passe les clés PNJ RÉELLEMENT chargées du stage (numérotées par stage) pour
+      // que _resolveKey matche une texture existante partout, pas seulement au stage 02.
+      const npcKeys = (this.stage.ambient ?? []).map((a) => a.key)
+      this.siteWorkers.reset(this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId, npcKeys)
+    }
     // PNJ(s) d'ambiance non-hostiles (geste métier) — un sprite par entrée, placement seedé
     // hors centre. Chaque PNJ reçoit un seed individuel dérivé de stageSeed + index, ce qui
     // garantit un placement déterministe et hors-chevauchement même si le tableau grandit (B5+).
@@ -606,11 +615,11 @@ export class GameScene extends Phaser.Scene {
     // Télégraphe des formations (Task 10) : marqueur au sol + flèche de bord d'écran.
     this.telegraph.sync(state, this.cameras.main)
 
-    // Clusters de terrain (T5) : statique, sync no-op (les sprites sont posés au reset).
-    this.siteRenderer.sync()
-
-    // Ouvriers navetteurs (T6) : navette + charge visible + panique.
-    this.siteWorkers.sync(state)
+    // Clusters de terrain (T5) + ouvriers (T6) : rendu cosmétique, sauté en lite (cf. reset).
+    if (!this.lite) {
+      this.siteRenderer.sync()
+      this.siteWorkers.sync(state)
+    }
 
     // PNJ(s) d'ambiance : errance douce (B3) + animation de geste (boucle lente).
     for (const npc of this.ambientSprites) {
