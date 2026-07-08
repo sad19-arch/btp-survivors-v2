@@ -444,7 +444,13 @@ export class GameScene extends Phaser.Scene {
     // autour d'angles dérivés (+ 40° par PNJ) pour rester dans le même secteur.
     const AMB_DIST_MIN = 420
     const AMB_DIST_MAX = 520
-    for (const [npcIdx, amb] of (this.stage.ambient ?? []).entries()) {
+    // Les stages pilotés par le PLAN de chantier (sitePrograms) tirent leur vie
+    // des ouvriers navetteurs (SiteWorkers, purposeful) : on N'AJOUTE PAS en plus
+    // les PNJ errants Lissajous — c'était la double-population incohérente
+    // (tailles disparates + errance « dans tous les sens »). Les feuilles PNJ
+    // restent chargées (preload) car SiteWorkers les réutilise.
+    const ambientList = SITE_PROGRAMS[this.loadedStageId] !== undefined ? [] : (this.stage.ambient ?? [])
+    for (const [npcIdx, amb] of ambientList.entries()) {
       if (!this.textures.exists(amb.key)) { continue }
       // Rayon forfaitaire du PNJ : demi-frame compact (64 px) × scale.
       const ambRadius = Math.round(amb.scale * 64)

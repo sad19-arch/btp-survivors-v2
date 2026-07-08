@@ -24,6 +24,8 @@
 
 import Phaser from 'phaser'
 import { buildSiteLayout } from '@core/siteLayout'
+import { buildSitePlan } from '@core/sitePlan'
+import { SITE_PROGRAMS } from '@content/sitePrograms'
 import { commutePos, loadVisible, panicDecision, PANIC_R } from '@render/workerBehavior'
 import { dirRow, walkFrame } from '@render/sprites'
 import type { AppViewState } from '@/app/appState'
@@ -42,11 +44,22 @@ const PORTEUR_SPEED = 65
 /** Vitesse de navette des signaleurs (px/s). */
 const SIGNALEUR_SPEED = 80
 
-/** Vitesse d'oscillation d'un terrassier au travail (px/s — lent, sur place). */
-const TERRASSIER_SPEED = 34
+/** Vitesse d'un navetteur qui va d'une fouille à l'autre (px/s — marche franche). */
+const NAVETTEUR_SPEED = 74
 
 /** Vitesse d'un camion benne sur la piste (px/s — rapide). */
-const CAMION_SPEED = 155
+const CAMION_SPEED = 150
+
+/**
+ * Échelle UNIQUE de tous les ouvriers à pied (feuilles PNJ 256²).
+ * Les feuilles d'ambiance avaient des échelles disparates (0.71 → 1.61) → PNJ
+ * « certains minuscules, certains géants ». Ici : une seule taille humaine,
+ * cohérente avec le joueur (~99 px).
+ */
+const WORKER_SCALE = 0.62
+
+/** Amplitude du rebond vertical d'un camion en roulant (px, suspension). */
+const CAMION_BOB_PX = 4
 
 /** Vitesse de fuite en panique (px/s — multiplicateur sur le vecteur de fuite). */
 const FLEE_SPEED_PX_PER_MS = 0.12
@@ -77,11 +90,11 @@ interface WorkerJob {
    * Rôle du job :
    *  - porteur    : évacue la terre fouille → déblais (charge visible à l'aller)
    *  - signaleur  : flagman à l'entrée (patrouille route)
-   *  - terrassier : travaille EN PLACE au bord d'un trou (petite oscillation)
+   *  - navetteur  : va D'UNE FOUILLE À L'AUTRE (marche franche, trajet visible)
    *  - camion     : benne qui roule sur la piste (évacuation) — gros sprite, rapide,
    *                 orienté par flipX, ne panique pas.
    */
-  role: 'porteur' | 'signaleur' | 'terrassier' | 'camion'
+  role: 'porteur' | 'signaleur' | 'navetteur' | 'camion'
   /** Point de départ A (monde). */
   ax: number
   ay: number
@@ -160,7 +173,11 @@ export class SiteWorkers {
     // Les prefabs « plan de chantier » sont inclus : le front de creusement joue
     // le rôle d'excavation, la rangée de déblais celui de spoil.
     const excavations = layout.clusters.filter(
-      (c) => c.defId === 'cluster_excavation' || c.defId === 'scene_dig_active'
+      (c) =>
+        c.defId === 'cluster_excavation' ||
+        c.defId === 'scene_dig_active' ||
+        c.defId === 'scene_dig_active_spawn' ||
+        c.defId === 'scene_dig_done'
     )
     const spoils = layout.clusters.filter(
       (c) => c.defId === 'cluster_spoil' || c.defId === 'scene_spoil' || c.defId === 'scene_stock'
@@ -205,45 +222,88 @@ export class SiteWorkers {
       jobIdx++
     }
 
-    // Jobs « terrassier » : un ouvrier travaille EN PLACE au bord de chaque
-    // front de creusement (petite oscillation = coups de pelle), pas d'errance.
-    for (const exc of excavations) {
+    // Jobs « navetteur » : un ouvrier va D'UNE FOUILLE À LA SUIVANTE (marche
+    // franche, trajet lisible) — remplace l'ancien terrassier qui oscillait sur
+    // place (« grand mais bouge à peine »). On apparie chaque fouille à la
+    // fouille la PLUS PROCHE (autre qu'elle-même) → va-et-vient entre chantiers.
+    for (let i = 0; i < excavations.length; i++) {
+      const from = excavations[i]
+      if (from === undefined) {
+        continue
+      }
+      // Fouille cible = la plus proche différente de `from`.
+      let to = undefined as (typeof excavations)[number] | undefined
+      let best = Infinity
+      for (let k = 0; k < excavations.length; k++) {
+        if (k === i) {
+          continue
+        }
+        const cand = excavations[k]
+        if (cand === undefined) {
+          continue
+        }
+        const d = Math.hypot(cand.x - from.x, cand.y - from.y)
+        if (d < best) {
+          best = d
+          to = cand
+        }
+      }
+      if (to === undefined) {
+        continue
+      }
       const key = this._resolveKey('porteur', npcKeys)
       if (key === null) {
         break
       }
       this.jobs.push({
         textureKey: key,
-        role: 'terrassier',
-        ax: exc.x - 55,
-        ay: exc.y + 130,
-        bx: exc.x + 55,
-        by: exc.y + 130,
-        speed: TERRASSIER_SPEED,
-        midX: exc.x,
-        midY: exc.y + 130,
+        role: 'navetteur',
+        ax: from.x,
+        ay: from.y + 120,
+        bx: to.x,
+        by: to.y + 120,
+        speed: NAVETTEUR_SPEED,
+        midX: (from.x + to.x) / 2,
+        midY: (from.y + to.y) / 2 + 120,
         phaseOffsetMs: jobIdx * PHASE_OFFSET_MS
       })
       jobIdx++
     }
 
-    // Jobs « camion » : bennes qui roulent sur la PISTE horizontale du sud
-    // (évacuation de la terre). Orientation gérée par flipX (asset de profil).
-    if (this.scene.textures.exists('prop_s2_truck') && routeClusters.length > 0) {
-      const routeY = routeClusters[0]?.y ?? worldH - 350
-      const leftX = worldW * 0.18
-      const rightX = worldW * 0.82
+    // Jobs « camion » : bennes qui roulent sur la PISTE le long du bord SUD de la
+    // zone de travail (au niveau de la clôture, pas relégués tout en bas du monde).
+    // On lit le rect de la zone signature dans le plan pour caler la voie.
+    if (this.scene.textures.exists('prop_s2_truck')) {
+      const plan = buildSitePlan(seed, worldW, worldH, stageId)
+      const sigId = SITE_PROGRAMS[stageId]?.zones.find((z) => z.signature === true)?.id
+      const sigZone = plan?.zones.find((z) => z.id === sigId)
+      let laneY: number
+      let leftX: number
+      let rightX: number
+      if (sigZone !== undefined) {
+        // Juste au sud de la clôture sud de la fouille (piste de roulage interne).
+        laneY = sigZone.cy + sigZone.halfH + 150
+        leftX = sigZone.cx - sigZone.halfW + 120
+        rightX = sigZone.cx + sigZone.halfW - 120
+      } else {
+        // Repli (stage sans zone signature) : bande sud du monde.
+        const routeY = routeClusters[0]?.y ?? worldH - 350
+        laneY = routeY - 40
+        leftX = worldW * 0.18
+        rightX = worldW * 0.82
+      }
       for (let t = 0; t < 3; t++) {
+        // 3 camions décalés en phase → un flux continu le long de la piste.
         this.jobs.push({
           textureKey: 'prop_s2_truck',
           role: 'camion',
           ax: leftX,
-          ay: routeY - 40,
+          ay: laneY,
           bx: rightX,
-          by: routeY - 40,
+          by: laneY,
           speed: CAMION_SPEED,
           midX: (leftX + rightX) / 2,
-          midY: routeY - 40,
+          midY: laneY,
           phaseOffsetMs: t * 5200
         })
         jobIdx++
@@ -317,9 +377,11 @@ export class SiteWorkers {
       const pos = commutePos(job.ax, job.ay, job.bx, job.by, tMs, job.speed)
 
       // Camion : roule sur la piste, ne panique pas, orienté par flipX
-      // (asset de profil — R-I : on respecte le sens de circulation).
+      // (asset de profil — R-I : on respecte le sens de circulation). Un léger
+      // rebond vertical (suspension) donne le sentiment qu'il ROULE.
       if (job.role === 'camion') {
-        aw.sprite.setPosition(pos.x, pos.y)
+        const bob = Math.sin(tMs / 150) * CAMION_BOB_PX
+        aw.sprite.setPosition(pos.x, pos.y + bob)
         const goingRight = pos.leg === 'ab'
         aw.sprite.setFlipX(!goingRight)
         continue
@@ -475,7 +537,7 @@ export class SiteWorkers {
     if (hasTexture) {
       sprite = this.scene.add
         .sprite(x, y, job.textureKey)
-        .setScale(isCamion ? 1.0 : 0.55)
+        .setScale(isCamion ? 1.0 : WORKER_SCALE)
         .setDepth(DEPTH_WORKER)
     } else {
       // Repli : cercle vert clair (non-menaçant, distinct des ennemis rouges).
