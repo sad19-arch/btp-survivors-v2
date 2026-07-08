@@ -11,6 +11,7 @@ import {
 } from '@core/sitePlan'
 import type { PlanSeg, PlacedZone, SitePlan } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
+import { buildSiteLayout } from '@core/siteLayout'
 
 /**
  * ÉTAPE 5 automatisée — les contraintes de placement (ÉTAPE 2 de la méthode
@@ -227,5 +228,76 @@ describe.each(STAGES)('sitePlan — contraintes de chantier (%s)', (stageId) => 
 describe('sitePlan — stages sans programme', () => {
   it('renvoie null (layout legacy conservé)', () => {
     expect(buildSitePlan(1, W, H, 'stage_inconnu')).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contraintes de niveau LAYOUT (placement des prefabs) — C4 et C9
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Clusters porteurs d'engins EN TRAVAIL (le parc = machines parquées, exempt). */
+const MACHINE_CLUSTERS = new Set(['cluster_front_terr', 'cluster_dozer_terr', 'cluster_camion_terr'])
+
+/** Clusters hors-zone par nature (infrastructure du site). */
+const INFRA_CLUSTERS = new Set(['cluster_route', 'cluster_gate_main'])
+
+describe.each(STAGES)('siteLayout — contraintes machines & zones (%s)', (stageId) => {
+  it.each(SEEDS)('C4 deux machines en travail ne sont JAMAIS collées (seed %i)', (seed) => {
+    const layout = buildSiteLayout(seed, W, H, stageId)
+    const machines = layout.clusters.filter((c) => MACHINE_CLUSTERS.has(c.defId))
+    expect(machines.length).toBeGreaterThan(0)
+    const minDist = SITE_PROGRAMS[stageId]?.rules.minMachineDistPx ?? 600
+    for (let i = 0; i < machines.length; i++) {
+      for (let k = i + 1; k < machines.length; k++) {
+        const a = machines[i]
+        const b = machines[k]
+        if (a === undefined || b === undefined) {
+          continue
+        }
+        expect(
+          Math.hypot(a.x - b.x, a.y - b.y),
+          `machines ${a.defId}@(${Math.round(a.x)},${Math.round(a.y)}) et ${b.defId} collées`
+        ).toBeGreaterThanOrEqual(minDist)
+      }
+    }
+  })
+
+  it.each(SEEDS)('C4b le front de creusement est AU BORD NORD de sa fouille (seed %i)', (seed) => {
+    const plan = planFor(stageId, seed)
+    const layout = buildSiteLayout(seed, W, H, stageId)
+    const fronts = layout.clusters.filter((c) => c.defId === 'cluster_front_terr')
+    for (const f of fronts) {
+      const zone = plan.zones.find(
+        (z) => Math.abs(f.x - z.cx) <= z.halfW && Math.abs(f.y - z.cy) <= z.halfH
+      )
+      expect(zone?.role, 'front hors excavation').toBe('excavation')
+      if (zone !== undefined) {
+        // Adjacent au bord nord (front de creusement), jamais au milieu ni dehors.
+        expect(f.y - (zone.cy - zone.halfH)).toBeLessThanOrEqual(320)
+        expect(f.y - (zone.cy - zone.halfH)).toBeGreaterThanOrEqual(40)
+      }
+    }
+  })
+
+  it.each(SEEDS)('C9 aucun prefab ne flotte hors de sa zone (seed %i)', (seed) => {
+    const plan = planFor(stageId, seed)
+    const layout = buildSiteLayout(seed, W, H, stageId)
+    for (const c of layout.clusters) {
+      if (INFRA_CLUSTERS.has(c.defId)) {
+        continue
+      }
+      const inSomeZone = plan.zones.some(
+        (z) => Math.abs(c.x - z.cx) <= z.halfW + 10 && Math.abs(c.y - z.cy) <= z.halfH + 10
+      )
+      expect(inSomeZone, `${c.defId}@(${Math.round(c.x)},${Math.round(c.y)}) hors zone`).toBe(true)
+    }
+  })
+
+  it.each(SEEDS)('les clôtures du plan deviennent des obstacles bloquants (seed %i)', (seed) => {
+    const plan = planFor(stageId, seed)
+    const layout = buildSiteLayout(seed, W, H, stageId)
+    const fenceObstacles = layout.obstacles.filter((o) => o.kind === 'segment' && o.blocks === 'both')
+    // Au moins autant de segments d'obstacle que de segments de clôture du plan.
+    expect(fenceObstacles.length).toBeGreaterThanOrEqual(plan.fences.length)
   })
 })

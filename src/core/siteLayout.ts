@@ -20,6 +20,10 @@
 import { Rng } from '@core/rng'
 import { CLUSTERS, STAGE_CLUSTERS } from '@content/clusters'
 import type { ClusterDef } from '@content/clusters'
+import { buildSitePlan } from '@core/sitePlan'
+import type { SitePlan, PlacedZone } from '@core/sitePlan'
+import { SITE_PROGRAMS } from '@content/sitePrograms'
+import type { ZonePrefab } from '@content/sitePrograms'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes exportees (testables)
@@ -175,6 +179,17 @@ export function buildSiteLayout(
   worldH: number,
   stageId: string
 ): SiteLayout {
+  // ── Chemin « PLAN DE CHANTIER » (méthode 6-étapes) ─────────────────────────
+  // Les stages avec programme sémantique sont composés depuis le plan masse
+  // (zones/portail/chemins/clôtures) — fini le pile-ou-face par cellule.
+  if (SITE_PROGRAMS[stageId] !== undefined) {
+    const plan = buildSitePlan(seed, worldW, worldH, stageId)
+    if (plan !== null) {
+      return layoutFromPlan(plan, stageId, seed)
+    }
+  }
+
+  // ── Chemin LEGACY (stages non migrés — transition) ─────────────────────────
   // Garde : terrain_vierge ou stage sans clusters => layout vide (sim:check diff 0)
   const stageEntries = STAGE_CLUSTERS[stageId]
   if (stageEntries === undefined || stageEntries.length === 0) {
@@ -287,4 +302,169 @@ export function buildSiteLayout(
   }
 
   return { clusters: placed, obstacles }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Placement « plan de chantier » : prefabs DANS leurs zones + clôtures bloquantes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Compose le layout à partir du plan masse : route + portail + clôtures des
+ * anneaux (obstacles) + prefabs placés DANS leurs zones selon l'arrangement du
+ * programme (front/rangée/répartition/centre/porte). Déterministe (Rng isolé).
+ */
+function layoutFromPlan(plan: SitePlan, stageId: string, seed: number): SiteLayout {
+  const rng = new Rng((seed ^ LAYOUT_XOR) >>> 0)
+  const placed: PlacedCluster[] = []
+  const obstacles: Obstacle[] = []
+  const program = SITE_PROGRAMS[stageId]
+
+  const push = (def: ClusterDef, x: number, y: number): void => {
+    placed.push({ defId: def.id, x, y })
+    for (const obs of extractObstacles(x, y, def)) {
+      obstacles.push(obs)
+    }
+  }
+
+  // ── 1. Route (bord sud) — identique au legacy (bande continue). ───────────
+  const routeDef = CLUSTERS['cluster_route']
+  if (routeDef !== undefined) {
+    const routeY = plan.worldH - ROUTE_BAND / 2
+    const tiles = Math.max(1, Math.round(plan.worldW / ROUTE_TILE))
+    const step = plan.worldW / tiles
+    for (let i = 0; i < tiles; i++) {
+      push(routeDef, step * (i + 0.5), routeY)
+    }
+  }
+
+  // ── 2. Portail principal (sur la route, LE passage — pas de collision). ───
+  const gateDef = CLUSTERS['cluster_gate_main']
+  if (gateDef !== undefined) {
+    push(gateDef, plan.gate.x, plan.gate.y - 24)
+  }
+
+  // ── 3. Clôtures des anneaux : obstacles bloquants (le rendu pose les panneaux). ──
+  for (const f of plan.fences) {
+    obstacles.push({
+      kind: 'segment',
+      x: f.x1,
+      y: f.y1,
+      x2: f.x2,
+      y2: f.y2,
+      thickness: 12,
+      blocks: 'both',
+    })
+  }
+
+  // ── 4. Prefabs par zone, selon l'arrangement du programme. ─────────────────
+  for (const zone of plan.zones) {
+    const spec = program?.zones.find((z) => z.id === zone.id)
+    const prefabs = spec?.prefabs ?? []
+    /** Positions déjà posées DANS cette zone (anti-collage, toutes familles). */
+    const zonePlaced: Array<{ x: number; y: number; r: number }> = []
+
+    const tryPlace = (def: ClusterDef, x: number, y: number): boolean => {
+      // Clamp dans la zone (marge = encombrement du prefab).
+      const m = def.footprintRadius + 40
+      const px = Math.min(Math.max(x, zone.cx - zone.halfW + m), zone.cx + zone.halfW - m)
+      const py = Math.min(Math.max(y, zone.cy - zone.halfH + m), zone.cy + zone.halfH - m)
+      // Jamais deux prefabs collés (règle « deux pelleteuses ») — et jamais
+      // en-dessous de l'invariant global MIN_GAP entre ancres de clusters.
+      for (const p of zonePlaced) {
+        const minSep = Math.max(p.r + def.footprintRadius + 120, MIN_GAP)
+        if (Math.hypot(px - p.x, py - p.y) < minSep) {
+          return false
+        }
+      }
+      // Laisse la porte dégagée (circulation).
+      if (Math.hypot(px - zone.door.x, py - zone.door.y) < def.footprintRadius + 220) {
+        return false
+      }
+      zonePlaced.push({ x: px, y: py, r: def.footprintRadius })
+      push(def, px, py)
+      return true
+    }
+
+    for (const pf of prefabs) {
+      const def = CLUSTERS[pf.clusterId]
+      if (def === undefined) {
+        continue
+      }
+      placePrefab(pf, def, zone, rng, tryPlace)
+    }
+  }
+
+  return { clusters: placed, obstacles }
+}
+
+/** Place `count` exemplaires d'un prefab dans la zone selon l'arrangement. */
+function placePrefab(
+  pf: ZonePrefab,
+  def: ClusterDef,
+  zone: PlacedZone,
+  rng: Rng,
+  tryPlace: (def: ClusterDef, x: number, y: number) => boolean
+): void {
+  const m = def.footprintRadius + 60
+  switch (pf.arrangement) {
+    case 'front_north': {
+      // L'engin AU FRONT : bord nord intérieur (là où on creuse).
+      for (let i = 0; i < pf.count; i++) {
+        const x = zone.cx + rng.float(-0.25, 0.25) * zone.halfW
+        const y = zone.cy - zone.halfH + def.footprintRadius + 70
+        tryPlace(def, x, y)
+      }
+      return
+    }
+    case 'row': {
+      // Alignés au cordeau le long du grand axe.
+      const alongX = zone.halfW >= zone.halfH
+      const half = (alongX ? zone.halfW : zone.halfH) - m
+      for (let i = 0; i < pf.count; i++) {
+        const t = pf.count === 1 ? 0 : -half + ((2 * half) / (pf.count - 1)) * i
+        const jitter = rng.float(-35, 35)
+        const x = alongX ? zone.cx + t : zone.cx + jitter
+        const y = alongX ? zone.cy + jitter : zone.cy + t
+        tryPlace(def, x, y)
+      }
+      return
+    }
+    case 'scatter': {
+      // Répartis avec espacement garanti (12 essais par exemplaire).
+      for (let i = 0; i < pf.count; i++) {
+        for (let t = 0; t < 12; t++) {
+          const x = rng.float(zone.cx - zone.halfW + m, zone.cx + zone.halfW - m)
+          const y = rng.float(zone.cy - zone.halfH + m, zone.cy + zone.halfH - m)
+          if (tryPlace(def, x, y)) {
+            break
+          }
+        }
+      }
+      return
+    }
+    case 'center': {
+      for (let i = 0; i < pf.count; i++) {
+        tryPlace(def, zone.cx + rng.float(-40, 40), zone.cy + rng.float(-40, 40))
+      }
+      return
+    }
+    case 'at_door': {
+      // Côté intérieur de la porte (rampe/accès), tiré vers le centre.
+      // Replis à distances croissantes si la place est prise (MIN_GAP).
+      const dx = zone.cx - zone.door.x
+      const dy = zone.cy - zone.door.y
+      const len = Math.hypot(dx, dy)
+      const ux = len > 0 ? dx / len : 0
+      const uy = len > 0 ? dy / len : 1
+      for (let i = 0; i < pf.count; i++) {
+        for (let t = 0; t < 4; t++) {
+          const d = def.footprintRadius + 320 + (i * 2 + t) * 240
+          if (tryPlace(def, zone.door.x + ux * d, zone.door.y + uy * d)) {
+            break
+          }
+        }
+      }
+      return
+    }
+  }
 }

@@ -113,6 +113,123 @@ function plantCluster(id: string, keys: [string, string]): ClusterDef {
 /** Registre global des prefabs par id. */
 export const CLUSTERS: Record<string, ClusterDef> = {
   // ─────────────────────────────────────────────────────────────────────────
+  // PREFABS « PLAN DE CHANTIER » (méthode 6-étapes) — placés PAR ZONE via
+  // sitePrograms/sitePlan (plus jamais d'assets isolés éparpillés).
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Front de creusement : LA pelleteuse au bord du trou + terre fraîche + traces.
+  cluster_front_terr: {
+    id: 'cluster_front_terr',
+    footprintRadius: 130,
+    gates: [{ dx: 0, dy: 100 }],
+    elements: [
+      { assetKey: 'prop_s2_excavator', dx: 0, dy: 0, scale: 1.2, collide: 'both', shape: { kind: 'circle', r: 52 } },
+      { assetKey: 'prop_s2_dirt', dx: 95, dy: 45, scale: 0.9, collide: 'both', shape: { kind: 'circle', r: 36 } },
+      { assetKey: 'prop_s2_dirt', dx: -85, dy: 60, scale: 0.8, collide: 'none' },
+      { assetKey: 'decal_s2_tracks', dx: 10, dy: 115, scale: 1.1, collide: 'none' },
+    ],
+  },
+
+  // Sol fouillé : fosse + terre remuée (l'intérieur d'une excavation EN COURS).
+  cluster_pit_terr: {
+    id: 'cluster_pit_terr',
+    footprintRadius: 120,
+    gates: [{ dx: 0, dy: 95 }],
+    elements: [
+      { assetKey: 'struct_stage02_pit', dx: 0, dy: 0, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 78 } },
+      { assetKey: 'prop_s2_dirt', dx: 105, dy: 35, scale: 0.75, collide: 'none' },
+      { assetKey: 'decal_s2_puddle', dx: -70, dy: 60, scale: 1.0, collide: 'none' },
+    ],
+  },
+
+  // Camion-benne à la rampe (rotation fouille→déblais) + traces de roues.
+  cluster_camion_terr: {
+    id: 'cluster_camion_terr',
+    footprintRadius: 95,
+    gates: [{ dx: 0, dy: 70 }],
+    elements: [
+      { assetKey: 'prop_s2_truck', dx: 0, dy: 0, scale: 1.05, collide: 'both', shape: { kind: 'circle', r: 46 } },
+      { assetKey: 'decal_s2_tracks', dx: -5, dy: 85, scale: 1.15, collide: 'none' },
+    ],
+  },
+
+  // Rangée de déblais : tas alignés (déchargés rangée par rangée) + flaque.
+  cluster_spoil_row: {
+    id: 'cluster_spoil_row',
+    footprintRadius: 130,
+    gates: [{ dx: 0, dy: 85 }],
+    elements: [
+      { assetKey: 'prop_s2_dirt', dx: -95, dy: 0, scale: 0.9, collide: 'both', shape: { kind: 'circle', r: 36 } },
+      { assetKey: 'prop_s2_dirt', dx: 0, dy: -8, scale: 0.95, collide: 'both', shape: { kind: 'circle', r: 38 } },
+      { assetKey: 'prop_s2_dirt', dx: 95, dy: 4, scale: 0.85, collide: 'both', shape: { kind: 'circle', r: 34 } },
+      { assetKey: 'decal_s2_puddle', dx: 40, dy: 70, scale: 1.0, collide: 'none' },
+    ],
+  },
+
+  // LE bulldozer qui étale les déblais (un seul par zone).
+  cluster_dozer_terr: {
+    id: 'cluster_dozer_terr',
+    footprintRadius: 120,
+    gates: [{ dx: 0, dy: 75 }],
+    elements: [
+      { assetKey: 'prop_s2_dozer', dx: 0, dy: 0, scale: 1.05, collide: 'both', shape: { kind: 'circle', r: 46 } },
+      { assetKey: 'decal_s2_tracks', dx: 0, dy: 90, scale: 1.1, collide: 'none' },
+      { assetKey: 'prop_s2_dirt', dx: 110, dy: 20, scale: 0.7, collide: 'none' },
+    ],
+  },
+
+  // Parc engins : machines PARQUÉES au cordeau, piquets de coin.
+  cluster_parc_row_terr: {
+    id: 'cluster_parc_row_terr',
+    footprintRadius: 250,
+    gates: [{ dx: 0, dy: 90 }],
+    elements: [
+      { assetKey: 'prop_s2_roller', dx: -170, dy: 0, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 42 } },
+      { assetKey: 'prop_s2_dozer', dx: 0, dy: 6, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 44 } },
+      { assetKey: 'prop_s2_truck', dx: 170, dy: 0, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 44 } },
+      { assetKey: 'fence_post', dx: -230, dy: -70, scale: 0.8, collide: 'none' },
+      { assetKey: 'fence_post', dx: 230, dy: -70, scale: 0.8, collide: 'none' },
+      { assetKey: 'decal_s2_tracks', dx: -80, dy: 95, scale: 1.1, collide: 'none' },
+    ],
+  },
+
+  // Base vie : bungalow + panneau d'entrée (près du portail).
+  cluster_base_vie_terr: {
+    id: 'cluster_base_vie_terr',
+    footprintRadius: 150,
+    gates: [{ dx: 0, dy: 95 }],
+    elements: [
+      { assetKey: 'bungalow_shared', dx: 0, dy: 0, scale: 1.15, collide: 'both', shape: { kind: 'circle', r: 64 } },
+      { assetKey: 'site_gate', dx: 130, dy: 55, scale: 0.55, collide: 'none' },
+      { assetKey: 'fence_post', dx: -110, dy: 60, scale: 0.8, collide: 'none' },
+    ],
+  },
+
+  // Ligne de piquets topo (bornage des zones futures).
+  cluster_survey_row: {
+    id: 'cluster_survey_row',
+    footprintRadius: 130,
+    gates: [],
+    elements: [
+      { assetKey: 'piquets_shared', dx: -100, dy: 0, scale: 1.0, collide: 'none' },
+      { assetKey: 'piquets_shared', dx: 0, dy: -6, scale: 1.0, collide: 'none' },
+      { assetKey: 'piquets_shared', dx: 100, dy: 2, scale: 1.0, collide: 'none' },
+    ],
+  },
+
+  // Portail principal du chantier (sur la route, cosmétique — c'est LE passage).
+  cluster_gate_main: {
+    id: 'cluster_gate_main',
+    footprintRadius: 185,
+    gates: [],
+    elements: [
+      { assetKey: 'site_gate', dx: 0, dy: -20, scale: 1.35, collide: 'none' },
+      { assetKey: 'fence_post', dx: -170, dy: -10, scale: 0.9, collide: 'none' },
+      { assetKey: 'fence_post', dx: 170, dy: -10, scale: 0.9, collide: 'none' },
+    ],
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // cluster_excavation : fosse centrale + palissade + engins + terre
   // Géographie locale : fosse au centre, anneau de panneaux sauf côté sud
   // (gate à dy=+80), pelleteuse NE, benne SE, 2 tas de terre NO/SO

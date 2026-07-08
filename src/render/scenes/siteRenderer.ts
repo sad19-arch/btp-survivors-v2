@@ -22,6 +22,8 @@
 
 import Phaser from 'phaser'
 import { buildSiteLayout } from '@core/siteLayout'
+import { buildSitePlan } from '@core/sitePlan'
+import type { PlanSeg } from '@core/sitePlan'
 import { CLUSTERS } from '@content/clusters'
 import type { ClusterElement } from '@content/clusters'
 
@@ -69,6 +71,9 @@ export class SiteRenderer {
   /** Sprites des clusters posés — détruits et recréés à chaque `reset()`. */
   private sprites: Phaser.GameObjects.Image[] = []
 
+  /** Objets du plan masse (clôtures/pistes/terre excavée) — même cycle de vie. */
+  private planObjects: Phaser.GameObjects.GameObject[] = []
+
   constructor(private readonly scene: Phaser.Scene) {}
 
   /**
@@ -86,6 +91,17 @@ export class SiteRenderer {
       sp.destroy()
     }
     this.sprites = []
+    for (const o of this.planObjects) {
+      o.destroy()
+    }
+    this.planObjects = []
+
+    // Plan masse (stages programmés) : terre excavée + pistes + panneaux de clôture.
+    // MÊME source déterministe que la sim (les obstacles viennent des mêmes segments).
+    const plan = buildSitePlan(seed, worldW, worldH, stageId)
+    if (plan !== null) {
+      this.drawPlan(plan)
+    }
 
     // Calcule le même layout que la sim (déterministe).
     const layout = buildSiteLayout(seed, worldW, worldH, stageId)
@@ -140,6 +156,68 @@ export class SiteRenderer {
   }
 
   /**
+   * Dessine le plan masse : terre excavée sous les fouilles, pistes de
+   * roulage le long des chemins, panneaux de clôture le long des anneaux
+   * (les ouvertures restent vides — les poteaux les encadrent).
+   */
+  private drawPlan(plan: NonNullable<ReturnType<typeof buildSitePlan>>): void {
+    // 1. Terre excavée : patch sombre sous chaque zone d'excavation.
+    for (const z of plan.zones) {
+      if (z.role !== 'excavation') {
+        continue
+      }
+      const rect = this.scene.add
+        .rectangle(z.cx, z.cy, z.halfW * 2 - 60, z.halfH * 2 - 60, 0x5b3f28, 0.42)
+        .setDepth(-9.4)
+      this.planObjects.push(rect)
+    }
+    // 2. Pistes : bandes de roulage continues le long des chemins.
+    if (this.scene.textures.exists('road_strip')) {
+      for (const p of plan.paths) {
+        this.tileAlong(p, 'road_strip', 0.8, 104, -9.1)
+      }
+    }
+    // 3. Clôtures : panneaux tuilés le long des segments, poteaux aux extrémités
+    //    (ils encadrent naturellement les ouvertures).
+    const hasPanel = this.scene.textures.exists('fence_panel')
+    const hasPost = this.scene.textures.exists('fence_post')
+    for (const f of plan.fences) {
+      if (hasPanel) {
+        this.tileAlong(f, 'fence_panel', 1.0, 78, -5)
+      }
+      if (hasPost) {
+        for (const end of [
+          { x: f.x1, y: f.y1 },
+          { x: f.x2, y: f.y2 },
+        ]) {
+          const post = this.scene.add.image(end.x, end.y, 'fence_post').setScale(0.85).setDepth(-5)
+          this.planObjects.push(post)
+        }
+      }
+    }
+  }
+
+  /** Tuile un asset le long d'un segment (orienté selon le segment). */
+  private tileAlong(seg: PlanSeg, key: string, scale: number, step: number, depth: number): void {
+    const dx = seg.x2 - seg.x1
+    const dy = seg.y2 - seg.y1
+    const len = Math.hypot(dx, dy)
+    const ang = Math.atan2(dy, dx)
+    const n = Math.max(1, Math.round(len / step))
+    for (let k = 0; k <= n; k++) {
+      const t = k / n
+      const img = this.scene.add
+        .image(seg.x1 + dx * t, seg.y1 + dy * t, key)
+        .setScale(scale)
+        .setDepth(depth)
+      if (ang !== 0) {
+        img.setRotation(ang)
+      }
+      this.planObjects.push(img)
+    }
+  }
+
+  /**
    * Sync de frame — les clusters sont STATIQUES (dessinés au reset, pas
    * reconstruits chaque frame). Méthode vide maintenue pour l'uniformité
    * des modules de rendu (pattern constructor/reset/sync/dispose).
@@ -157,10 +235,19 @@ export class SiteRenderer {
       sp.destroy()
     }
     this.sprites = []
+    for (const o of this.planObjects) {
+      o.destroy()
+    }
+    this.planObjects = []
   }
 
   /** Nombre de sprites actuellement actifs (sonde de test). */
   get spriteCount(): number {
     return this.sprites.length
+  }
+
+  /** Nombre d'objets du plan masse (clôtures/pistes/terre) — sonde de test. */
+  get planObjectCount(): number {
+    return this.planObjects.length
   }
 }

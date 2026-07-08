@@ -29,6 +29,26 @@ export type ZoneAnchor =
   /** Collée à une autre zone (id), côté donné, avec un espace gapPx entre bords. */
   | { kind: 'adjacent'; to: string; side: 'east' | 'west' | 'north' | 'south'; gapPx: number }
 
+/** Disposition d'un prefab DANS sa zone (résolue par siteLayout). */
+export type PrefabArrangement =
+  /** Au front de creusement : bord nord intérieur de la zone (engin au bord du trou). */
+  | 'front_north'
+  /** Alignés au cordeau le long du grand axe de la zone (parc, stocks, piquets). */
+  | 'row'
+  /** Répartis dans la zone avec espacement minimal (jamais deux collés). */
+  | 'scatter'
+  /** Au centre de la zone. */
+  | 'center'
+  /** Près de la porte, côté intérieur (camion à la rampe). */
+  | 'at_door'
+
+/** Prefab à placer dans une zone : on place des CLUSTERS, jamais des assets isolés. */
+export interface ZonePrefab {
+  clusterId: string
+  count: number
+  arrangement: PrefabArrangement
+}
+
 /** Spécification d'une zone du chantier. */
 export interface ZoneSpec {
   id: string
@@ -44,6 +64,8 @@ export interface ZoneSpec {
   fence?: { openings: number }
   /** Jitter seedé du centre (px, défaut 0) — irrégularité contrôlée, jamais le chaos. */
   jitterPx?: number
+  /** Prefabs à placer dans la zone (ÉTAPE 3 — clusters Lego). */
+  prefabs?: ZonePrefab[]
 }
 
 /** Paramètres des contraintes vérifiées par tests (ÉTAPE 2). */
@@ -102,6 +124,14 @@ const TERRASSEMENT: SiteProgram = {
       anchor: { kind: 'north', xFrac: 0.5 },
       fence: { openings: 1 },
       jitterPx: 120,
+      prefabs: [
+        // UNE pelleteuse au front de creusement (bord nord) — jamais deux collées.
+        { clusterId: 'cluster_front_terr', count: 1, arrangement: 'front_north' },
+        // Le sol FOUILLÉ : fosses + terre remuée réparties (espacement garanti).
+        { clusterId: 'cluster_pit_terr', count: 3, arrangement: 'scatter' },
+        // Le camion à la rampe (rotation déblais).
+        { clusterId: 'cluster_camion_terr', count: 1, arrangement: 'at_door' },
+      ],
     },
     {
       id: 'deblais',
@@ -111,6 +141,11 @@ const TERRASSEMENT: SiteProgram = {
       halfH: 900,
       anchor: { kind: 'adjacent', to: 'fouille_principale', side: 'east', gapPx: 350 },
       jitterPx: 80,
+      prefabs: [
+        // Tas alignés (déchargés rangée par rangée) + le bull qui étale.
+        { clusterId: 'cluster_spoil_row', count: 2, arrangement: 'row' },
+        { clusterId: 'cluster_dozer_terr', count: 1, arrangement: 'center' },
+      ],
     },
     {
       id: 'fouille_secondaire',
@@ -121,6 +156,10 @@ const TERRASSEMENT: SiteProgram = {
       anchor: { kind: 'west', yFrac: 0.45 },
       fence: { openings: 1 },
       jitterPx: 100,
+      prefabs: [
+        { clusterId: 'cluster_front_terr', count: 1, arrangement: 'front_north' },
+        { clusterId: 'cluster_pit_terr', count: 1, arrangement: 'center' },
+      ],
     },
     {
       id: 'parc_engins',
@@ -130,6 +169,10 @@ const TERRASSEMENT: SiteProgram = {
       halfH: 550,
       anchor: { kind: 'near_gate', side: 'west', distPx: 2600 },
       jitterPx: 60,
+      prefabs: [
+        // Machines PARQUÉES au cordeau (exemption min-dist : c'est un parc).
+        { clusterId: 'cluster_parc_row_terr', count: 1, arrangement: 'center' },
+      ],
     },
     {
       id: 'base_vie',
@@ -139,6 +182,7 @@ const TERRASSEMENT: SiteProgram = {
       halfH: 500,
       anchor: { kind: 'near_gate', side: 'east', distPx: 1360 },
       jitterPx: 40,
+      prefabs: [{ clusterId: 'cluster_base_vie_terr', count: 1, arrangement: 'center' }],
     },
     {
       id: 'piquets_ne',
@@ -148,9 +192,39 @@ const TERRASSEMENT: SiteProgram = {
       halfH: 250,
       anchor: { kind: 'east', yFrac: 0.33 },
       jitterPx: 80,
+      prefabs: [{ clusterId: 'cluster_survey_row', count: 2, arrangement: 'row' }],
+    },
+    {
+      id: 'stock_terre_se',
+      role: 'stockage',
+      glyph: 'M',
+      halfW: 850,
+      halfH: 520,
+      anchor: { kind: 'east', yFrac: 0.62 },
+      jitterPx: 80,
+      prefabs: [{ clusterId: 'cluster_spoil_row', count: 2, arrangement: 'row' }],
+    },
+    {
+      id: 'piquets_so',
+      role: 'survey',
+      glyph: 'k',
+      halfW: 520,
+      halfH: 230,
+      anchor: { kind: 'west', yFrac: 0.72 },
+      jitterPx: 80,
+      prefabs: [{ clusterId: 'cluster_survey_row', count: 2, arrangement: 'row' }],
     },
   ],
-  connect: ['fouille_principale', 'deblais', 'fouille_secondaire', 'parc_engins', 'base_vie', 'piquets_ne'],
+  connect: [
+    'fouille_principale',
+    'deblais',
+    'fouille_secondaire',
+    'parc_engins',
+    'base_vie',
+    'piquets_ne',
+    'stock_terre_se',
+    'piquets_so',
+  ],
   rules: {
     minMachineDistPx: 600,
     spoilAdjacentMaxPx: 400,

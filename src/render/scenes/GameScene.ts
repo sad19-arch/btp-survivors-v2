@@ -6,6 +6,7 @@ import { GamepadInput } from '@input/gamepad'
 import { routeInput, type FrameInput } from '@input/intents'
 import { buildPlayerInputs } from '@input/players'
 import { WORLD } from '@content/config'
+import { SITE_PROGRAMS } from '@content/sitePrograms'
 import { createGround } from '@render/ground'
 import { createLandmark, createStructures, phaseSalt, resolvePlacement, type ExclusionCircle } from '@render/props'
 import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
@@ -284,6 +285,10 @@ export class GameScene extends Phaser.Scene {
     this.load.image('road_strip', 'terrain/road_strip.png')
     this.load.image('site_gate', 'terrain/site_gate.png')
     this.load.image('fence_post', 'terrain/fence_post.png')
+    // Kit « plan de chantier » : base vie + piquets topo, partagés entre stages
+    // (les prefabs les référencent quel que soit le stage joué).
+    this.load.image('bungalow_shared', 'stage01/props/site_cabin.png')
+    this.load.image('piquets_shared', 'stage01/props/survey_stakes.png')
   }
 
   /** Réinitialise l'état par-run (indispensable car `scene.restart` réutilise l'instance). */
@@ -347,10 +352,15 @@ export class GameScene extends Phaser.Scene {
     if (this.stage.decalDensityMultiplier !== undefined) {
       streamerOpts.decalDensityMultiplier = this.stage.decalDensityMultiplier
     }
-    // Là où des STRUCTURES bâties prennent le relais (tranchées, grilles…), on
-    // atténue le scatter aléatoire pour que la structure se lise (moins de confettis
-    // par-dessus le lieu construit). Render-only.
-    if (hasStructurePlan(this.loadedStageId)) {
+    // Là où une STRUCTURE prend le relais, on atténue/éteint le scatter aléatoire
+    // pour que la structure se lise. Render-only.
+    if (SITE_PROGRAMS[this.loadedStageId] !== undefined) {
+      // Stage au PLAN DE CHANTIER : ZÉRO prop aléatoire (tout objet vient du plan).
+      // Seule reste une texture LÉGÈRE de décalques (traces d'engins, flaques) —
+      // la plateforme entre les zones est roulée par les machines, pas nue.
+      streamerOpts.props = []
+      streamerOpts.decalDensityMultiplier = 0.55
+    } else if (hasStructurePlan(this.loadedStageId)) {
       streamerOpts.decalDensityMultiplier = (streamerOpts.decalDensityMultiplier ?? 1) * 0.35
     }
     // NB : les props ne sont plus cuits statiquement — ils sont streamés par le DecorStreamer.

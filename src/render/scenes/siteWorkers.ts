@@ -144,8 +144,14 @@ export class SiteWorkers {
     }
 
     // Indices des clusters par rôle (defId).
-    const excavations = layout.clusters.filter((c) => c.defId === 'cluster_excavation')
-    const spoils = layout.clusters.filter((c) => c.defId === 'cluster_spoil')
+    // Les prefabs « plan de chantier » sont inclus : le front de creusement joue
+    // le rôle d'excavation, la rangée de déblais celui de spoil.
+    const excavations = layout.clusters.filter(
+      (c) => c.defId === 'cluster_excavation' || c.defId === 'cluster_front_terr'
+    )
+    const spoils = layout.clusters.filter(
+      (c) => c.defId === 'cluster_spoil' || c.defId === 'cluster_spoil_row'
+    )
     const routeClusters = layout.clusters.filter((c) => c.defId === 'cluster_route')
 
     let jobIdx = 0
