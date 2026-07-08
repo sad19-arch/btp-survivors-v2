@@ -77,6 +77,22 @@ export interface GameSeam {
    * Absente en mode allégé ou tant que la scène n'est pas montée.
    */
   debugActiveBubbles?(): number
+  /**
+   * [Debug/T5] Nombre de sprites de clusters de terrain actifs.
+   * Permet de valider en e2e que les clusters sont bien dessinés (> 0 pour terrassement)
+   * et que le count reste borné après restart (pas de fuite). Absente tant que la scène
+   * n'est pas montée.
+   */
+  debugSiteInfo?(): { spriteCount: number }
+  /**
+   * [Debug/T6] Nombre d'ouvriers navetteurs actuellement affichés.
+   * Permet de valider en e2e que les ouvriers sont bien présents sur les stages
+   * avec clusters (> 0 pour terrassement) et absents sur terrain_vierge (= 0).
+   * Absente tant que la scène n'est pas montée.
+   */
+  debugWorkers?(): { count: number }
+  /** Fige la caméra en vue d'ensemble (outil de revue visuelle, render-only). */
+  debugCameraOverview?(zoom: number, cx: number, cy: number): void
 }
 
 declare global {

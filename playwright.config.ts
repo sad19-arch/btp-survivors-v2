@@ -12,6 +12,11 @@ export default defineConfig({
   // au mode lite, même en série l'e2e est bien plus rapide qu'avant. Sur une
   // machine/CI plus costaude, remonter `workers` est sûr (pages déjà légères).
   workers: 1,
+  // Timeout de test généreux : les specs de CAPTURE visuelle (golden-stageXX,
+  // siteRender/siteWorkers) tournent NON-lite (vraies feuilles + clusters) et le
+  // rendu SwiftShader logiciel est lent au boot des stages lourds. 30s (défaut)
+  // ne suffit pas ; 90s laisse la marge sans masquer un vrai hang.
+  timeout: 90_000,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: 'html',

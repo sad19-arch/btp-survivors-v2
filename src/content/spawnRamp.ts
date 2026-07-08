@@ -99,7 +99,11 @@ export function difficultyScaleAt(elapsedMs: number): DifficultyScale {
     // Contact punitif mais moins rapide que l'arc 10:30 — le kite doit pouvoir
     // tenir 20 min. T5b : pente légèrement adoucie (0.11→0.09).
     contactDamage: 0.5 + 0.09 * min,
-    // Vitesse plafonnée à 1.30 — les ennemis poursuivent mais restent fuyables.
-    speed: Math.min(1.30, 1.0 + 0.030 * min)
+    // Vitesse plafonnée : re-tune phase 8 (terrain tactique). Les clusters
+    // (clôtures) ABRITENT le kiter → poursuite rallongée (flux qui contourne)
+    // → il fallait remonter la vitesse pour que la horde rattrape autour des
+    // obstacles (cap 1.30→1.40, pente 0.030→0.037). Rétablit la tension +
+    // évite l'accumulation d'ennemis bloqués (plafond sanity 220).
+    speed: Math.min(1.40, 1.0 + 0.037 * min)
   }
 }
