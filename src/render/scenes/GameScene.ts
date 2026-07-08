@@ -21,6 +21,7 @@ import { HordeRenderer, FEEDBACK_MAX_PER_FRAME } from '@render/scenes/hordeRende
 import { PlayerRenderer } from '@render/scenes/playerRenderer'
 import { TelegraphRenderer } from '@render/scenes/telegraphRenderer'
 import { SiteRenderer } from '@render/scenes/siteRenderer'
+import { SiteStructures, hasStructurePlan } from '@render/scenes/siteStructures'
 import { SiteWorkers } from '@render/scenes/siteWorkers'
 import { buildSiteLayout } from '@core/siteLayout'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
@@ -103,6 +104,8 @@ export class GameScene extends Phaser.Scene {
   private telegraph!: TelegraphRenderer
   /** Rendu des clusters de terrain tactique (T5) — module dédié, GameScene délègue. */
   private siteRenderer!: SiteRenderer
+  /** Structures bâties (tranchées/grilles/façades) — module dédié, GameScene délègue. */
+  private siteStructures!: SiteStructures
   /** Ouvriers navetteurs (T6) — module dédié, GameScene délègue. */
   private siteWorkers!: SiteWorkers
   /**
@@ -315,6 +318,8 @@ export class GameScene extends Phaser.Scene {
     this.telegraph = new TelegraphRenderer(this)
     // Rendu des clusters de terrain (T5) : instance fraîche par scène.
     this.siteRenderer = new SiteRenderer(this)
+    // Structures bâties (refonte cohérence) : instance fraîche par scène.
+    this.siteStructures = new SiteStructures(this)
     // Ouvriers navetteurs (T6) : instance fraîche par scène.
     this.siteWorkers = new SiteWorkers(this)
     // Sol : base tuilée (TileSprite, O(1)) + streamer de décalques/props par chunks.
@@ -341,6 +346,12 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.stage.decalDensityMultiplier !== undefined) {
       streamerOpts.decalDensityMultiplier = this.stage.decalDensityMultiplier
+    }
+    // Là où des STRUCTURES bâties prennent le relais (tranchées, grilles…), on
+    // atténue le scatter aléatoire pour que la structure se lise (moins de confettis
+    // par-dessus le lieu construit). Render-only.
+    if (hasStructurePlan(this.loadedStageId)) {
+      streamerOpts.decalDensityMultiplier = (streamerOpts.decalDensityMultiplier ?? 1) * 0.6
     }
     // NB : les props ne sont plus cuits statiquement — ils sont streamés par le DecorStreamer.
     // Le streamer est construit PLUS BAS, une fois les structures/landmark/PNJ posés,
@@ -407,6 +418,8 @@ export class GameScene extends Phaser.Scene {
     // ouvriers (purement cosmétique) ; la COLLISION reste gérée par la sim.
     if (!this.lite) {
       this.siteRenderer.reset(this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId)
+      // Réseau bâti (tranchées/tuyaux/regards) — streamé par chunks autour de la caméra.
+      this.siteStructures.setPlan(WORLD.width, WORLD.height, this.loadedStageId)
       // Ouvriers navetteurs (T6) : construits depuis le même layout que le siteRenderer.
       // On passe les clés PNJ RÉELLEMENT chargées du stage (numérotées par stage) pour
       // que _resolveKey matche une texture existante partout, pas seulement au stage 02.
@@ -508,6 +521,10 @@ export class GameScene extends Phaser.Scene {
     // Préchargement initial des chunks au démarrage (la caméra est positionnée,
     // le streamer peut déjà charger la vue initiale sans attendre le 1er update()).
     this.decorStreamer.update(this.cameras.main)
+    // Préchargement initial du réseau structurel (même vue initiale que le décor).
+    if (!this.lite) {
+      this.siteStructures.update(this.cameras.main)
+    }
 
     // Onde de choc du marteau + libération de prisonnier + évolution d'arme : la sim émet, l'App relaie.
     this.app.events.addEventListener('auraPulse', this.onAuraPulse)
@@ -519,6 +536,7 @@ export class GameScene extends Phaser.Scene {
       this.app.events.removeEventListener('evolved', this.onEvolved)
       this.telegraph.dispose()
       this.siteRenderer.dispose()
+      this.siteStructures.dispose()
       this.siteWorkers.dispose()
     })
 
@@ -591,6 +609,7 @@ export class GameScene extends Phaser.Scene {
     this.decorStreamerFrame++
     if (this.decorStreamerFrame % 4 === 0) {
       this.decorStreamer.update(this.cameras.main)
+      this.siteStructures.update(this.cameras.main)
     }
   }
 
