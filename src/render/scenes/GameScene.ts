@@ -351,7 +351,7 @@ export class GameScene extends Phaser.Scene {
     // atténue le scatter aléatoire pour que la structure se lise (moins de confettis
     // par-dessus le lieu construit). Render-only.
     if (hasStructurePlan(this.loadedStageId)) {
-      streamerOpts.decalDensityMultiplier = (streamerOpts.decalDensityMultiplier ?? 1) * 0.6
+      streamerOpts.decalDensityMultiplier = (streamerOpts.decalDensityMultiplier ?? 1) * 0.35
     }
     // NB : les props ne sont plus cuits statiquement — ils sont streamés par le DecorStreamer.
     // Le streamer est construit PLUS BAS, une fois les structures/landmark/PNJ posés,

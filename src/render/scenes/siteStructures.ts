@@ -1,22 +1,22 @@
 /**
  * SiteStructures — STRUCTURES BÂTIES streamées à l'échelle du monde (refonte cohérence).
  *
- * Problème résolu : le décor était des props ÉPARS posés sur un sol vide, et le
- * monde est immense (10240×7680) : où qu'aille le joueur, il retrouvait du vide.
- * Un vrai chantier, c'est de la STRUCTURE partout — ici, un RÉSEAU de tranchées
- * continues avec les tuyaux dedans, des regards aux nœuds, des déblais le long
- * des berges, des engins au front de fouille. On la STREAME par chunks (comme le
- * DecorStreamer) : chaque chunk dessine la portion du réseau mondial qui le
- * traverse → le joueur est TOUJOURS dans un lieu construit, sans coût mémoire.
+ * Le monde est immense (10240×7680) et rien ne posait de structure continue : que
+ * du scatter → « objets posés sur un sol vide ». Ce module STREAME un vrai RÉSEAU
+ * de chantier par chunks autour de la caméra (comme le DecorStreamer, mais de la
+ * STRUCTURE). Pour réseaux enterrés : un réseau ORGANIQUE de tranchées — des nœuds
+ * irréguliers reliés par des segments à angles variés (pas un damier), avec tuyaux
+ * posés dedans, regards/jonctions aux nœuds, engins au front de fouille, déblais le
+ * long des berges. Où qu'aille le joueur, il est dans un vrai chantier.
  *
- * CONTRAINTE ARCHITECTURE (règle 🔴) : rendu observateur PUR. `GameScene`
- * instancie et délègue (`setPlan`/`update`/`dispose`). Aucune dépendance src/core.
- * Déterministe : réseau sur grille mondiale + jitter par-ligne haché (aucun
- * Math.random). Un chunk revisité est identique.
+ * CONTRAINTE ARCHITECTURE (règle 🔴) : rendu observateur PUR. `GameScene` délègue
+ * (`setPlan`/`update`/`dispose`). Aucune dépendance src/core. Déterministe : nœuds
+ * et arêtes dérivés d'un hash de coordonnées de grille (zéro Math.random) → un chunk
+ * revisité est identique et les segments se raccordent sans couture.
  *
  * Profondeurs (sol −10, décalques streamés −9, props streamés −6) :
- *   −8.6 tranchée (pits tuilés → chenal continu) · −8.5 déblais ·
- *   −8.4 tuyaux/regards/jonctions posés dans la tranchée · −6.2 engins au bord.
+ *   −8.6 tranchée (pits tuilés) · −8.5 déblais · −8.4 tuyaux/regards/jonctions ·
+ *   −6.2 engins au bord.
  */
 
 import Phaser from 'phaser'
@@ -28,20 +28,28 @@ const DEPTH_TRENCH_LINE = -8.4
 const DEPTH_MACHINE = -6.2
 
 const CHUNK = 1024
-/** Pas de rejet du décor autour du spawn (comme le DecorStreamer). */
-const CENTER_EXCLUSION = 260
+/** Rejet du décor autour du spawn (le joueur a de l'air pour bouger/combattre). */
+const CENTER_EXCLUSION = 300
 
-// ── Réseau : pas de la grille mondiale ───────────────────────────────────────
-const GRID_H = 380 // espacement des tranchées horizontales (toujours ≥1 en vue)
-const GRID_V = 1040 // espacement des connecteurs verticaux
-const TRENCH_STEP = 46 // recouvrement fort des pits → chenal continu
+// ── Réseau organique : nœuds jitterés + arêtes à angles variés ───────────────
+const NODE = 640 // pas de la grille de nœuds
+const JIT = 250 // amplitude de jitter d'un nœud (irrégularité)
+const EDGE_PROMILLE = 640 // ~64 % des arêtes candidates existent → toile irrégulière
+/** Directions candidates d'arête depuis un nœud (vers voisins bas/droite → pas de doublon). */
+const DIRS: ReadonlyArray<readonly [number, number]> = [
+  [1, 0],
+  [0, 1],
+  [1, 1],
+  [1, -1],
+]
+const TRENCH_STEP = 46
 const TRENCH_SCALE = 1.02
-const PIPE_STEP = 158 // sections de tuyau espacées (fouille ouverte visible entre elles)
+const PIPE_STEP = 152 // sections de tuyau espacées (fouille ouverte entre elles)
 const PIPE_SCALE = 0.82
-const SPOIL_OFFSET = 96 // décalage des déblais depuis l'axe de tranchée
-const SPOIL_EVERY = 4 // 1 déblai tous les N pas de tranchée
+const PIPE_MARGIN = 130 // bouts d'arête laissés ouverts
+const SPOIL_EVERY = 4
+const SPOIL_OFFSET = 92
 
-/** Assets d'un réseau de stage (tous les stages « souterrains » partagent le schéma). */
 interface NetworkPlan {
   trenchKey: string
   pipeKey: string
@@ -49,6 +57,8 @@ interface NetworkPlan {
   spoilKey: string
   junctionKey?: string
   machineKey?: string
+  /** Matériel de poste de travail (touret, gaine…) posé à côté des engins. */
+  gearKeys?: readonly string[]
 }
 
 const RESEAUX_PLAN: NetworkPlan = {
@@ -58,6 +68,7 @@ const RESEAUX_PLAN: NetworkPlan = {
   spoilKey: 'decal_stage04_mud',
   junctionKey: 'struct_stage04_trench',
   machineKey: 'struct_stage04_excavator',
+  gearKeys: ['prop_stage04_cable', 'prop_stage04_trencher'],
 }
 
 const STAGE_PLANS: Record<string, NetworkPlan> = {
@@ -69,17 +80,16 @@ export function hasStructurePlan(stageId: string): boolean {
   return STAGE_PLANS[stageId] !== undefined
 }
 
-/** Hash déterministe 32-bit d'un entier (jitter par-ligne, aucun Math.random). */
-function hash1(n: number): number {
-  let h = (n ^ 0x9e3779b9) >>> 0
+/** Hash déterministe 32-bit d'un couple d'entiers + sel (zéro Math.random). */
+function hash2(i: number, j: number, salt: number): number {
+  let h = (Math.imul(i, 73856093) ^ Math.imul(j, 19349663) ^ Math.imul(salt, 83492791)) >>> 0
   h = Math.imul(h ^ (h >>> 15), 0x85ebca6b) >>> 0
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0
   return (h ^ (h >>> 16)) >>> 0
 }
-/** Jitter borné [-amp, amp] déterministe pour une ligne d'index i (salé par axe). */
-function jitter(i: number, salt: number, amp: number): number {
-  const h = hash1(i * 73856093 + salt * 19349663)
-  return ((h / 0xffffffff) * 2 - 1) * amp
+/** Réel déterministe [0,1) pour (i,j,salt). */
+function rnd(i: number, j: number, salt: number): number {
+  return hash2(i, j, salt) / 4294967296
 }
 
 export class SiteStructures {
@@ -99,7 +109,7 @@ export class SiteStructures {
     this.plan = STAGE_PLANS[stageId] ?? null
   }
 
-  /** Streame les chunks structurels autour de la caméra (charge les visibles, décharge le reste). */
+  /** Streame les chunks structurels autour de la caméra (charge visibles, décharge le reste). */
   update(camera: Phaser.Cameras.Scene2D.Camera): void {
     if (this.plan === null) {
       return
@@ -110,7 +120,6 @@ export class SiteStructures {
     const cy0 = Math.max(0, Math.floor((view.y - margin) / CHUNK))
     const cx1 = Math.floor((view.x + view.width + margin) / CHUNK)
     const cy1 = Math.floor((view.y + view.height + margin) / CHUNK)
-
     const wanted = new Set<string>()
     for (let cy = cy0; cy <= cy1; cy++) {
       for (let cx = cx0; cx <= cx1; cx++) {
@@ -121,7 +130,6 @@ export class SiteStructures {
         }
       }
     }
-    // Décharge les chunks hors vue.
     for (const [key, sprites] of this.chunks) {
       if (!wanted.has(key)) {
         for (const sp of sprites) {
@@ -132,7 +140,36 @@ export class SiteStructures {
     }
   }
 
-  /** Compose la portion du réseau mondial qui traverse le chunk (cx,cy). */
+  /** Position monde (jitterée) du nœud de grille (i,j). */
+  private nodePos(i: number, j: number): { x: number; y: number } {
+    return {
+      x: (i + 0.5) * NODE + (rnd(i, j, 7) * 2 - 1) * JIT,
+      y: (j + 0.5) * NODE + (rnd(i, j, 11) * 2 - 1) * JIT,
+    }
+  }
+
+  /** L'arête (i,j)→(i+di,j+dj) existe-t-elle ? (dir = index dans DIRS) */
+  private edge(i: number, j: number, dir: number): boolean {
+    return hash2(i, j, 40503 + dir) % 1000 < EDGE_PROMILLE
+  }
+
+  /** Degré d'un nœud = arêtes sortantes + entrantes (pour choisir regard vs jonction). */
+  private degree(i: number, j: number): number {
+    let d = 0
+    for (let k = 0; k < DIRS.length; k++) {
+      if (this.edge(i, j, k)) {
+        d++
+      }
+    }
+    // entrantes : arêtes des voisins pointant vers (i,j).
+    if (this.edge(i - 1, j, 0)) { d++ }
+    if (this.edge(i, j - 1, 1)) { d++ }
+    if (this.edge(i - 1, j - 1, 2)) { d++ }
+    if (this.edge(i - 1, j + 1, 3)) { d++ }
+    return d
+  }
+
+  /** Compose la portion du réseau qui traverse le chunk (cx,cy). */
   private buildChunk(cx: number, cy: number): Phaser.GameObjects.Image[] {
     const out: Phaser.GameObjects.Image[] = []
     const plan = this.plan
@@ -147,102 +184,124 @@ export class SiteStructures {
     const wcy = this.worldH / 2
     const excl2 = CENTER_EXCLUSION * CENTER_EXCLUSION
 
-    const inWorld = (x: number, y: number): boolean =>
-      x >= 0 && x < this.worldW && y >= 0 && y < this.worldH
-    const farFromSpawn = (x: number, y: number): boolean => {
+    const ok = (x: number, y: number): boolean => {
+      if (x < 0 || x >= this.worldW || y < 0 || y >= this.worldH) { return false }
+      if (x < x0 || x >= x1 || y < y0 || y >= y1) { return false }
       const dx = x - wcx
       const dy = y - wcy
       return dx * dx + dy * dy >= excl2
     }
     const put = (key: string, x: number, y: number, scale: number, rot: number, depth: number): void => {
-      if (!inWorld(x, y) || !farFromSpawn(x, y) || !this.scene.textures.exists(key)) {
-        return
-      }
+      if (!ok(x, y) || !this.scene.textures.exists(key)) { return }
       const sp = this.scene.add.image(x, y, key).setScale(scale).setDepth(depth)
-      if (rot !== 0) {
-        sp.setRotation(rot)
-      }
+      if (rot !== 0) { sp.setRotation(rot) }
       out.push(sp)
     }
-    // Aligne un pas global (pas de couture entre chunks).
-    const stepStart = (lo: number, step: number): number => Math.ceil(lo / step) * step
 
-    // ── Tranchées HORIZONTALES traversant ce chunk ────────────────────────────
-    const h0 = Math.floor(y0 / GRID_H)
-    const h1 = Math.floor(y1 / GRID_H)
-    for (let h = h0; h <= h1; h++) {
-      const yh = h * GRID_H + jitter(h, 1, 70)
-      if (yh < y0 || yh >= y1) {
-        continue
-      }
-      // Pits du chenal (aligné globalement → continu d'un chunk à l'autre).
-      for (let x = stepStart(x0, TRENCH_STEP); x < x1; x += TRENCH_STEP) {
-        put(plan.trenchKey, x, yh, TRENCH_SCALE, 0, DEPTH_TRENCH_FILL)
-      }
-      // Tuyaux bout à bout dans la tranchée.
-      for (let x = stepStart(x0, PIPE_STEP); x < x1; x += PIPE_STEP) {
-        put(plan.pipeKey, x, yh, PIPE_SCALE, 0, DEPTH_TRENCH_LINE)
-      }
-      // Déblais le long de la berge nord.
-      let s = 0
-      for (let x = stepStart(x0, TRENCH_STEP); x < x1; x += TRENCH_STEP, s++) {
-        if (s % SPOIL_EVERY === 0) {
-          put(plan.spoilKey, x, yh - SPOIL_OFFSET, 0.95, 0, DEPTH_SPOIL)
+    // Nœuds de grille dont une arête peut toucher ce chunk (portée ≈ NODE + 2·JIT).
+    const i0 = Math.floor(x0 / NODE) - 2
+    const i1 = Math.floor(x1 / NODE) + 2
+    const j0 = Math.floor(y0 / NODE) - 2
+    const j1 = Math.floor(y1 / NODE) + 2
+
+    for (let i = i0; i <= i1; i++) {
+      for (let j = j0; j <= j1; j++) {
+        const a = this.nodePos(i, j)
+        // Marqueur de nœud (dans ce chunk) : jonction si vrai carrefour, sinon regard/engin.
+        if (a.x >= x0 && a.x < x1 && a.y >= y0 && a.y < y1) {
+          const deg = this.degree(i, j)
+          const r = hash2(i, j, 999) % 6
+          if (r === 0 && plan.machineKey !== undefined) {
+            // Engin au nœud : posé AU BORD de la fouille (pas dessus), regard au centre.
+            put(plan.machineKey, a.x + 128, a.y - 60, 1.05, 0, DEPTH_MACHINE)
+            put(plan.manholeKey, a.x, a.y, 0.6, 0, DEPTH_TRENCH_LINE)
+          } else if (deg >= 3 && plan.junctionKey !== undefined) {
+            put(plan.junctionKey, a.x, a.y, 0.85, 0, DEPTH_TRENCH_LINE)
+          } else {
+            put(plan.manholeKey, a.x, a.y, 0.6, 0, DEPTH_TRENCH_LINE)
+          }
+        }
+        // Arêtes sortantes → tranchée + tuyaux + déblais (portion tombant dans le chunk).
+        for (let d = 0; d < DIRS.length; d++) {
+          if (!this.edge(i, j, d)) { continue }
+          const dir = DIRS[d]
+          if (dir === undefined) { continue }
+          const b = this.nodePos(i + dir[0], j + dir[1])
+          this.drawEdge(i, j, d, a, b, plan, put)
         }
       }
     }
-
-    // ── Tranchées VERTICALES traversant ce chunk ──────────────────────────────
-    const v0 = Math.floor(x0 / GRID_V)
-    const v1 = Math.floor(x1 / GRID_V)
-    for (let v = v0; v <= v1; v++) {
-      const xv = v * GRID_V + jitter(v, 2, 90)
-      if (xv < x0 || xv >= x1) {
-        continue
-      }
-      for (let y = stepStart(y0, TRENCH_STEP); y < y1; y += TRENCH_STEP) {
-        put(plan.trenchKey, xv, y, TRENCH_SCALE, Math.PI / 2, DEPTH_TRENCH_FILL)
-      }
-      for (let y = stepStart(y0, PIPE_STEP); y < y1; y += PIPE_STEP) {
-        put(plan.pipeKey, xv, y, PIPE_SCALE, Math.PI / 2, DEPTH_TRENCH_LINE)
-      }
-      let s = 0
-      for (let y = stepStart(y0, TRENCH_STEP); y < y1; y += TRENCH_STEP, s++) {
-        if (s % SPOIL_EVERY === 0) {
-          put(plan.spoilKey, xv + SPOIL_OFFSET, y, 0.95, 0, DEPTH_SPOIL)
-        }
-      }
-    }
-
-    // ── Nœuds : regards + jonctions + engins aux intersections tombant ici ────
-    for (let h = h0; h <= h1; h++) {
-      const yh = h * GRID_H + jitter(h, 1, 70)
-      for (let v = v0; v <= v1; v++) {
-        const xv = v * GRID_V + jitter(v, 2, 90)
-        if (xv < x0 || xv >= x1 || yh < y0 || yh >= y1) {
-          continue
-        }
-        const r = hash1(h * 40503 + v * 20903) % 6
-        if (r === 0 && plan.machineKey !== undefined) {
-          // Engin au front de fouille, décalé du croisement.
-          put(plan.machineKey, xv - 150, yh - 40, 1.05, 0, DEPTH_MACHINE)
-          put(plan.manholeKey, xv, yh, 0.58, 0, DEPTH_TRENCH_LINE)
-        } else if (r <= 2 && plan.junctionKey !== undefined) {
-          put(plan.junctionKey, xv, yh, 0.85, 0, DEPTH_TRENCH_LINE)
-        } else {
-          put(plan.manholeKey, xv, yh, 0.6, 0, DEPTH_TRENCH_LINE)
-        }
-      }
-      // Regards intermédiaires le long de la tranchée horizontale (entre nœuds).
-      const yh2 = h * GRID_H + jitter(h, 1, 70)
-      if (yh2 >= y0 && yh2 < y1) {
-        for (let x = stepStart(x0, 620); x < x1; x += 620) {
-          put(plan.manholeKey, x, yh2, 0.5, 0, DEPTH_TRENCH_LINE)
-        }
-      }
-    }
-
     return out
+  }
+
+  /** Trace une arête (pits + tuyaux + déblais + poste de travail) — chaque pas n'est posé que s'il tombe dans le chunk. */
+  private drawEdge(
+    i: number,
+    j: number,
+    d: number,
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    plan: NetworkPlan,
+    put: (key: string, x: number, y: number, scale: number, rot: number, depth: number) => void,
+  ): void {
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len = Math.hypot(dx, dy)
+    if (len < 1) { return }
+    const ang = Math.atan2(dy, dx)
+    const ux = dx / len
+    const uy = dy / len
+    // perpendiculaire (pour déblais / matériel au bord).
+    const px = -uy
+    const py = ux
+
+    // Chenal : pits tuilés fort recouvrement.
+    const nT = Math.max(1, Math.round(len / TRENCH_STEP))
+    for (let k = 0; k <= nT; k++) {
+      const t = (k / nT) * len
+      const x = a.x + ux * t
+      const y = a.y + uy * t
+      put(plan.trenchKey, x, y, TRENCH_SCALE, ang, DEPTH_TRENCH_FILL)
+      if (k % SPOIL_EVERY === 0) {
+        put(plan.spoilKey, x + px * SPOIL_OFFSET, y + py * SPOIL_OFFSET, 0.95, 0, DEPTH_SPOIL)
+      }
+    }
+    // Tuyaux : sections espacées, bouts laissés ouverts.
+    for (let t = PIPE_MARGIN; t <= len - PIPE_MARGIN; t += PIPE_STEP) {
+      put(plan.pipeKey, a.x + ux * t, a.y + uy * t, PIPE_SCALE, ang, DEPTH_TRENCH_LINE)
+    }
+
+    // ── POSTE DE TRAVAIL le long de la tranchée (~55 % des arêtes) ────────────
+    // Un chantier qui VIT : engin au front de pose + tuyaux STOCKÉS en attente
+    // (parallèles à la fouille) + touret/gaine. Déterministe par (i,j,d) → même
+    // arête = même poste, raccord sans couture entre chunks.
+    if (hash2(i + 31 * d, j - 17 * d, 555) % 100 < 55) {
+      const side = hash2(i, j, 556 + d) % 2 === 0 ? 1 : -1
+      const tW = len * (0.35 + rnd(i, j, 557 + d) * 0.3)
+      const wx = a.x + ux * tW
+      const wy = a.y + uy * tW
+      const ox = px * side
+      const oy = py * side
+      // Engin au bord de la fouille (2/3 des postes), sinon poste matériel seul.
+      if (plan.machineKey !== undefined && hash2(i, j, 558 + d) % 3 !== 0) {
+        put(plan.machineKey, wx + ox * 118, wy + oy * 118, 1.0, 0, DEPTH_MACHINE)
+      }
+      // Tuyaux stockés en attente de pose : 2 sections parallèles à la tranchée.
+      put(plan.pipeKey, wx + ox * 78 + ux * 55, wy + oy * 78 + uy * 55, 0.78, ang, DEPTH_SPOIL)
+      put(plan.pipeKey, wx + ox * 100 + ux * 175, wy + oy * 100 + uy * 175, 0.78, ang, DEPTH_SPOIL)
+      // Matériel (touret, gaine…) autour du poste.
+      const gear = plan.gearKeys ?? []
+      for (let g = 0; g < gear.length; g++) {
+        const key = gear[g]
+        if (key === undefined) { continue }
+        const gi = hash2(i + g, j, 559 + d)
+        const gx = wx + ox * (135 + (gi % 40)) - ux * (60 + (gi % 70))
+        const gy = wy + oy * (135 + ((gi >> 4) % 40)) - uy * (60 + ((gi >> 6) % 70))
+        put(key, gx, gy, 0.8, 0, DEPTH_MACHINE)
+      }
+      // Boue de piétinement autour du poste.
+      put(plan.spoilKey, wx + ox * 60 - ux * 30, wy + oy * 60 - uy * 30, 1.05, 0, DEPTH_SPOIL)
+    }
   }
 
   /** Sync de frame — no-op (le streaming se fait via `update`). */
