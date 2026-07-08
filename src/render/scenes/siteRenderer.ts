@@ -171,50 +171,83 @@ export class SiteRenderer {
         .setDepth(-9.4)
       this.planObjects.push(rect)
     }
-    // 2. Pistes : PISTE EN TERRE (ornières) le long des chemins — jamais
-    //    l'asphalte de la route (à petite échelle il lisait comme des rails).
-    if (this.scene.textures.exists('piste_strip')) {
-      for (const p of plan.paths) {
-        this.tileAlong(p, 'piste_strip', 1.0, 120, -9.1)
-      }
+    // 2. Pistes de roulage (R-G) : BANDE LARGE de terre compactée (un camion doit
+    //    passer) — un aplat sobre + traces de roues, PAS de ruban rayé orange.
+    for (const p of plan.paths) {
+      this.drawRoad(p)
     }
-    // 3. Clôtures : panneaux tuilés le long des segments, poteaux aux extrémités
-    //    (ils encadrent naturellement les ouvertures).
-    const hasPanel = this.scene.textures.exists('fence_panel')
-    const hasPost = this.scene.textures.exists('fence_post')
-    for (const f of plan.fences) {
-      if (hasPanel) {
-        this.tileAlong(f, 'fence_panel', 1.0, 78, -5)
-      }
-      if (hasPost) {
-        for (const end of [
-          { x: f.x1, y: f.y1 },
-          { x: f.x2, y: f.y2 },
-        ]) {
-          const post = this.scene.add.image(end.x, end.y, 'fence_post').setScale(0.85).setDepth(-5)
-          this.planObjects.push(post)
-        }
+    // 3. Clôtures : panneaux TOUJOURS DEBOUT (R-H : jamais de rotation → sinon
+    //    ils se couchent au sol). Le panneau porte déjà ses plots béton → PAS de
+    //    poteau ajouté. On les stepe le long du segment ; sur un run vertical ils
+    //    se chevauchent en profondeur et lisent comme une ligne de clôture.
+    if (this.scene.textures.exists('fence_panel')) {
+      for (const f of plan.fences) {
+        this.tileUpright(f, 'fence_panel', 1.0, 96, -5)
       }
     }
   }
 
-  /** Tuile un asset le long d'un segment (orienté selon le segment). */
-  private tileAlong(seg: PlanSeg, key: string, scale: number, step: number, depth: number): void {
+  /**
+   * Tuile un asset DEBOUT le long d'un segment, sans jamais le faire pivoter
+   * (préserve le point de vue 3/4). Depth = base − y/1e6 pour un tri correct
+   * (les panneaux du bas passent devant ceux du haut).
+   */
+  private tileUpright(seg: PlanSeg, key: string, scale: number, step: number, depth: number): void {
     const dx = seg.x2 - seg.x1
     const dy = seg.y2 - seg.y1
     const len = Math.hypot(dx, dy)
-    const ang = Math.atan2(dy, dx)
     const n = Math.max(1, Math.round(len / step))
     for (let k = 0; k <= n; k++) {
       const t = k / n
+      const x = seg.x1 + dx * t
+      const y = seg.y1 + dy * t
       const img = this.scene.add
-        .image(seg.x1 + dx * t, seg.y1 + dy * t, key)
+        .image(x, y, key)
         .setScale(scale)
-        .setDepth(depth)
-      if (ang !== 0) {
-        img.setRotation(ang)
-      }
+        .setDepth(depth + y / 1_000_000)
       this.planObjects.push(img)
+    }
+  }
+
+  /**
+   * Piste de roulage : aplat de terre compactée LARGE (~300 px) le long du
+   * segment + traces de roues clairsemées. Sobre (pas de ruban rayé) mais
+   * assez large pour qu'un camion passe (R-G).
+   */
+  private drawRoad(seg: PlanSeg): void {
+    const dx = seg.x2 - seg.x1
+    const dy = seg.y2 - seg.y1
+    const len = Math.hypot(dx, dy)
+    if (len < 1) {
+      return
+    }
+    const ROAD_W = 300
+    const ang = Math.atan2(dy, dx)
+    const midX = (seg.x1 + seg.x2) / 2
+    const midY = (seg.y1 + seg.y2) / 2
+    // Aplat de terre roulée (un peu plus foncé/tassé que le sol), coins arrondis.
+    const band = this.scene.add
+      .rectangle(midX, midY, len + ROAD_W, ROAD_W, 0x6b4f33, 0.5)
+      .setDepth(-9.3)
+    if (ang !== 0) {
+      band.setRotation(ang)
+    }
+    this.planObjects.push(band)
+    // Traces de roues TRÈS discrètes sur l'axe (sinon, tuilées, elles lisent
+    // comme des blocs bruns — R-D). Une seule file, faible alpha, clairsemées.
+    if (this.scene.textures.exists('decal_s2_tracks')) {
+      const step = 300
+      const n = Math.max(1, Math.round(len / step))
+      for (let k = 0; k <= n; k++) {
+        const t = k / n
+        const x = seg.x1 + dx * t
+        const y = seg.y1 + dy * t
+        const img = this.scene.add.image(x, y, 'decal_s2_tracks').setScale(0.85).setAlpha(0.22).setDepth(-9.2)
+        if (ang !== 0) {
+          img.setRotation(ang)
+        }
+        this.planObjects.push(img)
+      }
     }
   }
 

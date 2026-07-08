@@ -37,6 +37,10 @@ export const SPAWN_CLEAR_R = 300
 /** Espace minimal entre deux zones (bord à bord, px). */
 export const ZONE_GAP = 200
 
+/** Distance spawn → bord sud de la zone SIGNATURE (R-F) — juste au-delà de la
+ *  clairière (r=300) et dans la vue au démarrage (demi-hauteur ~390 px au zoom 1.2). */
+export const SIGNATURE_GAP = 340
+
 /** Constante XOR du RNG plan — isolé des autres flux (sim, layout, vagues). */
 const PLAN_XOR = 0x517e
 
@@ -240,6 +244,13 @@ export function buildSitePlan(
   const zones: MutableZone[] = []
   for (const spec of program.zones) {
     const p = resolveAnchor(spec, worldW, routeTopY, gate, byId, rng)
+    // R-F : la zone SIGNATURE est tirée juste au NORD du spawn — son bord sud
+    // (= l'ouverture, face au joueur) tombe à spawn − SIGNATURE_GAP, donc au
+    // démarrage le joueur fait face à la scène définitive de la phase.
+    if (spec.signature === true) {
+      p.x = spawn.x
+      p.y = spawn.y - SIGNATURE_GAP - spec.halfH
+    }
     const z: MutableZone = {
       id: spec.id,
       role: spec.role,
@@ -253,7 +264,12 @@ export function buildSitePlan(
       door: { x: p.x, y: p.y },
       spec,
     }
-    clampZone(z, worldW, routeTopY)
+    // La zone signature n'est PAS clampée en y (on veut son bord sud près du spawn).
+    if (spec.signature === true) {
+      z.cx = Math.min(Math.max(z.cx, PLAN_MARGIN + z.halfW), worldW - PLAN_MARGIN - z.halfW)
+    } else {
+      clampZone(z, worldW, routeTopY)
+    }
     byId.set(spec.id, z)
     zones.push(z)
   }

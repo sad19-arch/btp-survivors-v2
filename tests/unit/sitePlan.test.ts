@@ -12,6 +12,7 @@ import {
 import type { PlanSeg, PlacedZone, SitePlan } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
 import { buildSiteLayout } from '@core/siteLayout'
+import { CLUSTERS } from '@content/clusters'
 
 /**
  * ÉTAPE 5 automatisée — les contraintes de placement (ÉTAPE 2 de la méthode
@@ -235,8 +236,8 @@ describe('sitePlan — stages sans programme', () => {
 // Contraintes de niveau LAYOUT (placement des prefabs) — C4 et C9
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Clusters porteurs d'engins EN TRAVAIL (le parc = machines parquées, exempt). */
-const MACHINE_CLUSTERS = new Set(['cluster_front_terr', 'cluster_dozer_terr', 'cluster_camion_terr'])
+/** Scènes portant un engin EN TRAVAIL (le parc = machines parquées, exempt). */
+const MACHINE_CLUSTERS = new Set(['scene_dig_active', 'scene_spoil'])
 
 /** Clusters hors-zone par nature (infrastructure du site). */
 const INFRA_CLUSTERS = new Set(['cluster_route', 'cluster_gate_main'])
@@ -262,20 +263,21 @@ describe.each(STAGES)('siteLayout — contraintes machines & zones (%s)', (stage
     }
   })
 
-  it.each(SEEDS)('C4b le front de creusement est AU BORD NORD de sa fouille (seed %i)', (seed) => {
+  it.each(SEEDS)('R-F la zone SIGNATURE est adjacente au spawn (face au joueur) (seed %i)', (seed) => {
     const plan = planFor(stageId, seed)
-    const layout = buildSiteLayout(seed, W, H, stageId)
-    const fronts = layout.clusters.filter((c) => c.defId === 'cluster_front_terr')
-    for (const f of fronts) {
-      const zone = plan.zones.find(
-        (z) => Math.abs(f.x - z.cx) <= z.halfW && Math.abs(f.y - z.cy) <= z.halfH
-      )
-      expect(zone?.role, 'front hors excavation').toBe('excavation')
-      if (zone !== undefined) {
-        // Adjacent au bord nord (front de creusement), jamais au milieu ni dehors.
-        expect(f.y - (zone.cy - zone.halfH)).toBeLessThanOrEqual(320)
-        expect(f.y - (zone.cy - zone.halfH)).toBeGreaterThanOrEqual(40)
-      }
+    const program = SITE_PROGRAMS[stageId]
+    const sigSpec = program?.zones.find((z) => z.signature === true)
+    if (sigSpec === undefined) {
+      return // stage sans zone signature
+    }
+    const sig = plan.zones.find((z) => z.id === sigSpec.id)
+    expect(sig, 'zone signature introuvable dans le plan').toBeDefined()
+    if (sig !== undefined) {
+      const spawnY = H / 2
+      const southBorder = sig.cy + sig.halfH
+      // Bord sud (ouverture) juste au nord du spawn : visible au démarrage, hors clairière.
+      expect(southBorder).toBeLessThanOrEqual(spawnY - 300)
+      expect(southBorder).toBeGreaterThanOrEqual(spawnY - 900)
     }
   })
 
@@ -299,5 +301,32 @@ describe.each(STAGES)('siteLayout — contraintes machines & zones (%s)', (stage
     const fenceObstacles = layout.obstacles.filter((o) => o.kind === 'segment' && o.blocks === 'both')
     // Au moins autant de segments d'obstacle que de segments de clôture du plan.
     expect(fenceObstacles.length).toBeGreaterThanOrEqual(plan.fences.length)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// R-E structurel — « aucun trou nu » : toute scène avec une fosse porte son
+// anneau de déblais. Vérifié sur les DÉFINITIONS de clusters (indépendant du seed) :
+// un trou n'apparaît jamais sans les mottes qu'on en a sorties.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('clusters — R-E : aucun trou sans son anneau de déblais', () => {
+  const PIT_KEYS = ['struct_stage02_pit']
+  const MOUND_KEYS = ['prop_s2_dirt']
+  const RING_RADIUS = 220
+  const MIN_MOUNDS = 4
+
+  it('toute def de cluster contenant une fosse a ≥4 mottes autour', () => {
+    for (const def of Object.values(CLUSTERS)) {
+      const pits = def.elements.filter((e) => PIT_KEYS.includes(e.assetKey))
+      for (const pit of pits) {
+        const mounds = def.elements.filter(
+          (e) => MOUND_KEYS.includes(e.assetKey) && Math.hypot(e.dx - pit.dx, e.dy - pit.dy) <= RING_RADIUS
+        )
+        expect(
+          mounds.length,
+          `${def.id} : fosse sans anneau de déblais (${mounds.length} mottes dans ${RING_RADIUS}px)`
+        ).toBeGreaterThanOrEqual(MIN_MOUNDS)
+      }
+    }
   })
 })

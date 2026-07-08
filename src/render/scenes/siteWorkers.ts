@@ -147,10 +147,10 @@ export class SiteWorkers {
     // Les prefabs « plan de chantier » sont inclus : le front de creusement joue
     // le rôle d'excavation, la rangée de déblais celui de spoil.
     const excavations = layout.clusters.filter(
-      (c) => c.defId === 'cluster_excavation' || c.defId === 'cluster_front_terr'
+      (c) => c.defId === 'cluster_excavation' || c.defId === 'scene_dig_active'
     )
     const spoils = layout.clusters.filter(
-      (c) => c.defId === 'cluster_spoil' || c.defId === 'cluster_spoil_row'
+      (c) => c.defId === 'cluster_spoil' || c.defId === 'scene_spoil' || c.defId === 'scene_stock'
     )
     const routeClusters = layout.clusters.filter((c) => c.defId === 'cluster_route')
 

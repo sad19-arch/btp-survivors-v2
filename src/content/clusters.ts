@@ -117,64 +117,80 @@ export const CLUSTERS: Record<string, ClusterDef> = {
   // sitePrograms/sitePlan (plus jamais d'assets isolés éparpillés).
   // ─────────────────────────────────────────────────────────────────────────
 
-  // Front de creusement : LA pelleteuse au bord du trou + terre fraîche + traces.
-  cluster_front_terr: {
-    id: 'cluster_front_terr',
-    footprintRadius: 130,
-    gates: [{ dx: 0, dy: 100 }],
+  // ═══ SCÈNES D'ACTIVITÉ (R-E : composer des scènes, pas des objets) ═══════
+  // Chaque trou porte TOUJOURS son anneau de déblais + l'engin qui l'a creusé :
+  // un trou n'apparaît jamais par magie céleste.
+
+  // SCÈNE « fouille active » : LE front de creusement. Fosse + anneau de 5 mottes
+  // (les déblais sortis du trou) + pelleteuse AU BORD nord + camion-benne à charger
+  // + traces. C'est le tableau signature du terrassement.
+  scene_dig_active: {
+    id: 'scene_dig_active',
+    footprintRadius: 270,
+    gates: [{ dx: 0, dy: 270 }],
     elements: [
-      { assetKey: 'prop_s2_excavator', dx: 0, dy: 0, scale: 1.2, collide: 'both', shape: { kind: 'circle', r: 52 } },
-      { assetKey: 'prop_s2_dirt', dx: 95, dy: 45, scale: 0.9, collide: 'both', shape: { kind: 'circle', r: 36 } },
-      { assetKey: 'prop_s2_dirt', dx: -85, dy: 60, scale: 0.8, collide: 'none' },
-      { assetKey: 'decal_s2_tracks', dx: 10, dy: 115, scale: 1.1, collide: 'none' },
+      // Le trou.
+      { assetKey: 'struct_stage02_pit', dx: 0, dy: 10, scale: 1.05, collide: 'both', shape: { kind: 'circle', r: 82 } },
+      // Anneau de déblais (côté sud + flancs — le nord reste au front de la pelle).
+      { assetKey: 'prop_s2_dirt', dx: 152, dy: 30, scale: 0.9, collide: 'both', shape: { kind: 'circle', r: 34 } },
+      { assetKey: 'prop_s2_dirt', dx: 100, dy: 140, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_s2_dirt', dx: 0, dy: 168, scale: 0.95, collide: 'both', shape: { kind: 'circle', r: 34 } },
+      { assetKey: 'prop_s2_dirt', dx: -105, dy: 140, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_s2_dirt', dx: -150, dy: 25, scale: 0.88, collide: 'none' },
+      // La pelleteuse qui creuse, au bord nord du trou (adjacente, jamais dedans).
+      { assetKey: 'prop_s2_excavator', dx: -10, dy: -168, scale: 1.25, collide: 'both', shape: { kind: 'circle', r: 56 } },
+      // Le camion-benne qu'on charge, sur le flanc.
+      { assetKey: 'prop_s2_truck', dx: 205, dy: -70, scale: 1.05, collide: 'both', shape: { kind: 'circle', r: 48 } },
+      // Traces de va-et-vient.
+      { assetKey: 'decal_s2_tracks', dx: 120, dy: -30, scale: 1.15, collide: 'none' },
+      { assetKey: 'decal_s2_puddle', dx: -60, dy: 90, scale: 1.0, collide: 'none' },
     ],
   },
 
-  // Sol fouillé : fosse + terre remuée (l'intérieur d'une excavation EN COURS).
-  cluster_pit_terr: {
-    id: 'cluster_pit_terr',
-    footprintRadius: 120,
-    gates: [{ dx: 0, dy: 95 }],
+  // SCÈNE « fouille creusée » : un trou DÉJÀ fait — expliqué par son anneau
+  // complet de déblais (pas d'engin, le front est ailleurs).
+  scene_dig_done: {
+    id: 'scene_dig_done',
+    footprintRadius: 190,
+    gates: [{ dx: 0, dy: 190 }],
     elements: [
-      { assetKey: 'struct_stage02_pit', dx: 0, dy: 0, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 78 } },
-      { assetKey: 'prop_s2_dirt', dx: 105, dy: 35, scale: 0.75, collide: 'none' },
-      { assetKey: 'decal_s2_puddle', dx: -70, dy: 60, scale: 1.0, collide: 'none' },
+      { assetKey: 'struct_stage02_pit', dx: 0, dy: 0, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 80 } },
+      // Anneau COMPLET de 5 mottes autour du trou.
+      { assetKey: 'prop_s2_dirt', dx: 140, dy: 0, scale: 0.85, collide: 'both', shape: { kind: 'circle', r: 32 } },
+      { assetKey: 'prop_s2_dirt', dx: 62, dy: 128, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_s2_dirt', dx: -110, dy: 92, scale: 0.85, collide: 'both', shape: { kind: 'circle', r: 32 } },
+      { assetKey: 'prop_s2_dirt', dx: -120, dy: -80, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_s2_dirt', dx: 40, dy: -132, scale: 0.82, collide: 'none' },
+      { assetKey: 'decal_s2_puddle', dx: 20, dy: 60, scale: 0.9, collide: 'none' },
     ],
   },
 
-  // Camion-benne à la rampe (rotation fouille→déblais) + traces de roues.
-  cluster_camion_terr: {
-    id: 'cluster_camion_terr',
-    footprintRadius: 95,
-    gates: [{ dx: 0, dy: 70 }],
+  // SCÈNE « déblais » : les tas déchargés + LE bulldozer qui régale + traces.
+  scene_spoil: {
+    id: 'scene_spoil',
+    footprintRadius: 190,
+    gates: [{ dx: 0, dy: 150 }],
     elements: [
-      { assetKey: 'prop_s2_truck', dx: 0, dy: 0, scale: 1.05, collide: 'both', shape: { kind: 'circle', r: 46 } },
-      { assetKey: 'decal_s2_tracks', dx: -5, dy: 85, scale: 1.15, collide: 'none' },
+      { assetKey: 'prop_s2_dirt', dx: -110, dy: 20, scale: 0.9, collide: 'both', shape: { kind: 'circle', r: 36 } },
+      { assetKey: 'prop_s2_dirt', dx: 0, dy: 8, scale: 0.98, collide: 'both', shape: { kind: 'circle', r: 40 } },
+      { assetKey: 'prop_s2_dirt', dx: 110, dy: 24, scale: 0.86, collide: 'both', shape: { kind: 'circle', r: 34 } },
+      // Le bull qui pousse les tas (au bord nord de la zone de dépôt).
+      { assetKey: 'prop_s2_dozer', dx: 20, dy: -110, scale: 1.05, collide: 'both', shape: { kind: 'circle', r: 48 } },
+      { assetKey: 'decal_s2_tracks', dx: -30, dy: 95, scale: 1.1, collide: 'none' },
     ],
   },
 
-  // Rangée de déblais : tas alignés (déchargés rangée par rangée) + flaque.
-  cluster_spoil_row: {
-    id: 'cluster_spoil_row',
-    footprintRadius: 130,
-    gates: [{ dx: 0, dy: 85 }],
+  // SCÈNE « stock de terre » : tas alignés stockés, SANS engin ni trou (dépôt pur).
+  scene_stock: {
+    id: 'scene_stock',
+    footprintRadius: 160,
+    gates: [{ dx: 0, dy: 120 }],
     elements: [
-      { assetKey: 'prop_s2_dirt', dx: -95, dy: 0, scale: 0.9, collide: 'both', shape: { kind: 'circle', r: 36 } },
-      { assetKey: 'prop_s2_dirt', dx: 0, dy: -8, scale: 0.95, collide: 'both', shape: { kind: 'circle', r: 38 } },
-      { assetKey: 'prop_s2_dirt', dx: 95, dy: 4, scale: 0.85, collide: 'both', shape: { kind: 'circle', r: 34 } },
-      { assetKey: 'decal_s2_puddle', dx: 40, dy: 70, scale: 1.0, collide: 'none' },
-    ],
-  },
-
-  // LE bulldozer qui étale les déblais (un seul par zone).
-  cluster_dozer_terr: {
-    id: 'cluster_dozer_terr',
-    footprintRadius: 120,
-    gates: [{ dx: 0, dy: 75 }],
-    elements: [
-      { assetKey: 'prop_s2_dozer', dx: 0, dy: 0, scale: 1.05, collide: 'both', shape: { kind: 'circle', r: 46 } },
-      { assetKey: 'decal_s2_tracks', dx: 0, dy: 90, scale: 1.1, collide: 'none' },
-      { assetKey: 'prop_s2_dirt', dx: 110, dy: 20, scale: 0.7, collide: 'none' },
+      { assetKey: 'prop_s2_dirt', dx: -120, dy: 6, scale: 0.82, collide: 'both', shape: { kind: 'circle', r: 32 } },
+      { assetKey: 'prop_s2_dirt', dx: -20, dy: -6, scale: 0.9, collide: 'both', shape: { kind: 'circle', r: 34 } },
+      { assetKey: 'prop_s2_dirt', dx: 80, dy: 4, scale: 0.84, collide: 'both', shape: { kind: 'circle', r: 30 } },
+      { assetKey: 'prop_s2_dirt', dx: 155, dy: 12, scale: 0.78, collide: 'none' },
+      { assetKey: 'decal_s2_tracks', dx: 0, dy: 90, scale: 1.0, collide: 'none' },
     ],
   },
 
@@ -309,22 +325,11 @@ export const CLUSTERS: Record<string, ClusterDef> = {
         scale: 1.05,
         collide: 'none'
       },
-      // Tas de terre NO
-      {
-        assetKey: 'prop_s2_dirt',
-        dx: -95,
-        dy: -70,
-        scale: 0.85,
-        collide: 'none'
-      },
-      // Tas de terre SO
-      {
-        assetKey: 'prop_s2_dirt',
-        dx: -85,
-        dy: 60,
-        scale: 0.85,
-        collide: 'none'
-      },
+      // Anneau de déblais autour de la fosse (R-E : un trou = ses déblais).
+      { assetKey: 'prop_s2_dirt', dx: -95, dy: -70, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_s2_dirt', dx: -85, dy: 60, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_s2_dirt', dx: 95, dy: -60, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_s2_dirt', dx: 55, dy: 95, scale: 0.78, collide: 'none' },
       // Traces d'engins (decal, décoration)
       {
         assetKey: 'decal_s2_tracks',

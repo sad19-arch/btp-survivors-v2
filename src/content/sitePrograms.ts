@@ -66,6 +66,12 @@ export interface ZoneSpec {
   jitterPx?: number
   /** Prefabs à placer dans la zone (ÉTAPE 3 — clusters Lego). */
   prefabs?: ZonePrefab[]
+  /**
+   * Zone SIGNATURE (R-F) : ancrée ADJACENTE au spawn pour que la scène
+   * définitive de la phase soit face au joueur au démarrage (identifiable en 2 s).
+   * Le planificateur écrase l'ancrage : bord sud de la zone ≈ spawn − SIGNATURE_GAP.
+   */
+  signature?: boolean
 }
 
 /** Paramètres des contraintes vérifiées par tests (ÉTAPE 2). */
@@ -124,13 +130,13 @@ const TERRASSEMENT: SiteProgram = {
       anchor: { kind: 'north', xFrac: 0.5 },
       fence: { openings: 1 },
       jitterPx: 120,
+      signature: true,
       prefabs: [
-        // UNE pelleteuse au front de creusement (bord nord) — jamais deux collées.
-        { clusterId: 'cluster_front_terr', count: 1, arrangement: 'front_north' },
-        // Le sol FOUILLÉ : fosses + terre remuée réparties (espacement garanti).
-        { clusterId: 'cluster_pit_terr', count: 3, arrangement: 'scatter' },
-        // Le camion à la rampe (rotation déblais).
-        { clusterId: 'cluster_camion_terr', count: 1, arrangement: 'at_door' },
+        // Le front ACTIF juste à l'ouverture (face au spawn) : trou + anneau de
+        // mottes + pelleteuse au bord + camion. Une seule scène active → un seul engin.
+        { clusterId: 'scene_dig_active', count: 1, arrangement: 'at_door' },
+        // 2 fouilles DÉJÀ creusées, chacune expliquée par son anneau de déblais.
+        { clusterId: 'scene_dig_done', count: 2, arrangement: 'scatter' },
       ],
     },
     {
@@ -142,9 +148,9 @@ const TERRASSEMENT: SiteProgram = {
       anchor: { kind: 'adjacent', to: 'fouille_principale', side: 'east', gapPx: 350 },
       jitterPx: 80,
       prefabs: [
-        // Tas alignés (déchargés rangée par rangée) + le bull qui étale.
-        { clusterId: 'cluster_spoil_row', count: 2, arrangement: 'row' },
-        { clusterId: 'cluster_dozer_terr', count: 1, arrangement: 'center' },
+        // Le bull régale les déblais + un stock de terre à côté.
+        { clusterId: 'scene_spoil', count: 1, arrangement: 'center' },
+        { clusterId: 'scene_stock', count: 1, arrangement: 'scatter' },
       ],
     },
     {
@@ -157,8 +163,8 @@ const TERRASSEMENT: SiteProgram = {
       fence: { openings: 1 },
       jitterPx: 100,
       prefabs: [
-        { clusterId: 'cluster_front_terr', count: 1, arrangement: 'front_north' },
-        { clusterId: 'cluster_pit_terr', count: 1, arrangement: 'center' },
+        // Un second front actif (le chantier avance par fronts).
+        { clusterId: 'scene_dig_active', count: 1, arrangement: 'center' },
       ],
     },
     {
@@ -202,7 +208,7 @@ const TERRASSEMENT: SiteProgram = {
       halfH: 520,
       anchor: { kind: 'east', yFrac: 0.62 },
       jitterPx: 80,
-      prefabs: [{ clusterId: 'cluster_spoil_row', count: 2, arrangement: 'row' }],
+      prefabs: [{ clusterId: 'scene_stock', count: 2, arrangement: 'row' }],
     },
     {
       id: 'piquets_so',
