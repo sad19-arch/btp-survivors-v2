@@ -678,7 +678,7 @@ const ECHAFAUDAGES_RENDER: StageRender = {
     }
   ],
   baseTileIndex: 2,            // tuile gris neutre (index 2)
-  decalDensityMultiplier: 0.9, // échafaudages semi-ordonnés, densité légère (géométrique)
+  decalDensityMultiplier: 1.25, // échafaudages : sol dalle nu → densité relevée pour remplir (était 0.9, trop vide en haut)
   // Intérieur (structure montée, échafaudée) : poteaux béton bruts + voile gris chaud.
   interior: {
     columnKey: 'struct_stage06_column',
