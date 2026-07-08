@@ -19,6 +19,7 @@
     "test:e2e": "playwright test",
     "sim": "tsx tools/sim/run.ts",
     "sim:check": "tsx tools/sim/run.ts --seeds 12 --duration 1260 --enforce",
+    "site:plan": "tsx tools/site-plan-ascii.ts",
     "assets:qa": "tsx tools/assets/qa.ts"
   },
   "dependencies": {
