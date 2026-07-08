@@ -29,8 +29,15 @@ const GROUP_ZOOM_FAR = 0.66
  */
 export class CameraController {
   private following = false
+  /** Mode overview (outil de revue visuelle) : caméra gelée sur un cadrage fixe. null = suivi normal. */
+  private overview: { zoom: number; cx: number; cy: number } | null = null
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  /** Fige la caméra en vue d'ensemble (capture de revue) ; `null` pour revenir au suivi normal. Render-only. */
+  setOverview(o: { zoom: number; cx: number; cy: number } | null): void {
+    this.overview = o
+  }
 
   /** Coupe le suivi (nouvelle run / ré-armement de l'intro). */
   reset(): void {
@@ -46,6 +53,15 @@ export class CameraController {
     state: AppViewState,
     playerSprites: ReadonlyMap<number, Phaser.GameObjects.GameObject>
   ): void {
+    // Mode overview (revue) : cadrage fixe, on court-circuite tout le suivi.
+    if (this.overview !== null) {
+      const cam = this.scene.cameras.main
+      cam.stopFollow()
+      this.following = false
+      cam.setZoom(this.overview.zoom)
+      cam.centerOn(this.overview.cx, this.overview.cy)
+      return
+    }
     if (state.introActive) {
       return
     }

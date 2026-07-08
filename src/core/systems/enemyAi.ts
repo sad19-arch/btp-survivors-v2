@@ -1,6 +1,8 @@
 import type { World } from '../world'
 import type { Vec2, EnemyComp } from '../types'
 import { BEHAVIOR_TUNING } from '@content/enemies'
+import type { FlowField } from './flowField'
+import { sampleFlow } from './flowField'
 
 /**
  * IA d'ennemi : dispatch vers le comportement de chaque ennemi, puis applique
@@ -12,7 +14,7 @@ import { BEHAVIOR_TUNING } from '@content/enemies'
  * Les deux paramètres ont des valeurs par défaut pour rétrocompatibilité
  * avec les fixtures de test qui appellent encore `enemyAiSystem(world)`.
  */
-export function enemyAiSystem(world: World, elapsedMs = 0, dtMs = 16): void {
+export function enemyAiSystem(world: World, elapsedMs = 0, dtMs = 16, flowField: FlowField | null = null): void {
   const targets: Vec2[] = []
   for (const p of world.query('player', 'position', 'health')) {
     const h = world.get(p, 'health')
@@ -32,21 +34,28 @@ export function enemyAiSystem(world: World, elapsedMs = 0, dtMs = 16): void {
 
     const nearest = findNearest(pos, targets)
 
+    // Calcule la direction de base (vers le joueur) en mélangeant flux et chase.
+    // GATE : si flowField === null → nearest inchangé, CODE ACTUEL INCHANGÉ (diff 0).
+    // Sinon  : blend flow(0.7) + direct(0.3), renormalisé.
+    const blendedNearest = (flowField !== null && nearest !== null)
+      ? blendFlowNearest(flowField, pos.x, pos.y, nearest)
+      : nearest
+
     switch (enemy.behavior) {
       case 'zigzag':
-        steerZigzag(pos, vel, enemy, nearest, elapsedMs)
+        steerZigzag(pos, vel, enemy, blendedNearest, elapsedMs)
         break
       case 'circler':
-        steerCircler(pos, vel, enemy, nearest, dtMs)
+        steerCircler(pos, vel, enemy, blendedNearest, dtMs)
         break
       case 'sweep':
         steerSweep(vel, enemy)
         break
       case 'charger':
-        steerCharger(pos, vel, enemy, nearest, dtMs)
+        steerCharger(pos, vel, enemy, blendedNearest, dtMs)
         break
       default:
-        steerChase(pos, vel, enemy, nearest)
+        steerChase(pos, vel, enemy, blendedNearest)
     }
 
     // Applique le ralentissement si l'ennemi porte un composant `slow`.
@@ -172,6 +181,55 @@ function steerCharger(pos: Vec2, vel: Vec2, enemy: EnemyComp, nearest: Vec2 | nu
 }
 
 // --- Helpers ----------------------------------------------------------------
+
+/**
+ * Mélange la direction de flux et la direction directe vers le joueur.
+ *
+ * Formule : 0.7 × flux + 0.3 × direction_directe, renormalisée.
+ * Si le flux est nul (hors fenêtre / muré) → direction directe pure.
+ * Retourne un vecteur "nearest" synthétique situé dans la direction mélangée,
+ * à la même distance que le joueur réel, afin que les steer* calculent la bonne
+ * vitesse (speed × dir).
+ *
+ * NOTE : JAMAIS appelé quand flowField === null → chemin de code actuel intact.
+ */
+function blendFlowNearest(
+  flowField: FlowField,
+  ex: number,
+  ey: number,
+  nearest: Vec2
+): Vec2 {
+  const { fx, fy } = sampleFlow(flowField, ex, ey)
+
+  // Flux nul (hors fenêtre ou muré) → chase pur
+  if (fx === 0 && fy === 0) {
+    return nearest
+  }
+
+  // Direction directe vers le joueur (normalisée)
+  const ddx = nearest.x - ex
+  const ddy = nearest.y - ey
+  const ddLen = Math.sqrt(ddx * ddx + ddy * ddy)
+  if (ddLen === 0) {
+    return nearest
+  }
+  const ddnx = ddx / ddLen
+  const ddny = ddy / ddLen
+
+  // Mélange 70% flux + 30% direct
+  const bx = 0.7 * fx + 0.3 * ddnx
+  const by = 0.7 * fy + 0.3 * ddny
+  const bLen = Math.sqrt(bx * bx + by * by)
+  if (bLen === 0) {
+    return nearest
+  }
+
+  // Retourne un "nearest" synthétique dans la direction mélangée, à distance ddLen
+  return {
+    x: ex + (bx / bLen) * ddLen,
+    y: ey + (by / bLen) * ddLen
+  }
+}
 
 function findNearest(from: Vec2, targets: readonly Vec2[]): Vec2 | null {
   let best: Vec2 | null = null
