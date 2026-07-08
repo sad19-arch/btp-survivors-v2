@@ -171,10 +171,11 @@ export class SiteRenderer {
         .setDepth(-9.4)
       this.planObjects.push(rect)
     }
-    // 2. Pistes : bandes de roulage continues le long des chemins.
-    if (this.scene.textures.exists('road_strip')) {
+    // 2. Pistes : PISTE EN TERRE (ornières) le long des chemins — jamais
+    //    l'asphalte de la route (à petite échelle il lisait comme des rails).
+    if (this.scene.textures.exists('piste_strip')) {
       for (const p of plan.paths) {
-        this.tileAlong(p, 'road_strip', 0.8, 104, -9.1)
+        this.tileAlong(p, 'piste_strip', 1.0, 120, -9.1)
       }
     }
     // 3. Clôtures : panneaux tuilés le long des segments, poteaux aux extrémités

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GATE — Golden terrassement (plan de chantier)</title>
+<style>
+  body { margin: 0; background: #17120d; color: #f0e6d2; font-family: 'Courier New', monospace; padding: 12px; }
+  h1 { font-size: 18px; color: #ffb424; border-bottom: 3px solid #ffb424; padding-bottom: 6px; }
+  h2 { font-size: 15px; color: #ffb424; margin-top: 22px; }
+  img { width: 100%; display: block; border: 3px solid #000; box-shadow: 4px 4px 0 #000; margin: 8px 0; }
+  pre { background: #0d0a07; border: 3px solid #000; padding: 8px; font-size: 10px; line-height: 1.15; overflow-x: auto; }
+  p { font-size: 13px; line-height: 1.45; }
+  .ok { color: #7ee081; }
+</style>
+</head>
+<body>
+<h1>GATE — Golden « terrassement » (plan de chantier)</h1>
+<p>Le stage est maintenant COMPOSÉ depuis un plan masse : portail sur la route sud,
+base vie et parc engins à l'accès, fouilles clôturées (BLOQUANTES en jeu), déblais
+adjacents, pistes continues. <span class="ok">Contraintes vérifiées par tests :
+deux machines jamais collées · rien hors zone · anneaux fermés sauf ouvertures ·
+chemins connexes · spawn dégagé.</span></p>
+
+<h2>1. Vue drone (monde entier)</h2>
+<img src="drone.jpg" alt="Vue drone du terrassement">
+<p>Fouille principale clôturée au nord (terre excavée sombre, pelleteuse au front,
+camion à la rampe) · fouille secondaire ouest · déblais à l'est · stock de terre SE ·
+piquets topo NE/SO · parc engins + base vie près du portail · pistes reliant tout.</p>
+
+<h2>2. Au sol — bord de fouille (zoom de jeu)</h2>
+<img src="roam_fouille.jpg" alt="Le joueur bloqué par la clôture de la fouille">
+<p>La clôture BLOQUE physiquement le joueur (et les ennemis) — l'anneau se contourne
+par l'ouverture côté portail.</p>
+
+<h2>3. Au sol — côté accès (zoom de jeu)</h2>
+<img src="roam_basevie.jpg" alt="Base vie et parc engins">
+
+<h2>4. Plan masse ASCII (généré du vrai plan seedé)</h2>
+<pre id="ascii">chargement…</pre>
+<script>
+  fetch('ascii.txt').then((r) => r.text()).then((t) => { document.getElementById('ascii').textContent = t })
+</script>
+<p>Rejouable en vrai : <b>http://192.168.1.185:3000/?autostart=solo&level=2&seed=1</b>
+(ou niveau 2 depuis le titre).</p>
+</body>
+</html>

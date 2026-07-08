@@ -285,10 +285,11 @@ export class GameScene extends Phaser.Scene {
     this.load.image('road_strip', 'terrain/road_strip.png')
     this.load.image('site_gate', 'terrain/site_gate.png')
     this.load.image('fence_post', 'terrain/fence_post.png')
-    // Kit « plan de chantier » : base vie + piquets topo, partagés entre stages
-    // (les prefabs les référencent quel que soit le stage joué).
+    // Kit « plan de chantier » : base vie + piquets topo + piste en terre,
+    // partagés entre stages (les prefabs/pistes les référencent partout).
     this.load.image('bungalow_shared', 'stage01/props/site_cabin.png')
     this.load.image('piquets_shared', 'stage01/props/survey_stakes.png')
+    this.load.image('piste_strip', 'terrain/piste_strip.png')
   }
 
   /** Réinitialise l'état par-run (indispensable car `scene.restart` réutilise l'instance). */
@@ -355,11 +356,11 @@ export class GameScene extends Phaser.Scene {
     // Là où une STRUCTURE prend le relais, on atténue/éteint le scatter aléatoire
     // pour que la structure se lise. Render-only.
     if (SITE_PROGRAMS[this.loadedStageId] !== undefined) {
-      // Stage au PLAN DE CHANTIER : ZÉRO prop aléatoire (tout objet vient du plan).
-      // Seule reste une texture LÉGÈRE de décalques (traces d'engins, flaques) —
-      // la plateforme entre les zones est roulée par les machines, pas nue.
+      // Stage au PLAN DE CHANTIER : ZÉRO élément aléatoire streamé — tout ce qui
+      // est au sol vient du plan (zones/prefabs/pistes). Le bruit ne remplacera
+      // jamais du contenu (retour playtest : décalques épars = « drapeaux »).
       streamerOpts.props = []
-      streamerOpts.decalDensityMultiplier = 0.55
+      streamerOpts.decalDensityMultiplier = 0
     } else if (hasStructurePlan(this.loadedStageId)) {
       streamerOpts.decalDensityMultiplier = (streamerOpts.decalDensityMultiplier ?? 1) * 0.35
     }

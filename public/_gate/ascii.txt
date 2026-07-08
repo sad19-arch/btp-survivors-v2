@@ -1,0 +1,26 @@
+  k piquets_so (survey)
+
+................................  0
+........################........  1
+........#EEEEEEEEEEEEEE#.SSSSS..  2
+........#EEEEEEEEEEEEEE#.SSSSS..  3
+........#EEEEEEEEEEEEEE#.SSSSS..  4
+........#EEEEEEEEEEEEEE#.SSSSS..  5
+........#EEEEEEEEEEEEEE#.SSSSS..  6
+........#EEEEEEEEEEEEEE#.=SSSS..  7
+.#####..########o#######.=......  8
+.#eee#..........===========kkkk.  9
+.#eeeo===========...............  10
+.#eee#..........=...............  11
+.#eee#..........*...............  12
+.#####..........=........MMMMMM.  13
+................==========MMMMM.  14
+................=........MMMMMM.  15
+.kkkk...........=...............  16
+.kkk=============...............  17
+.....PPPPPP.....=.BBBB..........  18
+.....PPPPP=========BBB..........  19
+.....PPPPPP.....=.BBBB..........  20
+................G...............  21
+RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR  22
+RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR  23
