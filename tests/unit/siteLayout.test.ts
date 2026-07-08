@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Rng } from '@core/rng'
 import { CLUSTERS } from '@content/clusters'
+import { SITE_PROGRAMS } from '@content/sitePrograms'
 import {
   buildSiteLayout,
   ROUTE_BAND,
@@ -13,6 +14,15 @@ import {
 const WORLD_W = 10240
 const WORLD_H = 7680
 const SEED = 42
+
+/**
+ * Poche jouable garantie autour du spawn (px) : AUCUN élément collidable (both)
+ * n'y pénètre, même la scène signature ancrée au spawn par conception (R-F).
+ * Le joueur démarre au bord d'un trou (le trou = élément collidable le plus proche,
+ * ~270 px au nord ; le côté joueur de la scène est décoratif) mais a toujours de
+ * quoi bouger — il ne naît jamais coincé dans la fosse.
+ */
+const SPAWN_POCKET_R = 200
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Determinisme
@@ -51,10 +61,48 @@ describe('siteLayout — securite spawn', () => {
   // doit tenir là aussi (sinon le joueur naîtrait coincé dans une clôture).
   const SAFE_STAGES = ['terrassement', 'terrain_vierge'] as const
 
-  it.each(SAFE_STAGES)('3. [%s] aucune ancre de cluster collidable (both) a moins de SPAWN_SAFE_R du spawn', (stageId) => {
+  it.each(SAFE_STAGES)('3. [%s] poche de spawn libre : aucun ÉLÉMENT collidable (both) dans SPAWN_POCKET_R', (stageId) => {
     const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, stageId)
     const spawnX = WORLD_W / 2
     const spawnY = WORLD_H / 2
+
+    // Garantie HONNÊTE (au niveau de l'élément, pas de l'ancre) : le joueur ne
+    // naît jamais DANS un collidable. On mesure la distance spawn→CHAQUE élément
+    // collidable, pas seulement l'ancre du cluster (une scène ancrée au spawn a
+    // son ancre proche mais ses collidables restent hors de la poche).
+    for (const pc of layout.clusters) {
+      const def = CLUSTERS[pc.defId]
+      if (def === undefined) {
+        continue
+      }
+      for (const el of def.elements) {
+        if (el.collide !== 'both') {
+          continue
+        }
+        const ex = pc.x + (el.dx ?? 0)
+        const ey = pc.y + (el.dy ?? 0)
+        const d = Math.hypot(ex - spawnX, ey - spawnY)
+        expect(
+          d,
+          `[${stageId}] élément collidable de "${pc.defId}" a ${d.toFixed(0)}px < poche SPAWN_POCKET_R=${SPAWN_POCKET_R} du spawn`
+        ).toBeGreaterThanOrEqual(SPAWN_POCKET_R)
+      }
+    }
+  })
+
+  it.each(SAFE_STAGES)('3-bis. [%s] hors scène signature, aucune ancre collidable (both) sous SPAWN_SAFE_R', (stageId) => {
+    const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, stageId)
+    const spawnX = WORLD_W / 2
+    const spawnY = WORLD_H / 2
+    // Un stage AVEC zone signature ancre volontairement UNE scène (pelleteuse+
+    // trou) près du spawn (R-F) → la garde du grand rayon ne s'applique qu'aux
+    // stages SANS signature (ex. terrain_vierge legacy : grande clairière).
+    const hasSignature = (SITE_PROGRAMS[stageId]?.zones ?? []).some(
+      (z) => z.signature === true
+    )
+    if (hasSignature) {
+      return
+    }
 
     for (const pc of layout.clusters) {
       const def = CLUSTERS[pc.defId]

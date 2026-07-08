@@ -42,6 +42,12 @@ const PORTEUR_SPEED = 65
 /** Vitesse de navette des signaleurs (px/s). */
 const SIGNALEUR_SPEED = 80
 
+/** Vitesse d'oscillation d'un terrassier au travail (px/s — lent, sur place). */
+const TERRASSIER_SPEED = 34
+
+/** Vitesse d'un camion benne sur la piste (px/s — rapide). */
+const CAMION_SPEED = 155
+
 /** Vitesse de fuite en panique (px/s — multiplicateur sur le vecteur de fuite). */
 const FLEE_SPEED_PX_PER_MS = 0.12
 
@@ -67,8 +73,15 @@ const PHASE_OFFSET_MS = 3700
 interface WorkerJob {
   /** Clé de texture PNJ à utiliser pour ce job. */
   textureKey: string
-  /** Rôle du job ('porteur' | 'signaleur'). */
-  role: 'porteur' | 'signaleur'
+  /**
+   * Rôle du job :
+   *  - porteur    : évacue la terre fouille → déblais (charge visible à l'aller)
+   *  - signaleur  : flagman à l'entrée (patrouille route)
+   *  - terrassier : travaille EN PLACE au bord d'un trou (petite oscillation)
+   *  - camion     : benne qui roule sur la piste (évacuation) — gros sprite, rapide,
+   *                 orienté par flipX, ne panique pas.
+   */
+  role: 'porteur' | 'signaleur' | 'terrassier' | 'camion'
   /** Point de départ A (monde). */
   ax: number
   ay: number
@@ -192,6 +205,51 @@ export class SiteWorkers {
       jobIdx++
     }
 
+    // Jobs « terrassier » : un ouvrier travaille EN PLACE au bord de chaque
+    // front de creusement (petite oscillation = coups de pelle), pas d'errance.
+    for (const exc of excavations) {
+      const key = this._resolveKey('porteur', npcKeys)
+      if (key === null) {
+        break
+      }
+      this.jobs.push({
+        textureKey: key,
+        role: 'terrassier',
+        ax: exc.x - 55,
+        ay: exc.y + 130,
+        bx: exc.x + 55,
+        by: exc.y + 130,
+        speed: TERRASSIER_SPEED,
+        midX: exc.x,
+        midY: exc.y + 130,
+        phaseOffsetMs: jobIdx * PHASE_OFFSET_MS
+      })
+      jobIdx++
+    }
+
+    // Jobs « camion » : bennes qui roulent sur la PISTE horizontale du sud
+    // (évacuation de la terre). Orientation gérée par flipX (asset de profil).
+    if (this.scene.textures.exists('prop_s2_truck') && routeClusters.length > 0) {
+      const routeY = routeClusters[0]?.y ?? worldH - 350
+      const leftX = worldW * 0.18
+      const rightX = worldW * 0.82
+      for (let t = 0; t < 3; t++) {
+        this.jobs.push({
+          textureKey: 'prop_s2_truck',
+          role: 'camion',
+          ax: leftX,
+          ay: routeY - 40,
+          bx: rightX,
+          by: routeY - 40,
+          speed: CAMION_SPEED,
+          midX: (leftX + rightX) / 2,
+          midY: routeY - 40,
+          phaseOffsetMs: t * 5200
+        })
+        jobIdx++
+      }
+    }
+
     // Jobs « signaleur » : patrouille entre 2 clusters de route voisins.
     // On apparie les tuiles de route par paires consécutives (step 2).
     for (let i = 0; i + 1 < routeClusters.length; i += 2) {
@@ -257,6 +315,15 @@ export class SiteWorkers {
       // 1. Navette normale.
       const tMs = nowMs + job.phaseOffsetMs
       const pos = commutePos(job.ax, job.ay, job.bx, job.by, tMs, job.speed)
+
+      // Camion : roule sur la piste, ne panique pas, orienté par flipX
+      // (asset de profil — R-I : on respecte le sens de circulation).
+      if (job.role === 'camion') {
+        aw.sprite.setPosition(pos.x, pos.y)
+        const goingRight = pos.leg === 'ab'
+        aw.sprite.setFlipX(!goingRight)
+        continue
+      }
 
       // 2. Ennemi le plus proche du worker (position navette courante).
       let nearestDist = Infinity
@@ -402,11 +469,13 @@ export class SiteWorkers {
    */
   private _createWorker(job: WorkerJob, x: number, y: number): ActiveWorker {
     const hasTexture = this.scene.textures.exists(job.textureKey)
+    // Camion = gros engin (image mono-frame) ; ouvrier = petite silhouette.
+    const isCamion = job.role === 'camion'
     let sprite: Phaser.GameObjects.Sprite
     if (hasTexture) {
       sprite = this.scene.add
         .sprite(x, y, job.textureKey)
-        .setScale(0.55)
+        .setScale(isCamion ? 1.0 : 0.55)
         .setDepth(DEPTH_WORKER)
     } else {
       // Repli : cercle vert clair (non-menaçant, distinct des ennemis rouges).
@@ -441,8 +510,9 @@ export class SiteWorkers {
       fleeX: x,
       fleeY: y,
       inPanic: false,
-      // Seul un vrai Sprite texturé accepte setFrame ; le repli Graphics non.
-      animatable: hasTexture
+      // Seul un vrai Sprite texturé de type feuille de marche accepte setFrame.
+      // Le camion (image mono-frame) et le repli Graphics ne sont PAS animables.
+      animatable: hasTexture && !isCamion
     }
   }
 

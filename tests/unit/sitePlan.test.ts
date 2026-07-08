@@ -127,11 +127,11 @@ describe.each(STAGES)('sitePlan — contraintes de chantier (%s)', (stageId) => 
       const expected = perimeter - z.openings.length * OPENING_WIDTH
       expect(Math.abs(fenceLenOn(z, plan.fences) - expected)).toBeLessThanOrEqual(2)
       expect(z.openings.length).toBeGreaterThanOrEqual(1)
-      // Chaque ouverture débouche sur un chemin connecté au portail.
-      for (const o of z.openings) {
-        const near = comp.some((s) => segPointDist(s, o) <= 1)
-        expect(near).toBe(true)
-      }
+      // La PORTE principale débouche sur un chemin connecté au portail.
+      // (Les ouvertures latérales d'une zone signature sont de simples trous de
+      // clôture pour l'entrée des ennemis — pas des accès routiers.)
+      const near = comp.some((s) => segPointDist(s, z.door) <= 1)
+      expect(near, `porte de ${z.id} pas sur un chemin`).toBe(true)
     }
   })
 
@@ -151,8 +151,15 @@ describe.each(STAGES)('sitePlan — contraintes de chantier (%s)', (stageId) => 
 
   it.each(SEEDS)('C3b aucun chemin ne traverse une zone clôturée (seed %i)', (seed) => {
     const plan = planFor(stageId, seed)
+    const program = SITE_PROGRAMS[stageId]
     for (const z of plan.zones) {
       if (!z.fenced) {
+        continue
+      }
+      // La zone SIGNATURE contient le spawn : la piste d'accès (rampe) y ENTRE
+      // légitimement par la porte — c'est le chantier central desservi par la route.
+      const spec = program?.zones.find((s) => s.id === z.id)
+      if (spec?.signature === true) {
         continue
       }
       // Rect INTÉRIEUR (rétréci) : un chemin qui y pénètre = traversée de clôture.
@@ -211,10 +218,18 @@ describe.each(STAGES)('sitePlan — contraintes de chantier (%s)', (stageId) => 
     }
   })
 
-  it.each(SEEDS)('C8 spawn dégagé ET sur un chemin (seed %i)', (seed) => {
+  it.each(SEEDS)('C8 poche de spawn dégagée (aucun PREFAB) ET sur un chemin (seed %i)', (seed) => {
     const plan = planFor(stageId, seed)
     const spawn = { x: W / 2, y: H / 2 }
+    const program = SITE_PROGRAMS[stageId]
+    // Les zones NON-signature ne mordent pas le spawn. La zone signature PEUT
+    // le contenir (le joueur démarre dedans) — sa poche est garantie par le
+    // spawn-clear des prefabs (testé au niveau layout, C8b).
     for (const z of plan.zones) {
+      const spec = program?.zones.find((s) => s.id === z.id)
+      if (spec?.signature === true) {
+        continue
+      }
       expect(rectPointDist(z, spawn), `zone ${z.id} mord le spawn`).toBeGreaterThanOrEqual(SPAWN_CLEAR_R)
     }
     const dMin = Math.min(...plan.paths.map((s) => segPointDist(s, spawn)))
@@ -263,7 +278,7 @@ describe.each(STAGES)('siteLayout — contraintes machines & zones (%s)', (stage
     }
   })
 
-  it.each(SEEDS)('R-F la zone SIGNATURE est adjacente au spawn (face au joueur) (seed %i)', (seed) => {
+  it.each(SEEDS)('R-F la zone SIGNATURE CONTIENT le spawn (joueur démarre dedans) (seed %i)', (seed) => {
     const plan = planFor(stageId, seed)
     const program = SITE_PROGRAMS[stageId]
     const sigSpec = program?.zones.find((z) => z.signature === true)
@@ -273,11 +288,8 @@ describe.each(STAGES)('siteLayout — contraintes machines & zones (%s)', (stage
     const sig = plan.zones.find((z) => z.id === sigSpec.id)
     expect(sig, 'zone signature introuvable dans le plan').toBeDefined()
     if (sig !== undefined) {
-      const spawnY = H / 2
-      const southBorder = sig.cy + sig.halfH
-      // Bord sud (ouverture) juste au nord du spawn : visible au démarrage, hors clairière.
-      expect(southBorder).toBeLessThanOrEqual(spawnY - 300)
-      expect(southBorder).toBeGreaterThanOrEqual(spawnY - 900)
+      const spawn = { x: W / 2, y: H / 2 }
+      expect(rectPointDist(sig, spawn), 'le spawn n\'est pas DANS la zone signature').toBe(0)
     }
   })
 

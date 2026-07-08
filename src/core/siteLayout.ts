@@ -356,6 +356,12 @@ function layoutFromPlan(plan: SitePlan, stageId: string, seed: number): SiteLayo
     })
   }
 
+  // Spawn (centre monde) : rayon dégagé où AUCUN prefab n'est posé — le joueur
+  // démarre dans une poche libre même si la zone signature l'englobe.
+  const spawnX = plan.worldW / 2
+  const spawnY = plan.worldH / 2
+  const SPAWN_PREFAB_CLEAR = 340
+
   // ── 4. Prefabs par zone, selon l'arrangement du programme. ─────────────────
   for (const zone of plan.zones) {
     const spec = program?.zones.find((z) => z.id === zone.id)
@@ -363,11 +369,18 @@ function layoutFromPlan(plan: SitePlan, stageId: string, seed: number): SiteLayo
     /** Positions déjà posées DANS cette zone (anti-collage, toutes familles). */
     const zonePlaced: Array<{ x: number; y: number; r: number }> = []
 
-    const tryPlace = (def: ClusterDef, x: number, y: number): boolean => {
+    const tryPlace = (def: ClusterDef, x: number, y: number, ignoreSpawnClear = false): boolean => {
       // Clamp dans la zone (marge = encombrement du prefab).
       const m = def.footprintRadius + 40
       const px = Math.min(Math.max(x, zone.cx - zone.halfW + m), zone.cx + zone.halfW - m)
       const py = Math.min(Math.max(y, zone.cy - zone.halfH + m), zone.cy + zone.halfH - m)
+      // Jamais sur la poche de spawn (le joueur ne démarre pas dans un trou).
+      // La scène ANCRE (anchor_spawn) est volontairement proche → poche réduite
+      // (juste de quoi ne pas naître dans la fosse), les autres restent au large.
+      const clear = ignoreSpawnClear ? 210 : SPAWN_PREFAB_CLEAR + def.footprintRadius
+      if (Math.hypot(px - spawnX, py - spawnY) < clear) {
+        return false
+      }
       // Jamais deux prefabs collés (règle « deux pelleteuses ») — et jamais
       // en-dessous de l'invariant global MIN_GAP entre ancres de clusters.
       for (const p of zonePlaced) {
@@ -403,7 +416,7 @@ function placePrefab(
   def: ClusterDef,
   zone: PlacedZone,
   rng: Rng,
-  tryPlace: (def: ClusterDef, x: number, y: number) => boolean
+  tryPlace: (def: ClusterDef, x: number, y: number, ignoreSpawnClear?: boolean) => boolean
 ): void {
   const m = def.footprintRadius + 60
   switch (pf.arrangement) {
@@ -463,6 +476,18 @@ function placePrefab(
             break
           }
         }
+      }
+      return
+    }
+    case 'anchor_spawn': {
+      // Juste au NORD du spawn (la zone signature est centrée dessus) — le trou
+      // (origine de la scène dédiée) tombe à ~270 px du joueur, la pelleteuse au
+      // bord nord du trou reste dans le cadre au démarrage. On IGNORE le
+      // spawn-clear générique (poche réduite : la scène dédiée n'a AUCUN
+      // collidable côté joueur, cf. scene_dig_active_spawn).
+      const rad = 270
+      for (let i = 0; i < pf.count; i++) {
+        tryPlace(def, zone.cx, zone.cy - rad, true)
       }
       return
     }

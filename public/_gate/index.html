@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GATE — Golden terrassement (scènes d'activité)</title>
+<title>GATE — Golden terrassement (vie + spawn ancré)</title>
 <style>
   body { margin: 0; background: #17120d; color: #f0e6d2; font-family: 'Courier New', monospace; padding: 12px; }
   h1 { font-size: 18px; color: #ffb424; border-bottom: 3px solid #ffb424; padding-bottom: 6px; }
@@ -11,38 +11,54 @@
   img { width: 100%; display: block; border: 3px solid #000; box-shadow: 4px 4px 0 #000; margin: 8px 0; image-rendering: pixelated; }
   pre { background: #0d0a07; border: 3px solid #000; padding: 8px; font-size: 10px; line-height: 1.15; overflow-x: auto; }
   p { font-size: 13px; line-height: 1.45; }
+  ul { font-size: 13px; line-height: 1.5; }
   .ok { color: #7ee081; }
 </style>
 </head>
 <body>
-<h1>GATE — Golden « terrassement » v2 (scènes d'activité)</h1>
-<p>Correction de fond suite à ton retour « un trou ça n'apparaît pas par magie » :
-la composition ne pose plus des objets isolés mais des <b>SCÈNES d'activité</b> —
-un trou vient <b>toujours</b> avec son anneau de déblais + la pelleteuse qui l'a
-creusé. <span class="ok">Vérifié par test : aucune fosse sans son anneau de mottes.</span></p>
+<h1>GATE — Golden « terrassement » v3 (vie du chantier + spawn ancré)</h1>
+<p>Réponse à tes 6 points. Tout est <b>data-driven + testé</b> (aucune fosse sans son
+anneau de déblais + engin, poche de spawn libre, ancres non-collées) et validé aux
+portes <span class="ok">tsc / lint / 948 Vitest / sim:check diff 0 / 18 e2e</span>.</p>
+<ul>
+  <li><b>1. Panneau « CHANTIER INTERDIT AU PUBLIC »</b> à l'entrée (près du portail). → §3</li>
+  <li><b>2. Beaucoup plus de trous + pelleteuses + rouleau compresseur</b> dans la zone clôturée. → §2</li>
+  <li><b>3. PNJ qui travaillent</b> : pelleteuses qui creusent, terrassiers autour des fouilles, signaleurs sur la piste (fini l'errance). → §1/§2</li>
+  <li><b>4. Camions bennes qui roulent sur la piste</b> (chargés de terre → ils évacuent). → §3</li>
+  <li><b>5. Orientation corrigée</b> : clôtures DEBOUT, camions face à leur sens, traces de pneu retirées de la piste. → §2/§3</li>
+  <li><b>6. Spawn À L'INTÉRIEUR de la zone, au bord d'un trou + pelleteuse</b> (ancre l'étape en 2 s). → §1</li>
+</ul>
 
-<h2>1. Au démarrage (ta résolution) — le tableau signature</h2>
-<img src="spawn.png" alt="Spawn : piste + clôture galvanisée debout + ouverture">
-<p>Le joueur démarre sur la <b>piste de roulage</b> (large, terre compactée) face à
-la <b>fouille clôturée</b> ; la clôture est <b>debout</b> (fini couchée + poteau
-parasite) et son <b>ouverture s'aligne sur la piste</b> (le camion entre par là).</p>
+<h2>1. Au démarrage — le joueur naît au bord d'un trou (ta demande #6)</h2>
+<img src="spawn.png" alt="Spawn : trou + pelleteuse + camion juste au nord du joueur">
+<p>Le joueur (J1) démarre <b>dans la fouille clôturée</b>, face à un <b>front actif</b> :
+trou, pelleteuse qui creuse dedans, camion-benne qu'on charge. Un 2ᵉ front au SE. La
+poche de spawn reste libre (il ne naît pas dans le trou — vérifié par test).</p>
+<img src="roam.png" alt="Le joueur monte : il est stoppé au bord du trou (collision)">
+<p>Quand il monte, il est <b>stoppé net au bord du trou</b> (collision) — le trou est un
+vrai obstacle, pas un décalque traversable.</p>
 
-<h2>2. Dans la fouille (zoom de jeu) — la scène de creusement</h2>
-<img src="fouille.png" alt="Fouille : trou + anneau de mottes + pelleteuse">
-<p>Le trou est <b>entouré de son anneau de mottes</b> (les déblais sortis) — il est
-EXPLIQUÉ, plus jamais posé tout seul. La pelleteuse est au bord.</p>
+<h2>2. Dans la fouille clôturée — densité + rouleau (demandes #2/#3/#5)</h2>
+<img src="fouille.png" alt="Plusieurs trous + pelleteuses + camions + rouleau, clôture debout">
+<p>Plusieurs fronts (trou + anneau de déblais + pelleteuse + camion), un <b>rouleau
+compresseur</b>, des prisonniers en cage. La <b>clôture est debout</b> (fini couchée).</p>
 
-<h2>3. Vue drone — le plan masse</h2>
-<img src="drone.png" alt="Vue drone du terrassement">
-<p>Fouille principale clôturée (pelleteuse + trous + mottes dedans), fouille
-secondaire ouest, pistes sobres reliant les zones, base vie / parc / stock au sud.</p>
+<h2>3. L'entrée — panneau + camions sur la piste (demandes #1/#4/#5)</h2>
+<img src="gate.png" alt="Panneau CHANTIER INTERDIT AU PUBLIC + camions bennes sur la piste">
+<p>Le panneau <b>« CHANTIER INTERDIT AU PUBLIC »</b> au portail ; des <b>camions bennes
+chargés</b> roulent sur la <b>piste</b> (terre compactée, plus de traces pourries) et
+partent évacuer la terre ; base vie à l'est.</p>
 
-<h2>4. Plan ASCII (généré du vrai plan)</h2>
+<h2>4. Vue drone — le plan masse</h2>
+<img src="drone.png" alt="Vue drone : deux zones clôturées, pistes, zones support">
+<p>Zone de travail principale clôturée (au centre, le joueur dedans) + fouille secondaire
+ouest ; corridors d'accès depuis le portail ; piste + support (parc / base vie / stock) au sud.</p>
+
+<h2>5. Plan ASCII (généré du vrai plan seedé)</h2>
 <pre id="ascii">chargement…</pre>
 <script>
   fetch('ascii.txt').then((r) => r.text()).then((t) => { document.getElementById('ascii').textContent = t })
 </script>
-<p>En jeu : <b>http://192.168.1.185:3000/?autostart=solo&level=2&seed=1</b>
-(ou localhost sur ce PC).</p>
+<p>En jeu (ce PC) : <b>http://localhost:3000/?autostart=solo&amp;level=2&amp;seed=1</b></p>
 </body>
 </html>

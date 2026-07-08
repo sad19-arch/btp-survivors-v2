@@ -147,6 +147,37 @@ export const CLUSTERS: Record<string, ClusterDef> = {
     ],
   },
 
+  // SCÈNE « front actif FACE AU SPAWN » (R-F) : variante de scene_dig_active
+  // arrangée pour être LUE depuis le spawn au sud. Le trou est l'élément le plus
+  // proche du joueur (origine), la pelleteuse + le camion sont au bord NORD (loin,
+  // dans le cadre), et l'anneau de déblais du côté joueur est DÉCORATIF
+  // (collide:'none') pour garder la poche de spawn libre — le joueur démarre au
+  // bord du trou, pas dedans. Utilisée seulement en arrangement `anchor_spawn`,
+  // ancrée à ~270 px au nord du spawn.
+  scene_dig_active_spawn: {
+    id: 'scene_dig_active_spawn',
+    footprintRadius: 250,
+    gates: [{ dx: 0, dy: 250 }],
+    elements: [
+      // Le trou — élément le PLUS proche du joueur (origine de la scène).
+      { assetKey: 'struct_stage02_pit', dx: 0, dy: 0, scale: 1.05, collide: 'both', shape: { kind: 'circle', r: 82 } },
+      // La pelleteuse qui creuse, au bord NORD du trou (loin du joueur, bien visible).
+      { assetKey: 'prop_s2_excavator', dx: -15, dy: -120, scale: 1.25, collide: 'both', shape: { kind: 'circle', r: 56 } },
+      // Le camion-benne qu'on charge, sur le flanc nord-est.
+      { assetKey: 'prop_s2_truck', dx: 195, dy: -50, scale: 1.05, collide: 'both', shape: { kind: 'circle', r: 48 } },
+      // Anneau de déblais : flancs + nord COLLIDABLES ; le côté SUD (vers le
+      // joueur) est décoratif pour ne pas fermer la poche de spawn.
+      { assetKey: 'prop_s2_dirt', dx: 150, dy: -6, scale: 0.9, collide: 'both', shape: { kind: 'circle', r: 34 } },
+      { assetKey: 'prop_s2_dirt', dx: -120, dy: -96, scale: 0.85, collide: 'both', shape: { kind: 'circle', r: 32 } },
+      { assetKey: 'prop_s2_dirt', dx: -150, dy: 28, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_s2_dirt', dx: -40, dy: 135, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_s2_dirt', dx: 70, dy: 120, scale: 0.8, collide: 'none' },
+      // Traces de va-et-vient + flaque au bord.
+      { assetKey: 'decal_s2_tracks', dx: 110, dy: -20, scale: 1.15, collide: 'none' },
+      { assetKey: 'decal_s2_puddle', dx: -30, dy: 80, scale: 1.0, collide: 'none' },
+    ],
+  },
+
   // SCÈNE « fouille creusée » : un trou DÉJÀ fait — expliqué par son anneau
   // complet de déblais (pas d'engin, le front est ailleurs).
   scene_dig_done: {
@@ -191,6 +222,20 @@ export const CLUSTERS: Record<string, ClusterDef> = {
       { assetKey: 'prop_s2_dirt', dx: 80, dy: 4, scale: 0.84, collide: 'both', shape: { kind: 'circle', r: 30 } },
       { assetKey: 'prop_s2_dirt', dx: 155, dy: 12, scale: 0.78, collide: 'none' },
       { assetKey: 'decal_s2_tracks', dx: 0, dy: 90, scale: 1.0, collide: 'none' },
+    ],
+  },
+
+  // SCÈNE « compactage » : le rouleau compresseur nivelle une bande de terre
+  // déjà remblayée (une zone lissée + traces derrière). Machine EN TRAVAIL.
+  scene_roll: {
+    id: 'scene_roll',
+    footprintRadius: 150,
+    gates: [{ dx: 0, dy: 120 }],
+    elements: [
+      { assetKey: 'prop_s2_roller', dx: 0, dy: -10, scale: 1.05, collide: 'both', shape: { kind: 'circle', r: 46 } },
+      // Bande lissée devant le rouleau (terre tassée = 2 petites mottes aplaties).
+      { assetKey: 'prop_s2_dirt', dx: -70, dy: 70, scale: 0.6, collide: 'none' },
+      { assetKey: 'prop_s2_dirt', dx: 75, dy: 74, scale: 0.62, collide: 'none' },
     ],
   },
 

@@ -172,10 +172,12 @@ export class SiteRenderer {
       this.planObjects.push(rect)
     }
     // 2. Pistes de roulage (R-G) : BANDE LARGE de terre compactée (un camion doit
-    //    passer) — un aplat sobre + traces de roues, PAS de ruban rayé orange.
+    //    passer) — un aplat sobre, PAS de ruban rayé orange.
     for (const p of plan.paths) {
       this.drawRoad(p)
     }
+    // 2b. Panneau d'interdiction au portail.
+    this.drawGateSign(plan.gate)
     // 3. Clôtures : panneaux TOUJOURS DEBOUT (R-H : jamais de rotation → sinon
     //    ils se couchent au sol). Le panneau porte déjà ses plots béton → PAS de
     //    poteau ajouté. On les stepe le long du segment ; sur un run vertical ils
@@ -233,22 +235,38 @@ export class SiteRenderer {
       band.setRotation(ang)
     }
     this.planObjects.push(band)
-    // Traces de roues TRÈS discrètes sur l'axe (sinon, tuilées, elles lisent
-    // comme des blocs bruns — R-D). Une seule file, faible alpha, clairsemées.
-    if (this.scene.textures.exists('decal_s2_tracks')) {
-      const step = 300
-      const n = Math.max(1, Math.round(len / step))
-      for (let k = 0; k <= n; k++) {
-        const t = k / n
-        const x = seg.x1 + dx * t
-        const y = seg.y1 + dy * t
-        const img = this.scene.add.image(x, y, 'decal_s2_tracks').setScale(0.85).setAlpha(0.22).setDepth(-9.2)
-        if (ang !== 0) {
-          img.setRotation(ang)
-        }
-        this.planObjects.push(img)
-      }
-    }
+    // NB : pas de décalque de traces sur la piste (tuilé il lisait comme des
+    // blocs bruns au mauvais sens — R-I). La VIE de la piste vient des camions
+    // bennes MOBILES (SiteWorkers), pas d'un décalque statique.
+  }
+
+  /**
+   * Panneau « CHANTIER INTERDIT AU PUBLIC » planté à côté du portail (world-space,
+   * DA 16-bit : panneau sombre, bordure noire, texte jaune). Face au joueur qui
+   * arrive par la route sud.
+   */
+  private drawGateSign(gate: { x: number; y: number }): void {
+    const sx = gate.x + 260
+    const sy = gate.y - 40
+    const w = 300
+    const h = 78
+    const panel = this.scene.add
+      .rectangle(sx, sy, w, h, 0x241a10, 0.96)
+      .setStrokeStyle(5, 0x000000, 1)
+      .setDepth(1.5)
+    const txt = this.scene.add
+      .text(sx, sy, 'CHANTIER INTERDIT\nAU PUBLIC', {
+        fontFamily: 'monospace',
+        fontSize: '22px',
+        color: '#ffb424',
+        fontStyle: 'bold',
+        align: 'center',
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(1.6)
+    // Pied de panneau (petit poteau sombre sous le panneau).
+    const post = this.scene.add.rectangle(sx, sy + h / 2 + 22, 12, 44, 0x1a130b, 1).setDepth(1.4)
+    this.planObjects.push(panel, txt, post)
   }
 
   /**

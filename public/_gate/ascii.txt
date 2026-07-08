@@ -1,24 +1,37 @@
+
+> btp-survivors-v2@0.1.0 site:plan
+> tsx tools/site-plan-ascii.ts --stage terrassement --seed 1
+
+Stage : terrassement — 1 caractère = 320 px (monde 10240×7680)
+  R route   G portail   # clôture   o ouverture   = chemin   * spawn   . libre
+  E fouille_principale (excavation, clôturée)
+  S deblais (spoil)
+  e fouille_secondaire (excavation, clôturée)
+  P parc_engins (parc_engins)
+  B base_vie (base_vie)
+  k piquets_ne (survey)
+  M stock_terre_se (stockage)
   k piquets_so (survey)
 
 ................................  0
 ................................  1
 ................................  2
-........################........  3
-........#EEEEEEEEEEEEEE#........  4
-........#EEEEEEEEEEEEEE#.SSSSS..  5
-........#EEEEEEEEEEEEEE#.SSSSS..  6
-........#EEEEEEEEEEEEEE#.SSSSS..  7
-.#####..#EEEEEEEEEEEEEE#.SSSSS..  8
-.#eee#..#EEEEEEEEEEEEEE#.SSSSS..  9
-.#eee#..########o#######.=......  10
-.#eee#..........===========kkkk.  11
-.#eee#..........*...............  12
-.####o===========........MMMMMM.  13
-................==========MMMMM.  14
-................=........MMMMMM.  15
-.kkkk...........=...............  16
-.kkk=============...............  17
-.....PPPPPP.....=.BBBB..........  18
+................................  3
+................................  4
+................................  5
+................................  6
+................===========kkkk.  7
+.#####..........=..........kkkk.  8
+.#eee#.....##########.SSSSS.....  9
+.#eee#.....#EEEE=EEE#.SSSSS.....  10
+.#eee#.....#EEEE=EEE#.SSSSS.....  11
+.#eee#.....oEEEE*EEEo.SSSSS.....  12
+.####o.....#EEEE=EEE#.SSSSS.....  13
+.....=.....#####o####.=SSSS.....  14
+.....==================.........  15
+.kkkk...........=........MMMMMM.  16
+.kkk======================MMMMM.  17
+.....PPPPPP.....=.BBBB...MMMMMM.  18
 .....PPPPP=========BBB..........  19
 .....PPPPPP.....=.BBBB..........  20
 ................G...............  21

@@ -41,6 +41,8 @@ export type PrefabArrangement =
   | 'center'
   /** Près de la porte, côté intérieur (camion à la rampe). */
   | 'at_door'
+  /** Juste à côté du spawn (dans la zone signature) — ancre l'étape au démarrage. */
+  | 'anchor_spawn'
 
 /** Prefab à placer dans une zone : on place des CLUSTERS, jamais des assets isolés. */
 export interface ZonePrefab {
@@ -125,18 +127,25 @@ const TERRASSEMENT: SiteProgram = {
       id: 'fouille_principale',
       role: 'excavation',
       glyph: 'E',
-      halfW: 2400,
-      halfH: 1150,
+      // Grande fouille CENTRÉE sur le spawn (le joueur démarre dedans) — assez
+      // vaste pour plusieurs fronts, mais pas au point d'écraser les autres zones.
+      halfW: 1500,
+      halfH: 950,
       anchor: { kind: 'north', xFrac: 0.5 },
-      fence: { openings: 1 },
-      jitterPx: 120,
+      // 3 ouvertures (le joueur spawn DEDANS → les ennemis entrent par plusieurs
+      // côtés, pas de forteresse) débouchant sur les pistes.
+      fence: { openings: 3 },
+      jitterPx: 100,
       signature: true,
       prefabs: [
-        // Le front ACTIF juste à l'ouverture (face au spawn) : trou + anneau de
-        // mottes + pelleteuse au bord + camion. Une seule scène active → un seul engin.
-        { clusterId: 'scene_dig_active', count: 1, arrangement: 'at_door' },
-        // 2 fouilles DÉJÀ creusées, chacune expliquée par son anneau de déblais.
+        // Le front ACTIF ancré JUSTE À CÔTÉ du spawn : le joueur démarre au bord
+        // d'un trou avec sa pelleteuse → l'étape « terrassement » est lue en 2 s.
+        // Scène dédiée (trou près du joueur, pelleteuse au bord nord = dans le cadre).
+        { clusterId: 'scene_dig_active_spawn', count: 1, arrangement: 'anchor_spawn' },
+        // Le chantier VIT : d'autres fronts + fouilles creusées + un compactage.
+        { clusterId: 'scene_dig_active', count: 1, arrangement: 'scatter' },
         { clusterId: 'scene_dig_done', count: 2, arrangement: 'scatter' },
+        { clusterId: 'scene_roll', count: 1, arrangement: 'scatter' },
       ],
     },
     {
@@ -235,7 +244,9 @@ const TERRASSEMENT: SiteProgram = {
     minMachineDistPx: 600,
     spoilAdjacentMaxPx: 400,
     baseVieMaxFromGatePx: 800,
-    baseVieMinFromExcavationPx: 1500,
+    // La fouille signature étant centrale, la base vie (à l'entrée sud) en reste
+    // à bonne distance mais pas 1500 px : 850 suffit à la séparer du danger.
+    baseVieMinFromExcavationPx: 850,
   },
 }
 

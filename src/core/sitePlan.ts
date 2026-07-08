@@ -244,12 +244,12 @@ export function buildSitePlan(
   const zones: MutableZone[] = []
   for (const spec of program.zones) {
     const p = resolveAnchor(spec, worldW, routeTopY, gate, byId, rng)
-    // R-F : la zone SIGNATURE est tirée juste au NORD du spawn — son bord sud
-    // (= l'ouverture, face au joueur) tombe à spawn − SIGNATURE_GAP, donc au
-    // démarrage le joueur fait face à la scène définitive de la phase.
+    // R-F : la zone SIGNATURE est CENTRÉE sur le spawn — le joueur démarre
+    // DEDANS (dans la fouille clôturée, au bord d'une pelleteuse+trou ancrés
+    // juste à côté), ce qui lit l'étape « terrassement » immédiatement.
     if (spec.signature === true) {
       p.x = spawn.x
-      p.y = spawn.y - SIGNATURE_GAP - spec.halfH
+      p.y = spawn.y
     }
     const z: MutableZone = {
       id: spec.id,
@@ -287,8 +287,13 @@ export function buildSitePlan(
         }
       }
     }
-    // Spawn : aucune zone ne doit mordre le rayon dégagé.
+    // Spawn : aucune zone ne doit mordre le rayon dégagé — SAUF la zone
+    // signature, qui CONTIENT le spawn par conception (sa poche libre est
+    // garantie par le spawn-clear des prefabs dans siteLayout, pas par la zone).
     for (const z of zones) {
+      if (z.spec.signature === true) {
+        continue
+      }
       const dx = Math.max(0, Math.abs(spawn.x - z.cx) - z.halfW)
       const dy = Math.max(0, Math.abs(spawn.y - z.cy) - z.halfH)
       if (Math.hypot(dx, dy) < SPAWN_CLEAR_R) {
@@ -358,9 +363,10 @@ export function buildSitePlan(
       continue
     }
     if (Math.abs(z.cx - spineX) <= z.halfW - 120) {
-      // Zone traversée par l'épine : porte sur le bord horizontal côté spawn/portail.
+      // Zone traversée par l'épine : porte sur le bord horizontal côté portail.
+      // La zone signature (centrée sur le spawn) ouvre TOUJOURS au sud, vers le portail.
       const doorX = Math.min(Math.max(spineX, z.cx - z.halfW + 200), z.cx + z.halfW - 200)
-      const south = z.cy < spawn.y
+      const south = z.spec.signature === true ? true : z.cy < spawn.y
       z.door = { x: doorX, y: z.cy + (south ? z.halfH : -z.halfH) }
       branchYs.push(z.door.y)
       if (Math.abs(doorX - spineX) >= 1) {
@@ -411,14 +417,24 @@ export function buildSitePlan(
   const spineTopY = Math.min(...branchYs)
   paths.unshift({ x1: spineX, y1: gate.y, x2: spineX, y2: spineTopY })
 
-  // Ouvertures des zones clôturées : la porte finale (+ bord opposé si demandé).
+  // Ouvertures des zones clôturées : la porte (sud) + ouvertures latérales.
+  // La zone signature contient le spawn → 3 ouvertures (S/E/O) pour que les
+  // ennemis entrent par plusieurs côtés (jamais de forteresse).
   for (const z of zones) {
     if (!z.fenced) {
       continue
     }
-    z.openings.push({ x: z.door.x, y: z.door.y })
     const wanted = z.spec.fence?.openings ?? 1
-    if (wanted >= 2) {
+    z.openings.push({ x: z.door.x, y: z.door.y })
+    if (z.spec.signature === true) {
+      // Milieux des bords est/ouest (en plus de la porte sud).
+      if (wanted >= 2) {
+        z.openings.push({ x: z.cx + z.halfW, y: z.cy })
+      }
+      if (wanted >= 3) {
+        z.openings.push({ x: z.cx - z.halfW, y: z.cy })
+      }
+    } else if (wanted >= 2) {
       z.openings.push({ x: 2 * z.cx - z.door.x, y: 2 * z.cy - z.door.y })
     }
   }
