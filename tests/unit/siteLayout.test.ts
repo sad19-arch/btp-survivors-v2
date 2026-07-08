@@ -46,8 +46,13 @@ describe('siteLayout — terrain_vierge', () => {
 // 3. Securite spawn
 // ─────────────────────────────────────────────────────────────────────────────
 describe('siteLayout — securite spawn', () => {
-  it('3. aucune ancre de cluster collidable (both) a moins de SPAWN_SAFE_R du spawn', () => {
-    const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, 'terrassement')
+  // Couvre terrassement ET terrain_vierge : ce dernier est désormais le stage de
+  // sim:check ET a des clusters collidables (workCluster) → la sécurité du spawn
+  // doit tenir là aussi (sinon le joueur naîtrait coincé dans une clôture).
+  const SAFE_STAGES = ['terrassement', 'terrain_vierge'] as const
+
+  it.each(SAFE_STAGES)('3. [%s] aucune ancre de cluster collidable (both) a moins de SPAWN_SAFE_R du spawn', (stageId) => {
+    const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, stageId)
     const spawnX = WORLD_W / 2
     const spawnY = WORLD_H / 2
 
@@ -63,13 +68,13 @@ describe('siteLayout — securite spawn', () => {
       const d = Math.sqrt((pc.x - spawnX) ** 2 + (pc.y - spawnY) ** 2)
       expect(
         d,
-        `Cluster collidable "${pc.defId}" a distance ${d.toFixed(1)} < SPAWN_SAFE_R=${SPAWN_SAFE_R} du spawn`
+        `[${stageId}] cluster collidable "${pc.defId}" a distance ${d.toFixed(1)} < SPAWN_SAFE_R=${SPAWN_SAFE_R} du spawn`
       ).toBeGreaterThanOrEqual(SPAWN_SAFE_R)
     }
   })
 
-  it('3b. aucun obstacle blocks="both" a son origine dans le disque SPAWN_SAFE_R', () => {
-    const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, 'terrassement')
+  it.each(SAFE_STAGES)('3b. [%s] aucun obstacle blocks="both" pile sur le spawn (origine != centre)', (stageId) => {
+    const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, stageId)
     const spawnX = WORLD_W / 2
     const spawnY = WORLD_H / 2
 
@@ -77,10 +82,13 @@ describe('siteLayout — securite spawn', () => {
       if (obs.blocks !== 'both') {
         continue
       }
+      // NB : l'origine d'un obstacle est DÉCALÉE de l'ancre (clôture dy-110…),
+      // donc elle peut être < SPAWN_SAFE_R alors que l'ancre est sûre (test 3).
+      // On vérifie seulement qu'aucun obstacle n'est PILE sur le spawn.
       const d = Math.sqrt((obs.x - spawnX) ** 2 + (obs.y - spawnY) ** 2)
       expect(
         d,
-        `Obstacle blocks="both" origine a dist=${d.toFixed(1)} < SPAWN_SAFE_R=${SPAWN_SAFE_R}`
+        `[${stageId}] obstacle blocks="both" origine a dist=${d.toFixed(1)} du spawn (pile dessus)`
       ).toBeGreaterThan(0)
     }
   })
