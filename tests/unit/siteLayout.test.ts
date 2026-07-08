@@ -4,6 +4,7 @@ import { CLUSTERS } from '@content/clusters'
 import {
   buildSiteLayout,
   ROUTE_BAND,
+  ROUTE_TILE,
   MIN_GAP,
   SPAWN_SAFE_R,
   type PlacedCluster
@@ -84,12 +85,16 @@ describe('siteLayout — securite spawn', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. Espacement : toute paire d'ancres a distance >= MIN_GAP
+// 4. Espacement : toute paire d'ancres NON-route a distance >= MIN_GAP
+// (les tuiles route sont intentionnellement adjacentes a ~ROUTE_TILE px)
 // ─────────────────────────────────────────────────────────────────────────────
 describe('siteLayout — espacement', () => {
-  it("4. toute paire de clusters est distante d'au moins MIN_GAP", () => {
+  it("4. toute paire de clusters non-route est distante d'au moins MIN_GAP", () => {
     const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, 'terrassement')
-    const clusters: PlacedCluster[] = layout.clusters
+    // Exclure les clusters de route : ils sont volontairement adjacents (~ROUTE_TILE px)
+    const clusters: PlacedCluster[] = layout.clusters.filter(
+      (c) => c.defId !== 'cluster_route'
+    )
 
     for (let i = 0; i < clusters.length; i++) {
       for (let j = i + 1; j < clusters.length; j++) {
@@ -105,6 +110,11 @@ describe('siteLayout — espacement', () => {
         ).toBeGreaterThanOrEqual(MIN_GAP)
       }
     }
+  })
+
+  it('4b. ROUTE_TILE exporte correctement depuis siteLayout', () => {
+    // Simple sanite check — la constante est bien exportee et > 0
+    expect(ROUTE_TILE).toBeGreaterThan(0)
   })
 })
 

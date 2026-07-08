@@ -143,6 +143,14 @@ export const CLUSTERS: Record<string, ClusterDef> = {
         dy: -20,
         scale: 1.0,
         collide: 'none'
+      },
+      // Portail d'entrée côté sud (cosmétique — marque l'ouverture de l'enclos)
+      {
+        assetKey: 'site_gate',
+        dx: 0,
+        dy: 80,
+        scale: 0.6,
+        collide: 'none'
       }
     ]
   },
@@ -189,36 +197,16 @@ export const CLUSTERS: Record<string, ClusterDef> = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // cluster_route : couloir de passage balisé + portail
-  // Clôtures le long du passage (collision 'both') + une ouverture (gate)
+  // cluster_route : tuile de route cosmétique (se répète le long du bord sud)
+  // Pas de collision — la route est purement décorative.
+  // road_strip ~128px × 1.7 ≈ 218px, ROUTE_TILE=210 → légère superposition → bande continue.
   // ─────────────────────────────────────────────────────────────────────────
   cluster_route: {
     id: 'cluster_route',
-    footprintRadius: 150,
-    gates: [{ dx: 0, dy: -120 }], // portail côté nord = entrée du couloir
+    footprintRadius: 120,
+    gates: [],
     elements: [
-      // Revêtement de route (décoration)
-      { assetKey: 'road_strip', dx: 0, dy: 0, scale: 1.0, collide: 'none' },
-      // Clôture côté ouest
-      {
-        assetKey: 'fence_panel',
-        dx: -90,
-        dy: -60,
-        scale: 1.0,
-        collide: 'both',
-        shape: { kind: 'segment', x2: 0, y2: 120, thickness: 10 }
-      },
-      // Clôture côté est
-      {
-        assetKey: 'fence_panel',
-        dx: 90,
-        dy: -60,
-        scale: 1.0,
-        collide: 'both',
-        shape: { kind: 'segment', x2: 0, y2: 120, thickness: 10 }
-      },
-      // Portail nord (asset de portail, décoration)
-      { assetKey: 'site_gate', dx: 0, dy: -120, scale: 1.0, collide: 'none' }
+      { assetKey: 'road_strip', dx: 0, dy: 0, scale: 1.7, collide: 'none' }
     ]
   }
 }

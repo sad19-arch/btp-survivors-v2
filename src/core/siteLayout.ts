@@ -29,10 +29,13 @@ import type { ClusterDef } from '@content/clusters'
 export const ROUTE_BAND = 700
 
 /** Taille d'une cellule de la grille interieure (px). */
-export const CELL = 2048
+export const CELL = 1300
 
 /** Distance minimale entre deux ancres de clusters (px) — anti-chevauchement. */
-export const MIN_GAP = 520
+export const MIN_GAP = 440
+
+/** Espacement des tuiles de route le long du bord sud (px). */
+export const ROUTE_TILE = 210
 
 /** Rayon de securite autour du spawn : aucun cluster collidable autorise. */
 export const SPAWN_SAFE_R = 700
@@ -198,32 +201,21 @@ export function buildSiteLayout(
   const placed: PlacedCluster[] = []
   const obstacles: Obstacle[] = []
 
-  // ── 1. Route (bord sud) ───────────────────────────────────────────────────
-  const routeEntries = byRole.get('route')
-  if (routeEntries !== undefined && routeEntries.length > 0) {
-    const routeY = worldH - ROUTE_BAND / 2
-    const routeCount = routeEntries.length
-    const step = worldW / (routeCount + 1)
-    for (let i = 0; i < routeCount; i++) {
-      const entry = routeEntries[i]
-      if (entry === undefined) {
-        continue
-      }
-      const def = CLUSTERS[entry.clusterId]
-      if (def === undefined) {
-        continue
-      }
-
-      const cx = step * (i + 1)
-      const cy = routeY
-
-      if (tooClose(cx, cy, placed)) {
-        continue
-      }
-
-      placed.push({ defId: def.id, x: cx, y: cy })
-      for (const obs of extractObstacles(cx, cy, def)) {
-        obstacles.push(obs)
+  // ── 1. Route (bord sud) — ligne continue de tuiles ───────────────────────
+  const routeEntry = byRole.get('route')?.[0]
+  if (routeEntry !== undefined) {
+    const def = CLUSTERS[routeEntry.clusterId]
+    if (def !== undefined) {
+      const routeY = worldH - ROUTE_BAND / 2
+      const tiles = Math.max(1, Math.round(worldW / ROUTE_TILE))
+      const step = worldW / tiles
+      for (let i = 0; i < tiles; i++) {
+        const cx = step * (i + 0.5)
+        // Les tuiles route sont intentionnellement adjacentes : pas de tooClose
+        placed.push({ defId: def.id, x: cx, y: routeY })
+        for (const obs of extractObstacles(cx, routeY, def)) {
+          obstacles.push(obs)
+        }
       }
     }
   }
@@ -248,7 +240,7 @@ export function buildSiteLayout(
       //   intermediaire => spoil
       let role: string
       if (d >= interiorH * 0.66) {
-        role = 'excavation'
+        role = rng.chance(0.5) ? 'excavation' : 'spoil'
       } else if (d <= interiorH * 0.33) {
         role = rng.chance(0.5) ? 'plant' : 'pause'
       } else {
