@@ -77,6 +77,13 @@ export interface GameSeam {
    * Absente en mode allégé ou tant que la scène n'est pas montée.
    */
   debugActiveBubbles?(): number
+  /**
+   * [Debug/T5] Nombre de sprites de clusters de terrain actifs.
+   * Permet de valider en e2e que les clusters sont bien dessinés (> 0 pour terrassement)
+   * et que le count reste borné après restart (pas de fuite). Absente tant que la scène
+   * n'est pas montée.
+   */
+  debugSiteInfo?(): { spriteCount: number }
 }
 
 declare global {

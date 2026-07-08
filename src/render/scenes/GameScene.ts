@@ -20,6 +20,8 @@ import { CameraController } from '@render/scenes/cameraController'
 import { HordeRenderer, FEEDBACK_MAX_PER_FRAME } from '@render/scenes/hordeRenderer'
 import { PlayerRenderer } from '@render/scenes/playerRenderer'
 import { TelegraphRenderer } from '@render/scenes/telegraphRenderer'
+import { SiteRenderer } from '@render/scenes/siteRenderer'
+import { buildSiteLayout } from '@core/siteLayout'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
 import { PALETTE_HEX } from '@ui/palette'
@@ -98,6 +100,8 @@ export class GameScene extends Phaser.Scene {
   private readonly bubbles = new SpeechBubbleManager(this)
   /** Rendu du télégraphe des formations (marqueur au sol + flèche de bord) — Task 10. */
   private telegraph!: TelegraphRenderer
+  /** Rendu des clusters de terrain tactique (T5) — module dédié, GameScene délègue. */
+  private siteRenderer!: SiteRenderer
   /**
    * VFX des armes à impulsion (marteau/pied-de-biche/court-circuit), déclenché
    * par l'événement d'aura de la sim. Une forme dédiée par `kind` — pas de
@@ -267,6 +271,13 @@ export class GameScene extends Phaser.Scene {
     this.load.image('vfx_beam_segment', 'stage01/vfx/beam_segment.png')
     this.load.image('cage', 'stage01/props/cage.png')
     this.load.image('bubble_merci', 'stage01/ui/bubble_merci.png')
+    // Kit terrain tactique (T5) — clôtures, route, portail.
+    // Chargés ici (partagés, pas par stage) car les clusters les référencent
+    // indépendamment du stage. No-op si déjà en cache.
+    this.load.image('fence_panel', 'terrain/fence_panel.png')
+    this.load.image('road_strip', 'terrain/road_strip.png')
+    this.load.image('site_gate', 'terrain/site_gate.png')
+    this.load.image('fence_post', 'terrain/fence_post.png')
   }
 
   /** Réinitialise l'état par-run (indispensable car `scene.restart` réutilise l'instance). */
@@ -299,6 +310,8 @@ export class GameScene extends Phaser.Scene {
     this.players = new PlayerRenderer(this, this.vfx, this.camera, this.lite)
     // Rendu du télégraphe des formations (Task 10) : instance fraîche par scène.
     this.telegraph = new TelegraphRenderer(this)
+    // Rendu des clusters de terrain (T5) : instance fraîche par scène.
+    this.siteRenderer = new SiteRenderer(this)
     // Sol : base tuilée (TileSprite, O(1)) + streamer de décalques/props par chunks.
     // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
     const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
@@ -348,9 +361,17 @@ export class GameScene extends Phaser.Scene {
     // Liste mutable dans laquelle chaque fonction AJOUTE les positions posées.
     const placed: ExclusionCircle[] = []
 
+    // ── Anti-doublon clusters / ancien semis ─────────────────────────────────
+    // Si le stage A des clusters (ex. terrassement), le SiteRenderer dessine les
+    // engins/fosses aux positions de la sim → on saute l'ancien semis de structures
+    // (createStructures / createLandmark) pour CE stage pour éviter les doublons.
+    // Les stages sans clusters conservent l'ancien rendu.
+    const siteLayout = buildSiteLayout(this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId)
+    const hasClusters = siteLayout.clusters.length > 0
+
     // Grandes structures qui remplissent l'arène (l'étape de chantier partout, hors centre).
     const stageGeometry = this.stage.geometry
-    if (this.stage.structures !== undefined) {
+    if (!hasClusters && this.stage.structures !== undefined) {
       createStructures(
         this,
         WORLD.width,
@@ -364,7 +385,7 @@ export class GameScene extends Phaser.Scene {
     }
     // Landmark HERO de la phase — grand, en périphérie, décor.
     const lm = this.stage.landmark
-    if (lm !== undefined) {
+    if (!hasClusters && lm !== undefined) {
       createLandmark(
         this, WORLD.width, WORLD.height,
         { key: lm.key, scale: lm.scale, count: lm.count },
@@ -372,6 +393,10 @@ export class GameScene extends Phaser.Scene {
         exclusions, placed
       )
     }
+
+    // Clusters de terrain (T5) : dessinés après le sol, avant les PNJ/streamer.
+    // Utilise la MÊME seed brute que la sim (buildSiteLayout dérive son propre sel).
+    this.siteRenderer.reset(this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId)
     // PNJ(s) d'ambiance non-hostiles (geste métier) — un sprite par entrée, placement seedé
     // hors centre. Chaque PNJ reçoit un seed individuel dérivé de stageSeed + index, ce qui
     // garantit un placement déterministe et hors-chevauchement même si le tableau grandit (B5+).
@@ -477,6 +502,7 @@ export class GameScene extends Phaser.Scene {
       this.app.events.removeEventListener('prisonerFreed', this.onPrisonerFreed)
       this.app.events.removeEventListener('evolved', this.onEvolved)
       this.telegraph.dispose()
+      this.siteRenderer.dispose()
     })
 
     if (this.input.keyboard !== null) {
@@ -513,6 +539,10 @@ export class GameScene extends Phaser.Scene {
       this.seam.debugAmbientNpcs = (): { x: number; y: number }[] =>
         this.ambientSprites.map((npc) => ({ x: npc.sprite.x, y: npc.sprite.y }))
       this.seam.debugActiveBubbles = (): number => this.bubbles.activeCount
+      // T5 — Sonde clusters de terrain (test-only) : nombre de sprites actifs.
+      this.seam.debugSiteInfo = (): { spriteCount: number } => ({
+        spriteCount: this.siteRenderer.spriteCount
+      })
     }
   }
 
@@ -560,6 +590,9 @@ export class GameScene extends Phaser.Scene {
 
     // Télégraphe des formations (Task 10) : marqueur au sol + flèche de bord d'écran.
     this.telegraph.sync(state, this.cameras.main)
+
+    // Clusters de terrain (T5) : statique, sync no-op (les sprites sont posés au reset).
+    this.siteRenderer.sync()
 
     // PNJ(s) d'ambiance : errance douce (B3) + animation de geste (boucle lente).
     for (const npc of this.ambientSprites) {
