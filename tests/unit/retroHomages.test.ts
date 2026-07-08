@@ -136,11 +136,11 @@ describe('Clin d’œil — intro de run', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: true, intro: true })
     expect(app.getState().introActive).toBe(true)
 
-    app.advanceTime(INTRO.durationMs - 200)
+    app.advanceTime(INTRO.stageCinematicMs - 200)
     expect(app.getState().introActive).toBe(true)
     expect(app.getState().elapsedMs).toBe(0) // sim gelée
 
-    app.advanceTime(300) // dépasse la durée d'intro
+    app.advanceTime(300) // dépasse la durée d'intro (stageCinematicMs)
     expect(app.getState().introActive).toBe(false)
 
     app.advanceTime(1000)

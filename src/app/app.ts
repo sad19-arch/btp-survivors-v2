@@ -87,6 +87,8 @@ export class App {
   private comboBuffer: ComboAction[] = []
   /** Intro activée (vrai joueur) ; désactivée en test/e2e/capture. */
   private readonly introEnabled: boolean
+  /** Durée totale de l'intro pour la run en cours (0 si intro désactivée). */
+  private totalIntroMs = 0
   /** Temps restant de gel pour l'intro de run, en ms (0 = pas d'intro en cours). */
   private introMsLeft = 0
   /** Écran Options ouvert (surcouche au-dessus du titre / pause). */
@@ -179,7 +181,8 @@ export class App {
       const ev = e as EvolvedEvent
       this.events.dispatchEvent(new EvolvedEvent(ev.weaponId, ev.playerId))
     })
-    this.introMsLeft = this.introEnabled ? INTRO.durationMs : 0
+    this.totalIntroMs = this.introEnabled ? INTRO.stageCinematicMs : 0
+    this.introMsLeft = this.totalIntroMs
     this.started = true
     // Bump SEULEMENT sur un RE-démarrage (game over→restart, stage suivant,
     // setSeed) : le rendu repart alors d'une scène propre (cf. `runId`, fuite
@@ -352,6 +355,14 @@ export class App {
     this.refreshFocus()
   }
 
+  /** Saute l'intro (fin du gel) — câblée sur toute entrée pendant l'intro. */
+  skipIntro(): void {
+    if (this.introMsLeft <= 0) { return }
+    this.introMsLeft = 0
+    this.refreshFocus()
+    this.bumpState()
+  }
+
   /** Bascule pause/reprise (touche dédiée). */
   togglePause(): void {
     this.bumpState()
@@ -486,6 +497,7 @@ export class App {
       goldSkin: this.goldSkin,
       runId: this.runId,
       introActive: this.introMsLeft > 0,
+      introElapsedMs: Math.max(0, this.totalIntroMs - this.introMsLeft),
       stageTitle: phase?.title ?? '—',
       stageSubtitle: phase?.subtitle ?? '',
       stageOrder: phase?.order ?? 0,

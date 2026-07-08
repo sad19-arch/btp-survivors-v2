@@ -254,7 +254,13 @@ export const REVIVE = {
 /** Intro de run (micro-animation d'entrée du héros). Purement cosmétique. */
 export const INTRO = {
   /** Durée du préambule pendant lequel la sim est gelée, en ms. */
-  durationMs: 2000
+  durationMs: 2000,
+  /**
+   * Durée du gel quand une cinématique de stage joue, en ms.
+   * La cinématique de stage (render-only) s'exécute pendant ce laps ;
+   * la sim reste gelée et le joueur peut sauter via `skipIntro()`.
+   */
+  stageCinematicMs: 6500
 } as const
 
 /**
