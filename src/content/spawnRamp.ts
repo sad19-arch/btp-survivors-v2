@@ -21,9 +21,12 @@ export interface SpawnRampStep {
 }
 
 export const SPAWN_RAMP: readonly SpawnRampStep[] = [
-  { fromSec: 0,    intervalMs: 3000, countPerWave: 1 }, // 0-3 min : fuite, apprentissage
-  { fromSec: 45,   intervalMs: 2200, countPerWave: 1 },
-  { fromSec: 100,  intervalMs: 1600, countPerWave: 1 },
+  // J8 (addiction) : rythme early COMPRIMÉ (3000/2200/1600 → 2200/1800/1400) pour
+  // que ça « morde » tout de suite (moins de temps mort au démarrage). Monotonie
+  // préservée (intervalle décroissant). Valeurs de départ calées au re-tune J10.
+  { fromSec: 0,    intervalMs: 2200, countPerWave: 1 }, // 0-3 min : accroche immédiate
+  { fromSec: 45,   intervalMs: 1800, countPerWave: 1 },
+  { fromSec: 100,  intervalMs: 1400, countPerWave: 1 },
   { fromSec: 180,  intervalMs: 1200, countPerWave: 2 }, // 3:00 : la puissance commence
   { fromSec: 260,  intervalMs: 950,  countPerWave: 2 },
   { fromSec: 340,  intervalMs: 750,  countPerWave: 3 }, // ~4/s

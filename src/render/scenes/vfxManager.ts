@@ -346,6 +346,30 @@ export class VfxManager {
     }
   }
 
+  /**
+   * Explosion pixel à la mort d'un ennemi (poussière + flash + burst de pops),
+   * échelle `scale` (1 = début de partie, jusqu'à ~1.8 en fin de partie).
+   * Bornée à ≤ 5 primitives Phaser : rendu pur, DA-safe (palette), pas de glow.
+   * Les offsets des petits pops sont déterministes (cos/sin tiers de cercle).
+   */
+  spawnDeathBoom(x: number, y: number, scale: number): void {
+    // Poussière (asset vfx_dust) — agrandie selon l'échelle.
+    this.spawnVfx('vfx_dust', x, y, 0.2, 1.8 * scale, 380)
+    // Flash blanc bref.
+    this.spawnFlash(x, y)
+    // Gros pop central orange.
+    this.spawnPixelPop(x, y, PALETTE_HEX.orangeDanger, Math.round(10 * scale), 200)
+    // 3 petits pops décalés radialement (offsets déterministes : tiers de cercle).
+    const popCount = 3
+    const popRadius = 18 * scale
+    for (let i = 0; i < popCount; i++) {
+      const angle = (i * Math.PI * 2) / popCount
+      const px = x + Math.cos(angle) * popRadius
+      const py = y + Math.sin(angle) * popRadius
+      this.spawnPixelPop(px, py, PALETTE_HEX.orangeDanger, Math.round(6 * scale), 160)
+    }
+  }
+
   /** Bulle « Merci ! » (sprite pré-cuit) montant au-dessus d'un ouvrier libéré. */
   spawnBubble(x: number, y: number): void {
     if (!this.scene.textures.exists('bubble_merci')) {

@@ -42,6 +42,17 @@ const CSS = `
 #ui-root .hud__bar-fill { height: 100%; }
 #ui-root .hud__bar--hp .hud__bar-fill { background: ${PALETTE.vertBonus}; }
 #ui-root .hud__bar--xp .hud__bar-fill { background: ${PALETTE.cyanAccent}; }
+/* Flash de level-up : pulse net palette (DA 16-bit, pas de glow flou). */
+@keyframes xp-level-up-flash {
+  0%   { border-color: ${PALETTE.jauneSecurite}; box-shadow: 2px 2px 0 ${PALETTE.contour}; }
+  25%  { border-color: ${PALETTE.jauneSecurite}; box-shadow: 2px 2px 0 ${PALETTE.contour}; }
+  50%  { border-color: ${PALETTE.vertBonus};     box-shadow: 2px 2px 0 ${PALETTE.contour}; }
+  75%  { border-color: ${PALETTE.vertBonus};     box-shadow: 2px 2px 0 ${PALETTE.contour}; }
+  100% { border-color: ${PALETTE.contour};       box-shadow: 2px 2px 0 ${PALETTE.contour}; }
+}
+#ui-root .hud__bar--xp-flash {
+  animation: xp-level-up-flash 0.2s steps(2, end);
+}
 #ui-root .hud__players {
   display: flex;
   flex-direction: row;
@@ -337,6 +348,29 @@ const CSS = `
   line-height: 1;
   padding: 3px 5px;
 }
+/* J7 — Tuile d'arme prête à évoluer : halo/bordure pixel qui pulse (DA 16-bit).
+   Pas de blur, pas de gradient, coins carrés, palette imposée. */
+@keyframes inv-evolve-pulse {
+  0%   { border-color: ${PALETTE.vertBonus}; box-shadow: 2px 2px 0 ${PALETTE.contour}, 0 0 0 2px ${PALETTE.vertBonus}; }
+  50%  { border-color: ${PALETTE.jauneSecurite}; box-shadow: 2px 2px 0 ${PALETTE.contour}, 0 0 0 2px ${PALETTE.jauneSecurite}; }
+  100% { border-color: ${PALETTE.vertBonus}; box-shadow: 2px 2px 0 ${PALETTE.contour}, 0 0 0 2px ${PALETTE.vertBonus}; }
+}
+#ui-root .inv__tile--evolve-ready {
+  border: 3px solid ${PALETTE.vertBonus};
+  box-shadow: 2px 2px 0 ${PALETTE.contour}, 0 0 0 2px ${PALETTE.vertBonus};
+  animation: inv-evolve-pulse 0.6s steps(2, end) infinite;
+}
+/* Petit carré de marqueur en coin haut-droit de la tuile prête à évoluer. */
+#ui-root .inv__evolve-mark {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  background: ${PALETTE.vertBonus};
+  border: 2px solid ${PALETTE.contour};
+  box-shadow: 1px 1px 0 ${PALETTE.contour};
+}
 /* B5 — Panneau jackpot « machine à sous » (coffre d'évolution ramassé).
    DA-safe : panneaux pixel, palette palette.ts, coins carrés, ombre décalée,
    pas d'emoji/glow/gradient/coins-arrondis. Couche indépendante, pointer-events:none. */
@@ -432,6 +466,17 @@ const CSS = `
 }
 #ui-root .jackpot--flash {
   animation: jackpot-flash 0.5s steps(2, end);
+}
+/* Phase d'anticipation avant la roulette : tremble/pulse pixel-art (DA-safe). */
+@keyframes jackpot-charge {
+  0%   { transform: translate(-50%, -50%) scale(1)    translate(0px,  0px); border-color: ${PALETTE.jauneSecurite}; }
+  25%  { transform: translate(-50%, -50%) scale(1.03) translate(2px, -2px); border-color: ${PALETTE.rougeAlerte}; }
+  50%  { transform: translate(-50%, -50%) scale(1)    translate(0px,  0px); border-color: ${PALETTE.jauneSecurite}; }
+  75%  { transform: translate(-50%, -50%) scale(1.03) translate(-2px, 2px); border-color: ${PALETTE.rougeAlerte}; }
+  100% { transform: translate(-50%, -50%) scale(1)    translate(0px,  0px); border-color: ${PALETTE.jauneSecurite}; }
+}
+#ui-root .jackpot--charging {
+  animation: jackpot-charge 0.2s steps(2, end) infinite;
 }
 /* Entrée du panneau jackpot (slide pixel). */
 @keyframes jackpot-in {

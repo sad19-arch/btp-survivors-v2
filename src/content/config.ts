@@ -61,15 +61,15 @@ export const PICKUP = {
  * Tirés dans l'ordre via un Rng de loot dédié ; au plus un bonus par mort.
  * `heal` rend des PV, `chest` donne un lot d'XP, `magnet` aspire toutes les gemmes.
  *
- * ⚠️ DORMANT : `chance = 0` pour l'instant. Le tuning « skill récompensé » est
- * calibré à marge zéro ; tout drop actif perturbe la trajectoire déterministe et
- * fait basculer les cibles (creux HP / survie). L'infra (types, rendu, effets,
- * tests, assets) est prête ; à ACTIVER + re-tuner lors d'une passe d'équilibrage
- * dédiée (les `value` ci-dessous sont les valeurs proposées à ce moment-là).
+ * J9 (addiction) : soin/aimant RÉACTIVÉS (petites chances) pour la récompense
+ * tangible « ma mise à mort m'a rendu un truc ». `chest.chance` reste 0 (les
+ * coffres viennent de l'ÉCONOMIE périodique/évolution, PAS d'un drop aléatoire).
+ * `magnet.value = 0` : l'aimant est un déclencheur (aspire les gemmes), pas une
+ * valeur. Chances calées au re-tune J10 (impact équilibrage assumé).
  */
 export const PICKUP_DROPS = {
-  heal: { chance: 0, value: 18 },
-  magnet: { chance: 0, value: 0 },
+  heal: { chance: 0.008, value: 18 },
+  magnet: { chance: 0.004, value: 0 },
   chest: { chance: 0, value: 35 }
 } as const
 

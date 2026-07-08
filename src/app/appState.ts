@@ -39,6 +39,10 @@ export interface InventoryEntry {
   name: string
   level: number
   maxLevel?: number
+  /** Vrai si cette arme peut évoluer MAINTENANT (base au max + passif catalyseur). */
+  evolveReady?: boolean
+  /** Indice FR : « Prête à évoluer ! » / « Passif manquant : <nom> » / « Monte-la au max ». */
+  evolveHint?: string
 }
 
 /** Inventaire résolu d'un joueur (armes + passifs), pour l'affichage HUD. */

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { App } from '@/app/app'
 import { Overlay } from '@ui/overlay'
 
@@ -177,6 +177,84 @@ describe('Overlay — inventaire HUD (armes/passifs + niveaux)', () => {
     overlay.sync(app.getState())
     expect(root.querySelectorAll('.inv__tile').length).toBe(0)
   })
+
+  it('tuile arme evolveReady:true porte inv__tile--evolve-ready + .inv__evolve-mark', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({
+      weapons: [{ id: 'scie', level: 3 }]
+    })
+    const { root, overlay } = mount()
+    // Forge un état avec evolveReady sur la première arme.
+    const state = app.getState()
+    const patched = {
+      ...state,
+      players: state.players.map((p, i) =>
+        i === 0
+          ? {
+              ...p,
+              inventory: {
+                ...p.inventory,
+                weapons: p.inventory.weapons.map((w, j) =>
+                  j === 0
+                    ? { ...w, evolveReady: true, evolveHint: 'Prête à évoluer !' }
+                    : w
+                )
+              }
+            }
+          : p
+      )
+    }
+    overlay.sync(patched)
+    const weaponTiles = root.querySelectorAll('.inv__row:not(.inv__row--passives) .inv__tile')
+    expect(weaponTiles.length).toBeGreaterThan(0)
+    const firstTile = weaponTiles[0]
+    expect(firstTile?.classList.contains('inv__tile--evolve-ready')).toBe(true)
+    expect(firstTile?.querySelector('.inv__evolve-mark')).not.toBeNull()
+  })
+
+  it('tuile arme evolveReady:false/absent ne porte PAS inv__tile--evolve-ready', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({
+      weapons: [{ id: 'scie', level: 2 }]
+    })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+    const tiles = root.querySelectorAll('.inv__tile')
+    tiles.forEach((tile) => {
+      expect(tile.classList.contains('inv__tile--evolve-ready')).toBe(false)
+      expect(tile.querySelector('.inv__evolve-mark')).toBeNull()
+    })
+  })
+
+  it('evolveReady trigger un rebuild de signature (sig change)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugGrant({ weapons: [{ id: 'scie', level: 3 }] })
+    const { root, overlay } = mount()
+    const state = app.getState()
+    // Premier sync sans evolveReady.
+    overlay.sync(state)
+    const countBefore = root.querySelectorAll('.inv__tile--evolve-ready').length
+    expect(countBefore).toBe(0)
+    // Deuxième sync avec evolveReady:true — même niveau, donc la sig DOIT changer grâce au :${e.evolveReady ? 1 : 0}.
+    const patched = {
+      ...state,
+      players: state.players.map((p, i) =>
+        i === 0
+          ? {
+              ...p,
+              inventory: {
+                ...p.inventory,
+                weapons: p.inventory.weapons.map((w, j) =>
+                  j === 0 ? { ...w, evolveReady: true } : w
+                )
+              }
+            }
+          : p
+      )
+    }
+    overlay.sync(patched)
+    expect(root.querySelectorAll('.inv__tile--evolve-ready').length).toBe(1)
+  })
 })
 
 describe('Overlay — identité du boss (mid vs final)', () => {
@@ -254,6 +332,67 @@ describe('Overlay — HUD multi-joueur (co-op)', () => {
     expect(hud?.textContent).toContain('Niv. 1')
     expect(hud?.textContent).toContain('PV ')
     expect(hud?.textContent).toContain('XP ')
+  })
+})
+
+describe('Overlay — jackpot (anticipation + roulette)', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('showJackpot applique jackpot--charging IMMEDIATEMENT (avant toute roulette)', () => {
+    const { root, overlay } = mount()
+    overlay.showJackpot('Mitrailleuse a clous')
+    // Dès l'appel synchrone, la classe d'anticipation doit être présente.
+    const panel = root.querySelector('.jackpot')
+    expect(panel).not.toBeNull()
+    expect(panel?.classList.contains('jackpot--charging')).toBe(true)
+  })
+
+  it('jackpot--charging retire apres la phase d anticipation (500 ms)', () => {
+    const { root, overlay } = mount()
+    overlay.showJackpot('Mitrailleuse a clous')
+    const panel = root.querySelector('.jackpot')
+    expect(panel?.classList.contains('jackpot--charging')).toBe(true)
+    // Avance dans le temps après anticipationMs.
+    vi.advanceTimersByTime(500)
+    expect(panel?.classList.contains('jackpot--charging')).toBe(false)
+  })
+
+  it('le panneau affiche le nom de l arme (winner dans la roulette)', () => {
+    const { root, overlay } = mount()
+    overlay.showJackpot('Mitrailleuse a clous')
+    // Le DOM est construit synchronement, le winner est dans le reel.
+    const winner = root.querySelector('.jackpot__item--winner')
+    expect(winner).not.toBeNull()
+    expect(winner?.textContent).toBe('Mitrailleuse a clous')
+  })
+
+  it('le panneau disparait apres anticipation + totalMs (2000 ms)', () => {
+    const { root, overlay } = mount()
+    overlay.showJackpot('Mitrailleuse a clous')
+    // Toujours visible après 1999 ms.
+    vi.advanceTimersByTime(1999)
+    expect(root.querySelector('.jackpot')).not.toBeNull()
+    // Fermé après 2000 ms (500 anticipation + 1500 total).
+    vi.advanceTimersByTime(1)
+    expect(root.querySelector('.jackpot')).toBeNull()
+  })
+
+  it('re-trigger immédiat n exécute pas les timers du jackpot précédent (pas de fuite)', () => {
+    const { root, overlay } = mount()
+    const cb1 = vi.fn()
+    const cb2 = vi.fn()
+    overlay.showJackpot('Arme A', cb1)
+    // Re-trigger avant que quoi que ce soit ne se termine.
+    overlay.showJackpot('Arme B', cb2)
+    // Avance jusqu à la fermeture du 2e jackpot.
+    vi.advanceTimersByTime(2001)
+    // Le callback du 1er jackpot ne doit PAS avoir été appelé (timers annulés).
+    expect(cb1).not.toHaveBeenCalled()
+    // Le callback du 2e doit l'avoir été exactement une fois.
+    expect(cb2).toHaveBeenCalledTimes(1)
+    // Le panneau est fermé.
+    expect(root.querySelector('.jackpot')).toBeNull()
   })
 })
 

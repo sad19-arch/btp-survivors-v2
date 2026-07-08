@@ -4,6 +4,8 @@ import { formatTime, formatNumber } from './format'
 import { playerColor } from '@content/players'
 import { gamepadHudModel } from './gamepadHud'
 import { Minimap } from './minimap'
+import { approach } from './anim'
+import { cardEnterStyle } from './cardEnter'
 import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView } from '@/app/appState'
 
 /**
@@ -30,8 +32,10 @@ export class Overlay {
   private bossBarFill: HTMLElement | null = null
   /** Couche du panneau jackpot (coffre d'évolution ramassé) — B5. */
   private readonly jackpotLayer: HTMLElement
-  /** Timer de fermeture automatique du panneau jackpot. */
-  private jackpotTimer: number | null = null
+  /** Timers en cours pour l'animation jackpot (anticipation + flash + fermeture). */
+  private jackpotTimers: number[] = []
+  /** Handle rAF du défilement de la roulette jackpot (pour annulation au re-trigger). */
+  private jackpotRaf: number | null = null
   /** Mini-carte (bas-gauche) — prisonniers/boss/coffres/joueur, togglable. */
   private readonly minimap: Minimap
   /** Compteur de frames pour throttler la maj de la mini-carte (~toutes les 4 frames). */
@@ -55,6 +59,38 @@ export class Overlay {
   private lastJackpotWeaponName: string | null = null
   /** Callback de sélection d'un item par index (clic souris) ; route vers l'App. */
   private readonly onSelect: ((index: number) => void) | undefined
+  /**
+   * Ratio XP affiché (lissé via `approach`) par joueur (clé = playerId).
+   * Permet une montée en douceur de la barre XP à chaque frame.
+   */
+  private readonly xpDisplayed = new Map<number, number>()
+  /**
+   * Dernier niveau mémorisé par joueur — détecter les level-ups pour déclencher le flash.
+   */
+  private readonly lastLevel = new Map<number, number>()
+  /**
+   * Échéance (performance.now, ms) jusqu'à laquelle la barre XP flashe après un level-up,
+   * par joueur. Le HUD étant reconstruit chaque frame (`clear()`), le flash est piloté par
+   * cet état (classe ré-appliquée tant que `now < échéance`) et NON par un `setTimeout`
+   * one-shot sur un nœud détruit à la frame suivante (qui rendait le flash invisible).
+   */
+  private readonly xpFlashUntil = new Map<number, number>()
+  /**
+   * Timestamp (performance.now) du dernier appel à sync() — calcul du dt inter-frame
+   * côté rendu. Initialisé à -1 (jamais vu) → dt=16ms nominal au premier appel.
+   */
+  private lastFrameTimeMs = -1
+  /**
+   * Écran de la frame précédente — détection des transitions de screen.
+   * Permet de savoir si on vient d'arriver sur 'upgrade'.
+   */
+  private prevScreen: string = ''
+  /**
+   * Timestamp (performance.now) de l'apparition de l'écran upgrade.
+   * -1 = écran upgrade inactif. Remis à -1 à la sortie de l'écran pour
+   * rejouer le reveal au prochain level-up.
+   */
+  private upgradeAppearAt = -1
 
   constructor(root: HTMLElement, onSelect?: (index: number) => void) {
     injectStyles()
@@ -85,8 +121,12 @@ export class Overlay {
 
   /** Met à jour l'overlay depuis l'état applicatif. */
   sync(state: AppViewState): void {
-    this.syncHud(state)
-    this.syncScreen(state)
+    // Calcul du delta inter-frame côté rendu (performance.now, pas dans l'util pur).
+    const now = performance.now()
+    const dtMs = this.lastFrameTimeMs < 0 ? 16 : Math.min(now - this.lastFrameTimeMs, 100)
+    this.lastFrameTimeMs = now
+    this.syncHud(state, dtMs, now)
+    this.syncScreen(state, now)
     this.syncBanner(state)
     this.syncIntroCard(state)
     this.syncBossBar(state)
@@ -169,12 +209,16 @@ export class Overlay {
     )
   }
 
-  private syncHud(state: AppViewState): void {
+  private syncHud(state: AppViewState, dtMs: number, now: number): void {
     // HUD visible en run, mais masqué pendant l'intro (le héros entre en scène).
     const inRun =
       (state.screen === 'game' || state.screen === 'paused' || state.screen === 'upgrade') && !state.introActive
     this.hud.style.display = inRun ? 'flex' : 'none'
     if (!inRun) {
+      // Réinitialise l'état XP animé pour ne pas polluer la prochaine run.
+      this.xpDisplayed.clear()
+      this.lastLevel.clear()
+      this.xpFlashUntil.clear()
       return
     }
     const p = state.players[0]
@@ -182,7 +226,31 @@ export class Overlay {
     const maxHp = p?.maxHp ?? 1
     const xp = p?.xp ?? 0
     const threshold = p?.nextThreshold ?? 1
+    const level = p?.level ?? 1
+    const playerId = p?.id ?? 1
+
+    // --- Barre XP lissée (lerp via approach) ---
+    const xpTarget = threshold > 0 ? xp / threshold : 0
+    const prevDisplayed = this.xpDisplayed.get(playerId) ?? xpTarget
+    const displayed = approach(prevDisplayed, xpTarget, dtMs)
+    this.xpDisplayed.set(playerId, displayed)
+
+    // --- Flash de level-up (piloté par état : le HUD est reconstruit chaque frame) ---
+    const prevLevel = this.lastLevel.get(playerId)
+    if (prevLevel !== undefined && level > prevLevel) {
+      // Level-up : la barre repart de 0 (reset propre) et flashe pendant ~220 ms.
+      this.xpDisplayed.set(playerId, 0)
+      this.xpFlashUntil.set(playerId, now + 220)
+    }
+    this.lastLevel.set(playerId, level)
+    // La classe de flash est ré-appliquée à chaque frame tant que l'échéance n'est pas
+    // passée — sinon, le HUD étant recréé chaque frame, le flash serait invisible.
+    const flashing = now < (this.xpFlashUntil.get(playerId) ?? 0)
+    const xpBarModifier = flashing ? 'hud__bar--xp hud__bar--xp-flash' : 'hud__bar--xp'
+
     clear(this.hud)
+    const xpBar = this.bar(displayed, xpBarModifier)
+
     this.hud.append(
       h(
         'div',
@@ -196,7 +264,7 @@ export class Overlay {
         { className: 'hud__row' },
         h('span', { className: 'hud__time', text: formatTime(state.elapsedMs) }),
         h('span', { className: 'hud__sep', text: '·' }),
-        h('span', { text: `Niv. ${p?.level ?? 1}` }),
+        h('span', { text: `Niv. ${level}` }),
         h('span', { className: 'hud__sep', text: '·' }),
         h('span', { text: `Score ${state.score}` })
       ),
@@ -206,7 +274,7 @@ export class Overlay {
         h('span', { className: 'hud__hp', text: `PV ${Math.ceil(hp)}/${Math.round(maxHp)}` }),
         this.bar(hp / maxHp, 'hud__bar--hp'),
         h('span', { className: 'hud__xp', text: `XP ${Math.floor(xp)}/${threshold}` }),
-        this.bar(xp / threshold, 'hud__bar--xp')
+        xpBar
       )
     )
     // Co-op (>1 joueur) : bandeau de mini-HUD par joueur (pastille couleur + PV + niveau).
@@ -239,37 +307,59 @@ export class Overlay {
     )
   }
 
-  private syncScreen(state: AppViewState): void {
-    const sig = this.computeSignature(state)
-    if (sig === this.signature) {
-      return
+  private syncScreen(state: AppViewState, now: number): void {
+    // Suivi des transitions d'écran pour le reveal des cartes upgrade.
+    if (state.screen === 'upgrade' && this.prevScreen !== 'upgrade') {
+      // On vient d'arriver sur l'écran upgrade → démarre le reveal.
+      this.upgradeAppearAt = now
+    } else if (state.screen !== 'upgrade' && this.prevScreen === 'upgrade') {
+      // On quitte l'écran upgrade → réinitialise pour le prochain level-up.
+      this.upgradeAppearAt = -1
     }
-    this.signature = sig
-    clear(this.screenLayer)
-    switch (state.screen) {
-      case 'title':
-        this.screenLayer.append(this.titlePanel(state))
-        break
-      case 'characterSelect':
-        this.screenLayer.append(this.characterSelectPanel(state))
-        break
-      case 'paused':
-        this.screenLayer.append(this.menuPanel('Pause', null, state))
-        break
-      case 'gameover':
-        this.screenLayer.append(this.gameOverPanel(state))
-        break
-      case 'victory':
-        this.screenLayer.append(this.victoryPanel(state))
-        break
-      case 'upgrade':
-        this.screenLayer.append(this.upgradePanel(state))
-        break
-      case 'options':
-        this.screenLayer.append(this.menuPanel('Options', 'Réglages audio', state))
-        break
-      default:
-        break // en jeu : pas de modale
+    this.prevScreen = state.screen
+
+    const sig = this.computeSignature(state)
+    const needsRebuild = sig !== this.signature
+    if (needsRebuild) {
+      this.signature = sig
+      clear(this.screenLayer)
+      switch (state.screen) {
+        case 'title':
+          this.screenLayer.append(this.titlePanel(state))
+          break
+        case 'characterSelect':
+          this.screenLayer.append(this.characterSelectPanel(state))
+          break
+        case 'paused':
+          this.screenLayer.append(this.menuPanel('Pause', null, state))
+          break
+        case 'gameover':
+          this.screenLayer.append(this.gameOverPanel(state))
+          break
+        case 'victory':
+          this.screenLayer.append(this.victoryPanel(state))
+          break
+        case 'upgrade':
+          this.screenLayer.append(this.upgradePanel(state))
+          break
+        case 'options':
+          this.screenLayer.append(this.menuPanel('Options', 'Réglages audio', state))
+          break
+        default:
+          break // en jeu : pas de modale
+      }
+    }
+
+    // Stagger reveal des cartes upgrade : mis à jour en-place chaque frame
+    // (sans reconstruire le panneau) pour que l'animation survive au cache de signature.
+    if (state.screen === 'upgrade') {
+      const elapsedMs = this.upgradeAppearAt >= 0 ? now - this.upgradeAppearAt : Number.MAX_SAFE_INTEGER
+      const cardEls = this.screenLayer.querySelectorAll<HTMLElement>('.card')
+      cardEls.forEach((el, i) => {
+        const st = cardEnterStyle(elapsedMs, i)
+        el.style.opacity = String(st.opacity)
+        el.style.transform = `translateY(${st.translateYpx}px)`
+      })
     }
   }
 
@@ -356,12 +446,18 @@ export class Overlay {
    * @param weaponName  Nom de l'arme évoluée (résolu côté `main.ts` via `WEAPONS`).
    * @param onDone      Callback optionnel appelé à la fermeture du panneau.
    */
-  showJackpot(weaponName: string, onDone?: () => void): void {
-    // Annuler un éventuel jackpot en cours.
-    if (this.jackpotTimer !== null) {
-      window.clearTimeout(this.jackpotTimer)
-      this.jackpotTimer = null
+  private clearJackpotTimers(): void {
+    for (const id of this.jackpotTimers) { window.clearTimeout(id) }
+    this.jackpotTimers = []
+    if (this.jackpotRaf !== null) {
+      cancelAnimationFrame(this.jackpotRaf)
+      this.jackpotRaf = null
     }
+  }
+
+  showJackpot(weaponName: string, onDone?: () => void): void {
+    // Annuler tout jackpot en cours (timers + rAF) avant de reconstruire.
+    this.clearJackpotTimers()
     clear(this.jackpotLayer)
 
     // Liste d'items défilants (mots-clés chantier + nom final).
@@ -371,9 +467,10 @@ export class Overlay {
     ]
 
     // Durées (ms).
+    const anticipationMs = 500  // phase de suspense avant la roulette
     const reelDurationMs = 900  // durée de défilement
-    const flashDelayMs = 950     // flash après arrêt
-    const totalMs = 1500         // durée totale avant fermeture
+    const flashDelayMs = 950     // flash après arrêt de la roulette
+    const totalMs = 1500         // durée de la roulette avant fermeture
 
     const itemH = 48 // hauteur d'un item en px (sync CSS .jackpot__item height)
     const winnerIndex = reelItems.length - 1 // dernier item = le vrai nom
@@ -398,34 +495,44 @@ export class Overlay {
     )
     this.jackpotLayer.append(panel)
 
-    // Animation de défilement CSS via requestAnimationFrame : décélération cubic-ease.
-    const targetY = -(winnerIndex * itemH)
-    const startTime = performance.now()
+    // ── Phase d'anticipation (~500 ms) : panneau pulsé/tremblant avant la roulette.
+    panel.classList.add('jackpot--charging')
 
-    const animate = (now: number): void => {
-      const elapsed = now - startTime
-      const t = Math.min(elapsed / reelDurationMs, 1)
-      // Ease-out cubic : rapide au début, ralentit à la fin.
-      const ease = 1 - (1 - t) ** 3
-      const y = targetY * ease
-      reel.style.transform = `translateY(${Math.round(y)}px)`
-      if (t < 1) {
-        requestAnimationFrame(animate)
+    // Timer 1 : fin de l'anticipation → démarre la roulette.
+    this.jackpotTimers.push(window.setTimeout(() => {
+      panel.classList.remove('jackpot--charging')
+
+      // Animation de défilement CSS via requestAnimationFrame : décélération cubic-ease.
+      const targetY = -(winnerIndex * itemH)
+      const startTime = performance.now()
+
+      const animate = (now: number): void => {
+        const elapsed = now - startTime
+        const t = Math.min(elapsed / reelDurationMs, 1)
+        // Ease-out cubic : rapide au début, ralentit à la fin.
+        const ease = 1 - (1 - t) ** 3
+        const y = targetY * ease
+        reel.style.transform = `translateY(${Math.round(y)}px)`
+        if (t < 1) {
+          this.jackpotRaf = requestAnimationFrame(animate)
+        } else {
+          this.jackpotRaf = null
+        }
       }
-    }
-    requestAnimationFrame(animate)
+      this.jackpotRaf = requestAnimationFrame(animate)
 
-    // Flash pixel du panneau après arrêt (DA-safe : animation CSS steps).
-    window.setTimeout(() => {
-      panel.classList.add('jackpot--flash')
-    }, flashDelayMs)
+      // Timer 2 : flash pixel après arrêt de la roulette (DA-safe : animation CSS steps).
+      this.jackpotTimers.push(window.setTimeout(() => {
+        panel.classList.add('jackpot--flash')
+      }, flashDelayMs))
 
-    // Fermeture automatique.
-    this.jackpotTimer = window.setTimeout(() => {
-      clear(this.jackpotLayer)
-      this.jackpotTimer = null
-      onDone?.()
-    }, totalMs)
+      // Timer 3 : fermeture automatique.
+      this.jackpotTimers.push(window.setTimeout(() => {
+        this.clearJackpotTimers()
+        clear(this.jackpotLayer)
+        onDone?.()
+      }, totalMs))
+    }, anticipationMs))
   }
 
   private showBanner(text: string, className: string): void {
@@ -491,7 +598,7 @@ export class Overlay {
       return
     }
     const inv = state.players[0]?.inventory ?? { weapons: [], passives: [] }
-    const sig = [...inv.weapons, ...inv.passives].map((e) => `${e.id}:${e.level}`).join(',')
+    const sig = [...inv.weapons, ...inv.passives].map((e) => `${e.id}:${e.level}:${e.evolveReady ? 1 : 0}`).join(',')
     if (sig === this.inventorySignature) {
       return
     }
@@ -515,13 +622,20 @@ export class Overlay {
    * @param small - true pour la rangée passifs (~56×56, classe `inv__tile--sm`)
    */
   private invTile(entry: InventoryEntry, small: boolean): HTMLElement {
-    const tileClass = small ? 'inv__tile inv__tile--sm' : 'inv__tile'
-    return h(
-      'div',
-      { className: tileClass },
+    const evolveReady = entry.evolveReady === true
+    const baseClass = small ? 'inv__tile inv__tile--sm' : 'inv__tile'
+    const tileClass = evolveReady ? `${baseClass} inv__tile--evolve-ready` : baseClass
+    const children: HTMLElement[] = [
       icon(entry.id, entry.name, 'inv__icon', 'inv__img', 'inv__mono'),
       h('div', { className: 'inv__lvl', text: `${entry.level}/${entry.maxLevel ?? entry.level}` })
-    )
+    ]
+    if (evolveReady) {
+      children.push(h('div', { className: 'inv__evolve-mark' }))
+    }
+    if (evolveReady && entry.evolveHint !== undefined) {
+      return h('div', { className: tileClass, attrs: { title: entry.evolveHint } }, ...children)
+    }
+    return h('div', { className: tileClass }, ...children)
   }
 
   /**
