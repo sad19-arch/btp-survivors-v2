@@ -342,7 +342,7 @@ const TERRASSEMENT_RENDER: StageRender = {
     }
   ],
   baseTileIndex: 0,           // tuile boue de base (index 0)
-  decalDensityMultiplier: 1.2 // chantier brut, mais sans « papier peint » (trame trop régulière si trop dense)
+  decalDensityMultiplier: 1.9 // terrassement = dig ACTIF : tas + ornières denses (sinon sol trop nu)
 }
 
 
@@ -858,7 +858,7 @@ const SECOND_OEUVRE_RENDER: StageRender = {
     }
   ],
   baseTileIndex: 2,            // tuile dalle intérieure gris clair (index 2)
-  decalDensityMultiplier: 0.8, // second œuvre ordonné, densité légère (intérieur propre)
+  decalDensityMultiplier: 1.2, // second œuvre : intérieur en travaux, un peu plus fourni (était trop nu)
   // Intérieur (dans le bâtiment, cloisons en cours) : poteaux clairs + voile chaud doux.
   interior: {
     columnKey: 'struct_stage08_column',

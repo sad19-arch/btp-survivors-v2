@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { chunksForView, chunkPlacements, chunkHash, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
+import { chunksForView, chunkPlacements, chunkHash, DEFAULT_CHUNK_SIZE, CLUMP_REF_AREA, CLUMP_DECAL_MAX } from '@render/decorStreamer'
 
 /**
  * Tests unitaires PURS du DecorStreamer — fonctions sans Phaser, exécutables
@@ -163,12 +163,12 @@ describe('chunkPlacements', () => {
   })
 
   it('le nombre de props est borné (une pièce maîtresse par grappe, proportionnel à la surface du chunk)', () => {
-    // Un chunk 1024×1024 : clumpCount = round(1024*1024 / (800*800)) = round(1.638) = 2.
-    // Avec un seul groupe de props ([10] → longueur 1), chaque grappe réussie y pousse
-    // exactement 1 prop (la valeur du baseCount n'influence plus le compte, seule la
-    // LONGUEUR de propCounts sert à choisir l'indice de groupe).
+    // Chaque grappe réussie pousse AU PLUS 1 prop (la valeur du baseCount n'influence
+    // plus le compte, seule la LONGUEUR de propCounts sert à choisir l'indice de groupe).
+    // Donc props ≤ clumpCount = round(chunkArea / CLUMP_REF_AREA), quelle que soit la densité.
+    const clumpCount = Math.round((CS * CS) / CLUMP_REF_AREA)
     const { props } = chunkPlacements(seed, 0, 0, CS, W, H, 0, [10])
-    expect(props[0]?.length).toBeLessThanOrEqual(2) // ≤ clumpCount
+    expect(props[0]?.length).toBeLessThanOrEqual(clumpCount)
     expect(props[0]?.length).toBeGreaterThanOrEqual(0)
   })
 
@@ -178,13 +178,13 @@ describe('chunkPlacements', () => {
     expect(props.length).toBe(propCounts.length)
   })
 
-  it('produit un nombre de décalques raisonnable (≈ clumpCount × 3-6 par grappe)', () => {
+  it('produit un nombre de décalques raisonnable (≈ clumpCount × décalques par grappe)', () => {
     const { decals } = chunkPlacements(seed, cx, cy, CS, W, H, 3, [])
-    // Pour chunk 1024×1024 : clumpCount ≈ round(1024*1024 / (800*800)) = 2 grappes,
-    // chacune 3 à 6 décalques ⇒ attendu entre 6 et 12 (avant exclusion/collision spawn).
-    // On borne par une plage large (exclusion centrale peut réduire).
+    // clumpCount grappes, chacune AU PLUS CLUMP_DECAL_MAX décalques ⇒ borne haute
+    // = clumpCount × CLUMP_DECAL_MAX (l'exclusion centrale peut réduire, jamais augmenter).
+    const clumpCount = Math.round((CS * CS) / CLUMP_REF_AREA)
     expect(decals.length).toBeGreaterThan(0)
-    expect(decals.length).toBeLessThan(50)
+    expect(decals.length).toBeLessThanOrEqual(clumpCount * CLUMP_DECAL_MAX)
   })
 
   it('le chunk du centre du monde a moins de décalques (exclusion spawn)', () => {

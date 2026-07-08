@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { chunkPlacements, chunkHash, columnGridForChunk, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
+import { chunkPlacements, chunkHash, columnGridForChunk, DEFAULT_CHUNK_SIZE, CENTER_EXCLUSION_RADIUS } from '@render/decorStreamer'
 import { resolvePlacement, type ExclusionCircle } from '@render/props'
 import type { DecorZone } from '@render/stages'
 
@@ -369,7 +369,7 @@ describe('columnGridForChunk — grille intérieure déterministe', () => {
     // spacing fin → des points de grille tombent près du centre : ils doivent être exclus.
     const cols = columnGridForChunk(cxc, cyc, CS, W, H, 200)
     for (const c of cols) {
-      expect(Math.hypot(c.x - W / 2, c.y - H / 2)).toBeGreaterThan(300)
+      expect(Math.hypot(c.x - W / 2, c.y - H / 2)).toBeGreaterThan(CENTER_EXCLUSION_RADIUS)
     }
   })
 

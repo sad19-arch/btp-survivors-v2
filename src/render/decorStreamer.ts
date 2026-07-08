@@ -8,16 +8,18 @@ import type { DecorZone } from '@render/stages'
  */
 export const DEFAULT_CHUNK_SIZE = 1024
 
-/** Centre autour duquel aucun décalque/prop n'est émis (spawn joueur). */
-const CENTER_EXCLUSION_RADIUS = 300
+/** Centre autour duquel aucun décalque/prop n'est émis (spawn joueur). Resserré
+ *  pour que le décor arrive PRÈS du joueur (moins de « bulle vide » au spawn). */
+export const CENTER_EXCLUSION_RADIUS = 200
 
-/** Surface de référence pour la densité de grappes : ~1 grappe / 800px de côté (sol dégagé entre). */
-const CLUMP_REF_AREA = 800 * 800
-/** Rayon d'une grappe (serrée). */
-const CLUMP_RADIUS = 130
-/** Bornes du nombre de décalques par grappe. */
-const CLUMP_DECAL_MIN = 3
-const CLUMP_DECAL_MAX = 6
+/** Surface de référence pour la densité de grappes : ~1 grappe / 320px de côté
+ *  (chantier VIVANT — des tas/matériaux groupés partout, avec du sol dégagé entre). */
+export const CLUMP_REF_AREA = 320 * 320
+/** Rayon d'une grappe (serrée → lit comme un vrai tas, pas des specks épars). */
+const CLUMP_RADIUS = 105
+/** Bornes du nombre de décalques par grappe (tas fournis). */
+const CLUMP_DECAL_MIN = 4
+export const CLUMP_DECAL_MAX = 8
 
 /** PRNG seedé (mulberry32) — identique à ground.ts / props.ts pour cohérence. */
 function mulberry32(seed: number): () => number {
