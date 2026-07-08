@@ -21,6 +21,7 @@ import { HordeRenderer, FEEDBACK_MAX_PER_FRAME } from '@render/scenes/hordeRende
 import { PlayerRenderer } from '@render/scenes/playerRenderer'
 import { TelegraphRenderer } from '@render/scenes/telegraphRenderer'
 import { SiteRenderer } from '@render/scenes/siteRenderer'
+import { SiteWorkers } from '@render/scenes/siteWorkers'
 import { buildSiteLayout } from '@core/siteLayout'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
@@ -102,6 +103,8 @@ export class GameScene extends Phaser.Scene {
   private telegraph!: TelegraphRenderer
   /** Rendu des clusters de terrain tactique (T5) — module dédié, GameScene délègue. */
   private siteRenderer!: SiteRenderer
+  /** Ouvriers navetteurs (T6) — module dédié, GameScene délègue. */
+  private siteWorkers!: SiteWorkers
   /**
    * VFX des armes à impulsion (marteau/pied-de-biche/court-circuit), déclenché
    * par l'événement d'aura de la sim. Une forme dédiée par `kind` — pas de
@@ -312,6 +315,8 @@ export class GameScene extends Phaser.Scene {
     this.telegraph = new TelegraphRenderer(this)
     // Rendu des clusters de terrain (T5) : instance fraîche par scène.
     this.siteRenderer = new SiteRenderer(this)
+    // Ouvriers navetteurs (T6) : instance fraîche par scène.
+    this.siteWorkers = new SiteWorkers(this)
     // Sol : base tuilée (TileSprite, O(1)) + streamer de décalques/props par chunks.
     // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
     const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
@@ -397,6 +402,8 @@ export class GameScene extends Phaser.Scene {
     // Clusters de terrain (T5) : dessinés après le sol, avant les PNJ/streamer.
     // Utilise la MÊME seed brute que la sim (buildSiteLayout dérive son propre sel).
     this.siteRenderer.reset(this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId)
+    // Ouvriers navetteurs (T6) : construits depuis le même layout que le siteRenderer.
+    this.siteWorkers.reset(this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId)
     // PNJ(s) d'ambiance non-hostiles (geste métier) — un sprite par entrée, placement seedé
     // hors centre. Chaque PNJ reçoit un seed individuel dérivé de stageSeed + index, ce qui
     // garantit un placement déterministe et hors-chevauchement même si le tableau grandit (B5+).
@@ -503,6 +510,7 @@ export class GameScene extends Phaser.Scene {
       this.app.events.removeEventListener('evolved', this.onEvolved)
       this.telegraph.dispose()
       this.siteRenderer.dispose()
+      this.siteWorkers.dispose()
     })
 
     if (this.input.keyboard !== null) {
@@ -542,6 +550,10 @@ export class GameScene extends Phaser.Scene {
       // T5 — Sonde clusters de terrain (test-only) : nombre de sprites actifs.
       this.seam.debugSiteInfo = (): { spriteCount: number } => ({
         spriteCount: this.siteRenderer.spriteCount
+      })
+      // T6 — Sonde ouvriers navetteurs (test-only) : nombre de workers affichés.
+      this.seam.debugWorkers = (): { count: number } => ({
+        count: this.siteWorkers.workerCount
       })
       this.seam.debugCameraOverview = (zoom: number, cx: number, cy: number): void => {
         this.camera.setOverview({ zoom, cx, cy })
@@ -596,6 +608,9 @@ export class GameScene extends Phaser.Scene {
 
     // Clusters de terrain (T5) : statique, sync no-op (les sprites sont posés au reset).
     this.siteRenderer.sync()
+
+    // Ouvriers navetteurs (T6) : navette + charge visible + panique.
+    this.siteWorkers.sync(state)
 
     // PNJ(s) d'ambiance : errance douce (B3) + animation de geste (boucle lente).
     for (const npc of this.ambientSprites) {
