@@ -84,6 +84,8 @@ export interface GameSeam {
    * n'est pas montée.
    */
   debugSiteInfo?(): { spriteCount: number }
+  /** Fige la caméra en vue d'ensemble (outil de revue visuelle, render-only). */
+  debugCameraOverview?(zoom: number, cx: number, cy: number): void
 }
 
 declare global {

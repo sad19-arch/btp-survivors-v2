@@ -543,6 +543,9 @@ export class GameScene extends Phaser.Scene {
       this.seam.debugSiteInfo = (): { spriteCount: number } => ({
         spriteCount: this.siteRenderer.spriteCount
       })
+      this.seam.debugCameraOverview = (zoom: number, cx: number, cy: number): void => {
+        this.camera.setOverview({ zoom, cx, cy })
+      }
     }
   }
 
