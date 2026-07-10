@@ -19,11 +19,13 @@
 
 import { Rng } from '@core/rng'
 import { CLUSTERS, STAGE_CLUSTERS } from '@content/clusters'
-import type { ClusterDef } from '@content/clusters'
+import type { ClusterDef, ClusterElement } from '@content/clusters'
 import { buildSitePlan } from '@core/sitePlan'
 import type { SitePlan, PlacedZone } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
 import type { ZonePrefab } from '@content/sitePrograms'
+import { getComposedLayout } from '@content/composedLayouts'
+import type { StageLayout, EmbeddedElement } from '@content/stageLayout'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes exportees (testables)
@@ -55,6 +57,12 @@ export interface PlacedCluster {
   defId: string
   x: number
   y: number
+  /** Miroir horizontal de la scène entière (compos éditeur). Défaut : false. */
+  flipX?: boolean
+  /** Rotation de la scène entière en degrés (compos éditeur). Défaut : 0. */
+  rotationDeg?: number
+  /** Éléments inline (prefab d'éditeur SANS ClusterDef connu). Sinon : CLUSTERS[defId]. */
+  elements?: ClusterElement[]
 }
 
 /**
@@ -125,16 +133,33 @@ function violatesSpawnSafe(
 
 /**
  * Extrait les obstacles absolus d'un cluster place en (cx, cy).
+ *
+ * `flipX`/`rotationDeg` (défaut identité) transforment la scène ENTIÈRE (compos
+ * éditeur). Avec les valeurs par défaut, le résultat est BIT-À-BIT identique à
+ * l'ancien comportement (cos1/sin0) → sim:check diff 0 sur les stages génératifs.
  */
-function extractObstacles(cx: number, cy: number, def: ClusterDef): Obstacle[] {
+function extractObstacles(
+  cx: number,
+  cy: number,
+  elements: ReadonlyArray<ClusterElement>,
+  flipX = false,
+  rotationDeg = 0
+): Obstacle[] {
+  const rad = (rotationDeg * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  // Transforme un vecteur local (miroir puis rotation).
+  const tx = (vx: number, vy: number): number => (flipX ? -vx : vx) * cos - vy * sin
+  const ty = (vx: number, vy: number): number => (flipX ? -vx : vx) * sin + vy * cos
+
   const result: Obstacle[] = []
-  for (const elem of def.elements) {
+  for (const elem of elements) {
     if (elem.collide === 'none') {
       continue
     }
     const blocks = elem.collide // 'both' | 'enemies'
-    const ax = cx + elem.dx
-    const ay = cy + elem.dy
+    const ax = cx + tx(elem.dx, elem.dy)
+    const ay = cy + ty(elem.dx, elem.dy)
 
     // shape est toujours defini quand collide !== 'none' (invariant T1 verifie)
     const shape = elem.shape
@@ -145,19 +170,72 @@ function extractObstacles(cx: number, cy: number, def: ClusterDef): Obstacle[] {
     if (shape.kind === 'circle') {
       result.push({ kind: 'circle', x: ax, y: ay, r: shape.r, blocks })
     } else {
-      // segment : x2,y2 = coordonnees absolues du 2e point
+      // segment : le vecteur (x2,y2) est aussi transformé (miroir + rotation)
       result.push({
         kind: 'segment',
         x: ax,
         y: ay,
-        x2: ax + shape.x2,
-        y2: ay + shape.y2,
+        x2: ax + tx(shape.x2, shape.y2),
+        y2: ay + ty(shape.x2, shape.y2),
         thickness: shape.thickness,
         blocks
       })
     }
   }
   return result
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Composition éditeur → SiteLayout (pur, déterministe)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Élément embarqué (compo/import) → ClusterElement (collision lossless). */
+function embeddedToClusterElement(e: EmbeddedElement): ClusterElement {
+  if (e.collide !== undefined && e.collide !== 'none') {
+    const shape = e.shape ?? { kind: 'circle', r: Math.max(16, e.scale * 40) }
+    return { assetKey: e.assetKey, dx: e.dx, dy: e.dy, scale: e.scale, flipX: e.flipX === true, collide: e.collide, shape }
+  }
+  return { assetKey: e.assetKey, dx: e.dx, dy: e.dy, scale: e.scale, flipX: e.flipX === true, collide: 'none' }
+}
+
+/**
+ * Convertit une composition d'éditeur (`StageLayout`, origine = centre monde) en
+ * `SiteLayout` consommable par la sim (obstacles) ET le rendu (clusters).
+ * PUR : mêmes entrées ⇒ même sortie (aucun RNG/Date).
+ *
+ * - instance avec `elements` embarqués (import / objet inline) → priorité aux
+ *   éléments (collision lossless : clôtures segments, engins bloquants) ;
+ * - sinon prefab connu de `CLUSTERS` → `PlacedCluster{defId}` (collision du cluster) ;
+ * - sinon → ignoré.
+ * `flipX`/`rotation` de l'instance transforment la scène entière.
+ */
+export function composedToSiteLayout(layout: StageLayout): SiteLayout {
+  const offX = layout.worldSize.width / 2
+  const offY = layout.worldSize.height / 2
+  const clusters: PlacedCluster[] = []
+  const obstacles: Obstacle[] = []
+
+  for (const inst of layout.instances) {
+    const wx = offX + inst.x
+    const wy = offY + inst.y
+    const flip = inst.flipX
+    const rot = inst.rotation
+    if (inst.elements !== undefined && inst.elements.length > 0) {
+      const els = inst.elements.map(embeddedToClusterElement)
+      clusters.push({ defId: inst.prefab, x: wx, y: wy, flipX: flip, rotationDeg: rot, elements: els })
+      for (const obs of extractObstacles(wx, wy, els, flip, rot)) {
+        obstacles.push(obs)
+      }
+    } else if (CLUSTERS[inst.prefab] !== undefined) {
+      const cdef = CLUSTERS[inst.prefab] as ClusterDef
+      clusters.push({ defId: inst.prefab, x: wx, y: wy, flipX: flip, rotationDeg: rot })
+      for (const obs of extractObstacles(wx, wy, cdef.elements, flip, rot)) {
+        obstacles.push(obs)
+      }
+    }
+  }
+
+  return { clusters, obstacles }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -179,6 +257,27 @@ export function buildSiteLayout(
   worldH: number,
   stageId: string
 ): SiteLayout {
+  // ── Chemin « COMPOSITION ÉDITEUR » (source de vérité, prioritaire) ─────────
+  // Si une compo committée existe pour ce stage, elle DÉFINIT les scènes (décor +
+  // collision). Pure/déterministe (aucun RNG). Registre vide → null → no-op.
+  const composed = getComposedLayout(stageId)
+  if (composed !== null) {
+    const site = composedToSiteLayout(composed)
+    // Backdrop procédural : pour un stage PROGRAMMÉ, le rendu dessine toujours les
+    // panneaux de clôture des anneaux depuis le plan (siteRenderer.drawPlan). On
+    // ré-injecte ici LEURS obstacles pour que la collision de la sim colle aux
+    // panneaux visibles (parité sim/rendu). Le déterminisme est préservé.
+    if (SITE_PROGRAMS[stageId] !== undefined) {
+      const plan = buildSitePlan(seed, worldW, worldH, stageId)
+      if (plan !== null) {
+        for (const f of plan.fences) {
+          site.obstacles.push({ kind: 'segment', x: f.x1, y: f.y1, x2: f.x2, y2: f.y2, thickness: 12, blocks: 'both' })
+        }
+      }
+    }
+    return site
+  }
+
   // ── Chemin « PLAN DE CHANTIER » (méthode 6-étapes) ─────────────────────────
   // Les stages avec programme sémantique sont composés depuis le plan masse
   // (zones/portail/chemins/clôtures) — fini le pile-ou-face par cellule.
@@ -228,7 +327,7 @@ export function buildSiteLayout(
         const cx = step * (i + 0.5)
         // Les tuiles route sont intentionnellement adjacentes : pas de tooClose
         placed.push({ defId: def.id, x: cx, y: routeY })
-        for (const obs of extractObstacles(cx, routeY, def)) {
+        for (const obs of extractObstacles(cx, routeY, def.elements)) {
           obstacles.push(obs)
         }
       }
@@ -295,7 +394,7 @@ export function buildSiteLayout(
       }
 
       placed.push({ defId: def.id, x: cx, y: cy })
-      for (const obs of extractObstacles(cx, cy, def)) {
+      for (const obs of extractObstacles(cx, cy, def.elements)) {
         obstacles.push(obs)
       }
     }
@@ -321,7 +420,7 @@ function layoutFromPlan(plan: SitePlan, stageId: string, seed: number): SiteLayo
 
   const push = (def: ClusterDef, x: number, y: number): void => {
     placed.push({ defId: def.id, x, y })
-    for (const obs of extractObstacles(x, y, def)) {
+    for (const obs of extractObstacles(x, y, def.elements)) {
       obstacles.push(obs)
     }
   }
@@ -485,7 +584,7 @@ function placePrefab(
       // bord nord du trou reste dans le cadre au démarrage. On IGNORE le
       // spawn-clear générique (poche réduite : la scène dédiée n'a AUCUN
       // collidable côté joueur, cf. scene_dig_active_spawn).
-      const rad = 270
+      const rad = pf.clusterId === 'scene_foundation_pour_spawn' ? 220 : 270
       for (let i = 0; i < pf.count; i++) {
         tryPlace(def, zone.cx, zone.cy - rad, true)
       }

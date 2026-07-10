@@ -717,6 +717,9 @@ const CHARPENTE_TOITURE_RENDER: StageRender = {
   // Ordre = ordre des angles scriptés (structureAngles).
   structures: [
     { key: 'struct_stage07_load', file: 'stage07/structures/suspended_load.png', scale: 1.1,  count: 1, band: 'near' },
+    // Camion-grue VISIBLE tenant la charge (asset présent mais jusqu'ici non branché) :
+    // fini la « grue imaginée hors champ » — la scène signature est causale.
+    { key: 'struct_stage07_crane', file: 'stage07/props/crane_truck.png',        scale: 1.15, count: 1, band: 'near' },
     { key: 'struct_stage07_truss', file: 'stage07/structures/roof_trusses.png',  scale: 0.85, count: 5, band: 'mid'  }
   ],
   ambient: [
@@ -731,9 +734,9 @@ const CHARPENTE_TOITURE_RENDER: StageRender = {
   // Landmark (charpente hero) au Nord. PNJ couvreur posant des tuiles rouges près du NE.
   geometry: {
     // structureAngles[i] → structure i, dans l'ordre de `structures[]` :
-    //   0 = suspended_load (NE, ~50°) — charge visible côté NE, grue imaginée hors champ
-    //   1-5 = roof_trusses : O (175°), SO (220°), S (260°), NO (110°), ENE (30°)
-    structureAngles: [50, 175, 220, 260, 110, 30],
+    //   0 = suspended_load (NE, ~50°) · 1 = crane_truck (E-NE, ~35°, tient la charge)
+    //   2-6 = roof_trusses : O (175°), SO (220°), S (260°), NO (110°), ENE (30°)
+    structureAngles: [50, 35, 175, 220, 260, 110, 30],
     landmarkAngle: 70,    // charpente-hero au Nord-Est
     ambientAngle:  55     // couvreur posant des tuiles rouges, près de la charge NE
   },

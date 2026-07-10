@@ -23,10 +23,11 @@
  */
 
 import Phaser from 'phaser'
-import { buildSiteLayout } from '@core/siteLayout'
+import { buildSiteLayout, type PlacedCluster } from '@core/siteLayout'
 import { buildSitePlan } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
-import { commutePos, loadVisible, panicDecision, PANIC_R } from '@render/workerBehavior'
+import { commutePos, loadVisible, panicDecision, pathFollow, PANIC_R } from '@render/workerBehavior'
+import { getComposedLayout } from '@content/composedLayouts'
 import { dirRow, walkFrame } from '@render/sprites'
 import type { AppViewState } from '@/app/appState'
 import { PALETTE_HEX } from '@ui/palette'
@@ -94,7 +95,7 @@ interface WorkerJob {
    *  - camion     : benne qui roule sur la piste (évacuation) — gros sprite, rapide,
    *                 orienté par flipX, ne panique pas.
    */
-  role: 'porteur' | 'signaleur' | 'navetteur' | 'camion'
+  role: 'porteur' | 'signaleur' | 'navetteur' | 'stationnaire' | 'camion' | 'path' | 'path_camion'
   /** Point de départ A (monde). */
   ax: number
   ay: number
@@ -108,6 +109,8 @@ interface WorkerJob {
   midY: number
   /** Phase de départ en ms (déterministe). */
   phaseOffsetMs: number
+  /** Polyligne à suivre (rôles 'path'/'path_camion'), en coordonnées MONDE. */
+  points?: Array<{ x: number; y: number }>
 }
 
 interface ActiveWorker {
@@ -177,14 +180,26 @@ export class SiteWorkers {
         c.defId === 'cluster_excavation' ||
         c.defId === 'scene_dig_active' ||
         c.defId === 'scene_dig_active_spawn' ||
-        c.defId === 'scene_dig_done'
+        c.defId === 'scene_dig_done' ||
+        c.defId === 'scene_foundation_pour_spawn' ||
+        c.defId === 'scene_formwork_bay_active' ||
+        c.defId === 'scene_rebar_ready' ||
+        c.defId === 'scene_small_mixer_patch'
     )
     const spoils = layout.clusters.filter(
-      (c) => c.defId === 'cluster_spoil' || c.defId === 'scene_spoil' || c.defId === 'scene_stock'
+      (c) =>
+        c.defId === 'cluster_spoil' ||
+        c.defId === 'scene_spoil' ||
+        c.defId === 'scene_stock' ||
+        c.defId === 'scene_rebar_stock' ||
+        c.defId === 'scene_mixer_waiting'
     )
     const routeClusters = layout.clusters.filter((c) => c.defId === 'cluster_route')
 
     let jobIdx = 0
+    if (stageId === 'fondations') {
+      jobIdx = this._addFoundationTradeWorkers(layout.clusters, npcKeys, jobIdx)
+    }
 
     // Jobs « porteur » : evacuation excavation → spoil le plus proche.
     for (const exc of excavations) {
@@ -338,6 +353,77 @@ export class SiteWorkers {
       })
       jobIdx++
     }
+
+    // Jobs « navetteur BASELINE » : si AUCUNE fouille reconnue (stages legacy
+    // 04-10 / terrain_vierge), faire naviguer des ouvriers entre clusters
+    // quelconques → une population cohérente PARTOUT (fini les stages sans vie
+    // après suppression des vieux PNJ errants).
+    if (excavations.length === 0) {
+      const anchors = layout.clusters.filter((c) => c.defId !== 'cluster_route')
+      const count = Math.min(anchors.length, 8)
+      for (let i = 0; i < count; i++) {
+        const from = anchors[i]
+        const to = anchors[(i + 1) % anchors.length]
+        if (from === undefined || to === undefined || from === to) {
+          continue
+        }
+        const key = this._resolveKey('porteur', npcKeys)
+        if (key === null) {
+          break
+        }
+        this.jobs.push({
+          textureKey: key,
+          role: 'navetteur',
+          ax: from.x,
+          ay: from.y,
+          bx: to.x,
+          by: to.y,
+          speed: NAVETTEUR_SPEED,
+          midX: (from.x + to.x) / 2,
+          midY: (from.y + to.y) / 2,
+          phaseOffsetMs: jobIdx * PHASE_OFFSET_MS
+        })
+        jobIdx++
+      }
+    }
+
+    // Jobs « chemin » (compos éditeur) : ouvriers/camions qui SUIVENT une
+    // polyligne worker_path / truck_path (coordonnées composition → monde).
+    const composed = getComposedLayout(stageId)
+    if (composed !== null) {
+      const offX = worldW / 2
+      const offY = worldH / 2
+      for (const p of composed.paths) {
+        if (p.points.length < 2) {
+          continue
+        }
+        const pts = p.points.map((pt) => ({ x: offX + pt.x, y: offY + pt.y }))
+        const first = pts[0] ?? { x: offX, y: offY }
+        const mid = pts[Math.floor(pts.length / 2)] ?? first
+        const isTruck = p.type === 'truck_path'
+        if (isTruck && !this.scene.textures.exists('prop_s2_truck')) {
+          continue // le camion requiert la feuille terrassement
+        }
+        const key = isTruck ? 'prop_s2_truck' : this._resolveKey('porteur', npcKeys)
+        if (key === null) {
+          continue
+        }
+        this.jobs.push({
+          textureKey: key,
+          role: isTruck ? 'path_camion' : 'path',
+          ax: first.x,
+          ay: first.y,
+          bx: first.x,
+          by: first.y,
+          speed: isTruck ? CAMION_SPEED : NAVETTEUR_SPEED,
+          midX: mid.x,
+          midY: mid.y,
+          phaseOffsetMs: jobIdx * PHASE_OFFSET_MS,
+          points: pts
+        })
+        jobIdx++
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -384,6 +470,23 @@ export class SiteWorkers {
         aw.sprite.setPosition(pos.x, pos.y + bob)
         const goingRight = pos.leg === 'ab'
         aw.sprite.setFlipX(!goingRight)
+        continue
+      }
+
+      // Suivi de CHEMIN composé (éditeur) : polyligne A→B→C, sans panique
+      // (route assignée). Camion = bob + flip ; ouvrier = anim de marche.
+      if (job.role === 'path' || job.role === 'path_camion') {
+        const pf = pathFollow(job.points ?? [], tMs, job.speed)
+        if (job.role === 'path_camion') {
+          const bob = Math.sin(tMs / 150) * CAMION_BOB_PX
+          aw.sprite.setPosition(pf.x, pf.y + bob)
+          aw.sprite.setFlipX(pf.dirX < 0)
+        } else {
+          aw.sprite.setPosition(pf.x, pf.y)
+          if (aw.animatable) {
+            aw.sprite.setFrame(walkFrame(dirRow(pf.dirX, pf.dirY), nowMs, 250))
+          }
+        }
         continue
       }
 
@@ -487,6 +590,21 @@ export class SiteWorkers {
     return this.active.length
   }
 
+  get workerDebugInfo(): {
+    count: number
+    workers: { role: string; texture: string; x: number; y: number }[]
+  } {
+    return {
+      count: this.active.length,
+      workers: this.active.map((aw) => ({
+        role: aw.job.role,
+        texture: aw.job.textureKey,
+        x: Math.round(aw.sprite.x),
+        y: Math.round(aw.sprite.y)
+      }))
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // Helpers privés
   // ─────────────────────────────────────────────────────────────────────────
@@ -532,7 +650,7 @@ export class SiteWorkers {
   private _createWorker(job: WorkerJob, x: number, y: number): ActiveWorker {
     const hasTexture = this.scene.textures.exists(job.textureKey)
     // Camion = gros engin (image mono-frame) ; ouvrier = petite silhouette.
-    const isCamion = job.role === 'camion'
+    const isCamion = job.role === 'camion' || job.role === 'path_camion'
     let sprite: Phaser.GameObjects.Sprite
     if (hasTexture) {
       sprite = this.scene.add
@@ -554,12 +672,15 @@ export class SiteWorkers {
       sprite = g as unknown as Phaser.GameObjects.Sprite
     }
 
-    // Charge (prop_s2_dirt miniature) — visible uniquement pour les porteurs.
+    // Charge miniature — visible uniquement pour les porteurs.
     let loadSprite: Phaser.GameObjects.Image | null = null
-    if (job.role === 'porteur' && this.scene.textures.exists('prop_s2_dirt')) {
+    const loadKey = this.scene.textures.exists('prop_s2_dirt')
+      ? 'prop_s2_dirt'
+      : (this.scene.textures.exists('prop_stage03_rebar') ? 'prop_stage03_rebar' : null)
+    if (job.role === 'porteur' && loadKey !== null) {
       loadSprite = this.scene.add
-        .image(x, y - 20, 'prop_s2_dirt')
-        .setScale(0.35)
+        .image(x, y - 20, loadKey)
+        .setScale(loadKey === 'prop_stage03_rebar' ? 0.28 : 0.35)
         .setDepth(DEPTH_LOAD)
         .setVisible(false) // sera rendu visible au sync si loadVisible(leg)
     }
@@ -636,6 +757,54 @@ export class SiteWorkers {
       this._destroyWorker(aw)
     }
     this.active = []
+  }
+
+  private _addFoundationTradeWorkers(
+    clusters: readonly PlacedCluster[],
+    npcKeys: readonly string[],
+    startIdx: number
+  ): number {
+    const sig = clusters.find((c) => c.defId === 'scene_foundation_pour_spawn')
+    if (sig === undefined) {
+      return startIdx
+    }
+
+    const posts = [
+      { textureKey: 'npc_stage03_betonnier', dx: 245, dy: 110 },
+      { textureKey: 'npc_stage03_coffreur', dx: -210, dy: 140 },
+      { textureKey: 'npc_stage03', dx: -92, dy: 88 },
+    ] as const
+
+    let jobIdx = startIdx
+    for (const post of posts) {
+      const key = this._resolveExactKey(post.textureKey, npcKeys)
+      if (key === null) {
+        continue
+      }
+      const x = sig.x + post.dx
+      const y = sig.y + post.dy
+      this.jobs.push({
+        textureKey: key,
+        role: 'stationnaire',
+        ax: x,
+        ay: y,
+        bx: x,
+        by: y,
+        speed: 1,
+        midX: x,
+        midY: y,
+        phaseOffsetMs: jobIdx * PHASE_OFFSET_MS
+      })
+      jobIdx++
+    }
+    return jobIdx
+  }
+
+  private _resolveExactKey(textureKey: string, npcKeys: readonly string[]): string | null {
+    if (npcKeys.includes(textureKey) && this.scene.textures.exists(textureKey)) {
+      return textureKey
+    }
+    return null
   }
 
   /**

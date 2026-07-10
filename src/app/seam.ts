@@ -90,7 +90,10 @@ export interface GameSeam {
    * avec clusters (> 0 pour terrassement) et absents sur terrain_vierge (= 0).
    * Absente tant que la scène n'est pas montée.
    */
-  debugWorkers?(): { count: number }
+  debugWorkers?(): {
+    count: number
+    workers: { role: string; texture: string; x: number; y: number }[]
+  }
   /** Fige la caméra en vue d'ensemble (outil de revue visuelle, render-only). */
   debugCameraOverview?(zoom: number, cx: number, cy: number): void
 }

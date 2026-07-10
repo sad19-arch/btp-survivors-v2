@@ -113,6 +113,92 @@ export function commutePos(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// pathFollow
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Point 2D minimal (compatible avec {x,y}). */
+export interface PathPoint {
+  x: number
+  y: number
+}
+
+/** Résultat du suivi de polyligne. */
+export interface PathResult {
+  x: number
+  y: number
+  /** Index du segment courant. */
+  seg: number
+  /** Direction de déplacement normalisée (pour orienter le sprite / flipX). */
+  dirX: number
+  dirY: number
+  atEnd: boolean
+}
+
+/**
+ * Position sur une POLYLIGNE parcourue en aller-retour continu (ping-pong).
+ *
+ * - L = longueur cumulée des segments.
+ * - phase = (tMs/1000 * speed) modulo 2L ; si phase ≥ L on repart en sens inverse.
+ * - `dist` = distance parcourue depuis le début (0..L), `dirX/dirY` = sens courant.
+ *
+ * Cas dégénérés : 0 point → origine ; 1 point (ou longueur nulle) → immobile.
+ */
+export function pathFollow(
+  points: ReadonlyArray<PathPoint>,
+  tMs: number,
+  speedPxPerSec: number
+): PathResult {
+  const n = points.length
+  if (n === 0) {
+    return { x: 0, y: 0, seg: 0, dirX: 1, dirY: 0, atEnd: true }
+  }
+  const first = points[0] as PathPoint
+  if (n === 1) {
+    return { x: first.x, y: first.y, seg: 0, dirX: 1, dirY: 0, atEnd: true }
+  }
+
+  const segLen: number[] = []
+  let total = 0
+  for (let i = 0; i < n - 1; i++) {
+    const a = points[i] as PathPoint
+    const b = points[i + 1] as PathPoint
+    const l = Math.hypot(b.x - a.x, b.y - a.y)
+    segLen.push(l)
+    total += l
+  }
+  if (total < 0.001) {
+    return { x: first.x, y: first.y, seg: 0, dirX: 1, dirY: 0, atEnd: true }
+  }
+
+  const traveled = (tMs / 1000) * speedPxPerSec
+  const phase = traveled % (2 * total)
+  const forward = phase < total
+  const dist = forward ? phase : 2 * total - phase
+
+  // Segment contenant `dist`.
+  let acc = 0
+  let seg = 0
+  while (seg < segLen.length - 1 && acc + (segLen[seg] as number) < dist) {
+    acc += segLen[seg] as number
+    seg += 1
+  }
+  const a = points[seg] as PathPoint
+  const b = points[seg + 1] as PathPoint
+  const l = (segLen[seg] as number) || 1
+  const t = (dist - acc) / l
+  const x = a.x + (b.x - a.x) * t
+  const y = a.y + (b.y - a.y) * t
+  let dirX = (b.x - a.x) / l
+  let dirY = (b.y - a.y) / l
+  if (!forward) {
+    dirX = -dirX
+    dirY = -dirY
+  }
+  const atEnd = dist < AT_END_THRESHOLD || total - dist < AT_END_THRESHOLD
+  return { x, y, seg, dirX, dirY, atEnd }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // loadVisible
 // ─────────────────────────────────────────────────────────────────────────────
 

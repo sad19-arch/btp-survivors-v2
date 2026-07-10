@@ -449,7 +449,12 @@ export class GameScene extends Phaser.Scene {
     // les PNJ errants Lissajous — c'était la double-population incohérente
     // (tailles disparates + errance « dans tous les sens »). Les feuilles PNJ
     // restent chargées (preload) car SiteWorkers les réutilise.
-    const ambientList = SITE_PROGRAMS[this.loadedStageId] !== undefined ? [] : (this.stage.ambient ?? [])
+    // NORMALISATION PNJ : le vieux système d'errance (ambientSprites Lissajous,
+    // tailles disparates) est DÉSACTIVÉ sur TOUS les stages — plus aucun « petit
+    // PNJ ». La vie du chantier vient exclusivement des SiteWorkers (échelle
+    // unique, déplacements utiles). Les feuilles `stage.ambient` restent
+    // préchargées (skins réutilisés par SiteWorkers). Liste forcée vide.
+    const ambientList = (this.stage.ambient ?? []).slice(0, 0)
     for (const [npcIdx, amb] of ambientList.entries()) {
       if (!this.textures.exists(amb.key)) { continue }
       // Rayon forfaitaire du PNJ : demi-frame compact (64 px) × scale.
@@ -596,9 +601,10 @@ export class GameScene extends Phaser.Scene {
         spriteCount: this.siteRenderer.spriteCount
       })
       // T6 — Sonde ouvriers navetteurs (test-only) : nombre de workers affichés.
-      this.seam.debugWorkers = (): { count: number } => ({
-        count: this.siteWorkers.workerCount
-      })
+      this.seam.debugWorkers = (): {
+        count: number
+        workers: { role: string; texture: string; x: number; y: number }[]
+      } => this.siteWorkers.workerDebugInfo
       this.seam.debugCameraOverview = (zoom: number, cx: number, cy: number): void => {
         this.camera.setOverview({ zoom, cx, cy })
       }

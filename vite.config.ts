@@ -1,12 +1,14 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from 'vitest/config'
 import { fileURLToPath, URL } from 'node:url'
+import { saveLayoutPlugin } from './tools/vite/saveLayoutPlugin'
 
 // Base path: '/' en dev, '/btp-survivors/' en build pour déploiement sous sous-chemin.
 const BASE = process.env.VITE_BASE ?? '/'
 
 export default defineConfig({
   base: BASE,
+  plugins: [saveLayoutPlugin()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

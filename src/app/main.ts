@@ -4,7 +4,7 @@ import { GameScene, type GameSceneData } from '@render/scenes/GameScene'
 import { BootScene } from '@render/scenes/BootScene'
 import { Overlay } from '@ui/overlay'
 import { AudioDirector } from '@/audio/audioDirector'
-import { parseBootOptions } from './bootOptions'
+import { parseBootOptions, type BootOptions } from './bootOptions'
 import { phaseIdFromLevel } from '@content/phases'
 import { createSeam, installSeam } from './seam'
 
@@ -14,6 +14,17 @@ import { createSeam, installSeam } from './seam'
  * démarre la scène. Le cœur (`src/core`) ignore tout de ce fichier.
  */
 const opts = parseBootOptions(window.location.search)
+
+// ── Stage Composer Editor (?editor=true) : remplace INTÉGRALEMENT le jeu normal.
+// Chargé dynamiquement (code-split) → aucun octet ni logique d'éditeur dans le
+// chemin de jeu sans le flag. Gameplay strictement inchangé quand editor=false.
+if (opts.editor) {
+  void import('../editor/bootEditor').then((m) => m.bootEditor())
+} else {
+  bootGame(opts)
+}
+
+function bootGame(opts: BootOptions): void {
 const mode = opts.autostart ?? 'solo'
 const app = new App({
   seed: opts.seed,
@@ -80,4 +91,5 @@ if (uiRoot !== null) {
     window.requestAnimationFrame(tick)
   }
   window.requestAnimationFrame(tick)
+}
 }

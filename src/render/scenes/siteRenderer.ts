@@ -40,6 +40,18 @@ const DEPTH_PROP = -6
 /** Structures collidables (fosse, clôture, portail). */
 const DEPTH_STRUCT = -5
 
+interface RoadStyle {
+  width: number
+  alpha: number
+}
+
+function roadStyleFor(stageId: string): RoadStyle {
+  if (stageId === 'fondations') {
+    return { width: 36, alpha: 0.1 }
+  }
+  return { width: 300, alpha: 0.5 }
+}
+
 /**
  * Retourne la profondeur d'affichage pour un élément de cluster selon son
  * assetKey et son collide. Règle :
@@ -74,6 +86,8 @@ export class SiteRenderer {
   /** Objets du plan masse (clôtures/pistes/terre excavée) — même cycle de vie. */
   private planObjects: Phaser.GameObjects.GameObject[] = []
 
+  private siteOverlays: Phaser.GameObjects.GameObject[] = []
+
   constructor(private readonly scene: Phaser.Scene) {}
 
   /**
@@ -95,12 +109,16 @@ export class SiteRenderer {
       o.destroy()
     }
     this.planObjects = []
+    for (const o of this.siteOverlays) {
+      o.destroy()
+    }
+    this.siteOverlays = []
 
     // Plan masse (stages programmés) : terre excavée + pistes + panneaux de clôture.
     // MÊME source déterministe que la sim (les obstacles viennent des mêmes segments).
     const plan = buildSitePlan(seed, worldW, worldH, stageId)
     if (plan !== null) {
-      this.drawPlan(plan)
+      this.drawPlan(plan, stageId)
     }
 
     // Calcule le même layout que la sim (déterministe).
@@ -112,28 +130,40 @@ export class SiteRenderer {
     }
 
     for (const placed of layout.clusters) {
+      // Éléments : inline (compo éditeur) sinon le ClusterDef. Rien à dessiner sinon.
       const def = CLUSTERS[placed.defId]
-      if (def === undefined) {
+      const elements = placed.elements ?? def?.elements
+      if (elements === undefined) {
         continue
       }
 
-      for (const elem of def.elements) {
+      // Transform de la scène ENTIÈRE (compos éditeur) : miroir puis rotation.
+      // Identité (flip=false, rot=0) → placement bit-à-bit comme avant.
+      const flip = placed.flipX === true
+      const rot = ((placed.rotationDeg ?? 0) * Math.PI) / 180
+      const cos = Math.cos(rot)
+      const sin = Math.sin(rot)
+      const tx = (vx: number, vy: number): number => (flip ? -vx : vx) * cos - vy * sin
+      const ty = (vx: number, vy: number): number => (flip ? -vx : vx) * sin + vy * cos
+
+      for (const elem of elements) {
         // Vérifier que la texture est chargée (repli silencieux si absente).
         if (!this.scene.textures.exists(elem.assetKey)) {
           continue
         }
 
-        const ax = placed.x + elem.dx
-        const ay = placed.y + elem.dy
+        const ax = placed.x + tx(elem.dx, elem.dy)
+        const ay = placed.y + ty(elem.dx, elem.dy)
 
         const shape = elem.shape
 
         // Segments (clôtures) : positionner au milieu et orienter selon le segment.
         if (shape !== undefined && shape.kind === 'segment') {
-          // Centre du segment (les coordonnées de shape sont locales à dx/dy).
-          const mx = ax + shape.x2 / 2
-          const my = ay + shape.y2 / 2
-          const angle = Math.atan2(shape.y2, shape.x2)
+          const vx2 = tx(shape.x2, shape.y2)
+          const vy2 = ty(shape.x2, shape.y2)
+          const mx = ax + vx2 / 2
+          const my = ay + vy2 / 2
+          const angle = Math.atan2(vy2, vx2)
 
           const sp = this.scene.add
             .image(mx, my, elem.assetKey)
@@ -148,11 +178,96 @@ export class SiteRenderer {
             .image(ax, ay, elem.assetKey)
             .setScale(elem.scale)
             .setDepth(depthFor(elem))
+            .setFlipX(flip !== (elem.flipX === true))
+            .setRotation(rot + (elem.rotation ?? 0))
 
           this.sprites.push(sp)
         }
       }
+
+      if (stageId === 'fondations' && placed.defId === 'scene_foundation_pour_spawn') {
+        this.drawFoundationPumpFlow(placed.x, placed.y)
+      }
     }
+  }
+
+  private drawFoundationPumpFlow(cx: number, cy: number): void {
+    const g = this.scene.add.graphics()
+    g.setDepth(DEPTH_PROP + 0.55)
+
+    const drawPolyline = (
+      points: Array<{ x: number; y: number }>,
+      outlineWidth: number,
+      innerWidth: number,
+      innerColor: number
+    ): void => {
+      if (points.length < 2) {
+        return
+      }
+      const [first, ...rest] = points
+      if (first === undefined) {
+        return
+      }
+      g.lineStyle(outlineWidth, 0x141018, 0.96)
+      g.beginPath()
+      g.moveTo(first.x, first.y)
+      for (const point of rest) {
+        g.lineTo(point.x, point.y)
+      }
+      g.strokePath()
+
+      g.lineStyle(innerWidth, innerColor, 1)
+      g.beginPath()
+      g.moveTo(first.x, first.y)
+      for (const point of rest) {
+        g.lineTo(point.x, point.y)
+      }
+      g.strokePath()
+    }
+
+    drawPolyline(
+      [
+        { x: cx + 128, y: cy + 58 },
+        { x: cx + 104, y: cy - 12 },
+        { x: cx + 40, y: cy - 28 },
+        { x: cx + 4, y: cy + 48 },
+      ],
+      13,
+      8,
+      0xf2b43d
+    )
+    drawPolyline(
+      [
+        { x: cx + 4, y: cy + 48 },
+        { x: cx - 8, y: cy + 72 },
+      ],
+      9,
+      5,
+      0x4a4b52
+    )
+
+    drawPolyline(
+      [
+        { x: cx + 286, y: cy + 122 },
+        { x: cx + 230, y: cy + 118 },
+        { x: cx + 185, y: cy + 122 },
+      ],
+      12,
+      7,
+      0xb8b4aa
+    )
+
+    g.fillStyle(0x3b3834, 0.98)
+    g.fillRect(cx + 170, cy + 111, 26, 22)
+    g.lineStyle(4, 0x000000, 1)
+    g.strokeRect(cx + 170, cy + 111, 26, 22)
+
+    g.fillStyle(0x9c9a93, 0.9)
+    g.fillCircle(cx - 8, cy + 77, 12)
+    g.fillStyle(0xd2d0ca, 0.72)
+    g.fillCircle(cx - 10, cy + 74, 5)
+
+    this.siteOverlays.push(g)
   }
 
   /**
@@ -160,7 +275,7 @@ export class SiteRenderer {
    * roulage le long des chemins, panneaux de clôture le long des anneaux
    * (les ouvertures restent vides — les poteaux les encadrent).
    */
-  private drawPlan(plan: NonNullable<ReturnType<typeof buildSitePlan>>): void {
+  private drawPlan(plan: NonNullable<ReturnType<typeof buildSitePlan>>, stageId: string): void {
     // 1. Terre excavée : patch sombre sous chaque zone d'excavation.
     for (const z of plan.zones) {
       if (z.role !== 'excavation') {
@@ -173,8 +288,9 @@ export class SiteRenderer {
     }
     // 2. Pistes de roulage (R-G) : BANDE LARGE de terre compactée (un camion doit
     //    passer) — un aplat sobre, PAS de ruban rayé orange.
+    const roadStyle = roadStyleFor(stageId)
     for (const p of plan.paths) {
-      this.drawRoad(p)
+      this.drawRoad(p, roadStyle)
     }
     // 2b. Panneau d'interdiction au portail.
     this.drawGateSign(plan.gate)
@@ -216,20 +332,20 @@ export class SiteRenderer {
    * segment + traces de roues clairsemées. Sobre (pas de ruban rayé) mais
    * assez large pour qu'un camion passe (R-G).
    */
-  private drawRoad(seg: PlanSeg): void {
+  private drawRoad(seg: PlanSeg, style: RoadStyle): void {
     const dx = seg.x2 - seg.x1
     const dy = seg.y2 - seg.y1
     const len = Math.hypot(dx, dy)
     if (len < 1) {
       return
     }
-    const ROAD_W = 300
+    const roadW = style.width
     const ang = Math.atan2(dy, dx)
     const midX = (seg.x1 + seg.x2) / 2
     const midY = (seg.y1 + seg.y2) / 2
     // Aplat de terre roulée (un peu plus foncé/tassé que le sol), coins arrondis.
     const band = this.scene.add
-      .rectangle(midX, midY, len + ROAD_W, ROAD_W, 0x6b4f33, 0.5)
+      .rectangle(midX, midY, len + roadW, roadW, 0x6b4f33, style.alpha)
       .setDepth(-9.3)
     if (ang !== 0) {
       band.setRotation(ang)
@@ -291,6 +407,10 @@ export class SiteRenderer {
       o.destroy()
     }
     this.planObjects = []
+    for (const o of this.siteOverlays) {
+      o.destroy()
+    }
+    this.siteOverlays = []
   }
 
   /** Nombre de sprites actuellement actifs (sonde de test). */
