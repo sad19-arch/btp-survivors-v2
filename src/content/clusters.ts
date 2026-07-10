@@ -19,6 +19,8 @@ export interface ClusterElement {
   dx: number // offset px depuis l'ancre du cluster
   dy: number
   scale: number
+  flipX?: boolean
+  rotation?: number
   collide: CollideKind
   shape?: ObstacleShape // requis si collide !== 'none' ; interdit si 'none'
 }
@@ -458,6 +460,95 @@ export const CLUSTERS: Record<string, ClusterDef> = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Stage 03 - Fondations: named causal scenes.
+  scene_foundation_pour_spawn: {
+    id: 'scene_foundation_pour_spawn',
+    footprintRadius: 460,
+    gates: [{ dx: 0, dy: 310 }],
+    elements: [
+      // Le spawn est juste au sud de cette dalle : le premier ecran doit lire
+      // "coulage de fondations", pas "carrefour de pistes".
+      { assetKey: 'landmark_stage03', dx: 0, dy: 90, scale: 1.28, collide: 'none' },
+      { assetKey: 'struct_stage03_bay', dx: 0, dy: 52, scale: 0.92, collide: 'none' },
+      { assetKey: 'prop_stage03_rebar', dx: -80, dy: 60, scale: 0.95, collide: 'none' },
+      { assetKey: 'prop_stage03_formwork', dx: -160, dy: 105, scale: 0.82, collide: 'none' },
+      // Flux beton : route sud-est -> toupie active -> pompe -> dalle.
+      { assetKey: 'piste_strip', dx: 360, dy: 280, scale: 1.05, collide: 'none' },
+      { assetKey: 'struct_stage03_pump', dx: 170, dy: 100, scale: 1.18, collide: 'none' },
+      { assetKey: 'struct_stage03_mixer', dx: 330, dy: 125, scale: 1.06, flipX: true, collide: 'none' },
+      { assetKey: 'decal_stage03_spill', dx: 275, dy: 124, scale: 0.65, collide: 'none' },
+      { assetKey: 'decal_stage03_spill', dx: 210, dy: 112, scale: 0.76, collide: 'none' },
+      { assetKey: 'decal_stage03_spill', dx: 105, dy: 106, scale: 0.62, collide: 'none' },
+    ],
+  },
+
+  scene_formwork_bay_active: {
+    id: 'scene_formwork_bay_active',
+    footprintRadius: 280,
+    gates: [{ dx: 0, dy: 210 }],
+    elements: [
+      { assetKey: 'struct_stage03_bay', dx: 0, dy: 0, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage03_rebar', dx: -40, dy: -4, scale: 0.75, collide: 'none' },
+      { assetKey: 'prop_stage03_formwork', dx: 108, dy: 24, scale: 0.75, collide: 'none' },
+    ],
+  },
+
+  scene_rebar_ready: {
+    id: 'scene_rebar_ready',
+    footprintRadius: 240,
+    gates: [{ dx: 0, dy: 150 }],
+    elements: [
+      { assetKey: 'prop_stage03_rebar', dx: -112, dy: -22, scale: 0.78, collide: 'none' },
+      { assetKey: 'prop_stage03_rebar', dx: 0, dy: 0, scale: 0.78, collide: 'none' },
+      { assetKey: 'prop_stage03_rebar', dx: 108, dy: 22, scale: 0.78, collide: 'none' },
+      { assetKey: 'prop_stage03_formwork', dx: -24, dy: 96, scale: 0.72, collide: 'none' },
+    ],
+  },
+
+  scene_rebar_stock: {
+    id: 'scene_rebar_stock',
+    footprintRadius: 290,
+    gates: [{ dx: 0, dy: 120 }],
+    elements: [
+      { assetKey: 'prop_stage03_rebar', dx: -210, dy: -18, scale: 0.78, collide: 'none' },
+      { assetKey: 'prop_stage03_rebar', dx: -70, dy: -6, scale: 0.78, collide: 'none' },
+      { assetKey: 'prop_stage03_rebar', dx: 70, dy: 6, scale: 0.78, collide: 'none' },
+      { assetKey: 'prop_stage03_rebar', dx: 210, dy: 18, scale: 0.78, collide: 'none' },
+    ],
+  },
+
+  scene_mixer_waiting: {
+    id: 'scene_mixer_waiting',
+    footprintRadius: 260,
+    gates: [{ dx: 0, dy: 150 }],
+    elements: [
+      { assetKey: 'piste_strip', dx: 0, dy: 44, scale: 1.35, collide: 'none' },
+      { assetKey: 'struct_stage03_mixer', dx: 0, dy: -22, scale: 1.05, collide: 'none' },
+      { assetKey: 'decal_stage03_spill', dx: 118, dy: 66, scale: 0.65, collide: 'none' },
+    ],
+  },
+
+  scene_small_mixer_patch: {
+    id: 'scene_small_mixer_patch',
+    footprintRadius: 260,
+    gates: [{ dx: 0, dy: 170 }],
+    elements: [
+      { assetKey: 'prop_stage03_concrete_mixer', dx: -78, dy: -18, scale: 0.65, collide: 'none' },
+      { assetKey: 'prop_stage03_formwork', dx: 80, dy: 42, scale: 0.72, collide: 'none' },
+      { assetKey: 'decal_stage03_spill', dx: 18, dy: 96, scale: 0.78, collide: 'none' },
+    ],
+  },
+
+  scene_concrete_defect_minor: {
+    id: 'scene_concrete_defect_minor',
+    footprintRadius: 170,
+    gates: [{ dx: 0, dy: 110 }],
+    elements: [
+      { assetKey: 'decal_stage03_crack', dx: 0, dy: 0, scale: 0.7, collide: 'none' },
+      { assetKey: 'decal_stage03_spill', dx: 64, dy: 30, scale: 0.58, collide: 'none' },
+    ],
+  },
+
   // Stage 01 — Terrain vierge (INSTALLATION DE CHANTIER)
   // Sémantique : la parcelle vient d'être prise ; le chantier s'INSTALLE.
   // Pas encore d'engins lourds (ils arrivent au terrassement) → la « zone de

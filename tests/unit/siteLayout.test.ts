@@ -59,7 +59,7 @@ describe('siteLayout — securite spawn', () => {
   // Couvre terrassement ET terrain_vierge : ce dernier est désormais le stage de
   // sim:check ET a des clusters collidables (workCluster) → la sécurité du spawn
   // doit tenir là aussi (sinon le joueur naîtrait coincé dans une clôture).
-  const SAFE_STAGES = ['terrassement', 'terrain_vierge'] as const
+  const SAFE_STAGES = ['terrassement', 'terrain_vierge', 'fondations'] as const
 
   it.each(SAFE_STAGES)('3. [%s] poche de spawn libre : aucun ÉLÉMENT collidable (both) dans SPAWN_POCKET_R', (stageId) => {
     const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, stageId)

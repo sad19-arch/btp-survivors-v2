@@ -252,7 +252,13 @@ describe('sitePlan — stages sans programme', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Scènes portant un engin EN TRAVAIL (le parc = machines parquées, exempt). */
-const MACHINE_CLUSTERS = new Set(['scene_dig_active', 'scene_spoil'])
+const MACHINE_CLUSTERS = new Set([
+  'scene_dig_active',
+  'scene_spoil',
+  'scene_foundation_pour_spawn',
+  'scene_mixer_waiting',
+  'scene_small_mixer_patch',
+])
 
 /** Clusters hors-zone par nature (infrastructure du site). */
 const INFRA_CLUSTERS = new Set(['cluster_route', 'cluster_gate_main'])

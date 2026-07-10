@@ -1,0 +1,242 @@
+{
+  "stageId": "fondations",
+  "targetScore": 80,
+  "acceptanceScore": {
+    "total": 88,
+    "status": "code_authorized",
+    "breakdown": {
+      "signatureReadableInTwoSeconds": 18,
+      "spawnOnPourEdge": 15,
+      "concreteFlowReadable": 15,
+      "tradeWorkersPlaced": 12,
+      "noImportantOrphanAsset": 10,
+      "credibleScaleAndDistances": 8,
+      "zonesConnectedToEntry": 10,
+      "stageDensity": 6,
+      "visualDifferenceFromTerrassement": 4
+    },
+    "previousHumanScoreEstimate": 52,
+    "note": "Pre-code corrected score. The revised contract rejects the previous carrefour-vide spawn and requires a route-to-mixer-to-pump-to-slab signature in the first gameplay view."
+  },
+  "world": {
+    "width": 10240,
+    "height": 7680,
+    "grid": "32x24",
+    "cellSizePx": 320
+  },
+  "entry": {
+    "side": "south",
+    "gateCell": [16, 21],
+    "contractReferenceGateCell": [16, 22],
+    "roadCells": [[0, 22], [31, 23]]
+  },
+  "signature": {
+    "scene": "scene_foundation_pour_spawn",
+    "spawnCell": [16, 12],
+    "contractReferenceSpawnCell": [16, 14],
+    "spawnWorldPx": [5120, 3840],
+    "mustBeVisibleWithinPx": 620,
+    "mustNotBlockRadiusPx": 350
+  },
+  "zones": [
+    {
+      "id": "zone_coulage_principal",
+      "role": "active_main",
+      "anchor": "runtime_signature_centered_on_spawn",
+      "gridBox": [12, 10, 19, 13],
+      "allowedScenes": [
+        "scene_foundation_pour_spawn",
+        "scene_formwork_bay_active",
+        "scene_rebar_ready",
+        "scene_concrete_defect_minor"
+      ],
+      "requiredConnections": ["zone_acces_beton", "zone_stock_ferraillage", "entry"]
+    },
+    {
+      "id": "zone_acces_beton",
+      "role": "truck_access",
+      "anchor": "south_east",
+      "gridBox": [22, 17, 27, 20],
+      "allowedScenes": ["scene_mixer_waiting"],
+      "requiredConnections": ["entry", "zone_coulage_principal"]
+    },
+    {
+      "id": "zone_stock_ferraillage",
+      "role": "stock",
+      "anchor": "west_north_of_spawn",
+      "gridBox": [1, 8, 7, 11],
+      "allowedScenes": ["scene_rebar_stock", "scene_rebar_ready"],
+      "requiredConnections": ["zone_coulage_principal"]
+    },
+    {
+      "id": "zone_prepa_secondaire",
+      "role": "secondary_work",
+      "anchor": "south_west",
+      "gridBox": [6, 18, 9, 20],
+      "allowedScenes": ["scene_small_mixer_patch"],
+      "requiredConnections": ["zone_coulage_principal"]
+    },
+    {
+      "id": "zone_base_vie",
+      "role": "logistics_human",
+      "anchor": "south",
+      "gridBox": [17, 19, 20, 20],
+      "allowedScenes": [],
+      "requiredConnections": ["entry"]
+    }
+  ],
+  "sceneInstances": [
+    {
+      "id": "spawn_signature",
+      "type": "scene_foundation_pour_spawn",
+      "zone": "zone_coulage_principal",
+      "anchor": "near_spawn_north",
+      "cell": [16, 11],
+      "worldPx": [5120, 3620],
+      "radiusPx": 650,
+      "requiredAssets": [
+        "slab",
+        "rebar",
+        "formwork_bay",
+        "formwork",
+        "concrete_pump",
+        "mixer_truck",
+        "spill"
+      ],
+      "assetPlan": [
+        { "asset": "slab", "offsetFromSpawnPx": [0, -130], "role": "target_under_pour" },
+        { "asset": "formwork_bay", "offsetFromSpawnPx": [0, -168], "role": "containment_around_slab" },
+        { "asset": "rebar", "offsetFromSpawnPx": [-80, -160], "role": "integrated_in_slab" },
+        { "asset": "formwork", "offsetFromSpawnPx": [-160, -115], "role": "lower_edge_next_to_spawn" },
+        { "asset": "concrete_pump", "offsetFromSpawnPx": [170, -120], "role": "machine_between_mixer_and_slab" },
+        { "asset": "mixer_truck", "offsetFromSpawnPx": [330, -95], "role": "active_truck_feeds_pump_from_access" },
+        { "asset": "spill_chain", "offsetFromSpawnPx": [[275, -96], [210, -108], [105, -114]], "role": "route_mixer_pump_slab_flow" }
+      ],
+      "orientationRules": [
+        "spawn sits on the immediate lower edge of slab/formwork, never in an empty crossroad",
+        "concrete_pump sits between mixer and slab and visually points toward slab/formwork_bay",
+        "mixer_truck is flipped/positioned so its rear feeds the pump",
+        "slab/formwork_bay visible within 620px of spawn",
+        "no collidable footprint inside 350px spawn radius"
+      ],
+      "distanceRules": [
+        "spawn to slab/formwork lower edge: 40-220px",
+        "concrete_pump to slab/formwork_bay: 120-320px",
+        "mixer_truck to concrete_pump: 120-260px",
+        "waiting truck must remain in zone_acces_beton, separated from active mixer"
+      ],
+      "mustConnectTo": ["zone_acces_beton"],
+      "causalSentence": "The mixer truck feeds the concrete pump; the pump pours the slab; the formwork contains it; the rebar explains the foundation structure."
+    },
+    {
+      "id": "active_bay_west",
+      "type": "scene_formwork_bay_active",
+      "zone": "zone_coulage_principal",
+      "cell": [12, 8],
+      "radiusPx": 420,
+      "requiredAssets": ["formwork_bay", "formwork", "rebar"],
+      "mustConnectTo": ["spawn_signature"],
+      "causalSentence": "A foundation bay is ready before pouring: formwork is set and rebar is inside."
+    },
+    {
+      "id": "active_bay_north",
+      "type": "scene_formwork_bay_active",
+      "zone": "zone_coulage_principal",
+      "cell": [19, 7],
+      "radiusPx": 420,
+      "requiredAssets": ["formwork_bay", "formwork", "rebar"],
+      "mustConnectTo": ["spawn_signature"],
+      "causalSentence": "A second bay extends the same pour line without becoming a competing main slab."
+    },
+    {
+      "id": "ready_rebar_near_slab",
+      "type": "scene_rebar_ready",
+      "zone": "zone_coulage_principal",
+      "cell": [10, 13],
+      "radiusPx": 320,
+      "requiredAssets": ["rebar", "rebar", "formwork"],
+      "mustConnectTo": ["zone_stock_ferraillage", "spawn_signature"],
+      "causalSentence": "Rebar is staged next to the active coffrage before being placed in the slab."
+    },
+    {
+      "id": "stock_rebar_west",
+      "type": "scene_rebar_stock",
+      "zone": "zone_stock_ferraillage",
+      "cell": [4, 11],
+      "radiusPx": 360,
+      "requiredAssets": ["rebar", "rebar", "rebar", "rebar"],
+      "mustConnectTo": ["zone_coulage_principal"],
+      "causalSentence": "Aligned rebar stock waits west of the pour, connected by a short work path."
+    },
+    {
+      "id": "truck_waiting_access",
+      "type": "scene_mixer_waiting",
+      "zone": "zone_acces_beton",
+      "cell": [25, 18],
+      "radiusPx": 360,
+      "requiredAssets": ["mixer_truck"],
+      "optionalAssets": ["small_spill_near_access"],
+      "mustConnectTo": ["entry", "spawn_signature"],
+      "causalSentence": "A mixer truck waits on the concrete access lane before feeding the pump."
+    },
+    {
+      "id": "secondary_patch_sw",
+      "type": "scene_small_mixer_patch",
+      "zone": "zone_prepa_secondaire",
+      "cell": [5, 17],
+      "radiusPx": 320,
+      "requiredAssets": ["concrete_mixer", "formwork", "spill"],
+      "mustConnectTo": ["zone_coulage_principal"],
+      "causalSentence": "A small local pour is prepared next to secondary formwork, away from the main signature."
+    },
+    {
+      "id": "minor_edge_defect",
+      "type": "scene_concrete_defect_minor",
+      "zone": "zone_coulage_principal",
+      "cell": [22, 14],
+      "radiusPx": 220,
+      "requiredAssets": ["crack", "spill"],
+      "mustConnectTo": ["spawn_signature"],
+      "causalSentence": "A small concrete edge defect is visible but remains secondary and outside the spawn center."
+    }
+  ],
+  "workerRoutes": [
+    {
+      "kind": "stationary_trade_post",
+      "near": "spawn_signature",
+      "workerTypes": ["ferrailleur near rebar", "coffreur near formwork", "betonnier near pump/slab"]
+    },
+    {
+      "from": "zone_acces_beton",
+      "to": "zone_coulage_principal",
+      "workerTypes": ["betonnier", "cimentier"]
+    },
+    {
+      "from": "zone_prepa_secondaire",
+      "to": "zone_coulage_principal",
+      "workerTypes": ["cimentier"]
+    }
+  ],
+  "densityBudget": {
+    "signatureScenes": 1,
+    "activeScenes": 3,
+    "stockScenes": 1,
+    "secondaryScenes": 1,
+    "minorDefectScenes": 1,
+    "targetDensity": "medium"
+  },
+  "forbidden": [
+    "mixer_truck alone",
+    "concrete_pump alone",
+    "concrete_mixer alone",
+    "rebar isolated",
+    "formwork scattered randomly",
+    "spill far from concrete work",
+    "too many cracks",
+    "multiple competing main slabs",
+    "global random clutter",
+    "base_vie too close to fresh concrete",
+    "truck access too narrow",
+    "truck or pump blocking spawn"
+  ]
+}

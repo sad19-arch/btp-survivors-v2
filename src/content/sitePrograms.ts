@@ -251,10 +251,97 @@ const TERRASSEMENT: SiteProgram = {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// ETAPE 1 — FONDATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Contremaitre : la route reste au SUD avec un portail unique. Le coeur du stage
+ * est une zone de coulage au centre, autour du spawn : dalle, coffrage,
+ * ferraillage, pompe et toupie doivent se lire ensemble. Le stock de ferraillage
+ * est a l'ouest, assez proche pour alimenter la dalle sans etre pose au hasard.
+ * L'acces toupie arrive du sud-est depuis la route ; la base vie reste au sud,
+ * eloignee du beton frais ; une petite reprise beton au sud-ouest reste
+ * secondaire. Tout passe par des chemins connectes au portail.
+ */
+const FONDATIONS: SiteProgram = {
+  rationale:
+    'Acces sud unique ; coulage principal centre sur le spawn ; toupie et pompe ' +
+    'reliees a la dalle ; stock ferraillage ouest ; acces toupie sud-est ; reprise ' +
+    'beton secondaire sud-ouest ; base vie au sud hors beton frais.',
+  zones: [
+    {
+      id: 'zone_coulage_principal',
+      role: 'travail',
+      glyph: 'A',
+      halfW: 1180,
+      halfH: 780,
+      anchor: { kind: 'north', xFrac: 0.5 },
+      signature: true,
+      prefabs: [
+        { clusterId: 'scene_foundation_pour_spawn', count: 1, arrangement: 'anchor_spawn' },
+        { clusterId: 'scene_formwork_bay_active', count: 2, arrangement: 'scatter' },
+        { clusterId: 'scene_rebar_ready', count: 1, arrangement: 'scatter' },
+        { clusterId: 'scene_concrete_defect_minor', count: 1, arrangement: 'at_door' },
+      ],
+    },
+    {
+      id: 'zone_acces_beton',
+      role: 'parc_engins',
+      glyph: 'L',
+      halfW: 1000,
+      halfH: 760,
+      anchor: { kind: 'near_gate', side: 'east', distPx: 2850 },
+      prefabs: [{ clusterId: 'scene_mixer_waiting', count: 1, arrangement: 'at_door' }],
+    },
+    {
+      id: 'zone_stock_ferraillage',
+      role: 'stockage',
+      glyph: 'S',
+      halfW: 1100,
+      halfH: 700,
+      anchor: { kind: 'west', yFrac: 0.42 },
+      prefabs: [{ clusterId: 'scene_rebar_stock', count: 1, arrangement: 'center' }],
+    },
+    {
+      id: 'zone_prepa_secondaire',
+      role: 'travail',
+      glyph: 'P',
+      halfW: 680,
+      halfH: 560,
+      anchor: { kind: 'near_gate', side: 'west', distPx: 2600 },
+      prefabs: [{ clusterId: 'scene_small_mixer_patch', count: 1, arrangement: 'center' }],
+    },
+    {
+      id: 'zone_base_vie',
+      role: 'base_vie',
+      glyph: 'B',
+      halfW: 620,
+      halfH: 360,
+      anchor: { kind: 'near_gate', side: 'east', distPx: 900 },
+      prefabs: [],
+    },
+  ],
+  connect: [
+    'zone_coulage_principal',
+    'zone_acces_beton',
+    'zone_stock_ferraillage',
+    'zone_prepa_secondaire',
+    'zone_base_vie',
+  ],
+  rules: {
+    minMachineDistPx: 600,
+    spoilAdjacentMaxPx: 400,
+    baseVieMaxFromGatePx: 900,
+    baseVieMinFromExcavationPx: 900,
+  },
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Registre
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Programmes par stage — les stages absents utilisent le layout legacy (transition). */
 export const SITE_PROGRAMS: Record<string, SiteProgram> = {
   terrassement: TERRASSEMENT,
+  fondations: FONDATIONS,
 }

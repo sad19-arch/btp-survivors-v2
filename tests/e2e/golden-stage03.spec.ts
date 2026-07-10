@@ -32,6 +32,15 @@ test('golden stage 03 — fondations — charge sans crash et produit une captur
   // La partie tourne encore (pas de game over en 3 s avec un joueur immobile au spawn).
   expect(['game', 'upgrade']).toContain(s1?.scene)
 
+  const workers = await page.evaluate(() => window.__GAME__?.debugWorkers?.())
+  expect(workers?.count ?? 0).toBeGreaterThanOrEqual(3)
+  const workerTextures = workers?.workers.map((w) => w.texture) ?? []
+  expect(workerTextures).toEqual(expect.arrayContaining([
+    'npc_stage03',
+    'npc_stage03_coffreur',
+    'npc_stage03_betonnier',
+  ]))
+
   // Capture : nom absolu pour que Playwright la place dans test-results/.
   const capturePath = path.join('test-results', 'golden-stage03-overview.png')
   await page.screenshot({ path: capturePath, fullPage: false })
