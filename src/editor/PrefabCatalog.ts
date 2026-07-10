@@ -80,6 +80,10 @@ export const STAGE_LIST: ReadonlyArray<{ id: string; label: string }> = [
 
 export const CATEGORIES: Category[] = [
   { id: 'scenes', label: 'Scènes principales' },
+  { id: 'topo', label: 'Implantation & topographie' },
+  { id: 'marking', label: 'Marquage au sol' },
+  { id: 'entrance', label: 'Entrée & signalétique' },
+  { id: 'baselife', label: 'Base vie légère' },
   { id: 'stocks', label: 'Stocks & logistique' },
   { id: 'routes', label: 'Routes & accès' },
   { id: 'workers', label: 'Ouvriers & chemins' },
@@ -88,6 +92,47 @@ export const CATEGORIES: Category[] = [
   { id: 'objects', label: 'Objets isolés avancés' },
   { id: 'markers', label: 'Marqueurs' }
 ]
+
+/**
+ * Méta par clé d'asset : libellé FR lisible + catégorie de palette. Sert à sortir
+ * les assets d'implantation de la catégorie fourre-tout « Objets isolés avancés »
+ * et à leur donner un nom métier (au lieu du nom de fichier humanisé). Une clé
+ * absente = comportement par défaut (catégorie déduite du rôle, libellé humanisé).
+ */
+const ASSET_META: Record<string, { label: string; category: string }> = {
+  // Stage 01 — implantation / topographie (assets EXISTANTS)
+  prop_stakes: { label: 'Piquets topo', category: 'topo' },
+  struct_stage01_plot: { label: 'Parcelle piquetée', category: 'topo' },
+  struct_stage01_sign: { label: 'Panneau accès chantier', category: 'entrance' },
+  landmark_stage01: { label: 'Panneau permis', category: 'entrance' },
+  struct_stage01_cabin: { label: 'Bungalow / algeco', category: 'baselife' },
+  struct_stage01_tape: { label: 'Rubalise de balisage', category: 'safety' },
+  prop_rocks: { label: 'Amas de rochers', category: 'decor' },
+  prop_weeds: { label: 'Herbes sèches', category: 'decor' },
+  prop_soft: { label: 'Terre meuble', category: 'decor' },
+  decal_puddle: { label: 'Flaque', category: 'decor' },
+  decal_weeds: { label: 'Broussailles', category: 'decor' },
+  decal_pebbles: { label: 'Gravillons', category: 'decor' },
+  decal_crack: { label: 'Fissure du sol', category: 'decor' },
+  decal_tracks: { label: 'Traces de roues', category: 'decor' },
+  // Stage 01 — pack implantation généré (assets NEUFS)
+  prop_stage01_theodolite: { label: 'Théodolite (trépied)', category: 'topo' },
+  prop_stage01_mire: { label: 'Mire de géomètre', category: 'topo' },
+  prop_stage01_stake1: { label: 'Piquet topo simple', category: 'topo' },
+  prop_stage01_stake_bundle: { label: 'Botte de piquets', category: 'stocks' },
+  prop_stage01_tape_reel: { label: 'Rouleau de rubalise', category: 'stocks' },
+  prop_stage01_cones: { label: 'Cônes de balisage', category: 'safety' },
+  struct_stage01_wc: { label: 'WC de chantier', category: 'baselife' },
+  struct_stage01_plan_table: { label: 'Table avec plan', category: 'baselife' },
+  decal_stage01_layout_cross: { label: 'Croix topo au sol', category: 'marking' },
+  decal_stage01_layout_corner: { label: 'Angle de marquage', category: 'marking' },
+  decal_stage01_layout_line: { label: 'Ligne de marquage', category: 'marking' }
+}
+
+/** Méta (label FR + catégorie) d'un asset, ou null si non répertorié. */
+export function assetMeta(key: string): { label: string; category: string } | null {
+  return ASSET_META[key] ?? null
+}
 
 export function kindLabel(kind: EntryKind): string {
   const map: Record<EntryKind, string> = {
@@ -151,6 +196,11 @@ function buildStageAssets(stageId: string): { assets: EditorAsset[]; groundKey: 
   for (const d of sr.decals) {
     add({ key: d.key, file: d.file, label: humanize(d.file), role: 'decal' })
   }
+  // Assets réservés éditeur (implantation, WC, marquages…) : exposés dans la
+  // palette + miniature, jamais scatterés par le jeu.
+  for (const e of sr.editorExtras ?? []) {
+    add({ key: e.key, file: e.file, label: humanize(e.file), role: e.role })
+  }
   const worker = sr.ambient?.[0]
   if (worker !== undefined) {
     add({ key: worker.key, file: worker.file, sheet: true, frame: worker.frame, label: humanize(worker.file), role: 'worker' })
@@ -161,21 +211,23 @@ function buildStageAssets(stageId: string): { assets: EditorAsset[]; groundKey: 
   return { assets, groundKey }
 }
 
-/** Un objet isolé par asset (hors sol). */
+/** Un objet isolé par asset (hors sol). Catégorie + libellé via ASSET_META, sinon défaut par rôle. */
 function objectEntries(assets: EditorAsset[]): PaletteEntry[] {
   const out: PaletteEntry[] = []
   for (const a of assets) {
     if (a.role === 'ground') {
       continue
     }
-    if (a.role === 'decal') {
-      out.push({ id: 'obj_' + a.key, label: a.label, category: 'decor', kind: 'decor', size: 'petite', elements: [{ assetKey: a.key, dx: 0, dy: 0, scale: 1.0 }] })
-    } else if (a.role === 'worker') {
-      out.push({ id: 'obj_' + a.key, label: 'Ouvrier — ' + a.label, category: 'workers', kind: 'logistique', size: 'petite', elements: [{ assetKey: a.key, dx: 0, dy: 0, scale: 0.55 }] })
-    } else {
-      const size: EntrySize = a.role === 'landmark' || a.role === 'structure' ? 'grande' : 'moyenne'
-      out.push({ id: 'obj_' + a.key, label: a.label, category: 'objects', kind: 'objet', size, elements: [{ assetKey: a.key, dx: 0, dy: 0, scale: 1.0 }] })
+    const meta = ASSET_META[a.key]
+    const label = meta?.label ?? a.label
+    if (a.role === 'worker') {
+      out.push({ id: 'obj_' + a.key, label: 'Ouvrier — ' + label, category: meta?.category ?? 'workers', kind: 'logistique', size: 'petite', elements: [{ assetKey: a.key, dx: 0, dy: 0, scale: 0.55 }] })
+      continue
     }
+    const isDecal = a.role === 'decal'
+    const size: EntrySize = a.role === 'landmark' || a.role === 'structure' ? 'grande' : isDecal ? 'petite' : 'moyenne'
+    const category = meta?.category ?? (isDecal ? 'decor' : 'objects')
+    out.push({ id: 'obj_' + a.key, label, category, kind: isDecal ? 'decor' : 'objet', size, elements: [{ assetKey: a.key, dx: 0, dy: 0, scale: 1.0 }] })
   }
   return out
 }
@@ -246,6 +298,41 @@ function authoredScenes(stageId: string): PaletteEntry[] {
         { assetKey: REBAR, dx: -135, dy: 0, scale: 0.8 }, { assetKey: REBAR, dx: -45, dy: 0, scale: 0.8 }, { assetKey: REBAR, dx: 45, dy: 0, scale: 0.8 }, { assetKey: REBAR, dx: 135, dy: 0, scale: 0.8 } ] },
       { id: 'scene_access_concrete_trucks', label: 'Voie d\'accès toupies', category: 'routes', kind: 'route', size: 'grande', elements: [
         { assetKey: MIXER, dx: -160, dy: 0, scale: 1.0 }, { assetKey: MIXER, dx: 160, dy: 8, scale: 1.0, flipX: true }, { assetKey: SPILL, dx: 0, dy: 60, scale: 0.8 } ] }
+    ]
+  }
+  if (stageId === 'terrain_vierge') {
+    const THEO = 'prop_stage01_theodolite', MIRE = 'prop_stage01_mire', STK = 'prop_stage01_stake1'
+    const CROSS = 'decal_stage01_layout_cross', LINE = 'decal_stage01_layout_line', CORN = 'decal_stage01_layout_corner'
+    const BUNDLE = 'prop_stage01_stake_bundle', REEL = 'prop_stage01_tape_reel', CONES = 'prop_stage01_cones'
+    const WC = 'struct_stage01_wc', PTABLE = 'struct_stage01_plan_table'
+    const SIGN = 'struct_stage01_sign', PERMIT = 'landmark_stage01', CABIN = 'struct_stage01_cabin'
+    return [
+      { id: 'scene_stage01_survey_setup', label: 'Poste de relevé topo', category: 'scenes', kind: 'scene', size: 'grande', elements: [
+        { assetKey: THEO, dx: 0, dy: -20, scale: 1.0 }, { assetKey: MIRE, dx: 80, dy: 10, scale: 0.9 },
+        { assetKey: STK, dx: -70, dy: 45, scale: 0.8 }, { assetKey: STK, dx: 50, dy: 60, scale: 0.8, flipX: true },
+        { assetKey: CROSS, dx: 0, dy: 70, scale: 0.85 } ] },
+      { id: 'scene_stage01_future_footprint_small', label: 'Petite emprise future', category: 'scenes', kind: 'scene', size: 'grande', elements: [
+        { assetKey: LINE, dx: 0, dy: -95, scale: 1.0 }, { assetKey: LINE, dx: 0, dy: 95, scale: 1.0 },
+        { assetKey: CORN, dx: -140, dy: -85, scale: 0.8 }, { assetKey: CORN, dx: 140, dy: -85, scale: 0.8, flipX: true },
+        { assetKey: STK, dx: -140, dy: 90, scale: 0.75 }, { assetKey: STK, dx: 140, dy: 90, scale: 0.75, flipX: true },
+        { assetKey: CROSS, dx: 0, dy: 0, scale: 0.8 } ] },
+      { id: 'scene_stage01_future_footprint_large', label: 'Grande emprise future', category: 'scenes', kind: 'scene', size: 'grande', elements: [
+        { assetKey: LINE, dx: 0, dy: -150, scale: 1.5 }, { assetKey: LINE, dx: 0, dy: 150, scale: 1.5 },
+        { assetKey: CORN, dx: -230, dy: -135, scale: 0.9 }, { assetKey: CORN, dx: 230, dy: -135, scale: 0.9, flipX: true },
+        { assetKey: STK, dx: -230, dy: 140, scale: 0.8 }, { assetKey: STK, dx: 230, dy: 140, scale: 0.8, flipX: true },
+        { assetKey: CROSS, dx: 0, dy: 0, scale: 0.9 } ] },
+      { id: 'scene_stage01_site_entrance', label: 'Entrée terrain / panneau', category: 'entrance', kind: 'scene', size: 'grande', elements: [
+        { assetKey: SIGN, dx: 0, dy: -20, scale: 1.0 }, { assetKey: PERMIT, dx: -95, dy: 25, scale: 0.9 },
+        { assetKey: CONES, dx: 95, dy: 45, scale: 0.8 }, { assetKey: 'decal_tracks', dx: 0, dy: 75, scale: 1.0 } ] },
+      { id: 'scene_stage01_base_life_light', label: 'Base vie légère', category: 'baselife', kind: 'scene', size: 'grande', elements: [
+        { assetKey: CABIN, dx: 0, dy: 0, scale: 1.1 }, { assetKey: WC, dx: 115, dy: 20, scale: 0.9 },
+        { assetKey: REEL, dx: -95, dy: 60, scale: 0.7 }, { assetKey: BUNDLE, dx: 85, dy: 70, scale: 0.7 } ] },
+      { id: 'scene_stage01_topo_stock', label: 'Stock topo / balisage', category: 'stocks', kind: 'stock', size: 'moyenne', elements: [
+        { assetKey: BUNDLE, dx: -70, dy: 5, scale: 0.85 }, { assetKey: REEL, dx: 35, dy: 15, scale: 0.8 },
+        { assetKey: STK, dx: 95, dy: -10, scale: 0.7 }, { assetKey: PTABLE, dx: 0, dy: -70, scale: 0.85 } ] },
+      { id: 'scene_stage01_raw_ground_cluster', label: 'Terrain brut', category: 'decor', kind: 'decor', size: 'moyenne', elements: [
+        { assetKey: 'prop_rocks', dx: -60, dy: 0, scale: 0.9 }, { assetKey: 'prop_weeds', dx: 45, dy: 20, scale: 0.9 },
+        { assetKey: 'decal_puddle', dx: 0, dy: 50, scale: 1.0 }, { assetKey: 'prop_soft', dx: 70, dy: -20, scale: 1.0 } ] }
     ]
   }
   if (stageId === 'terrassement') {

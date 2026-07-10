@@ -127,6 +127,19 @@ export interface StageRender {
   decalDensityMultiplier?: number
   /** Ambiance intérieure (phases 05→10) — grille de colonnes + voile chaud. Optionnel. */
   interior?: InteriorTheme
+  /**
+   * Assets réservés au Stage Composer Editor : préchargés (pour que les compos
+   * sauvées soient jouables) et exposés dans la palette, mais JAMAIS placés
+   * automatiquement par le jeu (aucun scatter). Le gameplay auto reste inchangé.
+   */
+  editorExtras?: StageEditorExtra[]
+}
+
+/** Asset exposé dans l'éditeur (préchargé pour les compos) mais jamais scatteré par le jeu. */
+export interface StageEditorExtra {
+  key: string
+  file: string
+  role: 'prop' | 'structure' | 'decal'
 }
 
 /** PNJ d'ambiance : skin perso + comportement + période d'animation optionnelle. */
@@ -258,7 +271,22 @@ const TERRAIN_VIERGE_RENDER: StageRender = {
     }
   ],
   baseTileIndex:          0,   // tuile terre/herbe de base (index 0)
-  decalDensityMultiplier: 1.2  // terrain brut début de chantier, densité moyenne
+  decalDensityMultiplier: 1.2, // terrain brut début de chantier, densité moyenne
+  // Assets d'implantation exposés dans l'éditeur (préchargés, JAMAIS scatterés).
+  // Le jeu auto est inchangé ; ils ne servent qu'à composer + jouer une compo.
+  editorExtras: [
+    { key: 'prop_stage01_theodolite',  file: 'stage01/props/theodolite.png',         role: 'structure' },
+    { key: 'prop_stage01_mire',        file: 'stage01/props/measuring_staff.png',     role: 'prop' },
+    { key: 'prop_stage01_stake1',      file: 'stage01/props/survey_stake_single.png', role: 'prop' },
+    { key: 'prop_stage01_stake_bundle', file: 'stage01/props/stake_bundle.png',       role: 'prop' },
+    { key: 'prop_stage01_tape_reel',   file: 'stage01/props/tape_reel.png',           role: 'prop' },
+    { key: 'prop_stage01_cones',       file: 'stage01/props/cone_cluster.png',        role: 'prop' },
+    { key: 'struct_stage01_wc',        file: 'stage01/props/site_toilet.png',         role: 'structure' },
+    { key: 'struct_stage01_plan_table', file: 'stage01/props/plan_table.png',         role: 'structure' },
+    { key: 'decal_stage01_layout_cross',  file: 'stage01/decals/layout_cross.png',    role: 'decal' },
+    { key: 'decal_stage01_layout_corner', file: 'stage01/decals/layout_corner.png',   role: 'decal' },
+    { key: 'decal_stage01_layout_line',   file: 'stage01/decals/layout_line.png',     role: 'decal' }
+  ]
 }
 
 const TERRASSEMENT_RENDER: StageRender = {

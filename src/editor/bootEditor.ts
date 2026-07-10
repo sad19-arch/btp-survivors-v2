@@ -17,7 +17,7 @@ import { clearThumbnailCache } from './PrefabThumbnail'
 
 const OFFSET_X = 5120
 const OFFSET_Y = 3840
-const START_STAGE = 'fondations'
+const START_STAGE = 'terrain_vierge'
 
 const CSS = `
 .sce-overlay{position:fixed;inset:0;z-index:9998;pointer-events:none;font-family:'Courier New',monospace;color:#f0e6d2}
