@@ -7,10 +7,10 @@
  * Ne dépend NI de Phaser NI du DOM.
  */
 
-import { emptyLayout, type EmbeddedElement, type EmbeddedShape, type LayoutInstance, type LayoutMarker, type LayoutPath, type StageLayout, type Vec2 } from '@content/stageLayout'
+import { emptyLayout, type EmbeddedElement, type EmbeddedShape, type LayoutInstance, type LayoutMarker, type LayoutNpc, type LayoutPath, type NpcKind, type StageLayout, type Vec2 } from '@content/stageLayout'
 
 export { SCHEMA_VERSION, emptyLayout } from '@content/stageLayout'
-export type { Vec2, LayoutInstance, LayoutMarker, LayoutPath, StageLayout, MarkerType, PathType, EmbeddedElement, EmbeddedShape } from '@content/stageLayout'
+export type { Vec2, LayoutInstance, LayoutMarker, LayoutPath, LayoutNpc, NpcKind, StageLayout, MarkerType, PathType, EmbeddedElement, EmbeddedShape } from '@content/stageLayout'
 
 export interface ParseResult {
   ok: boolean
@@ -139,6 +139,18 @@ export function parseLayout(raw: string, fallbackStage: string): ParseResult {
         return { id: typeof o.id === 'string' ? o.id : `${t}_${i + 1}`, type: t, points: pts }
       })
       .filter((v): v is LayoutPath => v !== null)
+  }
+
+  if (Array.isArray(d.npcs)) {
+    base.npcs = d.npcs
+      .map((it, i): LayoutNpc | null => {
+        if (typeof it !== 'object' || it === null) {return null}
+        const o = it as Record<string, unknown>
+        if (typeof o.skin !== 'string') {return null}
+        const kind: NpcKind = o.kind === 'worker' ? 'worker' : 'trade'
+        return { id: typeof o.id === 'string' ? o.id : `npc_${i + 1}`, skin: o.skin, kind, x: num(o.x, 0), y: num(o.y, 0) }
+      })
+      .filter((v): v is LayoutNpc => v !== null)
   }
 
   return { ok: true, layout: base }

@@ -5,6 +5,8 @@
  * Tout le temps est passé en argument → testable en Vitest sans environnement.
  */
 
+import type { StageLayout } from '@content/stageLayout'
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes exportées (testables)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -244,4 +246,52 @@ export function panicDecision(
     return { flee: true, fx: 0, fy: -1 }
   }
   return { flee: true, fx: dx / dist, fy: dy / dist }
+}
+
+/**
+ * Vitesse de FUITE d'un ouvrier mobile face aux ennemis (pur, cosmétique).
+ * Si l'ennemi le plus proche est dans `fleeRadius`, renvoie une vitesse de norme
+ * `speed` dirigée à l'OPPOSÉ de cet ennemi ; sinon `{0,0}`. Dist 0 → immobile
+ * (évite NaN). Aucun impact gameplay/collision : le rendu observe `state.enemies`.
+ */
+export function fleeVelocity(
+  pos: { x: number; y: number },
+  enemies: ReadonlyArray<{ x: number; y: number }>,
+  fleeRadius: number,
+  speed: number
+): { vx: number; vy: number } {
+  let nx = 0
+  let ny = 0
+  let best = fleeRadius
+  for (const e of enemies) {
+    const dx = pos.x - e.x
+    const dy = pos.y - e.y
+    const d = Math.hypot(dx, dy)
+    if (d < best && d > 0.0001) {
+      best = d
+      nx = dx / d
+      ny = dy / d
+    }
+  }
+  return { vx: nx * speed, vy: ny * speed }
+}
+
+/**
+ * PNJ posés dans une compo → jobs de rendu (pur, testable, sans Phaser).
+ * Convertit les coords composition (origine = centre monde) en monde.
+ * `worker` → mobile (marche + fuite), sinon `trade` → fixe animé.
+ */
+export function planNpcJobs(
+  layout: StageLayout,
+  worldW: number,
+  worldH: number
+): Array<{ role: 'npc_trade' | 'npc_worker'; x: number; y: number; skin: string }> {
+  const offX = worldW / 2
+  const offY = worldH / 2
+  return layout.npcs.map((n) => ({
+    role: n.kind === 'worker' ? 'npc_worker' : 'npc_trade',
+    x: offX + n.x,
+    y: offY + n.y,
+    skin: n.skin
+  }))
 }

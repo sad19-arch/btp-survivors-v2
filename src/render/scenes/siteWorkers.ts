@@ -26,9 +26,10 @@ import Phaser from 'phaser'
 import { buildSiteLayout, type PlacedCluster } from '@core/siteLayout'
 import { buildSitePlan } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
-import { commutePos, loadVisible, panicDecision, pathFollow, PANIC_R } from '@render/workerBehavior'
+import { commutePos, loadVisible, panicDecision, pathFollow, fleeVelocity, planNpcJobs, PANIC_R } from '@render/workerBehavior'
 import { getComposedLayout } from '@content/composedLayouts'
-import { dirRow, walkFrame } from '@render/sprites'
+import type { StageLayout } from '@content/stageLayout'
+import { dirRow, idleFrame, walkFrame } from '@render/sprites'
 import type { AppViewState } from '@/app/appState'
 import { PALETTE_HEX } from '@ui/palette'
 
@@ -58,6 +59,17 @@ const CAMION_SPEED = 150
  * cohérente avec le joueur (~99 px).
  */
 const WORKER_SCALE = 0.62
+
+/** PNJ posés (compo) : rayon de fuite d'un ouvrier mobile + vitesse (px/s) + retour à l'ancre. */
+const NPC_FLEE_R = 240
+const NPC_WORKER_SPEED = 90
+const NPC_RETURN_SPEED = 40
+/**
+ * Cadence d'animation du geste d'un PNJ métier (ms/frame). Le NOMBRE de frames
+ * est lu directement sur la feuille (les feuilles générées vont de 5 à 12 frames
+ * selon le métier), pas codé en dur.
+ */
+const NPC_GESTURE_PERIOD_MS = 110
 
 /** Amplitude du rebond vertical d'un camion en roulant (px, suspension). */
 const CAMION_BOB_PX = 4
@@ -95,7 +107,7 @@ interface WorkerJob {
    *  - camion     : benne qui roule sur la piste (évacuation) — gros sprite, rapide,
    *                 orienté par flipX, ne panique pas.
    */
-  role: 'porteur' | 'signaleur' | 'navetteur' | 'stationnaire' | 'camion' | 'path' | 'path_camion'
+  role: 'porteur' | 'signaleur' | 'navetteur' | 'stationnaire' | 'camion' | 'path' | 'path_camion' | 'npc_trade' | 'npc_worker'
   /** Point de départ A (monde). */
   ax: number
   ay: number
@@ -151,6 +163,23 @@ export class SiteWorkers {
 
   constructor(private readonly scene: Phaser.Scene) {}
 
+  /**
+   * Sources de bulles : PNJ actuellement affichés (métier posé ET ouvrier
+   * mobile) avec position courante + rôle. Utilisé par la couche « bulles de
+   * dialogue » (observer-only) ; `seed` varie par PNJ pour diversifier la pioche.
+   */
+  getActiveNpcs(): Array<{ x: number; y: number; role: WorkerJob['role']; seed: number }> {
+    const out: Array<{ x: number; y: number; role: WorkerJob['role']; seed: number }> = []
+    for (let i = 0; i < this.active.length; i++) {
+      const aw = this.active[i]
+      if (aw === undefined) {
+        continue
+      }
+      out.push({ x: aw.sprite.x, y: aw.sprite.y, role: aw.job.role, seed: (i * 0x9e3779b9) >>> 0 })
+    }
+    return out
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // reset
   // ─────────────────────────────────────────────────────────────────────────
@@ -197,6 +226,16 @@ export class SiteWorkers {
     const routeClusters = layout.clusters.filter((c) => c.defId === 'cluster_route')
 
     let jobIdx = 0
+
+    // Un stage AVEC compo sauvée est la VÉRITÉ TOTALE : pas d'auto-peuplement
+    // d'ouvriers (porteurs/navetteurs/baseline) ; seuls les PNJ POSÉS + les
+    // chemins tracés sont rendus. Sans compo → auto-peuplement (fallback).
+    const composed = getComposedLayout(stageId)
+    if (composed !== null) {
+      this._addComposedNpcsAndPaths(composed, worldW, worldH, npcKeys)
+      return
+    }
+
     if (stageId === 'fondations') {
       jobIdx = this._addFoundationTradeWorkers(layout.clusters, npcKeys, jobIdx)
     }
@@ -387,42 +426,51 @@ export class SiteWorkers {
       }
     }
 
-    // Jobs « chemin » (compos éditeur) : ouvriers/camions qui SUIVENT une
-    // polyligne worker_path / truck_path (coordonnées composition → monde).
-    const composed = getComposedLayout(stageId)
-    if (composed !== null) {
-      const offX = worldW / 2
-      const offY = worldH / 2
-      for (const p of composed.paths) {
-        if (p.points.length < 2) {
-          continue
-        }
-        const pts = p.points.map((pt) => ({ x: offX + pt.x, y: offY + pt.y }))
-        const first = pts[0] ?? { x: offX, y: offY }
-        const mid = pts[Math.floor(pts.length / 2)] ?? first
-        const isTruck = p.type === 'truck_path'
-        if (isTruck && !this.scene.textures.exists('prop_s2_truck')) {
-          continue // le camion requiert la feuille terrassement
-        }
-        const key = isTruck ? 'prop_s2_truck' : this._resolveKey('porteur', npcKeys)
-        if (key === null) {
-          continue
-        }
-        this.jobs.push({
-          textureKey: key,
-          role: isTruck ? 'path_camion' : 'path',
-          ax: first.x,
-          ay: first.y,
-          bx: first.x,
-          by: first.y,
-          speed: isTruck ? CAMION_SPEED : NAVETTEUR_SPEED,
-          midX: mid.x,
-          midY: mid.y,
-          phaseOffsetMs: jobIdx * PHASE_OFFSET_MS,
-          points: pts
-        })
-        jobIdx++
+  }
+
+  /**
+   * Stage COMPOSÉ : ajoute les PNJ posés (métier fixe / ouvrier mobile) puis les
+   * suiveurs de chemin (worker_path / truck_path). AUCUN auto-peuplement.
+   */
+  private _addComposedNpcsAndPaths(composed: StageLayout, worldW: number, worldH: number, npcKeys: readonly string[]): void {
+    let jobIdx = 0
+    const offX = worldW / 2
+    const offY = worldH / 2
+
+    for (const nj of planNpcJobs(composed, worldW, worldH)) {
+      if (!this.scene.textures.exists(nj.skin)) {
+        continue
       }
+      this.jobs.push({
+        textureKey: nj.skin, role: nj.role,
+        ax: nj.x, ay: nj.y, bx: nj.x, by: nj.y, speed: 0,
+        midX: nj.x, midY: nj.y, phaseOffsetMs: jobIdx * PHASE_OFFSET_MS
+      })
+      jobIdx++
+    }
+
+    for (const p of composed.paths) {
+      if (p.points.length < 2) {
+        continue
+      }
+      const pts = p.points.map((pt) => ({ x: offX + pt.x, y: offY + pt.y }))
+      const first = pts[0] ?? { x: offX, y: offY }
+      const mid = pts[Math.floor(pts.length / 2)] ?? first
+      const isTruck = p.type === 'truck_path'
+      if (isTruck && !this.scene.textures.exists('prop_s2_truck')) {
+        continue
+      }
+      const key = isTruck ? 'prop_s2_truck' : this._resolveKey('porteur', npcKeys)
+      if (key === null) {
+        continue
+      }
+      this.jobs.push({
+        textureKey: key, role: isTruck ? 'path_camion' : 'path',
+        ax: first.x, ay: first.y, bx: first.x, by: first.y,
+        speed: isTruck ? CAMION_SPEED : NAVETTEUR_SPEED,
+        midX: mid.x, midY: mid.y, phaseOffsetMs: jobIdx * PHASE_OFFSET_MS, points: pts
+      })
+      jobIdx++
     }
   }
 
@@ -486,6 +534,45 @@ export class SiteWorkers {
           if (aw.animatable) {
             aw.sprite.setFrame(walkFrame(dirRow(pf.dirX, pf.dirY), nowMs, 250))
           }
+        }
+        continue
+      }
+
+      // PNJ posés (compo) — métier FIXE animé / ouvrier MOBILE qui fuit.
+      if (job.role === 'npc_trade') {
+        aw.sprite.setPosition(job.ax, job.ay)
+        if (aw.animatable) {
+          // Nombre de frames RÉEL de la feuille (Phaser compte le frame `__BASE`
+          // en plus → -1). Défile tout le geste, quel que soit le métier.
+          const total = Math.max(1, aw.sprite.texture.frameTotal - 1)
+          aw.sprite.setFrame(Math.floor(nowMs / NPC_GESTURE_PERIOD_MS) % total)
+        }
+        continue
+      }
+      if (job.role === 'npc_worker') {
+        const flee = fleeVelocity({ x: aw.fleeX, y: aw.fleeY }, enemies, NPC_FLEE_R, NPC_WORKER_SPEED)
+        const frameMs = Math.min(this.scene.game.loop.delta, 100) / 1000
+        let dirX = flee.vx
+        let dirY = flee.vy
+        if (flee.vx !== 0 || flee.vy !== 0) {
+          aw.fleeX = Phaser.Math.Clamp(aw.fleeX + flee.vx * frameMs, 0, this.worldW)
+          aw.fleeY = Phaser.Math.Clamp(aw.fleeY + flee.vy * frameMs, 0, this.worldH)
+        } else {
+          // Aucun ennemi proche : retour lent vers l'ancre (pas d'errance infinie).
+          const rx = job.ax - aw.fleeX
+          const ry = job.ay - aw.fleeY
+          const rd = Math.hypot(rx, ry)
+          if (rd > 8) {
+            const step = Math.min(NPC_RETURN_SPEED * frameMs, rd)
+            aw.fleeX += (rx / rd) * step
+            aw.fleeY += (ry / rd) * step
+            dirX = rx
+            dirY = ry
+          }
+        }
+        aw.sprite.setPosition(aw.fleeX, aw.fleeY)
+        if (aw.animatable) {
+          aw.sprite.setFrame(dirX !== 0 || dirY !== 0 ? walkFrame(dirRow(dirX, dirY), nowMs, 200) : idleFrame(dirRow(0, 1)))
         }
         continue
       }

@@ -76,6 +76,19 @@ export interface LayoutPath {
   points: Vec2[]
 }
 
+/** Catégorie de PNJ : 'trade' = métier fixe animé ; 'worker' = ouvrier mobile (marche + fuite). */
+export type NpcKind = 'trade' | 'worker'
+
+/** Un PNJ posé dans la composition. Système distinct des instances de décor. */
+export interface LayoutNpc {
+  id: string
+  /** Clé de skin (feuille de sprite) — ex. 'npc_stage01' (métier) ou 'npc_stage01_ouvrier_a' (ouvrier). */
+  skin: string
+  kind: NpcKind
+  x: number
+  y: number
+}
+
 export interface StageLayout {
   schemaVersion: number
   stage: string
@@ -85,6 +98,7 @@ export interface StageLayout {
   instances: LayoutInstance[]
   markers: LayoutMarker[]
   paths: LayoutPath[]
+  npcs: LayoutNpc[]
 }
 
 /** Layout vide par défaut (spawn au centre = origine composition). */
@@ -97,6 +111,7 @@ export function emptyLayout(stage: string): StageLayout {
     cameraPreview: { width: 1280, height: 720 },
     instances: [],
     markers: [],
-    paths: []
+    paths: [],
+    npcs: []
   }
 }

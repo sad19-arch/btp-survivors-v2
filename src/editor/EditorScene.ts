@@ -25,12 +25,21 @@ const ZOOM_MAX = 1.6
 const DEPTH_GROUND = 0
 const DEPTH_PATH = 5
 const DEPTH_INSTANCE = 10
+const DEPTH_NPC = 30 // PNJ au-dessus du décor, sous les marqueurs/sélection
 const DEPTH_MARKER = 40
 const DEPTH_SELECT = 45
+
+/** Échelle de rendu ÉDITEUR d'un PNJ (lisibilité, indépendante du scale de jeu). */
+const NPC_SCALE = 0.6
 
 interface InstanceView {
   container: Phaser.GameObjects.Container
   sig: string // signature (prefab+flip+variant) pour savoir s'il faut reconstruire les enfants
+}
+
+interface NpcView {
+  container: Phaser.GameObjects.Container
+  skin: string // reconstruire la vue si le skin change
 }
 
 export interface EditorSceneData {
@@ -52,12 +61,14 @@ export class EditorScene extends Phaser.Scene {
   private uiRefresh: (() => void) | null = null
 
   private views = new Map<string, InstanceView>()
+  private npcViews = new Map<string, NpcView>()
   private gfx!: Phaser.GameObjects.Graphics // grille + rect caméra + spawn + signature
   private pathGfx!: Phaser.GameObjects.Graphics
   private selGfx!: Phaser.GameObjects.Graphics // sélection + verrous
   private guideGfx!: Phaser.GameObjects.Graphics // guides d'alignement (pendant le drag)
 
   private dragId: string | null = null
+  private dragIsNpc = false
   private dragOffset: Vec2 = { x: 0, y: 0 }
   private panning = false
   private panStart = { x: 0, y: 0, sx: 0, sy: 0 }
@@ -201,6 +212,11 @@ export class EditorScene extends Phaser.Scene {
     const wx = cam.midPoint.x
     const wy = cam.midPoint.y
     const p = this.state.applySnap(wx - OFFSET_X, wy - OFFSET_Y)
+    const entry = paletteEntry(this.activePrefab)
+    if (entry?.npcSkin !== undefined) {
+      this.state.addNpc(entry.npcSkin, entry.npcKind ?? 'trade', OFFSET_X + p.x, OFFSET_Y + p.y)
+      return
+    }
     this.state.addInstance(this.activePrefab, p.x, p.y)
   }
   setZoom(z: number): void {
@@ -260,17 +276,34 @@ export class EditorScene extends Phaser.Scene {
       this.handleMarkerClick(this.activeMarker, comp)
       return
     }
-    // Prefab actif → poser.
+    // Prefab actif → poser. Une entrée PNJ (npcSkin défini) pose un LayoutNpc
+    // AVANT la branche instance (les PNJ sont un système distinct du décor).
     if (this.activePrefab !== null) {
       const s = this.state.applySnap(comp.x, comp.y)
+      const entry = paletteEntry(this.activePrefab)
+      if (entry?.npcSkin !== undefined) {
+        this.state.addNpc(entry.npcSkin, entry.npcKind ?? 'trade', OFFSET_X + s.x, OFFSET_Y + s.y)
+        return
+      }
       this.state.addInstance(this.activePrefab, s.x, s.y)
       return
     }
-    // Sinon : sélection d'une instance (la plus haute).
+    // Sinon : sélection. Les PNJ (rendus au-dessus) sont prioritaires, puis les
+    // instances (la plus haute).
+    const npcHit = this.pickNpc(w)
+    if (npcHit !== null) {
+      this.state.select(npcHit)
+      this.dragId = npcHit
+      this.dragIsNpc = true
+      const npc = this.state.npcs.find((n) => n.id === npcHit)
+      if (npc !== undefined) {this.dragOffset = { x: comp.x - npc.x, y: comp.y - npc.y }}
+      return
+    }
     const hit = this.pickInstance(w)
     if (hit !== null) {
       this.state.select(hit)
       this.dragId = hit
+      this.dragIsNpc = false
       const inst = this.state.instances.find((i) => i.id === hit)
       if (inst !== undefined) {this.dragOffset = { x: comp.x - inst.x, y: comp.y - inst.y }}
     } else {
@@ -297,7 +330,11 @@ export class EditorScene extends Phaser.Scene {
       const raw = { x: w.x - OFFSET_X - this.dragOffset.x, y: w.y - OFFSET_Y - this.dragOffset.y }
       const gridSnap = this.state.applySnap(raw.x, raw.y)
       const aligned = this.alignSnap(gridSnap.x, gridSnap.y, this.dragId)
-      this.state.moveInstance(this.dragId, aligned.x, aligned.y)
+      if (this.dragIsNpc) {
+        this.state.moveNpc(this.dragId, OFFSET_X + aligned.x, OFFSET_Y + aligned.y)
+      } else {
+        this.state.moveInstance(this.dragId, aligned.x, aligned.y)
+      }
     }
   }
 
@@ -336,6 +373,7 @@ export class EditorScene extends Phaser.Scene {
   private onPointerUp(): void {
     this.panning = false
     this.dragId = null
+    this.dragIsNpc = false
     this.resizingSig = false
     this.guideGfx.clear()
   }
@@ -395,6 +433,19 @@ export class EditorScene extends Phaser.Scene {
       if (view === undefined) {continue}
       const b = view.container.getBounds()
       if (b.contains(world.x, world.y)) {return inst.id}
+    }
+    return null
+  }
+
+  private pickNpc(world: Vec2): string | null {
+    const list = this.state.npcs
+    for (let i = list.length - 1; i >= 0; i--) {
+      const npc = list[i]
+      if (npc === undefined) {continue}
+      const view = this.npcViews.get(npc.id)
+      if (view === undefined) {continue}
+      const b = view.container.getBounds()
+      if (b.contains(world.x, world.y)) {return npc.id}
     }
     return null
   }
@@ -535,6 +586,51 @@ export class EditorScene extends Phaser.Scene {
     }
   }
 
+  /** Rend les PNJ posés : sprite (skin, frame 0) + badge « fixe »/« mobile ». */
+  private syncNpcs(): void {
+    const seen = new Set<string>()
+    for (const npc of this.state.npcs) {
+      seen.add(npc.id)
+      const wx = OFFSET_X + npc.x
+      const wy = OFFSET_Y + npc.y
+      let view = this.npcViews.get(npc.id)
+      if (view === undefined || view.skin !== npc.skin) {
+        view?.container.destroy()
+        view = { container: this.buildNpcView(npc.skin, npc.kind), skin: npc.skin }
+        this.npcViews.set(npc.id, view)
+      }
+      view.container.setPosition(wx, wy)
+      view.container.setDepth(DEPTH_NPC)
+    }
+    for (const [id, view] of this.npcViews) {
+      if (!seen.has(id)) {
+        view.container.destroy()
+        this.npcViews.delete(id)
+      }
+    }
+  }
+
+  /** Container d'un PNJ : sprite (ou placeholder) + badge de catégorie au-dessus. */
+  private buildNpcView(skin: string, kind: 'trade' | 'worker'): Phaser.GameObjects.Container {
+    const children: Phaser.GameObjects.GameObject[] = []
+    if (this.textures.exists(skin)) {
+      children.push(this.add.sprite(0, 0, skin, 0).setScale(NPC_SCALE))
+    } else {
+      children.push(this.add.rectangle(0, 0, 90, 130, 0x3a6ea5).setStrokeStyle(4, 0x000000))
+    }
+    const badge = this.add
+      .text(0, -78, kind === 'worker' ? 'mobile' : 'fixe', {
+        fontFamily: 'monospace',
+        fontSize: '38px',
+        color: '#ffffff',
+        backgroundColor: kind === 'worker' ? '#1f6f4f' : '#8a5a1f'
+      })
+      .setOrigin(0.5, 1)
+      .setPadding(6, 2, 6, 2)
+    children.push(badge)
+    return this.add.container(0, 0, children)
+  }
+
   private drawOverlays(): void {
     const g = this.gfx
     g.clear()
@@ -605,18 +701,30 @@ export class EditorScene extends Phaser.Scene {
       const lb = v.container.getBounds()
       sel.strokeRect(lb.x, lb.y, lb.width, lb.height)
     }
-    // Sélection courante (blanc + cyan).
+    // Sélection courante (blanc + cyan) — instance OU PNJ.
     const inst = this.state.selectedInstance()
-    if (inst === null) {return}
-    const view = this.views.get(inst.id)
-    if (view === undefined) {return}
-    const b = view.container.getBounds()
-    sel.lineStyle(3, 0xffffff, 1).strokeRect(b.x, b.y, b.width, b.height)
-    sel.lineStyle(2, 0x66ccff, 1).strokeRect(b.x - 3, b.y - 3, b.width + 6, b.height + 6)
+    if (inst !== null) {
+      const view = this.views.get(inst.id)
+      if (view !== undefined) {
+        const b = view.container.getBounds()
+        sel.lineStyle(3, 0xffffff, 1).strokeRect(b.x, b.y, b.width, b.height)
+        sel.lineStyle(2, 0x66ccff, 1).strokeRect(b.x - 3, b.y - 3, b.width + 6, b.height + 6)
+      }
+    }
+    const npc = this.state.selectedNpc()
+    if (npc !== null) {
+      const view = this.npcViews.get(npc.id)
+      if (view !== undefined) {
+        const b = view.container.getBounds()
+        sel.lineStyle(3, 0xffffff, 1).strokeRect(b.x, b.y, b.width, b.height)
+        sel.lineStyle(2, 0x66ccff, 1).strokeRect(b.x - 3, b.y - 3, b.width + 6, b.height + 6)
+      }
+    }
   }
 
   private syncAll(): void {
     this.syncInstances()
+    this.syncNpcs()
     this.drawOverlays()
     this.drawSelection()
     this.refreshUi()

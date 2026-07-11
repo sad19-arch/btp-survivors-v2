@@ -12,7 +12,7 @@
  * y résolvent leurs clés.
  */
 
-import { STAGE_RENDER } from '@render/stages'
+import { STAGE_RENDER, SHARED_WORKER_NPCS, type StageRender, type StageAmbientNpc } from '@render/stages'
 import { CLUSTERS } from '@content/clusters'
 
 export type EntryKind = 'scene' | 'stock' | 'route' | 'logistique' | 'marqueur' | 'decor' | 'objet'
@@ -36,6 +36,10 @@ export interface PaletteEntry {
   size: EntrySize
   elements?: PrefabElement[]
   marker?: MarkerTool
+  /** Skin (feuille) du PNJ posé par cette entrée (sections `npc_metier`/`npc_ouvrier`). */
+  npcSkin?: string
+  /** Catégorie de PNJ : 'trade' = métier fixe ; 'worker' = ouvrier mobile. */
+  npcKind?: 'trade' | 'worker'
 }
 
 export interface Category {
@@ -80,6 +84,8 @@ export const STAGE_LIST: ReadonlyArray<{ id: string; label: string }> = [
 
 export const CATEGORIES: Category[] = [
   { id: 'scenes', label: 'Scènes principales' },
+  { id: 'npc_metier', label: 'PNJ métier (fixe)' },
+  { id: 'npc_ouvrier', label: 'PNJ ouvrier (mobile)' },
   { id: 'topo', label: 'Implantation & topographie' },
   { id: 'marking', label: 'Marquage au sol' },
   { id: 'entrance', label: 'Entrée & signalétique' },
@@ -201,9 +207,15 @@ function buildStageAssets(stageId: string): { assets: EditorAsset[]; groundKey: 
   for (const e of sr.editorExtras ?? []) {
     add({ key: e.key, file: e.file, label: humanize(e.file), role: e.role })
   }
-  const worker = sr.ambient?.[0]
-  if (worker !== undefined) {
-    add({ key: worker.key, file: worker.file, sheet: true, frame: worker.frame, label: humanize(worker.file), role: 'worker' })
+  // PNJ « métier » du stage (tous les skins ambient) + ouvriers génériques
+  // PARTAGÉS (SHARED_WORKER_NPCS, identiques sur tous les stages) : exposés
+  // comme assets « worker » (feuille de sprite) → `EditorScene.preload` charge
+  // ainsi toutes leurs textures. La palette (npcEntries) s'appuie sur ces skins.
+  for (const npc of sr.ambient ?? []) {
+    add({ key: npc.key, file: npc.file, sheet: true, frame: npc.frame, label: humanize(npc.file), role: 'worker' })
+  }
+  for (const npc of SHARED_WORKER_NPCS) {
+    add({ key: npc.key, file: npc.file, sheet: true, frame: npc.frame, label: humanize(npc.file), role: 'worker' })
   }
   if (sr.interior !== undefined) {
     add({ key: sr.interior.columnKey, file: sr.interior.columnFile, label: 'Poteau', role: 'column' })
@@ -221,13 +233,45 @@ function objectEntries(assets: EditorAsset[]): PaletteEntry[] {
     const meta = ASSET_META[a.key]
     const label = meta?.label ?? a.label
     if (a.role === 'worker') {
-      out.push({ id: 'obj_' + a.key, label: 'Ouvrier — ' + label, category: meta?.category ?? 'workers', kind: 'logistique', size: 'petite', elements: [{ assetKey: a.key, dx: 0, dy: 0, scale: 0.55 }] })
+      // Les PNJ sont gérés par `npcEntries` (2 sections dédiées) — pas de doublon
+      // « Ouvrier — … » dans la catégorie « Ouvriers & chemins ».
       continue
     }
     const isDecal = a.role === 'decal'
     const size: EntrySize = a.role === 'landmark' || a.role === 'structure' ? 'grande' : isDecal ? 'petite' : 'moyenne'
     const category = meta?.category ?? (isDecal ? 'decor' : 'objects')
     out.push({ id: 'obj_' + a.key, label, category, kind: isDecal ? 'decor' : 'objet', size, elements: [{ assetKey: a.key, dx: 0, dy: 0, scale: 1.0 }] })
+  }
+  return out
+}
+
+/**
+ * Une entrée de palette par PNJ, dans 2 sections distinctes :
+ *  - MÉTIERS (`sr.ambient`, `kind` absent → 'trade') → « PNJ métier (fixe) » ;
+ *  - OUVRIERS génériques (`SHARED_WORKER_NPCS`, `kind:'worker'`), IDENTIQUES sur
+ *    tous les stages → « PNJ ouvrier (mobile) ».
+ * Poser une entrée ajoute un `LayoutNpc` (via `EditorState.addNpc`) — pas une
+ * instance de décor.
+ */
+function npcEntries(sr: StageRender | undefined): PaletteEntry[] {
+  const out: PaletteEntry[] = []
+  const push = (npc: StageAmbientNpc): void => {
+    const kind: 'trade' | 'worker' = npc.kind === 'worker' ? 'worker' : 'trade'
+    out.push({
+      id: 'npc_' + npc.key,
+      label: humanize(npc.file),
+      category: kind === 'worker' ? 'npc_ouvrier' : 'npc_metier',
+      kind: 'objet',
+      size: 'moyenne',
+      npcSkin: npc.key,
+      npcKind: kind
+    })
+  }
+  for (const npc of sr?.ambient ?? []) {
+    push(npc)
+  }
+  for (const npc of SHARED_WORKER_NPCS) {
+    push(npc)
   }
   return out
 }
@@ -359,10 +403,11 @@ export function getStageCatalog(stageId: string): StageCatalog {
   if (hit !== undefined) {
     return hit
   }
+  const sr = STAGE_RENDER[stageId] ?? STAGE_RENDER.terrain_vierge
   const { assets, groundKey } = buildStageAssets(stageId)
   const authored = authoredScenes(stageId)
   const scenes = authored.length > 0 ? authored : autoScenes(stageId, assets)
-  const entries = [...scenes, ...objectEntries(assets), ...MARKERS]
+  const entries = [...scenes, ...npcEntries(sr), ...objectEntries(assets), ...MARKERS]
   const cat: StageCatalog = { stageId, assets, entries, groundKey }
   cache.set(stageId, cat)
   return cat

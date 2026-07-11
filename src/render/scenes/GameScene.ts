@@ -10,9 +10,10 @@ import { SITE_PROGRAMS } from '@content/sitePrograms'
 import { createGround } from '@render/ground'
 import { createLandmark, createStructures, phaseSalt, resolvePlacement, type ExclusionCircle } from '@render/props'
 import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
+import { getComposedLayout } from '@content/composedLayouts'
 import { walkFrame } from '@render/sprites'
 import { ambientOffset } from '@render/ambientNpc'
-import { stageRender, type StageRender, FINAL_BOSS_SKIN } from '@render/stages'
+import { stageRender, type StageRender, FINAL_BOSS_SKIN, SHARED_WORKER_NPCS } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { DamageNumberPool } from '@render/damageNumbers'
 import { VfxManager } from '@render/scenes/vfxManager'
@@ -85,6 +86,8 @@ export class GameScene extends Phaser.Scene {
   private decorStreamer!: DecorStreamer
   /** Compteur de frames depuis le dernier update du DecorStreamer (throttle toutes les 4 frames). */
   private decorStreamerFrame = 0
+  /** true si une compo existe pour ce stage → décor ambiant coupé (la compo est la vérité). */
+  private decorSuppressed = false
   /**
    * Pool de sprites pour ennemis/projectiles/pickups (horde 300-600 entités) : réutilise
    * au lieu de create/destroy. INSTANCE FRAÎCHE à chaque `create()` (scene.restart en
@@ -256,6 +259,10 @@ export class GameScene extends Phaser.Scene {
       // PNJ(s) d'ambiance non-hostiles du stage (feuilles perso).
       for (const a of this.stage.ambient ?? []) {
         this.load.spritesheet(a.key, a.file, { frameWidth: a.frame, frameHeight: a.frame })
+      }
+      // Ouvriers GÉNÉRIQUES partagés : dispo dans les compos de TOUS les stages.
+      for (const w of SHARED_WORKER_NPCS) {
+        this.load.spritesheet(w.key, w.file, { frameWidth: w.frame, frameHeight: w.frame })
       }
     }
     this.load.image('proj_scie', 'stage01/weapons/proj_scie.png')
@@ -531,6 +538,9 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.decorStreamer = new DecorStreamer(this, WORLD.width, WORLD.height, streamerOpts)
+    // Compo sauvée = vérité totale du décor : on coupe le streaming ambiant
+    // (traces/cailloux/herbes auto). Sans compo → décor procédural conservé.
+    this.decorSuppressed = getComposedLayout(this.loadedStageId) !== null
 
     this.add
       .rectangle(WORLD.width / 2, WORLD.height / 2, WORLD.width, WORLD.height)
@@ -547,7 +557,9 @@ export class GameScene extends Phaser.Scene {
     this.camera.update(this.app.getStateForFrame(this.app.frameId), this.players.sprites)
     // Préchargement initial des chunks au démarrage (la caméra est positionnée,
     // le streamer peut déjà charger la vue initiale sans attendre le 1er update()).
-    this.decorStreamer.update(this.cameras.main)
+    if (!this.decorSuppressed) {
+      this.decorStreamer.update(this.cameras.main)
+    }
     // Préchargement initial du réseau structurel (même vue initiale que le décor).
     if (!this.lite) {
       this.siteStructures.update(this.cameras.main)
@@ -636,7 +648,9 @@ export class GameScene extends Phaser.Scene {
     // à chaque tick (la caméra ne se déplace pas d'un chunk par frame).
     this.decorStreamerFrame++
     if (this.decorStreamerFrame % 4 === 0) {
-      this.decorStreamer.update(this.cameras.main)
+      if (!this.decorSuppressed) {
+        this.decorStreamer.update(this.cameras.main)
+      }
       this.siteStructures.update(this.cameras.main)
     }
   }
@@ -674,7 +688,22 @@ export class GameScene extends Phaser.Scene {
       npc.sprite.setPosition(npc.anchor.x + off.dx, npc.anchor.y + off.dy)
       npc.sprite.setFrame(walkFrame(0, this.time.now, npc.framePeriodMs))
     }
-    // B4 — Bulles râleuses à l'approche du joueur.
-    this.bubbles.update(this.ambientSprites, state.players.filter((p) => p.alive), this.time.now)
+    // Bulles de dialogue (humour râleur rétro) sur les PNJ du chantier : métier
+    // posé → 'job' (blasé, moqueur), ouvrier mobile → 'civilian' (panique). Un
+    // ennemi à portée déclenche les répliques « monstre proche ». Priorité stage
+    // + anti-répétition gérées par le sélecteur pur (npcDialogues).
+    const enemies = state.enemies
+    const monsterR2 = 260 * 260
+    const bubbleSources = this.siteWorkers.getActiveNpcs().map((n) => ({
+      sprite: { x: n.x, y: n.y },
+      seed: n.seed,
+      npcType: n.role === 'npc_trade' ? ('job' as const) : ('civilian' as const),
+      monsterNear: enemies.some((e) => {
+        const dx = e.x - n.x
+        const dy = e.y - n.y
+        return dx * dx + dy * dy < monsterR2
+      })
+    }))
+    this.bubbles.update(bubbleSources, state.players.filter((p) => p.alive), this.time.now, this.loadedStageId)
   }
 }

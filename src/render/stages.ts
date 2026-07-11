@@ -146,6 +146,12 @@ export interface StageEditorExtra {
 export interface StageAmbientNpc extends StageEnemySprite {
   /** Comportement de déplacement : 'work' = errance courte (~24 px), 'patrol' = plus large (~120 px). */
   behavior: 'work' | 'patrol'
+  /**
+   * Catégorie éditeur : 'trade' = métier fixe animé (défaut) ; 'worker' = ouvrier
+   * mobile (feuille marche 4×4, marche + fuite). Sert au Stage Composer à séparer
+   * les 2 sections de PNJ et à choisir le rendu.
+   */
+  kind?: 'trade' | 'worker'
   /** Période d'une frame du geste, en ms (défaut 300). */
   framePeriodMs?: number
   /** Nombre d'instances de ce PNJ (défaut 1 — réservé pour B5+). */
@@ -164,6 +170,18 @@ export interface StageExtra {
 }
 
 export const DEFAULT_STAGE = 'terrain_vierge'
+
+/**
+ * PNJ « ouvriers » GÉNÉRIQUES (bleu de chantier, casque blanc) — PARTAGÉS par
+ * TOUS les stages (pas spécifiques à une phase). Feuilles marche 4×4 192.
+ * Exposés dans l'éditeur sur chaque stage (section « PNJ ouvrier (mobile) ») et
+ * préchargés par GameScene partout. Les 3 variantes = diversité (maghrébin/black/est).
+ */
+export const SHARED_WORKER_NPCS: StageAmbientNpc[] = [
+  { key: 'npc_ouvrier_a', file: 'stage01/npc/ouvrier_a_walk.png', frame: 192, scale: 0.62, framePeriodMs: 200, behavior: 'patrol', kind: 'worker' },
+  { key: 'npc_ouvrier_b', file: 'stage01/npc/ouvrier_b_walk.png', frame: 192, scale: 0.62, framePeriodMs: 200, behavior: 'patrol', kind: 'worker' },
+  { key: 'npc_ouvrier_c', file: 'stage01/npc/ouvrier_c_walk.png', frame: 192, scale: 0.62, framePeriodMs: 200, behavior: 'patrol', kind: 'worker' }
+]
 
 /** Boss stage 01 (ground_keeper), réutilisé tant qu'un stage n'a pas son skin propre. */
 const GROUND_KEEPER: StageEnemySprite = {
@@ -222,10 +240,11 @@ const TERRAIN_VIERGE_RENDER: StageRender = {
     { key: 'struct_stage01_plot',  file: 'stage01/structures/plot.png',     scale: 0.85, count: 3, band: 'mid'  }
   ],
   ambient: [
-    { key: 'npc_stage01',            file: 'stage01/npc/geometre_work.png',    frame: 256, scale: 0.72,  framePeriodMs: 320, behavior: 'work' },
-    { key: 'npc_stage01_topographe', file: 'stage01/npc/topographe_work.png',  frame: 256, scale: 1.610, framePeriodMs: 300, behavior: 'work' },
-    { key: 'npc_stage01_piqueteur',  file: 'stage01/npc/piqueteur_work.png',   frame: 256, scale: 1.439, framePeriodMs: 300, behavior: 'work' },
-    { key: 'npc_stage01_ouvplan',    file: 'stage01/npc/ouvplan_work.png',     frame: 256, scale: 1.397, framePeriodMs: 340, behavior: 'work' }
+    // Métier de la phase (fixe, geste en place) — kind:'trade'. Le géomètre porte
+    // son théodolite = vraie action métier. Les faux « ouvriers casqués »
+    // (topographe/piqueteur/ouvplan) ont été retirés : un PNJ métier doit porter
+    // du matériel et faire une action de métier (creuser à la pelle, peindre…).
+    { key: 'npc_stage01', file: 'stage01/npc/geometre_work.png', frame: 256, scale: 0.72, framePeriodMs: 320, behavior: 'work', kind: 'trade' }
   ],
   // ── Composition scriptée stage 01 (terrain vierge) ───────────────────────
   // Géographie : panneau (sign=idx0) côté NE proche, algeco (cabin=idx1) côté SE,
@@ -319,7 +338,7 @@ const TERRASSEMENT_RENDER: StageRender = {
     { key: 'struct_stage02_pit', file: 'stage02/structures/pit_big.png', scale: 0.85, count: 3, band: 'mid' }
   ],
   ambient: [
-    { key: 'npc_stage02',           file: 'stage02/npc/chef_work.png',      frame: 256, scale: 0.71,  framePeriodMs: 340, behavior: 'work' },
+    { key: 'npc_stage02', file: 'stage02/npc/terrassier_work.png', frame: 180, scale: 1.0, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
     { key: 'npc_stage02_signaleur', file: 'stage02/npc/signaleur_work.png', frame: 256, scale: 1.53,  framePeriodMs: 300, behavior: 'patrol' },
     { key: 'npc_stage02_porteur',   file: 'stage02/npc/porteur_work.png',   frame: 256, scale: 1.61,  framePeriodMs: 300, behavior: 'work' },
     { key: 'npc_stage02_macon',     file: 'stage02/npc/macon_work.png',     frame: 256, scale: 1.61,  framePeriodMs: 320, behavior: 'work' }
@@ -403,7 +422,7 @@ const FONDATIONS_RENDER: StageRender = {
     { key: 'struct_stage03_bay',      file: 'stage03/structures/formwork_bay.png', scale: 0.85, count: 5, band: 'mid'  }
   ],
   ambient: [
-    { key: 'npc_stage03',          file: 'stage03/npc/ferrailleur_work.png', frame: 256, scale: 0.69,  framePeriodMs: 260, behavior: 'work' },
+    { key: 'npc_stage03', file: 'stage03/npc/ferrailleur_work.png', frame: 180, scale: 1.0, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
     { key: 'npc_stage03_coffreur', file: 'stage03/npc/coffreur_work.png',    frame: 256, scale: 1.532, framePeriodMs: 300, behavior: 'work' },
     { key: 'npc_stage03_betonnier',file: 'stage03/npc/betonnier_work.png',   frame: 256, scale: 1.532, framePeriodMs: 300, behavior: 'patrol' },
     { key: 'npc_stage03_cimentier',file: 'stage03/npc/cimentier_work.png',   frame: 256, scale: 1.484, framePeriodMs: 300, behavior: 'work' }
@@ -484,7 +503,7 @@ const RESEAUX_ENTERRES_RENDER: StageRender = {
     { key: 'struct_stage04_trench',    file: 'stage04/structures/trench_junction.png',  scale: 0.85, count: 4, band: 'mid'  }
   ],
   ambient: [
-    { key: 'npc_stage04',             file: 'stage04/npc/electricien_work.png',  frame: 256, scale: 0.71,  framePeriodMs: 280, behavior: 'work' },
+    { key: 'npc_stage04', file: 'stage04/npc/poseur_work.png', frame: 180, scale: 1.0, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
     { key: 'npc_stage04_plombier',    file: 'stage04/npc/plombier_work.png',     frame: 256, scale: 1.583, framePeriodMs: 300, behavior: 'work' },
     { key: 'npc_stage04_poseur_cable',file: 'stage04/npc/poseur_cable_work.png', frame: 256, scale: 1.610, framePeriodMs: 300, behavior: 'patrol' },
     { key: 'npc_stage04_gainier',     file: 'stage04/npc/gainier_work.png',      frame: 256, scale: 1.638, framePeriodMs: 300, behavior: 'work' }
@@ -567,7 +586,7 @@ const GROS_OEUVRE_RENDER: StageRender = {
     { key: 'struct_stage05_wall',    file: 'stage05/structures/wall_section.png', scale: 0.85, count: 5, band: 'mid'  }
   ],
   ambient: [
-    { key: 'npc_stage05',              file: 'stage05/npc/mason_work.png',        frame: 256, scale: 0.79,  framePeriodMs: 280, behavior: 'work' },
+    { key: 'npc_stage05', file: 'stage05/npc/macon_work.png', frame: 180, scale: 1.0, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
     { key: 'npc_stage05_parpaingueur', file: 'stage05/npc/parpaingueur_work.png', frame: 256, scale: 1.462, framePeriodMs: 300, behavior: 'work' },
     { key: 'npc_stage05_porteur_blocs',file: 'stage05/npc/porteur_blocs_work.png',frame: 256, scale: 1.508, framePeriodMs: 300, behavior: 'patrol' },
     { key: 'npc_stage05_grutier',      file: 'stage05/npc/grutier_work.png',      frame: 256, scale: 1.610, framePeriodMs: 320, behavior: 'work' }
@@ -658,7 +677,7 @@ const ECHAFAUDAGES_RENDER: StageRender = {
     { key: 'struct_stage06_grid',    file: 'stage06/structures/scaffold_grid.png', scale: 0.80, count: 5, band: 'mid'  }
   ],
   ambient: [
-    { key: 'npc_stage06',                file: 'stage06/npc/echafaudeur_work.png',    frame: 256, scale: 0.68, framePeriodMs: 260, behavior: 'work' },
+    { key: 'npc_stage06', file: 'stage06/npc/echafaudeur_work.png', frame: 180, scale: 1.0, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
     { key: 'npc_stage06_monteur_tube',   file: 'stage06/npc/monteur_tube_work.png',   frame: 256, scale: 1.61, framePeriodMs: 300, behavior: 'patrol' },
     { key: 'npc_stage06_porteur_planche',file: 'stage06/npc/porteur_planche_work.png',frame: 256, scale: 1.51, framePeriodMs: 300, behavior: 'patrol' },
     { key: 'npc_stage06_porteur_echelle',file: 'stage06/npc/porteur_echelle_work.png',frame: 256, scale: 1.34, framePeriodMs: 300, behavior: 'patrol' },
@@ -751,7 +770,7 @@ const CHARPENTE_TOITURE_RENDER: StageRender = {
     { key: 'struct_stage07_truss', file: 'stage07/structures/roof_trusses.png',  scale: 0.85, count: 5, band: 'mid'  }
   ],
   ambient: [
-    { key: 'npc_stage07',               file: 'stage07/npc/couvreur_work.png',      frame: 256, scale: 0.72,  framePeriodMs: 240, behavior: 'work' },
+    { key: 'npc_stage07', file: 'stage07/npc/couvreur_work.png', frame: 180, scale: 1.0, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
     { key: 'npc_stage07_charpentier',   file: 'stage07/npc/charpentier_work.png',   frame: 256, scale: 0.779, framePeriodMs: 300, behavior: 'work' },
     { key: 'npc_stage07_porteur_tuiles',file: 'stage07/npc/porteur_tuiles_work.png',frame: 256, scale: 1.638, framePeriodMs: 300, behavior: 'patrol' },
     { key: 'npc_stage07_poseur_liteau', file: 'stage07/npc/poseur_liteau_work.png', frame: 256, scale: 1.484, framePeriodMs: 300, behavior: 'work' }
@@ -931,7 +950,7 @@ const FINITIONS_RENDER: StageRender = {
     { key: 'struct_stage09_room',    file: 'stage09/structures/finished_room.png', scale: 0.80, count: 4, band: 'mid'  }
   ],
   ambient: [
-    { key: 'npc_stage09',           file: 'stage09/npc/painter_work.png',      frame: 256, scale: 0.74,  framePeriodMs: 260, behavior: 'work' },
+    { key: 'npc_stage09', file: 'stage09/npc/peintre_work.png', frame: 180, scale: 1.0, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
     { key: 'npc_stage09_carreleur', file: 'stage09/npc/carreleur_work.png',    frame: 256, scale: 1.439, framePeriodMs: 300, behavior: 'work' },
     { key: 'npc_stage09_poseur_sol',file: 'stage09/npc/poseur_sol_work.png',   frame: 256, scale: 1.462, framePeriodMs: 300, behavior: 'work' },
     { key: 'npc_stage09_porteur_pots', file: 'stage09/npc/porteur_pots_work.png', frame: 256, scale: 1.583, framePeriodMs: 300, behavior: 'patrol' }

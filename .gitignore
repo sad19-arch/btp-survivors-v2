@@ -17,3 +17,5 @@ golden-batch-review/
 /ingame-*.png
 # Config locale d'agent Codex : contient un token API en clair → JAMAIS committé
 .codex/
+# Pages/planches de validation visuelle servies en dev (previews jetables)
+public/_gate/

@@ -1,16 +1,23 @@
 import Phaser from 'phaser'
 import { PALETTE, PALETTE_HEX } from '@ui/palette'
-import { shouldBubble, pickPhrase } from '@render/ambientNpc'
+import { shouldBubble } from '@render/ambientNpc'
+import { pickNpcLine, type NpcDialogueType, type NpcDialogueTrigger } from '@content/npcDialogues'
 
 /** Délai (ms) entre deux bulles pour le MÊME PNJ d'ambiance. */
 const AMBIENT_BUBBLE_COOLDOWN_MS = 4000
 /** Nombre maximum de bulles d'ambiance simultanées (pool borné). */
 const MAX_AMBIENT_BUBBLES = 2
+/** Fenêtre anti-répétition : une même réplique n'est pas redite avant ce délai. */
+const RECENT_WINDOW_MS = 60000
 
-/** Source d'une bulle : position ACTUELLE du sprite PNJ + seed (choix de phrase). */
+/** Source d'une bulle : position ACTUELLE du sprite PNJ + contexte de dialogue. */
 export interface BubbleSource {
   readonly sprite: { readonly x: number; readonly y: number }
   readonly seed: number
+  /** Famille de dialogue : métier posé → 'job', ouvrier mobile → 'civilian'. */
+  readonly npcType: NpcDialogueType
+  /** Vrai si un ennemi est à portée (déclenche les répliques « monstre proche »). */
+  readonly monsterNear: boolean
 }
 /** Cible de proximité : un joueur vivant. */
 export interface BubbleTarget {
@@ -29,6 +36,8 @@ export class SpeechBubbleManager {
   private readonly bubbles = new Set<Phaser.GameObjects.Container>()
   /** Index de PNJ → dernier timestamp (ms) de bulle (anti-spam par PNJ). */
   private readonly cooldowns = new Map<number, number>()
+  /** Id de réplique → dernier timestamp (ms) où elle a été dite (anti-répétition). */
+  private readonly recent = new Map<string, number>()
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -47,6 +56,7 @@ export class SpeechBubbleManager {
     }
     this.bubbles.clear()
     this.cooldowns.clear()
+    this.recent.clear()
   }
 
   /**
@@ -54,9 +64,20 @@ export class SpeechBubbleManager {
    * (`shouldBubble`) et si le cooldown est écoulé ; si oui, affiche une bulle DA.
    * `nowMs` = horloge de scène (`scene.time.now`).
    */
-  update(npcs: readonly BubbleSource[], alivePlayers: readonly BubbleTarget[], nowMs: number): void {
+  update(
+    npcs: readonly BubbleSource[],
+    alivePlayers: readonly BubbleTarget[],
+    nowMs: number,
+    stageId: string
+  ): void {
     if (alivePlayers.length === 0) {
       return
+    }
+    // Purge de la fenêtre anti-répétition (répliques dites il y a > 60 s).
+    for (const [id, ts] of this.recent) {
+      if (nowMs - ts > RECENT_WINDOW_MS) {
+        this.recent.delete(id)
+      }
     }
     for (let i = 0; i < npcs.length; i++) {
       const npc = npcs[i]
@@ -85,9 +106,20 @@ export class SpeechBubbleManager {
       if (!shouldBubble(minDist)) {
         continue
       }
-      // Déclenche la bulle.
+      // Pioche une réplique du bon pool (métier/ouvrier), priorité stage,
+      // trigger « monstre proche » si un ennemi est là, sans répétition récente.
+      const trigger: NpcDialogueTrigger = npc.monsterNear ? 'monster_near' : 'near_player'
+      const seed = (npc.seed ^ Math.floor(nowMs)) >>> 0
+      const line = pickNpcLine(
+        { npcType: npc.npcType, stage: stageId, trigger, recentIds: new Set(this.recent.keys()) },
+        seed
+      )
+      if (line === null) {
+        continue
+      }
       this.cooldowns.set(i, nowMs)
-      this.spawn(sx, sy, pickPhrase(npc.seed))
+      this.recent.set(line.id, nowMs)
+      this.spawn(sx, sy, line.text)
     }
   }
 

@@ -13,12 +13,15 @@ import {
   type EmbeddedShape,
   type LayoutInstance,
   type LayoutMarker,
+  type LayoutNpc,
   type LayoutPath,
+  type NpcKind,
   type StageLayout,
   type Vec2
 } from './StageLayoutSchema'
 import { editorAsset, paletteEntry } from './PrefabCatalog'
 import { CLUSTERS } from '@content/clusters'
+import { SHARED_WORKER_NPCS, stageRender } from '@render/stages'
 import { buildSiteLayout } from '@core/siteLayout'
 
 const WORLD_W = 10240
@@ -112,6 +115,9 @@ export class EditorState {
   get instances(): readonly LayoutInstance[] {
     return this.layout.instances
   }
+  get npcs(): readonly LayoutNpc[] {
+    return this.layout.npcs
+  }
   get spawn(): Vec2 {
     return this.layout.spawn
   }
@@ -129,6 +135,9 @@ export class EditorState {
   }
   selectedInstance(): LayoutInstance | null {
     return this.layout.instances.find((i) => i.id === this.selectedId) ?? null
+  }
+  selectedNpc(): LayoutNpc | null {
+    return this.layout.npcs.find((n) => n.id === this.selectedId) ?? null
   }
 
   // ── sélection ───────────────────────────────────────────────────────────────
@@ -154,14 +163,25 @@ export class EditorState {
   }
   nudge(dx: number, dy: number): void {
     const inst = this.selectedInstance()
-    if (inst === null || inst.locked) {return}
-    inst.x += dx
-    inst.y += dy
-    this.emit()
+    if (inst !== null) {
+      if (inst.locked) {return}
+      inst.x += dx
+      inst.y += dy
+      this.emit()
+      return
+    }
+    const npc = this.selectedNpc()
+    if (npc !== null) {
+      npc.x += dx
+      npc.y += dy
+      this.emit()
+    }
   }
   deleteSelected(): void {
     if (this.selectedId === null) {return}
-    this.layout.instances = this.layout.instances.filter((i) => i.id !== this.selectedId)
+    const id = this.selectedId
+    this.layout.instances = this.layout.instances.filter((i) => i.id !== id)
+    this.layout.npcs = this.layout.npcs.filter((n) => n.id !== id)
     this.selectedId = null
     this.emit()
   }
@@ -218,6 +238,27 @@ export class EditorState {
     if (it !== undefined) {
       this.layout.instances.unshift(it)
     }
+    this.emit()
+  }
+
+  // ── PNJ (métier fixe / ouvrier mobile) ──────────────────────────────────────
+  /**
+   * Pose un PNJ. `worldX/worldY` sont en coords MONDE (origine coin haut-gauche) ;
+   * on les convertit en coords COMPO (origine = centre monde) pour le stockage.
+   */
+  addNpc(skin: string, kind: NpcKind, worldX: number, worldY: number): LayoutNpc {
+    const npc: LayoutNpc = { id: newId('npc'), skin, kind, x: worldX - WORLD_W / 2, y: worldY - WORLD_H / 2 }
+    this.layout.npcs.push(npc)
+    this.selectedId = npc.id
+    this.emit()
+    return npc
+  }
+  /** Déplace un PNJ (coords MONDE en entrée, converties en compo). */
+  moveNpc(id: string, worldX: number, worldY: number): void {
+    const npc = this.layout.npcs.find((n) => n.id === id)
+    if (npc === undefined) {return}
+    npc.x = worldX - WORLD_W / 2
+    npc.y = worldY - WORLD_H / 2
     this.emit()
   }
 
@@ -374,8 +415,24 @@ export class EditorState {
         elements
       })
     }
+    // PNJ auto du stage → `LayoutNpc` ÉDITABLES (point de départ) : les métiers
+    // du stage (`ambient`) + un ouvrier générique partagé. Positions dérivées
+    // simples (petit anneau autour du centre) — l'utilisateur ajuste ensuite.
+    const ambient = stageRender(this.stage).ambient ?? []
+    const worker0 = SHARED_WORKER_NPCS[0]
+    const seeds: Array<{ skin: string; kind: NpcKind }> = [
+      ...ambient.map((n): { skin: string; kind: NpcKind } => ({ skin: n.key, kind: n.kind === 'worker' ? 'worker' : 'trade' })),
+      ...(worker0 !== undefined ? [{ skin: worker0.key, kind: 'worker' as NpcKind }] : [])
+    ]
+    const npcs: LayoutNpc[] = seeds.map((s, i) => {
+      const angle = (i / Math.max(1, seeds.length)) * Math.PI * 2
+      const r = 260
+      return { id: newId('npc'), skin: s.skin, kind: s.kind, x: Math.round(Math.cos(angle) * r), y: Math.round(Math.sin(angle) * r) }
+    })
+
     this.layout = emptyLayout(this.stage)
     this.layout.instances = instances
+    this.layout.npcs = npcs
     this.selectedId = null
     this.emit()
   }
