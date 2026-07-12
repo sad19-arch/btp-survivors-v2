@@ -6,7 +6,7 @@
  *
  * Éligibilité :
  * - `weapon-up` : chaque arme possédée avec level < maxLevel
- * - `weapon-new` : si inv.weapons.length < INVENTORY.weapons, une par arme de base non possédée (BASE_WEAPON_IDS = 10 armes, dérivé de WEAPONS maxLevel>1)
+ * - `weapon-new` : si inv.weapons.length < INVENTORY.weapons, une par arme de base non possédée (BASE_WEAPON_IDS = 11 armes, dérivé de WEAPONS maxLevel>1)
  * - `passive-up` : chaque passif possédé avec level < maxLevel
  * - `passive-new` : si inv.passives.length < INVENTORY.passives, une par passif non possédé
  *

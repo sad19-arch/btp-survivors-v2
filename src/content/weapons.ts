@@ -178,6 +178,16 @@ export const WEAPONS: Record<string, WeaponDef> = {
       { damage: 7, projectileRadius: 2 }, 8
     )
   },
+  chalumeau: {
+    id: 'chalumeau', name: 'Chalumeau', description: 'Jet de flammes qui brûle devant toi.', kind: 'cone', maxLevel: 8,
+    // Feel lance-flammes, opposé de l'extincteur : portée COURTE, cadence RAPIDE,
+    // gros dégâts, pas de slow. Jalons de cadence (niv 4/7) = progression ressentie.
+    levels: buildLevels(
+      { damage: 7, cooldownMs: 520, count: 1, area: 85, pierce: 99 },
+      { damage: 2.5, area: 5 }, 8,
+      { 4: { cooldownMs: 430 }, 7: { cooldownMs: 350 } }
+    )
+  },
   // Évoluées (niveau unique puissant ; montent via les passifs globaux)
   mitrailleuse_clous: {
     id: 'mitrailleuse_clous',
@@ -204,7 +214,9 @@ export const WEAPONS: Record<string, WeaponDef> = {
   canon_mousse: { id: 'canon_mousse', name: 'Canon à mousse', description: 'Jet de mousse puissant qui immobilise les ennemis.', kind: 'cone', maxLevel: 1,
     levels: [{ damage: 40, cooldownMs: 620, count: 1, area: 190, pierce: 99, slowMult: 0.35, slowMs: 2200 }] },
   transpalette: { id: 'transpalette', name: 'Transpallette automatisée', description: 'Transpalette géant qui écrase tout sur son passage.', kind: 'projectile', maxLevel: 1,
-    levels: [{ damage: 110, cooldownMs: 1100, count: 1, area: 0, pierce: 99, projectileSpeed: 300, projectileRadius: 40, projectileLifeMs: 3200 }] }
+    levels: [{ damage: 110, cooldownMs: 1100, count: 1, area: 0, pierce: 99, projectileSpeed: 300, projectileRadius: 40, projectileLifeMs: 3200 }] },
+  lance_thermique: { id: 'lance_thermique', name: 'Lance thermique', description: 'Lance de découpe industrielle qui fait fondre les rangs.', kind: 'cone', maxLevel: 1,
+    levels: [{ damage: 42, cooldownMs: 300, count: 1, area: 150, pierce: 99 }] }
 }
 
 const FALLBACK_LEVEL: WeaponLevel = { damage: 0, cooldownMs: 1000, count: 1, area: 0, pierce: 0 }

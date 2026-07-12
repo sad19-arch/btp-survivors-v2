@@ -68,5 +68,13 @@ export const EVOLUTIONS: readonly EvolutionDef[] = [
     evolved: 'transpalette',
     reqBaseLevel: baseMaxLevel('brouette'),
     reqPassiveLevel: 1
+  },
+  // Chalumeau maxé + outillage renforcé (flamme de découpe plus chaude) → lance thermique.
+  {
+    base: 'chalumeau',
+    passive: 'outillage_renforce',
+    evolved: 'lance_thermique',
+    reqBaseLevel: baseMaxLevel('chalumeau'),
+    reqPassiveLevel: 1
   }
 ] as const
