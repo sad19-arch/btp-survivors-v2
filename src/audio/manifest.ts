@@ -92,7 +92,10 @@ const SFX_NAMES: readonly string[] = [
  * Ajouter une arme = poser `public/audio/sfx/weapons/weapon_<id>.mp3` + son id ici.
  */
 export const WEAPON_SFX_IDS: readonly string[] = [
-  'cloueur', 'boulons', 'cle_molette', 'brouette', 'pied_de_biche', 'extincteur', 'goudron'
+  // Armes de base (scie = whir périodique discret, throttlé côté AudioDirector).
+  'cloueur', 'boulons', 'cle_molette', 'brouette', 'pied_de_biche', 'extincteur', 'goudron', 'scie',
+  // Armes évoluées.
+  'mitrailleuse_clous', 'haute_tension', 'coulee_bitume', 'tempete_boulons', 'cle_choc', 'canon_mousse', 'transpalette'
 ]
 
 export const SFX_FILES: ReadonlyArray<readonly [string, string]> = [

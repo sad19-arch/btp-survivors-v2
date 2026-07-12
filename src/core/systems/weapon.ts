@@ -79,8 +79,10 @@ export function weaponSystem(
       }
       // Une arme qui vient de TIRER ce pas a rechargé son cooldown (valeur > celle
       // d'avant le tick) → on émet weaponFired(id) pour l'audio (SFX par arme).
-      // Orbital (scie) exclu : arme continue → ronronnement en boucle côté rendu.
-      if (def.kind !== 'orbital' && slot.cooldownLeftMs > cdBefore) {
+      // La scie (orbital) émet aussi désormais, MAIS sa cadence sonore est bornée
+      // côté rendu (throttle dédié) → « whir » périodique discret, pas un drone.
+      // Émission d'événement uniquement : aucun état de simulation modifié.
+      if (slot.cooldownLeftMs > cdBefore) {
         fired?.push(def.id)
       }
     }

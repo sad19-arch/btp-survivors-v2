@@ -70,6 +70,8 @@ const AMB_DUCK = 0.15 // et l'ambiance quasi muette (~15 %) pour dégager la voi
 const WEAPON_THROTTLE_MS = 55 // délai min entre deux SFX d'une MÊME arme (anti-double)
 /** Gain des SFX d'armes en FICHIER (ex. cloueur ElevenLabs), avant le gain SFX utilisateur. */
 const WEAPON_FILE_VOLUME = 0.5
+/** Throttle dédié par arme (ms). La scie touche en continu → whir périodique discret (pas un drone). */
+const WEAPON_THROTTLE_OVERRIDE: Readonly<Record<string, number>> = { scie: 350 }
 /** Délai min entre deux dings de gemme XP (anti-saturation horde). */
 const GEM_DING_THROTTLE_MS = 50
 /**
@@ -226,7 +228,8 @@ export class AudioDirector {
     }
     const now = performance.now()
     const last = this.lastSfx.get(`w_${id}`) ?? -1e9
-    if (now - last < WEAPON_THROTTLE_MS) {
+    const throttleMs = WEAPON_THROTTLE_OVERRIDE[id] ?? WEAPON_THROTTLE_MS
+    if (now - last < throttleMs) {
       return
     }
     this.lastSfx.set(`w_${id}`, now)
