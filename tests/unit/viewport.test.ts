@@ -84,6 +84,33 @@ describe('computeViewport — échelle HUD (--ui-scale)', () => {
     expect(v.uiScale).toBe(0.5)
   })
 
+  // Régression du bug PAYSAGE (HUD géant) : écran large mais COURT → l'échelle
+  // doit être bornée par la HAUTEUR, pas rester à 1.0.
+  it('PAYSAGE tactile (851×393) : échelle bornée par la hauteur (~0.5), pas 1.0', () => {
+    const v = computeViewport(raw({ innerW: 851, innerH: 393, pointerCoarse: true }))
+    expect(v.uiScale).toBeLessThanOrEqual(0.5)
+    // Le HUD haut (~200px @ scale 1) occupe désormais ≤ 30 % de la hauteur (était 51 %).
+    expect((200 * v.uiScale) / 393).toBeLessThan(0.3)
+  })
+
+  it('PAYSAGE en « site pour ordinateur » (980×440, pointer fin) : compact quand même', () => {
+    const v = computeViewport(raw({ innerW: 980, innerH: 440, pointerCoarse: false }))
+    expect(v.uiMobile).toBe(true) // petit côté 440 < 560 → compact même sans pointeur coarse
+    expect(v.uiScale).toBeLessThan(1)
+  })
+
+  it('petite fenêtre PC courte (1200×500) → compact (petit côté < 560)', () => {
+    const v = computeViewport(raw({ innerW: 1200, innerH: 500 }))
+    expect(v.uiMobile).toBe(true)
+    expect(v.uiScale).toBeLessThan(1)
+  })
+
+  it('bureau plein écran (1920×1080) reste NON compact (échelle 1)', () => {
+    const v = computeViewport(raw({ innerW: 1920, innerH: 1080 }))
+    expect(v.uiMobile).toBe(false)
+    expect(v.uiScale).toBe(1)
+  })
+
   it('les safe areas réduisent la largeur UTILE donc l\'échelle', () => {
     const sans = computeViewport(raw({ innerW: 412, innerH: 839, pointerCoarse: true }))
     const avec = computeViewport(

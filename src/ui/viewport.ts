@@ -50,10 +50,24 @@ export const TOUCH_ZOOM_MAX = DESKTOP_ZOOM
  */
 export const STICK_ZONE_FRAC = 0.55
 
-/** Largeur de conception du HUD (px) — base de l'échelle `--ui-scale`. */
+/** Largeur de conception du HUD (px) — base de l'échelle `--ui-scale` en largeur. */
 const HUD_DESIGN_WIDTH = 720
-/** Marge horizontale minimale autour du HUD lors du calcul d'échelle (px). */
+/**
+ * Budget vertical de conception du HUD (px). En PAYSAGE mobile la hauteur (~390 px)
+ * est la vraie contrainte — sans elle, un écran large mais court laisse `--ui-scale`
+ * à 1.0 et le HUD dévore la moitié de l'écran (bug paysage constaté). L'échelle finale
+ * = min(ajustement largeur, ajustement hauteur).
+ */
+const HUD_DESIGN_HEIGHT = 780
+/** Marge minimale autour du HUD lors du calcul d'échelle (px). */
 const HUD_EDGE_MARGIN = 16
+/**
+ * Seuil de « petit côté » : en-dessous, présentation compacte (`.ui-mobile`)
+ * quelle que soit la nature du pointeur. Rend la détection ROBUSTE au mode
+ * « site pour ordinateur » et aux navigateurs qui ne remontent pas `pointer: coarse`
+ * — un téléphone en paysage (~390 px de haut) bascule toujours en compact.
+ */
+const COMPACT_SHORT_SIDE = 560
 
 // --- Types ------------------------------------------------------------------
 
@@ -137,7 +151,10 @@ export function computeViewport(raw: RawViewportInputs): ViewportState {
   const orientation: ViewportState['orientation'] = availW >= availH ? 'landscape' : 'portrait'
   const inputType: ViewportState['inputType'] = raw.pointerCoarse ? 'touch' : 'pointer'
   const narrow = availW < MOBILE_BREAKPOINT
-  const uiMobile = narrow || inputType === 'touch'
+  // Présentation compacte si : tactile, OU largeur étroite, OU petit côté (paysage
+  // mobile / petite fenêtre) — la condition hauteur rend la détection robuste au
+  // « site pour ordinateur » et corrige le HUD géant en paysage.
+  const uiMobile = inputType === 'touch' || narrow || Math.min(availW, availH) < COMPACT_SHORT_SIDE
 
   // Zoom caméra : le canvas couvre TOUTE la fenêtre (viewport-fit=cover), la
   // caméra travaille donc sur avail* (pas usable*).
@@ -147,9 +164,12 @@ export function computeViewport(raw: RawViewportInputs): ViewportState {
       ? round2(Math.min(TOUCH_ZOOM_MAX, Math.max(TOUCH_ZOOM_MIN, halfDiag / REF_HALF_DIAG)))
       : DESKTOP_ZOOM
 
-  // Échelle HUD : ramène la largeur de conception dans la zone UTILE (safe areas
-  // déduites), plancher 0.5, snap 0.05 (bordures 1 px nettes). Desktop : 1.
-  const rawScale = uiMobile ? (usableW - HUD_EDGE_MARGIN) / HUD_DESIGN_WIDTH : 1
+  // Échelle HUD : fait rentrer le HUD dans la zone UTILE (safe areas déduites) en
+  // LARGEUR **et** en HAUTEUR — on prend le plus contraignant des deux (en paysage
+  // c'est la hauteur). Plancher 0.5, snap 0.05 (bordures 1 px nettes). Desktop : 1.
+  const widthFit = (usableW - HUD_EDGE_MARGIN) / HUD_DESIGN_WIDTH
+  const heightFit = (usableH - HUD_EDGE_MARGIN) / HUD_DESIGN_HEIGHT
+  const rawScale = uiMobile ? Math.min(widthFit, heightFit) : 1
   const uiScale = Math.max(0.5, Math.min(1, Math.round(rawScale * 20) / 20))
 
   const controlReserves: ControlReserves = {
