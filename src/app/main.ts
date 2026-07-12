@@ -7,6 +7,7 @@ import { AudioDirector } from '@/audio/audioDirector'
 import { parseBootOptions, type BootOptions } from './bootOptions'
 import { phaseIdFromLevel } from '@content/phases'
 import { createSeam, installSeam } from './seam'
+import { PerfOverlay } from '@render/perf/perfOverlay'
 
 /**
  * Point d'entrée (couche rendu). Lit les options de boot, instancie l'App (qui
@@ -88,6 +89,9 @@ if (uiRoot !== null) {
     (i) => app.clickItem(i),
     (phase) => { if (phase === 'start') { audio?.beginStudioPresents() } else { audio?.endStudioPresents() } }
   )
+  // Overlay de diagnostic perf (`?perf=1`) : mesure sur vrai device, gated par le
+  // flag seul (indépendant de l'audio, actif même en `?test=1&perf=1` pour l'e2e).
+  const perfOverlay = opts.perf ? new PerfOverlay(uiRoot) : null
   // Splash studio : PERSISTE jusqu'au 1er geste → garantit que la voix « presents » l'accompagne.
   // - clavier/souris/tactile → déverrouille WebAudio (`unlocked`) → la voix joue, puis retrait (tail) ;
   // - manette (ne déverrouille PAS l'audio, limite navigateur) → retrait quand même (voix impossible) ;
@@ -108,6 +112,12 @@ if (uiRoot !== null) {
     const state = app.getStateForFrame(app.frameId)
     overlay.sync(state)
     audio?.observe(state) // musique par écran/phase/boss (crossfade)
+    if (perfOverlay !== null) {
+      const snap = seam.debugPerfProfile?.() ?? null
+      if (snap !== null) {
+        perfOverlay.update(snap, game.loop.actualFps)
+      }
+    }
     window.requestAnimationFrame(tick)
   }
   window.requestAnimationFrame(tick)

@@ -3,7 +3,15 @@ import { parseBootOptions } from '@/app/bootOptions'
 
 describe('parseBootOptions', () => {
   it('renvoie des valeurs par défaut sans paramètres', () => {
-    expect(parseBootOptions('')).toEqual({ autostart: null, seed: 1, test: false, level: null, lite: false, editor: false })
+    expect(parseBootOptions('')).toEqual({
+      autostart: null,
+      seed: 1,
+      test: false,
+      level: null,
+      lite: false,
+      editor: false,
+      perf: false
+    })
   })
 
   it('lit autostart, seed et test', () => {
@@ -13,7 +21,8 @@ describe('parseBootOptions', () => {
       test: true,
       level: null,
       lite: false,
-      editor: false
+      editor: false,
+      perf: false
     })
   })
 
@@ -24,7 +33,8 @@ describe('parseBootOptions', () => {
       test: false,
       level: 'fondations',
       lite: false,
-      editor: false
+      editor: false,
+      perf: false
     })
   })
 
@@ -44,5 +54,10 @@ describe('parseBootOptions', () => {
 
   it('ignore une seed non numérique et garde le défaut', () => {
     expect(parseBootOptions('?seed=abc').seed).toBe(1)
+  })
+
+  it('parse le flag perf', () => {
+    expect(parseBootOptions('?perf=1').perf).toBe(true)
+    expect(parseBootOptions('').perf).toBe(false)
   })
 })

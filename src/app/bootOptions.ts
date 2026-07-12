@@ -14,6 +14,8 @@ export interface BootOptions {
   lite: boolean
   /** Active le Stage Composer Editor (?editor=true) — remplace le jeu normal. */
   editor: boolean
+  /** Active l'overlay de diagnostic perf (`?perf=1`) — FPS + décomposition frame. */
+  perf: boolean
 }
 
 const VALID_MODES: ReadonlySet<string> = new Set<GameMode>(['solo', 'coop', 'coop3', 'coop4'])
@@ -36,6 +38,7 @@ export function parseBootOptions(search: string): BootOptions {
   const level = params.get('level')
   const lite = params.get('lite') === '1'
   const editor = params.get('editor') === 'true'
+  const perf = params.get('perf') === '1'
 
-  return { autostart, seed, test, level, lite, editor }
+  return { autostart, seed, test, level, lite, editor, perf }
 }
