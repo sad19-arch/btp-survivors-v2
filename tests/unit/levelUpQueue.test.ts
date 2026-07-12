@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Simulation } from '@core/simulation'
 import { STEP_MS } from '@core/clock'
+import { PROGRESSION } from '@content/config'
 
 /**
  * Vérifie que la file de choix (choiceQueue) se comporte de façon iso par rapport
@@ -13,8 +14,10 @@ describe('file de choix (choiceQueue)', () => {
   it('2 paliers XP bankes → file s enchaîne sans soft-lock', () => {
     const sim = new Simulation({ seed: 42, mode: 'solo' })
 
-    // Premier palier = 25 XP, second = ceil(25 * 1.15) = 29 XP → total 54 XP suffit pour 2 niveaux
-    sim.debugAddXp(54)
+    // XP juste suffisante pour 2 paliers (calculée depuis PROGRESSION, robuste au tuning
+    // de growth) : firstThreshold + ceil(firstThreshold × growth), sans atteindre le 3e.
+    const twoLevels = PROGRESSION.firstThreshold + Math.ceil(PROGRESSION.firstThreshold * PROGRESSION.growth)
+    sim.debugAddXp(twoLevels)
     sim.advanceTime(STEP_MS)
 
     // Premier choix visible

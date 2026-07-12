@@ -60,10 +60,16 @@ export function pickupSystem(
 
     // Les coffres d'évolution ne sont PAS aimantés : le joueur doit aller les chercher.
     const isMagnetable = pickup.type !== 'coffre' && pickup.type !== 'chest'
-    if (isMagnetable && dist <= target.pickupRadius && dist > 0) {
-      const step = Math.min(PICKUP.magnetSpeed * dt, dist)
-      gpos.x += (dx / dist) * step
-      gpos.y += (dy / dist) * step
+    if (isMagnetable && dist > 0) {
+      // Aimant actif (power-up) : la gemme est tirée quel que soit le rayon, plus
+      // vite. Sinon : aimantation normale, seulement dans le rayon du joueur.
+      const pulling = pickup.magnetized === true
+      if (pulling || dist <= target.pickupRadius) {
+        const speed = pulling ? PICKUP.magnetPullSpeed : PICKUP.magnetSpeed
+        const step = Math.min(speed * dt, dist)
+        gpos.x += (dx / dist) * step
+        gpos.y += (dy / dist) * step
+      }
     }
   }
 }
@@ -98,7 +104,7 @@ function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
       break
     }
     case 'magnet': {
-      vacuumXpGems(world)
+      startMagnetPull(world)
       break
     }
     case 'coffre': {
@@ -109,40 +115,19 @@ function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
 }
 
 /**
- * Aspire immédiatement toutes les gemmes d'XP restantes (power-up aimant). Chaque
- * gemme est créditée à son joueur VIVANT le plus proche (coop-équitable — évite
- * qu'un seul joueur rafle toute la carte). En solo, tout revient à l'unique joueur
- * → arithmétique identique (`Math.round(total × growth)`), run par défaut byte-identique.
- * Puis despawn des gemmes créditées.
+ * Power-up aimant : marque toutes les gemmes d'XP restantes comme « aimantées ».
+ * Elles convergent alors vers le joueur le plus proche (à `PICKUP.magnetPullSpeed`)
+ * dans `pickupSystem`, puis sont collectées AU CONTACT — l'XP est créditée à la
+ * collecte, plus de disparition sèche instantanée (« toutes les gemmes volent vers
+ * toi » façon Vampire Survivors). Déterministe.
  */
-function vacuumXpGems(world: World): void {
-  const byPlayer = new Map<EntityId, number>()
-  const ids: EntityId[] = []
+export function startMagnetPull(world: World): void {
   for (const g of world.query('pickup', 'position')) {
     const pk = world.get(g, 'pickup')
     if (pk === undefined || pk.type !== 'xp') {
       continue
     }
-    const gpos = world.get(g, 'position')
-    if (gpos === undefined) {
-      continue
-    }
-    const near = nearestPlayer(world, gpos)
-    if (near === null) {
-      continue // aucun joueur vivant → laisse la gemme (pas de despawn silencieux)
-    }
-    ids.push(g)
-    byPlayer.set(near.entity, (byPlayer.get(near.entity) ?? 0) + pk.value)
-  }
-  for (const [pid, total] of byPlayer) {
-    const progress = world.get(pid, 'progress')
-    if (progress !== undefined) {
-      const growth = world.get(pid, 'stats')?.growth ?? 1
-      progress.xp += Math.round(total * growth)
-    }
-  }
-  for (const g of ids) {
-    world.despawn(g)
+    pk.magnetized = true
   }
 }
 

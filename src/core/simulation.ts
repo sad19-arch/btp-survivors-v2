@@ -18,6 +18,7 @@ import { movementSystem } from './systems/movement'
 import { tetherSystem } from './systems/tether'
 import { worldBoundsSystem } from './systems/bounds'
 import { enemyAiSystem } from './systems/enemyAi'
+import { bossSystem } from './systems/bossSystem'
 import { slowSystem } from './systems/slow'
 import { spawnBoss, spawnGroup, spawnWave } from './systems/spawn'
 import { createWaveDirectorState, stepWaveDirector, type WaveDirectorState } from './systems/waveDirector'
@@ -39,7 +40,7 @@ import { tickChestDirector, maybeDropEliteChest } from './systems/chestDirector'
 import { resolveObstacleCollisions } from './systems/obstacleCollision'
 import { buildSiteLayout, type Obstacle } from './siteLayout'
 import { buildFlowField, CELL_FLOW, HALF_FLOW, type FlowField } from './systems/flowField'
-import { CHEST, coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
+import { bossLevelHpMult, CHEST, coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
 import { SPAWN_RAMP, difficultyScaleAt } from '@content/spawnRamp'
 import { eventPoolForPhase } from '@content/waveEvents'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
@@ -433,7 +434,7 @@ export class Simulation {
     }
     const radius = role === 'mid' ? MID_BOSS_WAVES.spawnRadius : FINAL_BOSS.spawnRadius
     const hpMult = role === 'mid' ? (MID_BOSS_WAVES.hpMults[0] ?? 1.0) : FINAL_BOSS.hpMult
-    const bossScale = { hp: coopHpFactor(this.playerCount()) * hpMult, contactDamage: 1, speed: 1 }
+    const bossScale = { hp: coopHpFactor(this.playerCount()) * hpMult * bossLevelHpMult(this.maxPlayerLevel()), contactDamage: 1, speed: 1 }
     spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), radius, role, bossScale)
     this.events.dispatchEvent(new BossSpawnedEvent(role))
     if (role === 'mid') {
@@ -625,6 +626,11 @@ export class Simulation {
         }
       }
     }
+    // Mini-événement boss (enrage + invocation d'add) AVANT le steering : l'enrage
+    // doit être à jour quand `steerBoss` calcule la vitesse. Add mis à l'échelle
+    // comme une vague normale (difficulté temporelle × co-op).
+    const bossScale = difficultyScaleAt(this.elapsedMs)
+    bossSystem(this.world, this.rng, this.phase, { ...bossScale, hp: bossScale.hp * coopHpFactor(this.playerCount()) })
     enemyAiSystem(this.world, this.elapsedMs, dtMs, this.flowField)
     tetherSystem(this.world, MODE_PLAYER_COUNT[this.mode] ?? 1, TETHER.maxRadius)
     movementSystem(this.world, dtMs)
@@ -801,6 +807,23 @@ export class Simulation {
     return MODE_PLAYER_COUNT[this.mode] ?? 1
   }
 
+  /**
+   * Niveau du joueur le plus haut (co-op : le max de la table). Sert à faire
+   * monter les PV des boss avec la puissance du joueur (`bossLevelHpMult`), pour
+   * que le boss reste une menace même quand le joueur a beaucoup d'upgrades.
+   * Défaut 1 si aucun joueur/progress (jamais négatif, jamais < 1).
+   */
+  private maxPlayerLevel(): number {
+    let max = 1
+    for (const e of this.playerEntities.values()) {
+      const progress = this.world.get(e, 'progress')
+      if (progress !== undefined && progress.level > max) {
+        max = progress.level
+      }
+    }
+    return max
+  }
+
   private runSpawns(dtMs: number): void {
     this.maybeSpawnMidBoss()
     this.maybeSpawnFinalBoss()
@@ -818,8 +841,12 @@ export class Simulation {
       ringRadius: SPAWN.ringRadius,
       rng: this._waveRng
     })
-    if (placements.length > 0 && this.countEnemies() < SPAWN.maxActive) {
-      spawnGroup(this.world, this._waveRng, this.phase, center, placements, coopScale)
+    // Clamp au budget restant : une vague dense (jusqu'à 17) ne doit PAS pousser
+    // le total au-delà de `maxActive` (l'invariant sanity du harness le vérifie).
+    const budget = SPAWN.maxActive - this.countEnemies()
+    if (placements.length > 0 && budget > 0) {
+      const clamped = placements.length > budget ? placements.slice(0, budget) : placements
+      spawnGroup(this.world, this._waveRng, this.phase, center, clamped, coopScale)
     }
   }
 
@@ -838,7 +865,7 @@ export class Simulation {
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
       const hpMult = MID_BOSS_WAVES.hpMults[nextIndex] ?? 1.0
-      const bossScale = { hp: coopHpFactor(this.playerCount()) * hpMult, contactDamage: 1, speed: 1 }
+      const bossScale = { hp: coopHpFactor(this.playerCount()) * hpMult * bossLevelHpMult(this.maxPlayerLevel()), contactDamage: 1, speed: 1 }
       spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), MID_BOSS_WAVES.spawnRadius, 'mid', bossScale)
       this.events.dispatchEvent(new BossSpawnedEvent('mid'))
     }
@@ -852,7 +879,7 @@ export class Simulation {
     }
     const def = ENEMIES[MINI_BOSS_ID]
     if (def !== undefined) {
-      const bossScale = { hp: coopHpFactor(this.playerCount()) * FINAL_BOSS.hpMult, contactDamage: 1, speed: 1 }
+      const bossScale = { hp: coopHpFactor(this.playerCount()) * FINAL_BOSS.hpMult * bossLevelHpMult(this.maxPlayerLevel()), contactDamage: 1, speed: 1 }
       spawnBoss(this.world, def, this.playersCentroid(), this.rng.float(0, Math.PI * 2), FINAL_BOSS.spawnRadius, 'final', bossScale)
       this.events.dispatchEvent(new BossSpawnedEvent('final'))
     }
@@ -937,7 +964,10 @@ export class Simulation {
         maxHp: health.maxHp,
         isElite: enemy.isElite,
         isBoss: enemy.isBoss,
-        ...(enemy.bossRole !== undefined ? { bossRole: enemy.bossRole } : {})
+        ...(enemy.bossRole !== undefined ? { bossRole: enemy.bossRole } : {}),
+        ...(enemy.behavior === 'boss' && (enemy.bMode === 1 || enemy.bMode === 2)
+          ? { bossCharge: enemy.bMode === 1 ? ('telegraph' as const) : ('charge' as const) }
+          : {})
       })
     }
     enemies.sort((a, b) => a.id - b.id)

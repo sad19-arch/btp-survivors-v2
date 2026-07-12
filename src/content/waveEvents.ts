@@ -10,6 +10,7 @@
 
 import { Rng } from '@core/rng'
 import type { EnemyBehavior, WavePlacement } from '@core/types'
+import { FORMATION } from './config'
 import { ConstructionPhaseId } from '@content/phases'
 
 // ---------------------------------------------------------------------------
@@ -180,7 +181,7 @@ function placeEncircle(
 ): WavePlacement[] {
   const behavior: EnemyBehavior = behaviorOverride ?? 'circler'
   const base = rng.float(0, TWO_PI)
-  const radius = ringRadius * 0.7
+  const radius = ringRadius * FORMATION.encircleRadiusFactor
   const result: WavePlacement[] = []
   for (let i = 0; i < count; i++) {
     const angle = base + i * (TWO_PI / count)

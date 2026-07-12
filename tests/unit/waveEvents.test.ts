@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest'
 import { Rng } from '@core/rng'
 import { placeEvent, EVENT_POOL_DEFAULT, eventPoolForPhase } from '@content/waveEvents'
+import { FORMATION } from '@content/config'
 import { ConstructionPhaseId } from '@content/phases'
 
 // ---------------------------------------------------------------------------
@@ -74,12 +75,12 @@ describe('placeEvent("encircle")', () => {
     }
   })
 
-  it('radius = ringRadius × 0.7 (resserré)', () => {
+  it('radius = ringRadius × encircleRadiusFactor (au bord, hors écran)', () => {
     const ringRadius = 400
     const rng = new Rng(5)
     const result = placeEvent('encircle', 8, ringRadius, rng)
     for (const p of result) {
-      expect(p.radius).toBeCloseTo(ringRadius * 0.7, 5)
+      expect(p.radius).toBeCloseTo(ringRadius * FORMATION.encircleRadiusFactor, 5)
     }
   })
 

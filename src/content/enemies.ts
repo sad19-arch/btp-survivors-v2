@@ -85,10 +85,11 @@ export const ENEMIES: Record<string, EnemyDef> = {
     id: 'contremaitre',
     name: 'Contremaître',
     hp: 1800,
-    speed: 215, // > joueur (200) : rattrape et reste au contact → vrai combat de climax
+    speed: 170, // < joueur (200) : ESQUIVABLE ; la pression vient des charges télégraphiées (behavior 'boss')
     contactDamage: 22,
     archetype: 'elite',
-    xpValue: 80
+    xpValue: 80,
+    behavior: 'boss' // machine à états : chase lent → télégraphe → charge (steerBoss) + invocations/enrage (bossSystem)
   }
 }
 
@@ -122,6 +123,29 @@ export const BEHAVIOR_TUNING = {
     recoverMs: 700,
     /** Multiplicateur de vitesse pendant la récupération. */
     recoverMult: 0.45,
+  },
+  /** Boss « mini-événement » : chase lent + charges télégraphiées + invocation d'add + enrage. */
+  boss: {
+    /** Délai entre deux charges (ms). */
+    chargeCooldownMs: 3200,
+    /** Durée du télégraphe avant la charge (quasi-arrêt, mémorise la direction) (ms). */
+    chargeTelegraphMs: 650,
+    /** Durée de la charge/dash (ms). */
+    chargeMs: 500,
+    /** Multiplicateur de vitesse pendant la charge (rattrape brièvement le joueur). */
+    chargeMult: 3.2,
+    /** Seuils de PV (fraction du max) déclenchant une invocation d'add. */
+    summonAtHpPct: [0.75, 0.5, 0.25] as readonly number[],
+    /** Nombre d'add invoqués à chaque seuil franchi. */
+    summonCount: 4,
+    /** Rayon (px) autour du boss où apparaissent les add invoqués (à l'écran, autour de lui). */
+    summonRadius: 260,
+    /** Fraction de PV sous laquelle le boss enrage. */
+    enrageHpPct: 0.30,
+    /** Multiplicateur de vitesse en enrage. */
+    enrageSpeedMult: 1.35,
+    /** Multiplicateur du cooldown de charge en enrage (<1 = charges plus fréquentes). */
+    enrageChargeCooldownMult: 0.6,
   },
 } as const
 

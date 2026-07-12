@@ -36,8 +36,14 @@ export const PLAYER_BASE = {
 export const PROGRESSION = {
   /** XP requise pour le 1er niveau. */
   firstThreshold: 25,
-  /** Facteur multiplicatif du seuil à chaque niveau. */
-  growth: 1.15,
+  /**
+   * Facteur multiplicatif du seuil à chaque niveau. TUN-3 : relevé 1.15→1.22
+   * pour RALENTIR le leveling. Cause racine du « jeu trop sûr » post-TUN-2 : le
+   * joueur sur-levelait (armes AoE + swarm nourrissent l'XP) → trop puissant.
+   * Ralentir l'XP = joueur moins fort à kills égaux = plus de tension/mort, SANS
+   * ajouter d'ennemis (ce qui aurait nourri encore plus le swarm).
+   */
+  growth: 1.20,
   /** Nombre de cartes proposées à chaque montée de niveau. */
   choices: 4
 } as const
@@ -53,7 +59,9 @@ export const PICKUP = {
    * Borne l'accumulation de gemmes loin du joueur (horde). `coffre`/`heal`/
    * `magnet` n'ont PAS de durée de vie (persistants).
    */
-  gemLifeMs: 20000
+  gemLifeMs: 20000,
+  /** Vitesse d'aspiration quand le power-up aimant est actif (px/s, > magnetSpeed). */
+  magnetPullSpeed: 900
 } as const
 
 /**
@@ -171,12 +179,26 @@ export const INVENTORY = { weapons: 6, passives: 6 } as const
  * dans le temps vivent dans `spawnRamp.ts` (rampe data-driven) ; le mini-boss
  * à 5:00 est géré par le directeur de spawn (`simulation.ts`).
  */
+/**
+ * Résolution de référence pour un spawn « hors écran » DÉTERMINISTE : le rayon de
+ * spawn ne peut PAS dépendre du viewport réel (ça casserait le replay/sim:check),
+ * on fige donc les demi-extents visibles au format cible (1920×1080 à zoom 1.2).
+ */
+export const REFERENCE_VIEW = { halfW: 800, halfH: 450 } as const
+
 export const SPAWN = {
-  /** Rayon d'apparition autour du centre des joueurs (hors écran).
-   *  Resserré (700→560) pour laisser moins de temps de réaction et favoriser la nasse. */
-  ringRadius: 560,
-  /** Plafond d'ennemis simultanés (perf). */
-  maxActive: 300
+  /**
+   * Rayon d'apparition autour du centre des joueurs, DÉRIVÉ de REFERENCE_VIEW
+   * (demi-diagonale ~918 + marge 122 ≈ 1040) : les ennemis apparaissent HORS du
+   * champ visible et « viennent du monde » au lieu de pop à l'écran à l'arrêt.
+   */
+  ringRadius: Math.round(Math.hypot(REFERENCE_VIEW.halfW, REFERENCE_VIEW.halfH) + 122),
+  /**
+   * Plafond d'ennemis simultanés. TUN-3 : 300→220 (= la limite sanity du harness).
+   * Un pic à 300 n'apportait pas de menace mais nourrissait l'XP (armes AoE) et la
+   * charge CPU. 220 aligne le cap sur l'invariant et affame un peu le swarm.
+   */
+  maxActive: 220
 } as const
 
 /**
@@ -194,7 +216,7 @@ export const FINAL_BOSS = {
    * Arc 20 min : le joueur a pu évoluer 2-3 armes. PV ajusté pour viser 25-40 %
    * de win (cible sim `KITE_MIN_WIN_PCT`).
    */
-  hpMult: 0.85
+  hpMult: 4.0
 } as const
 
 /**
@@ -208,9 +230,23 @@ export const FINAL_BOSS = {
  */
 export const MID_BOSS_WAVES = {
   atMs: [5 * 60_000, 10 * 60_000, 15 * 60_000] as readonly number[],
-  hpMults: [1.0, 1.1, 1.5] as readonly number[],
+  hpMults: [3.0, 4.0, 5.0] as readonly number[],
   spawnRadius: 320
 } as const
+
+/**
+ * Scaling de PV du boss selon le NIVEAU D'XP du joueur au spawn (demande user) :
+ * plus le joueur est haut niveau, plus le boss encaisse → reste un défi même en
+ * fin de montée en puissance. Formule bornée (le niveau d'XP n'a pas de plafond).
+ * En coop : le caller prend le niveau MAX parmi les joueurs vivants.
+ */
+export const BOSS_HP_BY_PLAYER_LEVEL = { k: 0.06, cap: 2.0 } as const
+
+/** Multiplicateur de PV boss dérivé du niveau d'XP du joueur (borné [1, cap]). Pur. */
+export function bossLevelHpMult(level: number): number {
+  const raw = 1 + (Math.max(1, level) - 1) * BOSS_HP_BY_PLAYER_LEVEL.k
+  return Math.min(BOSS_HP_BY_PLAYER_LEVEL.cap, raw)
+}
 
 /**
  * Ouvrier prisonnier (clin d'œil « otage à libérer »). 1 par run, position seedée
@@ -280,8 +316,8 @@ export const CONE_HALF_ANGLE = 0.5 as const
  * L'alternance tight / loose dans le pool crée un contraste de densité perçu.
  */
 export const FORMATION = {
-  /** Facteur de rayon pour encircle (0.7 = resserré vs ringRadius). */
-  encircleRadiusFactor: 0.7,
+  /** Facteur de rayon pour encircle (0.9 = juste au bord vs ringRadius, hors écran). */
+  encircleRadiusFactor: 0.9,
   /**
    * Demi-angle perpendiculaire du mur CONDENSÉ (spread total = 2×).
    * Était 0.4 (T7). Réduit à 0.25 pour un mur nettement plus serré.

@@ -50,6 +50,45 @@ export function spawnWave(
 }
 
 /**
+ * Invoque `count` add autour d'un centre (le boss), sur un anneau de rayon `radius`
+ * (à l'écran, autour du boss — pas à l'anneau de spawn lointain). Type tiré du pool
+ * de la phase via le RNG passé. Utilisé par `bossSystem` sur franchissement de seuil PV.
+ * No-op si le pool de la phase est vide.
+ */
+export function spawnSummons(
+  world: World,
+  rng: Rng,
+  phase: ConstructionPhase,
+  center: Vec2,
+  count: number,
+  radius: number,
+  scale: DifficultyScale = NO_SCALE
+): void {
+  const pool = phasePoolIds(phase)
+  if (pool.length === 0) {
+    return
+  }
+  for (let i = 0; i < count; i++) {
+    const id = rng.pick(pool)
+    const def = ENEMIES[id]
+    if (def === undefined) {
+      continue
+    }
+    const angle = rng.float(0, Math.PI * 2)
+    spawnEnemy(
+      world,
+      def,
+      {
+        x: center.x + Math.cos(angle) * radius,
+        y: center.y + Math.sin(angle) * radius
+      },
+      false,
+      scale
+    )
+  }
+}
+
+/**
  * Invoque un ennemi spécifique (ex. mini-boss) à un angle donné.
  * `radius` = distance d'apparition ; par défaut l'anneau de spawn, mais le mini-boss
  * passe un rayon plus court pour apparaître À L'ÉCRAN (combat de climax lisible).

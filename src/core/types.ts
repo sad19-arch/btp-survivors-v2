@@ -58,7 +58,7 @@ export interface ProgressComp {
 }
 
 /** Comportements d'IA disponibles pour les ennemis. */
-export type EnemyBehavior = 'chase' | 'zigzag' | 'circler' | 'sweep' | 'charger'
+export type EnemyBehavior = 'chase' | 'zigzag' | 'circler' | 'sweep' | 'charger' | 'boss'
 
 /**
  * Placement d'un ennemi dans un groupe de vague (directeur de vagues).
@@ -89,10 +89,21 @@ export interface EnemyComp {
   bPhase?: number
   /** Angle courant du comportement (utilisé par circler…). */
   bAngle?: number
-  /** Mode interne du comportement (utilisé par charger…). */
+  /** Mode interne du comportement (utilisé par charger, boss…). */
   bMode?: number
-  /** Timer interne du comportement (utilisé par charger…). */
+  /** Timer interne du comportement (utilisé par charger, boss…). */
   bTimer?: number
+  /**
+   * Boss « enragé » : posé par `bossSystem` quand ses PV passent sous
+   * `BEHAVIOR_TUNING.boss.enrageHpPct`. Lu par `steerBoss` (vitesse + cadence
+   * de charge). Absent = non enragé.
+   */
+  bEnraged?: boolean
+  /**
+   * Nombre de seuils d'invocation déjà franchis par ce boss (index dans
+   * `BEHAVIOR_TUNING.boss.summonAtHpPct`). Empêche de re-invoquer au même palier.
+   */
+  bSummonIdx?: number
   /**
    * PlayerId du dernier joueur ayant infligé des dégâts à cet ennemi.
    * Posé à chaque site de dégât (projectile, aura, orbital, sweep, strike, cone, hazard).
@@ -113,6 +124,11 @@ export interface PickupComp {
   value: number
   /** Durée de vie restante (ms) avant despawn auto. Seules les gemmes d'XP en ont une. */
   lifeMs?: number
+  /**
+   * Power-up aimant actif sur cette gemme : elle est tirée vers le joueur quel
+   * que soit le rayon d'aimantation, puis collectée au contact (pas de vacuum sec).
+   */
+  magnetized?: boolean
 }
 
 /** Un projectile en vol. */
@@ -303,6 +319,12 @@ export interface EnemyState {
   isBoss: boolean
   /** Rôle de boss (mini-boss intermédiaire vs boss final). Absent pour les ennemis non-boss. */
   bossRole?: 'mid' | 'final'
+  /**
+   * Phase de charge du boss (behavior 'boss'), pour le télégraphe visuel :
+   * `'telegraph'` = wind-up (fenêtre d'esquive), `'charge'` = dash en cours.
+   * Absent hors phase de charge / pour les non-boss. Cosmétique (render-only).
+   */
+  bossCharge?: 'telegraph' | 'charge'
 }
 
 export interface ProjectileState {

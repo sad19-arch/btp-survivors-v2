@@ -54,6 +54,9 @@ export function enemyAiSystem(world: World, elapsedMs = 0, dtMs = 16, flowField:
       case 'charger':
         steerCharger(pos, vel, enemy, blendedNearest, dtMs)
         break
+      case 'boss':
+        steerBoss(pos, vel, enemy, blendedNearest, dtMs)
+        break
       default:
         steerChase(pos, vel, enemy, blendedNearest)
     }
@@ -174,6 +177,57 @@ function steerCharger(pos: Vec2, vel: Vec2, enemy: EnemyComp, nearest: Vec2 | nu
     // Approche / télégraphe / récup : homing vers le joueur
     const dx = nearest.x - pos.x
     const dy = nearest.y - pos.y
+    const l = Math.hypot(dx, dy) || 1
+    vel.x = (dx / l) * enemy.speed * mult
+    vel.y = (dy / l) * enemy.speed * mult
+  }
+}
+
+/**
+ * IA du boss « mini-événement » : machine à états à 3 phases cycliques.
+ *   0 = chase       — poursuite lente (esquivable), pendant `chargeCooldownMs`
+ *   1 = télégraphe  — quasi-arrêt lisible, fige la direction de la charge
+ *   2 = charge      — dash `chargeMult×speed` dans la direction figée
+ * Enrage (`enemy.bEnraged`, posé par `bossSystem` sous le seuil de PV) :
+ *   - poursuite plus rapide (`enrageSpeedMult`)
+ *   - cadence de charge accélérée (`enrageChargeCooldownMult` < 1)
+ * L'invocation d'add et le flag d'enrage vivent dans `bossSystem` (accès RNG/monde) ;
+ * ici on ne fait que du steering déterministe (timers ms fixes, zéro RNG runtime).
+ */
+function steerBoss(pos: Vec2, vel: Vec2, enemy: EnemyComp, nearest: Vec2 | null, dtMs: number): void {
+  if (nearest === null) { vel.x = 0; vel.y = 0; return }
+  const T = BEHAVIOR_TUNING.boss
+  const enraged = enemy.bEnraged === true
+  const cooldownMs = T.chargeCooldownMs * (enraged ? T.enrageChargeCooldownMult : 1)
+  // Initialisation au premier appel (bMode undefined → chase).
+  if (enemy.bMode === undefined) {
+    enemy.bMode = 0
+    enemy.bTimer = cooldownMs
+  }
+  enemy.bTimer = (enemy.bTimer ?? 0) - dtMs
+  if (enemy.bTimer <= 0) {
+    enemy.bMode = (enemy.bMode + 1) % 3
+    if (enemy.bMode === 1) {
+      enemy.bTimer = T.chargeTelegraphMs
+    } else if (enemy.bMode === 2) {
+      enemy.bTimer = T.chargeMs
+      // Entrée en charge : fige la direction vers le joueur (charge « aveugle »).
+      const dx = nearest.x - pos.x, dy = nearest.y - pos.y
+      const l = Math.hypot(dx, dy) || 1
+      enemy.bAngle = Math.atan2(dy / l, dx / l)
+    } else {
+      enemy.bTimer = cooldownMs
+    }
+  }
+  if (enemy.bMode === 2) {
+    // Charge : direction figée, vitesse démultipliée (rattrape brièvement le joueur).
+    const a = enemy.bAngle ?? 0
+    vel.x = Math.cos(a) * enemy.speed * T.chargeMult
+    vel.y = Math.sin(a) * enemy.speed * T.chargeMult
+  } else {
+    // Chase (mult enrage) ou télégraphe (quasi-arrêt) : homing vers le joueur.
+    const mult = enemy.bMode === 1 ? 0.06 : (enraged ? T.enrageSpeedMult : 1)
+    const dx = nearest.x - pos.x, dy = nearest.y - pos.y
     const l = Math.hypot(dx, dy) || 1
     vel.x = (dx / l) * enemy.speed * mult
     vel.y = (dy / l) * enemy.speed * mult

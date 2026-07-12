@@ -154,14 +154,16 @@ describe('pickupSystem', () => {
     expect(world.alive(p2)).toBe(true)
   })
 
-  it('l’aimant aspire toutes les gemmes d’XP restantes', () => {
+  it('l’aimant aspire (progressivement) toutes les gemmes d’XP restantes', () => {
     const world = new World()
     const player = makePlayer(world, 0, 0, 100)
     // Gemmes hors rayon : normalement non collectées, mais aspirées par l'aimant.
     const g1 = makeGem(world, 500, 0, 5)
     const g2 = makeGem(world, 0, 500, 8)
     makePickup(world, COLLECT_X, 0, 'magnet', 0)
-    pickupSystem(world, 16)
+    // TUN-1 : l'aimant TIRE les gemmes vers le joueur (pas de vacuum sec) ; on
+    // avance dans le temps jusqu'à la collecte au contact.
+    for (let i = 0; i < 200; i++) { pickupSystem(world, 16) }
     expect(world.alive(g1)).toBe(false)
     expect(world.alive(g2)).toBe(false)
     expect(world.get(player, 'progress')?.xp).toBe(13)
@@ -174,10 +176,11 @@ describe('pickupSystem', () => {
     const gemNearP1 = makeGem(world, 60, 0, 5) // clairement le plus proche de p1
     const gemNearP2 = makeGem(world, 1000, 60, 9) // clairement le plus proche de p2
     makePickup(world, COLLECT_X, 0, 'magnet', 0) // p1 ramasse l'aimant
-    pickupSystem(world, 16)
+    for (let i = 0; i < 200; i++) { pickupSystem(world, 16) }
     expect(world.alive(gemNearP1)).toBe(false)
     expect(world.alive(gemNearP2)).toBe(false)
-    // La gemme loin (près de p2) va à p2, PAS au ramasseur p1 — équité coop.
+    // La gemme loin (près de p2) va à p2, PAS au ramasseur p1 — équité coop
+    // (cible recalculée par frame → chaque gemme converge vers son joueur le plus proche).
     expect(world.get(p1, 'progress')?.xp).toBe(5)
     expect(world.get(p2, 'progress')?.xp).toBe(9)
   })
@@ -234,7 +237,7 @@ describe('pickupSystem', () => {
 
     // p1 ramasse l'aimant au contact → déclenche l'aspiration globale.
     makePickup(world, COLLECT_X, 0, 'magnet', 0)
-    pickupSystem(world, 16)
+    for (let i = 0; i < 400; i++) { pickupSystem(world, 16) }
 
     // Les deux gemmes sont consommées...
     expect(world.alive(gemNearP1)).toBe(false)

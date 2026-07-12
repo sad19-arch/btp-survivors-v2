@@ -91,17 +91,22 @@ export function difficultyScaleAt(elapsedMs: number): DifficultyScale {
   //  [17, 20+ min] : coup de fouet (climax avant boss final)
   let hp: number
   if (min <= 9) {
-    hp = 0.7 + 0.07 * min   // T5b allégé (0.09→0.07) : 9:00→hp=1.33
+    // TUN-3 : PV vague RÉTABLIS à l'original. Les monter avait backfiré — plus
+    // d'ennemis coriaces = plus d'ennemis à l'écran = plus d'AoE = plus de kills
+    // = plus d'XP = joueur PLUS fort (le swarm nourrit la puissance). Le vrai
+    // levier de difficulté est la courbe d'XP (PROGRESSION.growth), pas les PV.
+    hp = 0.7 + 0.07 * min
   } else if (min <= 17) {
-    hp = 0.7 + 0.07 * 9 + 0.09 * (min - 9)  // T5b allégé (0.10→0.09)
+    hp = 0.7 + 0.07 * 9 + 0.09 * (min - 9)
   } else {
-    hp = 0.7 + 0.07 * 9 + 0.09 * 8 + 0.55 * (min - 17)  // coup de fouet final inchangé
+    hp = 0.7 + 0.07 * 9 + 0.09 * 8 + 0.55 * (min - 17)
   }
   return {
     hp,
-    // Contact punitif mais moins rapide que l'arc 10:30 — le kite doit pouvoir
-    // tenir 20 min. T5b : pente légèrement adoucie (0.11→0.09).
-    contactDamage: 0.5 + 0.09 * min,
+    // Contact relevé (0.5+0.09 → 0.62+0.14) : levier SÉPARATEUR. Le growth ralenti
+    // aide kite ET greedy à survivre ; le contact re-punit spécifiquement le greedy
+    // qui ENCAISSE (kite l'évite). Sans sur-level (growth 1.20), il mord vraiment.
+    contactDamage: 0.62 + 0.14 * min,
     // Vitesse plafonnée : re-tune phase 8 (terrain tactique). Les clusters
     // (clôtures) ABRITENT le kiter → poursuite rallongée (flux qui contourne)
     // → il fallait remonter la vitesse pour que la horde rattrape autour des

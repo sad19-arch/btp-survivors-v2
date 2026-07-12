@@ -20,6 +20,14 @@ import { renderSummaryTable, renderCurves, renderDiff } from './render'
 import { evaluateTargets } from './targets'
 import { saveBaseline, loadBaseline } from './baseline'
 import { BOT_NAMES, isBotName, type BotName } from './bots'
+import { SPAWN } from '@content/config'
+
+/**
+ * Marge de sécurité au-dessus de `SPAWN.maxActive` : les boss (mid/final) sont
+ * des ennemis qui apparaissent HORS du plafond de vague (condition de victoire,
+ * jamais clampés). Le pic légitime = maxActive + quelques boss simultanés.
+ */
+const ENEMY_SANITY_MARGIN = 8
 
 const BASELINE_PATH = join(dirname(fileURLToPath(import.meta.url)), 'baseline.json')
 
@@ -122,7 +130,7 @@ function main(): void {
   if (minHp < 0) {
     sanity.push(`HP négatif silencieux (min=${minHp})`)
   }
-  if (maxEnemies > 220) {
+  if (maxEnemies > SPAWN.maxActive + ENEMY_SANITY_MARGIN) {
     sanity.push(`plafond d'ennemis dépassé (${maxEnemies})`)
   }
   if (sanity.length > 0) {

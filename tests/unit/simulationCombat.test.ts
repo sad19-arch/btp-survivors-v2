@@ -10,9 +10,18 @@ describe('Simulation — combat', () => {
   })
 
   it('tue des ennemis avec le temps et fait monter le score', () => {
+    // TUN-2 : les ennemis apparaissent hors écran (~1040 px) et « viennent du
+    // monde » → le premier contact/kill arrive plus tard qu'avant. On vérifie
+    // l'INTENTION (le combat produit du score au fil du temps) sur une fenêtre
+    // large plutôt qu'un seuil serré. La cadence early précise est du ressort du
+    // re-tune SPAWN_RAMP (TUN-3) + du playtest, pas de ce test unitaire.
     const sim = new Simulation({ seed: 1, mode: 'solo' })
-    sim.advanceTime(8000)
-    expect(sim.getState().score).toBeGreaterThan(0)
+    let score = 0
+    for (let i = 0; i < 30 && score === 0; i++) {
+      sim.advanceTime(1000)
+      score = sim.getState().score
+    }
+    expect(score).toBeGreaterThan(0)
   })
 
   it('fait apparaître des projectiles quand des cibles sont à portée', () => {
