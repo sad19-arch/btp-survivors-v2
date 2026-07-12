@@ -1,6 +1,7 @@
 import type { App } from './app'
 import type { AppViewState, NavDir } from './appState'
 import type { GameMode, PlayerInput } from '@core/types'
+import type { PerfSnapshot } from '@render/perf/perfProbe'
 
 /**
  * Contrat du « seam » de test exposé sur `window.__GAME__`.
@@ -96,6 +97,13 @@ export interface GameSeam {
   }
   /** Fige la caméra en vue d'ensemble (outil de revue visuelle, render-only). */
   debugCameraOverview?(zoom: number, cx: number, cy: number): void
+  /**
+   * [Debug/Perf] Snapshot du profileur de temps de frame render-side (posé par la
+   * GameScene) : durées moyennes par section (`sim`, `hordeSync`, `playersSync`…)
+   * et compteurs instantanés (`enemies`, `objects`). `null` si la scène n'est pas
+   * montée. Test/overlay only — n'affecte jamais la simulation.
+   */
+  debugPerfProfile?(): PerfSnapshot | null
 }
 
 declare global {

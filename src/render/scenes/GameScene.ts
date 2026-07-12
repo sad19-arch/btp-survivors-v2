@@ -29,6 +29,7 @@ import { buildSiteLayout } from '@core/siteLayout'
 import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
 import { PALETTE_HEX } from '@ui/palette'
+import { PerfProbe, type PerfSnapshot } from '@render/perf/perfProbe'
 
 /** Feuille PARTAGÉE (tous stages) : le joueur. Ennemis ET boss sont PAR STAGE (voir stages.ts). */
 const SHARED_SHEETS: ReadonlyArray<readonly [string, string, number]> = [['player', 'player_j1.png', 192]]
@@ -68,6 +69,8 @@ export class GameScene extends Phaser.Scene {
   private readonly camera = new CameraController(this)
   /** Effets visuels transitoires (extraits de GameScene) — observer-only, sans état de sim. */
   private readonly vfx = new VfxManager(this)
+  /** Profileur de temps de frame render-side (perf mobile) — test/overlay only. */
+  private readonly perf = new PerfProbe()
   /** Rendu du joueur/prisonniers/intro extrait de GameScene (détient les Maps/état joueur). */
   private players!: PlayerRenderer
   /** Rendu de la horde (ennemis/hazards/projectiles/pickups/coffres) extrait de GameScene. */
@@ -627,6 +630,8 @@ export class GameScene extends Phaser.Scene {
       this.seam.debugCameraOverview = (zoom: number, cx: number, cy: number): void => {
         this.camera.setOverview({ zoom, cx, cy })
       }
+      // Sonde perf (test/overlay only) : snapshot du profileur de temps de frame.
+      this.seam.debugPerfProfile = (): PerfSnapshot => this.perfSnapshot()
     }
   }
 
@@ -642,7 +647,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!this.testMode) {
       routeInput(this.app, this.readPlayerInputs(st.players.length))
-      this.app.advanceTime(Math.min(delta, MAX_FRAME_MS))
+      this.perf.measure('sim', () => this.app.advanceTime(Math.min(delta, MAX_FRAME_MS)))
     }
     this.syncSprites()
     this.camera.update(st, this.players.sprites)
@@ -655,6 +660,14 @@ export class GameScene extends Phaser.Scene {
       }
       this.siteStructures.update(this.cameras.main)
     }
+    // Sonde perf (test/overlay only) : compteurs instantanés publiés en fin de frame.
+    this.perf.count('enemies', st.enemies.length)
+    this.perf.count('objects', this.children.list.length)
+  }
+
+  /** Snapshot du profileur de frame (test/overlay only). */
+  perfSnapshot(): PerfSnapshot {
+    return this.perf.snapshot()
   }
 
 
@@ -671,9 +684,9 @@ export class GameScene extends Phaser.Scene {
     const state = this.app.getStateForFrame(this.app.frameId)
     // Rendu joueur/prisonniers/intro (délégué) : goldSkin, ré-arme d'intro, boucle
     // joueur (rings/label/downed/anim/level-up/flash), fin-d'intro flourish, prisonniers.
-    this.players.sync(state)
+    this.perf.measure('playersSync', () => this.players.sync(state))
 
-    this.horde.sync(state, this.stage)
+    this.perf.measure('hordeSync', () => this.horde.sync(state, this.stage))
 
     // Télégraphe des formations (Task 10) : marqueur au sol + flèche de bord d'écran.
     this.telegraph.sync(state, this.cameras.main)
