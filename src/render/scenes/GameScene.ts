@@ -129,7 +129,13 @@ export class GameScene extends Phaser.Scene {
   private readonly onAuraPulse = (e: Event): void => {
     const p = e as AuraPulseEvent
     if (p.kind === 'sweep') {
-      this.vfx.spawnSweepArc(p.x, p.y, p.radius)
+      // Niveau du pied-de-biche du frappeur (joueur le plus proche du balayage) →
+      // le VFX scale avec le niveau (progression visible). Lecture d'état pure.
+      const level = this.weaponLevelNear(p.x, p.y, 'pied_de_biche')
+      this.vfx.spawnSweepArc(p.x, p.y, p.radius, level)
+      // Léger kick « coup de barre à mine », renforcé au haut niveau.
+      const lf = Math.max(0, Math.min(1, (level - 1) / 7))
+      this.cameras.main.shake(70, 0.0025 + lf * 0.0022)
       return
     }
     if (p.kind === 'strike') {
@@ -184,6 +190,30 @@ export class GameScene extends Phaser.Scene {
     }
     // Screen-shake plus fort que le marteau (événement majeur du run).
     this.cameras.main.shake(160, 0.007)
+  }
+
+  /**
+   * Niveau de l'arme `weaponId` du joueur vivant le plus proche de (x,y) — utilisé
+   * par les VFX d'impulsion pour scaler leur intensité avec le niveau (progression
+   * visible). Lecture d'état pure (players[].weapons/weaponLevels), aucun effet sim.
+   * Repli à 1 si aucun joueur ne possède l'arme.
+   */
+  private weaponLevelNear(x: number, y: number, weaponId: string): number {
+    const st = this.app.getStateForFrame(this.app.frameId)
+    let level = 1
+    let best = Infinity
+    for (const pl of st.players) {
+      const wi = pl.weapons.indexOf(weaponId)
+      if (wi < 0) {
+        continue
+      }
+      const d = (pl.x - x) ** 2 + (pl.y - y) ** 2
+      if (d < best) {
+        best = d
+        level = pl.weaponLevels[wi] ?? 1
+      }
+    }
+    return level
   }
 
   constructor() {
@@ -292,6 +322,9 @@ export class GameScene extends Phaser.Scene {
     this.load.image('vfx_sparkle', 'stage01/vfx/sparkle.png')
     this.load.image('vfx_levelup', 'stage01/vfx/levelup.png')
     this.load.image('vfx_shockwave', 'stage01/vfx/shockwave.png')
+    // Balayage pied-de-biche (PixelLab) : arc « swoosh » (A) + éclat d'impact (B).
+    this.load.image('vfx_slash', 'stage01/vfx/vfx_slash.png')
+    this.load.image('vfx_slash_burst', 'stage01/vfx/vfx_slash_burst.png')
     // Clins d'œil rétro : fumée de disparition, colonne de téléportation boss, prisonnier.
     this.load.image('vfx_dust', 'stage01/vfx/dust.png')
     this.load.image('vfx_beam', 'stage01/vfx/beam.png')

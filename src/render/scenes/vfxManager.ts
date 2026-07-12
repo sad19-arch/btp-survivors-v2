@@ -109,74 +109,69 @@ export class VfxManager {
   }
 
   /**
-   * Balayage du pied-de-biche : arc épais (croissant, pas un cercle complet)
-   * qui pivote sur ~40° en s'estompant — lecture "coup de balayage", distincte
-   * de l'onde ronde du marteau. Double-tracé (cœur blanc + contour jaune) +
-   * scale-pop (naît petit → pleine taille) + particules éjectées le long de l'arc.
-   * Primitive Graphics, aucune texture chargée.
+   * Balayage du pied-de-biche : coup de barre à mine qui SE VOIT monter en
+   * puissance avec le niveau. Effet PixelLab premium — un arc « swoosh »
+   * (`vfx_slash`, A) tourné/agrandi comme un vrai coup balayé + un éclat
+   * d'impact (`vfx_slash_burst`, B) au point de contact. L'échelle et
+   * l'amplitude du balayage croissent avec `level` ; au niveau 5 (count 2 dans
+   * la sim) → DOUBLE coup croisé (X), miroir → la montée de palier se lit d'un
+   * coup d'œil. Quelques éclats de béton procéduraux COMPLÈTENT le sprite
+   * (jamais en remplacement). Render-only ; Math.random cosmétique OK.
    */
-  spawnSweepArc(x: number, y: number, radius: number): void {
-    const arcRadius = radius * 0.6
-    const span = Phaser.Math.DegToRad(120)
-    const startAngle = -Phaser.Math.DegToRad(90) - span / 2
+  spawnSweepArc(x: number, y: number, radius: number, level = 1): void {
+    const lf = Math.max(0, Math.min(1, (level - 1) / 7)) // 0 au niv 1 → 1 au niv 8
+    const swings = level >= 5 ? 2 : 1 // double coup croisé quand l'arme atteint 2 passes
+    const scale = (radius / 100) * (0.72 + lf * 0.38) // le sprite couvre l'aire et grossit au niveau
+    const sweep = Phaser.Math.DegToRad(38 + lf * 22) // amplitude de rotation du coup
 
-    // Cœur blanc (plus fin, éclatant) — dessous.
-    const gInner = this.scene.add.graphics().setPosition(x, y).setDepth(5).setScale(0.3)
-    gInner.lineStyle(12, PALETTE_HEX.blanc, 0.85)
-    gInner.beginPath()
-    gInner.arc(0, 0, arcRadius, startAngle, startAngle + span)
-    gInner.strokePath()
-    this.scene.tweens.add({
-      targets: gInner,
-      rotation: Phaser.Math.DegToRad(40),
-      scaleX: 1,
-      scaleY: 1,
-      alpha: 0,
-      duration: 260,
-      ease: 'Quad.easeOut',
-      onComplete: () => gInner.destroy()
-    })
+    if (this.scene.textures.exists('vfx_slash')) {
+      for (let s = 0; s < swings; s++) {
+        const dir = s === 0 ? 1 : -1
+        // Orienté vers le haut (devant) ; les 2 coups partent en biais opposé (X).
+        const base = -Math.PI / 2 + (swings === 2 ? dir * Phaser.Math.DegToRad(22) : 0)
+        const img = this.scene.add.image(x, y, 'vfx_slash')
+          .setDepth(5)
+          .setScale(scale * 0.72)
+          .setRotation(base - (dir * sweep) / 2)
+          .setFlipX(s === 1)
+          .setAlpha(0.96)
+        this.scene.tweens.add({
+          targets: img,
+          rotation: base + (dir * sweep) / 2,
+          scale,
+          alpha: 0,
+          duration: 240,
+          ease: 'Quad.easeOut',
+          onComplete: () => img.destroy()
+        })
+      }
+    } else {
+      // Repli sans asset (tests/lite sans preload) : flash pour ne jamais planter.
+      this.spawnPixelPop(x, y, PALETTE_HEX.jauneSecurite, 12, 200)
+    }
 
-    // Contour jaune (épais) — dessus, légèrement décalé en temps (scale-pop décalé).
-    const gOuter = this.scene.add.graphics().setPosition(x, y).setDepth(5).setScale(0.3)
-    gOuter.lineStyle(7, PALETTE_HEX.jauneSecurite, 1)
-    gOuter.beginPath()
-    gOuter.arc(0, 0, arcRadius, startAngle, startAngle + span)
-    gOuter.strokePath()
-    this.scene.tweens.add({
-      targets: gOuter,
-      rotation: Phaser.Math.DegToRad(40),
-      scaleX: 1,
-      scaleY: 1,
-      alpha: 0,
-      duration: 240,
-      ease: 'Quad.easeOut',
-      onComplete: () => gOuter.destroy()
-    })
+    // Éclat d'impact (B) au centre — grossit avec le niveau.
+    this.spawnVfx('vfx_slash_burst', x, y, scale * 0.25, scale * 0.62, 230)
 
-    // Flash central (scale-pop) — marque le point d'impact.
-    this.spawnPixelPop(x, y, PALETTE_HEX.jauneSecurite, 10, 180)
-
-    // Particules éjectées en éventail le long de l'arc.
-    const particleCount = 5
-    for (let i = 0; i < particleCount; i++) {
-      const angle = startAngle + (span / (particleCount - 1)) * i
-      const dist = arcRadius * (0.7 + Math.random() * 0.4)
-      const px = x + Math.cos(angle) * dist
-      const py = y + Math.sin(angle) * dist
-      const speedX = Math.cos(angle) * (28 + Math.random() * 22)
-      const speedY = Math.sin(angle) * (28 + Math.random() * 22)
-      const par = this.scene.add.rectangle(px, py, 4, 4, PALETTE_HEX.jauneSecurite).setDepth(6)
+    // Complément procédural léger : éclats de béton éjectés PAR-DESSUS le sprite.
+    const pcount = 4 + Math.round(lf * 5)
+    const fanSpan = Phaser.Math.DegToRad(150)
+    const fanStart = -Phaser.Math.DegToRad(90) - fanSpan / 2
+    for (let i = 0; i < pcount; i++) {
+      const a = fanStart + (fanSpan / Math.max(1, pcount - 1)) * i
+      const dist = radius * (0.5 + Math.random() * 0.4)
+      const px = x + Math.cos(a) * dist
+      const py = y + Math.sin(a) * dist
+      const sp = 26 + lf * 30 + Math.random() * 22
+      const isChunk = lf > 0.4 && i % 3 === 0 // béton cassé au niveau élevé
+      const sz = isChunk ? 5 : 4
+      const par = this.scene.add
+        .rectangle(px, py, sz, sz, isChunk ? PALETTE_HEX.contour : PALETTE_HEX.jauneSecurite)
+        .setDepth(6)
       this.scene.tweens.add({
-        targets: par,
-        x: px + speedX,
-        y: py + speedY,
-        alpha: 0,
-        scaleX: 0.2,
-        scaleY: 0.2,
-        duration: 220 + Math.random() * 80,
-        ease: 'Quad.easeOut',
-        onComplete: () => par.destroy()
+        targets: par, x: px + Math.cos(a) * sp, y: py + Math.sin(a) * sp,
+        alpha: 0, scaleX: 0.2, scaleY: 0.2, angle: isChunk ? 200 : 0,
+        duration: 220 + Math.random() * 110, ease: 'Quad.easeOut', onComplete: () => par.destroy()
       })
     }
   }
