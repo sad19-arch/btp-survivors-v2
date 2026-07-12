@@ -79,7 +79,15 @@ test("allowedFromSec - pas de crash et partie toujours en cours a 119 s", async 
       return s.elapsedMs >= target
     }, TARGET_MS)
     if (done) { break }
-    await page.evaluate(() => { window.__GAME__?.advanceTime(5_000) })
+    // Léger kite (direction tournante) pour garder le joueur en vie sous le contact
+    // durci : ce test vérifie la stabilité du DIRECTEUR/boucle jusqu'à ~119 s, pas la
+    // survie d'un joueur immobile (les spawns hors-écran + contact rapproché tuent
+    // l'immobile trop tôt en e2e). L'input persiste pendant tout l'advanceTime.
+    await page.evaluate((step) => {
+      const a = (step / 6) * Math.PI * 2
+      window.__GAME__?.setInput(1, { move: { x: Math.cos(a), y: Math.sin(a) }, attack: true })
+      window.__GAME__?.advanceTime(5_000)
+    }, i)
   }
 
   // Jeu toujours intact (pas de crash, scène toujours en cours).

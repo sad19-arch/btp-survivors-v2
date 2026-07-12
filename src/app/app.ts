@@ -418,10 +418,13 @@ export class App {
     this.refreshFocus()
   }
 
-  /** [Debug/seam] Fait apparaître `n` ennemis autour des joueurs (stress test horde). */
-  debugSpawnEnemies(n: number): void {
+  /**
+   * [Debug/seam] Fait apparaître `n` ennemis autour des joueurs (stress test horde).
+   * `radius` optionnel (test-only) : spawn à ce rayon autour du joueur (à portée d'arme).
+   */
+  debugSpawnEnemies(n: number, radius?: number): void {
     this.bumpState()
-    this.sim?.debugSpawnEnemies(n)
+    this.sim?.debugSpawnEnemies(n, radius)
   }
 
   /**

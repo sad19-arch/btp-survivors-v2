@@ -40,8 +40,11 @@ test('des ennemis apparaissent au fil du temps (via le seam)', async ({ page }) 
 test('le joueur tue des ennemis via le seam (le score monte)', async ({ page }) => {
   await page.goto('/?autostart=solo&seed=1&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
+  // Les ennemis spawnent à l'anneau lointain hors-écran (TUN-2) : il leur faut le
+  // temps de converger sur le joueur immobile pour se faire tuer par l'arme auto.
+  // 25 s de sim (mode lite = rapide) garantit des kills → le score monte.
   await page.evaluate(() => {
-    window.__GAME__?.advanceTime(8000)
+    window.__GAME__?.advanceTime(25000)
   })
   const s = await page.evaluate(() => window.__GAME__?.getState())
   expect(s?.score ?? 0).toBeGreaterThan(0)

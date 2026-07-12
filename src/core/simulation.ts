@@ -20,7 +20,7 @@ import { worldBoundsSystem } from './systems/bounds'
 import { enemyAiSystem } from './systems/enemyAi'
 import { bossSystem } from './systems/bossSystem'
 import { slowSystem } from './systems/slow'
-import { spawnBoss, spawnGroup, spawnWave } from './systems/spawn'
+import { spawnBoss, spawnGroup, spawnSummons, spawnWave } from './systems/spawn'
 import { createWaveDirectorState, stepWaveDirector, type WaveDirectorState } from './systems/waveDirector'
 import { weaponSystem } from './systems/weapon'
 import { collisionSystem } from './systems/collision'
@@ -449,11 +449,24 @@ export class Simulation {
    * [Debug/seam] Fait apparaître `n` ennemis de la phase courante autour du
    * centroïde des joueurs, via le spawner de vague normal (RNG seedé →
    * déterministe). Ne clampe PAS sur `SPAWN.maxActive` : c'est un helper de
-   * stress dont le but est justement de dépasser le plafond normal. Réservé
-   * aux tests et au seam de debug (`window.__GAME__`) — jamais en jeu normal.
+   * stress dont le but est justement de dépasser le plafond normal.
+   *
+   * `radius` optionnel (test-only) : quand fourni, spawne les ennemis sur un
+   * anneau de ce rayon AUTOUR du joueur (via `spawnSummons`, « à l'écran »)
+   * plutôt qu'à l'anneau de spawn lointain hors-écran de `spawnWave`. Utile
+   * aux e2e qui veulent des ennemis immédiatement à portée d'arme (feedback,
+   * AOE). Le chemin par défaut (sans `radius`) est INCHANGÉ — les bots de la
+   * sim n'appellent jamais ce helper → `sim:check` diff 0.
+   *
+   * Réservé aux tests et au seam de debug (`window.__GAME__`) — jamais en jeu normal.
    */
-  debugSpawnEnemies(n: number): void {
-    spawnWave(this.world, this.rng, this.phase, this.playersCentroid(), n, difficultyScaleAt(this.elapsedMs))
+  debugSpawnEnemies(n: number, radius?: number): void {
+    const scale = difficultyScaleAt(this.elapsedMs)
+    if (radius !== undefined) {
+      spawnSummons(this.world, this.rng, this.phase, this.playersCentroid(), n, radius, scale)
+    } else {
+      spawnWave(this.world, this.rng, this.phase, this.playersCentroid(), n, scale)
+    }
   }
 
   /**

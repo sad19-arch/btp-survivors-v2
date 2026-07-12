@@ -83,23 +83,23 @@ test('upgrade : nav déplace le focus DOM et le focus est visuellement distinct 
   // Attendre que l'overlay ait rendu les cartes (requestAnimationFrame).
   await page.waitForFunction(() => document.querySelectorAll('.card').length > 0, { timeout: 3000 })
 
-  // La 1re carte a le focus (index 0) et une couleur de bordure.
-  const focusedBorder = await page.evaluate(() => {
+  // La carte focalisée est distinguée par un FOND jaune (jauneSecurite) + sheen —
+  // c'est le mécanisme de focus (styles.ts .card--focus), plus lisible qu'une bordure.
+  const focusedBg = await page.evaluate(() => {
     const focused = document.querySelector('.card.card--focus')
-    return focused !== null ? window.getComputedStyle(focused).borderColor : null
+    return focused !== null ? window.getComputedStyle(focused).backgroundColor : null
   })
-  expect(focusedBorder).not.toBeNull()
+  expect(focusedBg).not.toBeNull()
 
-  // Les cartes non-focalisées ont une bordure de couleur DIFFÉRENTE du focus.
-  // (Preuve que card--focus écrase bien card--weapon / card--passive.)
-  const unfocusedBorder = await page.evaluate(() => {
+  // Les cartes non-focalisées ont un fond DIFFÉRENT (texture var(--tex) → transparent).
+  const unfocusedBg = await page.evaluate(() => {
     const cards = Array.from(document.querySelectorAll('.card:not(.card--focus)'))
     const first = cards[0]
-    return first !== undefined ? window.getComputedStyle(first).borderColor : null
+    return first !== undefined ? window.getComputedStyle(first).backgroundColor : null
   })
 
-  if (unfocusedBorder !== null) {
-    expect(focusedBorder).not.toBe(unfocusedBorder)
+  if (unfocusedBg !== null) {
+    expect(focusedBg).not.toBe(unfocusedBg)
   }
 
   // nav('right') → la 2e carte est maintenant focalisée.
@@ -132,7 +132,7 @@ test('upgrade : nav déplace le focus DOM et le focus est visuellement distinct 
 // Test C : focus visible — card--focus écrase bien card--weapon / card--passive
 // ---------------------------------------------------------------------------
 
-test('upgrade : la carte focalisée a une bordure jaune même si card--weapon ou card--passive', async ({
+test('upgrade : la carte focalisée a un fond jaune même si card--weapon ou card--passive', async ({
   page
 }) => {
   await page.goto('/?autostart=solo&seed=3&test=1&lite=1')
@@ -164,10 +164,10 @@ test('upgrade : la carte focalisée a une bordure jaune même si card--weapon ou
       return { ok: true, reason: 'no typed card focused — skip type-override check' }
     }
     const style = window.getComputedStyle(focused)
-    const border = style.borderColor
-    // La couleur du focus (jauneSecurite) est rgb(255, 204, 0) en palette.
-    // Les cartes weapon = orangeDanger, passive = cyanAccent.
-    // On s'assure que la border n'est pas identique à la carte non-focalisée du même type.
+    const bg = style.backgroundColor
+    // Le focus impose un FOND jaune (jauneSecurite = rgb(255, 204, 0)) qui écrase le
+    // style de type (weapon/passive) : on s'assure que ce fond diffère de la carte
+    // non-focalisée du même type (fond texturé var(--tex) → transparent).
     const unfocusedOfSameType = Array.from(
       document.querySelectorAll(focused.classList.contains('card--weapon') ? '.card--weapon:not(.card--focus)' : '.card--passive:not(.card--focus)')
     )[0]
@@ -175,8 +175,8 @@ test('upgrade : la carte focalisée a une bordure jaune même si card--weapon ou
       // Seule carte de ce type → impossible de comparer, on accepte.
       return { ok: true, reason: 'single card of this type' }
     }
-    const otherBorder = window.getComputedStyle(unfocusedOfSameType).borderColor
-    return { ok: border !== otherBorder, border, otherBorder }
+    const otherBg = window.getComputedStyle(unfocusedOfSameType).backgroundColor
+    return { ok: bg !== otherBg, bg, otherBg }
   })
 
   expect(result.ok).toBe(true)

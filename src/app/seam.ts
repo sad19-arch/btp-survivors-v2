@@ -41,8 +41,12 @@ export interface GameSeam {
   debugSpawnChestOnPlayer(playerId?: number): void
   /** [Debug] Fait apparaître immédiatement le boss du rôle demandé (`mid`/`final`). */
   debugSpawnBoss(role: 'mid' | 'final'): void
-  /** [Debug] Fait apparaître `n` ennemis autour des joueurs (stress test horde). */
-  debugSpawnEnemies(n: number): void
+  /**
+   * [Debug] Fait apparaître `n` ennemis autour des joueurs (stress test horde).
+   * `radius` optionnel (test-only) : spawn sur un anneau de ce rayon autour du
+   * joueur (à l'écran, à portée d'arme) au lieu de l'anneau lointain hors-écran.
+   */
+  debugSpawnEnemies(n: number, radius?: number): void
   /** [Debug] Met les PV de tous les joueurs à 0 → game-over au prochain pas. */
   debugKillPlayer(): void
   /** [Debug] Audition d'un SFX d'arme (procédural) par ID d'arme. */
@@ -168,8 +172,8 @@ export function createSeam(app: App): GameSeam {
     debugSpawnBoss: (role: 'mid' | 'final') => {
       app.debugSpawnBoss(role)
     },
-    debugSpawnEnemies: (n: number) => {
-      app.debugSpawnEnemies(n)
+    debugSpawnEnemies: (n: number, radius?: number) => {
+      app.debugSpawnEnemies(n, radius)
     },
     debugKillPlayer: () => {
       app.debugKillPlayer()
