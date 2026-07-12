@@ -57,10 +57,17 @@ export class CameraController {
   /**
    * Met à jour la caméra selon l'état ; en solo suit le sprite du leader (via
    * `playerSprites`), en coop centre sur le centroïde des vivants et ajuste le zoom.
+   *
+   * `baseZoom` (P4 refonte mobile) : zoom de base fourni par la source de vérité
+   * responsive — desktop = SOLO_ZOOM (1.2, comportement historique inchangé),
+   * tactile = adaptatif à l'écran. En coop on prend min(baseZoom, palier
+   * d'écartement) : le dé-zoom de groupe ne peut que ÉLARGIR la vue, jamais la
+   * resserrer en-deçà de la base.
    */
   update(
     state: AppViewState,
-    playerSprites: ReadonlyMap<number, Phaser.GameObjects.GameObject>
+    playerSprites: ReadonlyMap<number, Phaser.GameObjects.GameObject>,
+    baseZoom: number = SOLO_ZOOM
   ): void {
     // Mode overview (revue) : cadrage fixe, on court-circuite tout le suivi.
     if (this.overview !== null) {
@@ -88,8 +95,9 @@ export class CameraController {
     const alive = state.players.filter((p) => p.alive)
 
     if (alive.length <= 1) {
-      // Solo / dernier survivant : comportement identique à l'ancien `followLeader`.
-      this.scene.cameras.main.zoom = Phaser.Math.Linear(this.scene.cameras.main.zoom, SOLO_ZOOM, CAMERA_ZOOM_LERP)
+      // Solo / dernier survivant : lerp vers le zoom de base (desktop 1.2 ;
+      // tactile adaptatif — une rotation d'écran glisse en douceur vers la cible).
+      this.scene.cameras.main.zoom = Phaser.Math.Linear(this.scene.cameras.main.zoom, baseZoom, CAMERA_ZOOM_LERP)
       if (this.following) {
         return
       }
@@ -132,13 +140,16 @@ export class CameraController {
       }
     }
 
-    let targetZoom = GROUP_ZOOM_FAR
+    let tierZoom = GROUP_ZOOM_FAR
     for (const tier of GROUP_ZOOM_TIERS) {
       if (maxSpread < tier.maxSpread) {
-        targetZoom = tier.zoom
+        tierZoom = tier.zoom
         break
       }
     }
+    // Le palier d'écartement ne peut qu'ÉLARGIR la vue par rapport à la base
+    // (desktop : min(1.2, palier) = palier — comportement historique inchangé).
+    const targetZoom = Math.min(baseZoom, tierZoom)
 
     const cam = this.scene.cameras.main
     cam.zoom = Phaser.Math.Linear(cam.zoom, targetZoom, CAMERA_ZOOM_LERP)

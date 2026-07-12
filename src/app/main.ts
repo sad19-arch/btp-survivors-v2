@@ -43,7 +43,11 @@ if (import.meta.env.DEV || opts.test) {
   installSeam(seam)
 }
 
-const data: GameSceneData = { app, testMode: opts.test, seam, lite: opts.lite }
+// Source de vérité responsive UNIQUE (P3/P4) : créée AVANT la scène — GameScene
+// TIRE `current().cameraZoom` à chaque frame, l'overlay s'y ABONNE plus bas.
+const viewport = new ViewportBus()
+
+const data: GameSceneData = { app, testMode: opts.test, seam, lite: opts.lite, viewport }
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -92,11 +96,8 @@ if (uiRoot !== null) {
     (i) => app.clickItem(i),
     (phase) => { if (phase === 'start') { audio?.beginStudioPresents() } else { audio?.endStudioPresents() } }
   )
-  // Source de vérité responsive UNIQUE (refonte mobile P3) : tous les événements
-  // (resize / visualViewport / orientation / plein écran / retour de veille /
-  // bfcache) convergent vers cet état ; l'overlay le CONSOMME (plus de listener
-  // resize direct). Émission immédiate à l'abonnement → HUD correct dès le boot.
-  const viewport = new ViewportBus()
+  // L'overlay CONSOMME la source de vérité responsive (émission immédiate à
+  // l'abonnement → HUD correct dès le boot ; recalculs coalescés ensuite).
   viewport.subscribe((v) => overlay.applyResponsive(v))
   // Overlay de diagnostic perf (`?perf=1`) : mesure sur vrai device, gated par le
   // flag seul (indépendant de l'audio, actif même en `?test=1&perf=1` pour l'e2e).

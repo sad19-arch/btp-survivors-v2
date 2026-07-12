@@ -7,6 +7,7 @@ import { routeInput, type FrameInput } from '@input/intents'
 import { buildPlayerInputs } from '@input/players'
 import { TouchInput } from '@input/touch'
 import { isTouchPrimary } from '@ui/responsive'
+import { DESKTOP_ZOOM, type ViewportBus } from '@ui/viewport'
 import { WORLD } from '@content/config'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
 import { createGround } from '@render/ground'
@@ -42,6 +43,12 @@ export interface GameSceneData {
   seam: GameSeam | null
   /** Mode allégé (e2e) : ne charge pas les feuilles de sprites lourdes → cercles. */
   lite?: boolean
+  /**
+   * Source de vérité responsive (P4 refonte mobile) : la scène TIRE (pull)
+   * `current().cameraZoom` à chaque update — pas d'abonnement à gérer au
+   * restart de scène. Absent (harness/tests sans bus) → zoom desktop.
+   */
+  viewport?: ViewportBus
 }
 
 /** Clamp du delta réel pour éviter la spirale de la mort après un gel d'onglet. */
@@ -197,6 +204,15 @@ export class GameScene extends Phaser.Scene {
     }
     // Screen-shake plus fort que le marteau (événement majeur du run).
     this.cameras.main.shake(160, 0.007)
+  }
+
+  /**
+   * Zoom caméra de BASE courant, tiré de la source de vérité responsive
+   * (ViewportBus, câblé par main.ts). Desktop : DESKTOP_ZOOM constant (parité
+   * PC) ; tactile : adaptatif à l'écran. Repli DESKTOP_ZOOM sans bus (harness).
+   */
+  private baseZoom(): number {
+    return this.sceneData.viewport?.current().cameraZoom ?? DESKTOP_ZOOM
   }
 
   /**
@@ -602,10 +618,12 @@ export class GameScene extends Phaser.Scene {
     // avec leurs depths explicites (-1 / 5) → même z-ordering qu'auparavant.
 
     this.cameras.main.setBounds(0, 0, WORLD.width, WORLD.height)
-    this.cameras.main.setZoom(1.2)
+    // Zoom initial depuis la source de vérité responsive (desktop = 1.2 inchangé ;
+    // tactile = adaptatif, diagonale visible ≈ référence PC). P4 refonte mobile.
+    this.cameras.main.setZoom(this.baseZoom())
 
     this.syncSprites()
-    this.camera.update(this.app.getStateForFrame(this.app.frameId), this.players.sprites)
+    this.camera.update(this.app.getStateForFrame(this.app.frameId), this.players.sprites, this.baseZoom())
     // Préchargement initial des chunks au démarrage (la caméra est positionnée,
     // le streamer peut déjà charger la vue initiale sans attendre le 1er update()).
     if (!this.decorSuppressed) {
@@ -708,7 +726,7 @@ export class GameScene extends Phaser.Scene {
       this.perf.measure('sim', () => this.app.advanceTime(Math.min(delta, MAX_FRAME_MS)))
     }
     this.syncSprites()
-    this.camera.update(st, this.players.sprites)
+    this.camera.update(st, this.players.sprites, this.baseZoom())
     // Streamer de décor : throttlé toutes les 4 frames pour éviter un scan de Map
     // à chaque tick (la caméra ne se déplace pas d'un chunk par frame).
     this.decorStreamerFrame++
