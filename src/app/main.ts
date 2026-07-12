@@ -8,6 +8,7 @@ import { parseBootOptions, type BootOptions } from './bootOptions'
 import { phaseIdFromLevel } from '@content/phases'
 import { createSeam, installSeam } from './seam'
 import { PerfOverlay } from '@render/perf/perfOverlay'
+import { ViewportBus } from '@ui/viewport'
 
 /**
  * Point d'entrée (couche rendu). Lit les options de boot, instancie l'App (qui
@@ -48,6 +49,8 @@ const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game-root',
   backgroundColor: '#1a1a1a',
+  // DA 16-bit : rendu net des pixels (antialias off + roundPixels). Refonte mobile P3.
+  pixelArt: true,
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -89,6 +92,12 @@ if (uiRoot !== null) {
     (i) => app.clickItem(i),
     (phase) => { if (phase === 'start') { audio?.beginStudioPresents() } else { audio?.endStudioPresents() } }
   )
+  // Source de vérité responsive UNIQUE (refonte mobile P3) : tous les événements
+  // (resize / visualViewport / orientation / plein écran / retour de veille /
+  // bfcache) convergent vers cet état ; l'overlay le CONSOMME (plus de listener
+  // resize direct). Émission immédiate à l'abonnement → HUD correct dès le boot.
+  const viewport = new ViewportBus()
+  viewport.subscribe((v) => overlay.applyResponsive(v))
   // Overlay de diagnostic perf (`?perf=1`) : mesure sur vrai device, gated par le
   // flag seul (indépendant de l'audio, actif même en `?test=1&perf=1` pour l'e2e).
   const perfOverlay = opts.perf ? new PerfOverlay(uiRoot) : null

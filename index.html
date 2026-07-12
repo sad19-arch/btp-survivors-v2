@@ -10,6 +10,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Jersey+25&family=Pixelify+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
+      /* Safe areas (encoches/coins arrondis) : source CSS unique, lue par le
+         ViewportBus (src/ui/viewport.ts) et consommable par tout le HUD. */
+      :root {
+        --safe-t: env(safe-area-inset-top, 0px);
+        --safe-r: env(safe-area-inset-right, 0px);
+        --safe-b: env(safe-area-inset-bottom, 0px);
+        --safe-l: env(safe-area-inset-left, 0px);
+      }
       html, body {
         margin: 0;
         padding: 0;
@@ -21,7 +29,8 @@
       #game-root {
         position: relative;
         width: 100vw;
-        height: 100vh;
+        height: 100vh;   /* repli navigateurs anciens */
+        height: 100dvh;  /* viewport DYNAMIQUE : suit les barres du navigateur mobile */
       }
       /* L'overlay UI (HUD, menus) vit ici, au-dessus du canvas Phaser. */
       #ui-root {

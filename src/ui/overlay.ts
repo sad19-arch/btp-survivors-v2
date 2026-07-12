@@ -4,7 +4,7 @@ import { formatTime, formatNumber } from './format'
 import { playerColor } from '@content/players'
 import { gamepadHudModel } from './gamepadHud'
 import { Minimap } from './minimap'
-import { isNarrow, isTouchPrimary } from './responsive'
+import type { ViewportState } from './viewport'
 import { approach } from './anim'
 import { cardEnterStyle } from './cardEnter'
 import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView } from '@/app/appState'
@@ -16,8 +16,6 @@ import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView } from 
  */
 export class Overlay {
   private readonly root: HTMLElement
-  /** Recalcule le mode compact/échelle au redimensionnement (référence stable). */
-  private readonly onResize = (): void => this.applyResponsive()
   private readonly hud: HTMLElement
   private readonly screenLayer: HTMLElement
   /** Couche des éléments transitoires (bandeau « ZONE À SÉCURISER → »). */
@@ -150,21 +148,20 @@ export class Overlay {
     this.onStudioSplash = onStudioSplash
     // Signale l'apparition → l'audio arme/joue « AIL Entertainment presents » EN SYNC.
     onStudioSplash?.('start')
-    // Responsive HUD : mode compact mobile (classe .ui-mobile + --ui-scale), au boot + au resize.
-    this.applyResponsive()
-    window.addEventListener('resize', this.onResize)
+    // Responsive : l'overlay ne LIT plus la fenêtre lui-même — il consomme l'état
+    // du ViewportBus (source de vérité unique, câblé dans main.ts, émission
+    // immédiate à l'abonnement). Fini le listener resize local (P3 refonte mobile).
   }
 
-  /** Mode compact mobile : pose `.ui-mobile` + calcule `--ui-scale`. Desktop → neutre (scale 1). */
-  private applyResponsive(): void {
-    const mobile = isNarrow() || isTouchPrimary()
-    this.root.classList.toggle('ui-mobile', mobile)
-    this.minimap.setCompact(mobile)
-    // Ramène la largeur naturelle du HUD (~720px) dans le viewport, plancher 0.5, snap 0.05
-    // (bordures 1px nettes). Desktop (mobile=false) : 1 → aucune mise à l'échelle.
-    const raw = mobile ? (window.innerWidth - 16) / 720 : 1
-    const scale = Math.max(0.5, Math.min(1, Math.round(raw * 20) / 20))
-    this.root.style.setProperty('--ui-scale', String(scale))
+  /**
+   * Applique l'état responsive au HUD : classe `.ui-mobile`, minimap compacte,
+   * échelle `--ui-scale` (calculée par la source de vérité — safe areas incluses).
+   * IDEMPOTENT : ré-appliquer le même état ne change rien au DOM.
+   */
+  applyResponsive(v: ViewportState): void {
+    this.root.classList.toggle('ui-mobile', v.uiMobile)
+    this.minimap.setCompact(v.uiMobile)
+    this.root.style.setProperty('--ui-scale', String(v.uiScale))
   }
 
   /**
