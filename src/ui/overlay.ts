@@ -106,6 +106,8 @@ export class Overlay {
     this.jackpotLayer = h('div')
     this.minimap = new Minimap()
     this.minimap.setVisible(false)
+    // Cadre métal ouvragé (au fond) + couches UI + scanlines CRT (au-dessus). Décoratif.
+    root.append(h('div', { className: 'frame' }))
     root.append(
       this.hud,
       this.screenLayer,
@@ -117,6 +119,18 @@ export class Overlay {
       this.jackpotLayer,
       this.minimap.el
     )
+    root.append(h('div', { className: 'frame__scan' }))
+    // Splash studio « Ail Entertainment » (joué une fois au boot, puis retiré).
+    const base = import.meta.env.BASE_URL
+    const splash = h('div', { className: 'splash' },
+      h('div', { className: 'splash__gyro' }),
+      h('div', { className: 'splash__flash' }),
+      h('img', { className: 'splash__helmet', attrs: { src: `${base}casque.png`, alt: '' } }),
+      h('div', { className: 'splash__name', text: 'AIL ENTERTAINMENT' }),
+      h('div', { className: 'splash__tag', text: 'PRÉSENTE' })
+    )
+    root.append(splash)
+    window.setTimeout(() => { splash.remove() }, 3400)
   }
 
   /** Met à jour l'overlay depuis l'état applicatif. */
@@ -377,7 +391,11 @@ export class Overlay {
     if (state.goldSkin) {
       panel.append(h('p', { className: 'unlock-line', text: 'Casque doré débloqué' }))
     }
-    return h('div', { className: 'screen' }, panel)
+    // Décor titre tramé derrière le panneau (screen--title allège le voile sombre).
+    return h('div', { className: 'screen screen--title' },
+      h('img', { className: 'title-bg', attrs: { src: `${import.meta.env.BASE_URL}bg_dusk.png`, alt: '' } }),
+      panel
+    )
   }
 
   /** Panneau de sélection de personnage : un joueur à la fois, carrousel ◄ Nom — Arme ►. */

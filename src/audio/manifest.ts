@@ -78,7 +78,9 @@ const SFX_NAMES: readonly string[] = [
   'collect_1', 'collect_2', 'collect_3', 'collect_4',
   'powerup_1', 'powerup_2', 'equip_1',
   'select_1', 'confirm_1', 'cancel_1',
-  'siren', 'chime', 'fire_1', 'boost', 'teleport', 'computer_1'
+  'siren', 'chime', 'fire_1', 'boost', 'teleport', 'computer_1',
+  // Refonte UI 16-bit : 8 blips d'UI synthétisés (menus, roulette, tampon, transition).
+  'ui_move', 'ui_confirm', 'ui_back', 'ui_tick', 'ui_buzzer', 'ui_stamp', 'ui_door', 'ui_jackpot_win'
 ]
 
 /** Fichiers SFX à précharger (clé `sfx_<nom>` → chemin). */
@@ -145,9 +147,15 @@ export const SFX: Readonly<Record<string, SfxCue>> = {
   bossSpawned: { keys: ['sfx_siren'], volume: 0.7 },
   prisonerFreed: { keys: ['sfx_chime'], volume: 0.7 },
   upgradePick: { keys: ['sfx_powerup_1', 'sfx_equip_1'], volume: 0.7 },
-  menuMove: { keys: ['sfx_select_1'], volume: 0.3, rateJitter: 0.05, throttleMs: 45 },
-  menuConfirm: { keys: ['sfx_confirm_1'], volume: 0.5 },
-  menuBack: { keys: ['sfx_cancel_1'], volume: 0.5 },
+  // Refonte UI : blips rétro crunchés en lieu et place des anciens cues menu.
+  menuMove: { keys: ['sfx_ui_move'], volume: 0.35, rateJitter: 0.06, throttleMs: 45 },
+  menuConfirm: { keys: ['sfx_ui_confirm'], volume: 0.5 },
+  menuBack: { keys: ['sfx_ui_back'], volume: 0.5 },
+  // Nouveaux cues d'UI (jackpotWin branché sur `evolved` ; les autres prêts à câbler).
+  uiTick: { keys: ['sfx_ui_tick'], volume: 0.3, rateJitter: 0.08, throttleMs: 40 },
+  victoryStamp: { keys: ['sfx_ui_stamp'], volume: 0.7 },
+  screenTransition: { keys: ['sfx_ui_door'], volume: 0.55 },
+  jackpotWin: { keys: ['sfx_ui_jackpot_win'], volume: 0.7 },
   gameOver: { keys: ['sfx_lose_1'], volume: 0.7 },
   stageClear: { keys: ['sfx_stage_clear'], volume: 0.7 }
 }

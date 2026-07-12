@@ -174,7 +174,7 @@ export class AudioDirector {
     on('prisonerFreed', () => { this.playCue('prisonerFreed'); this.playVoice(VOICE.thankyou, 2) })
     // B5 — Fanfare d'évolution (coffre ramassé + conditions réunies) : fanfare zzfx en accord
     // majeur + voix triomphante. Remplace le cue 'bonus' générique par une fanfare dédiée.
-    on('evolved', () => { this.playChestFanfare(); this.playVoice(VOICE.evolved, 4) })
+    on('evolved', () => { this.playChestFanfare(); this.playCue('jackpotWin'); this.playVoice(VOICE.evolved, 4) })
     on('upgradePick', () => { this.playCue('upgradePick') })
     on('menuMove', () => { this.playCue('menuMove') })
     on('menuConfirm', () => { this.playCue('menuConfirm') })
