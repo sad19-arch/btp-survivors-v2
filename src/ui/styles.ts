@@ -580,6 +580,12 @@ const CSS = `
 @keyframes splash-drop { 0% { transform: translateY(-500px); } 38% { transform: translateY(0) scaleY(1); } 45% { transform: translateY(0) scaleY(0.72) scaleX(1.2); } 55% { transform: translateY(-46px); } 66% { transform: translateY(0) scaleY(0.9); } 74%, 100% { transform: translateY(0) scaleY(1); } }
 @keyframes splash-flash { 0%, 40% { opacity: 0; } 43% { opacity: 0.85; } 54%, 100% { opacity: 0; } }
 @keyframes splash-text { 0%, 46% { opacity: 0; transform: translateY(10px); } 58%, 100% { opacity: 1; transform: translateY(0); } }
+/* Invite « appuie pour commencer » : clignote APRÈS le reveal (le splash persiste jusqu'au 1er input). */
+#ui-root .splash__hint { position: relative; margin-top: 6px; font-family: 'Pixelify Sans', monospace; font-weight: 700; font-size: 22px; letter-spacing: 5px; color: #E8B27A; opacity: 0; animation: splash-hint 1.1s steps(2) 3.4s infinite; }
+/* Retrait : court fondu piloté par JS (dismissStudioSplash ajoute .splash--out). */
+#ui-root .splash.splash--out { animation: splash-out 0.4s ease forwards; pointer-events: none; }
+@keyframes splash-hint { 0%, 49% { opacity: 0.18; } 50%, 100% { opacity: 0.95; } }
+@keyframes splash-out { to { opacity: 0; } }
 `
 
 let injected = false

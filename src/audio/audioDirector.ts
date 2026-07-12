@@ -102,6 +102,10 @@ export class AudioDirector {
   private readonly loadingKeys = new Set<string>()
   private prevScreen = ''
   private presentsPlayed = false
+  /** Fenêtre du splash studio ouverte : la voix « presents » ne joue QUE pendant celle-ci. */
+  private studioWindowOpen = false
+  /** Handler de déverrouillage WebAudio armé (anti-double-arm) pour la voix du splash. */
+  private studioUnlockArmed = false
   /** Compteur de level-ups, pour l'alternance des voix (pair/impair). */
   private upgradeVoiceCount = 0
   /** « Finish him » dit une seule fois par boss (remis à zéro quand le boss disparaît). */
@@ -325,6 +329,41 @@ export class AudioDirector {
     return this.voice !== null && this.voice.isPlaying
   }
 
+  // --- Voix du splash studio « AIL Entertainment presents » -------------------
+
+  /**
+   * Ouvre la fenêtre du splash studio et joue la voix « AIL Entertainment presents »
+   * EN SYNC avec lui. Si WebAudio est encore verrouillé (politique autoplay du
+   * navigateur), la voix est armée sur le 1er geste (`unlocked`) — mais ne jouera
+   * QUE si la fenêtre est encore ouverte. Appelée par l'overlay à l'apparition du splash.
+   */
+  beginStudioPresents(): void {
+    this.studioWindowOpen = true
+    if (this.isLocked()) {
+      if (!this.studioUnlockArmed) {
+        this.studioUnlockArmed = true
+        this.sound.once('unlocked', () => { this.tryStudioPresents() })
+      }
+    } else {
+      this.tryStudioPresents()
+    }
+  }
+
+  /** Ferme la fenêtre (splash retiré) : toute voix « presents » tardive est abandonnée (jamais sur le titre). */
+  endStudioPresents(): void {
+    this.studioWindowOpen = false
+  }
+
+  /** Joue la voix du splash une seule fois, si la fenêtre est ouverte ET l'audio prêt (déverrouillé + chargé). */
+  private tryStudioPresents(): void {
+    const key = VOICE.intro[0]
+    if (this.presentsPlayed || !this.studioWindowOpen || this.isLocked() || key === undefined || !this.hasAudio(key)) {
+      return
+    }
+    this.presentsPlayed = true
+    this.playVoice(VOICE.intro, 2)
+  }
+
   // --- Musique + ambiance + voix d'écran (observation de l'état, chaque frame) -
 
   observe(state: AppViewState): void {
@@ -333,10 +372,11 @@ export class AudioDirector {
     }
     // Réinitialise la garde anti-chevauchement de voix au début de chaque frame.
     this.voicePriorityThisTick = 0
-    // Jingle « AIL Entertainment presents » au premier affichage du titre.
-    if (state.screen === 'title' && !this.presentsPlayed) {
-      this.presentsPlayed = true
-      this.playVoice(VOICE.intro, 2)
+    // Voix « AIL Entertainment presents » : jouée UNIQUEMENT pendant le splash studio
+    // (fenêtre begin/endStudioPresents). On (re)tente ici tant que la fenêtre est ouverte
+    // — couvre le cas « asset voix pas encore chargé » au boot. Jamais sur le titre.
+    if (this.studioWindowOpen) {
+      this.tryStudioPresents()
     }
     // Voix + stingers au CHANGEMENT d'écran.
     if (state.screen !== this.prevScreen) {

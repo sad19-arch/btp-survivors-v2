@@ -51,6 +51,10 @@ export class Overlay {
   private bannerTimer: number | null = null
   /** Carton d'intro affiché (évite de le reconstruire chaque frame). */
   private introShown = false
+  /** Élément du splash studio tant qu'il est affiché (null une fois retiré). */
+  private studioSplashEl: HTMLElement | null = null
+  /** Callback de cycle de vie du splash (émet 'end' à son retrait). */
+  private onStudioSplash: ((phase: 'start' | 'end') => void) | undefined
   /**
    * Nom de l'arme pour laquelle le jackpot+bandeau ont déjà été déclenchés
    * (null = pas encore ou déjà consommé). Garde contre les appels répétés dans
@@ -92,7 +96,11 @@ export class Overlay {
    */
   private upgradeAppearAt = -1
 
-  constructor(root: HTMLElement, onSelect?: (index: number) => void) {
+  constructor(
+    root: HTMLElement,
+    onSelect?: (index: number) => void,
+    onStudioSplash?: (phase: 'start' | 'end') => void
+  ) {
     injectStyles()
     this.onSelect = onSelect
     root.id = 'ui-root'
@@ -120,17 +128,39 @@ export class Overlay {
       this.minimap.el
     )
     root.append(h('div', { className: 'frame__scan' }))
-    // Splash studio « Ail Entertainment » (joué une fois au boot, puis retiré).
+    // Splash studio « AIL Entertainment » : affiché au boot, retiré par le boot
+    // (dismissStudioSplash) dès que l'audio est prêt / au 1er input — la voix « presents »
+    // l'accompagne À COUP SÛR. L'invite « appuie pour commencer » clignote après le reveal.
     const base = import.meta.env.BASE_URL
     const splash = h('div', { className: 'splash' },
       h('div', { className: 'splash__gyro' }),
       h('div', { className: 'splash__flash' }),
       h('img', { className: 'splash__helmet', attrs: { src: `${base}casque.png`, alt: '' } }),
       h('div', { className: 'splash__name', text: 'AIL ENTERTAINMENT' }),
-      h('div', { className: 'splash__tag', text: 'PRÉSENTE' })
+      h('div', { className: 'splash__tag', text: 'PRÉSENTE' }),
+      h('div', { className: 'splash__hint', text: 'Appuie pour commencer' })
     )
     root.append(splash)
-    window.setTimeout(() => { splash.remove() }, 3400)
+    this.studioSplashEl = splash
+    this.onStudioSplash = onStudioSplash
+    // Signale l'apparition → l'audio arme/joue « AIL Entertainment presents » EN SYNC.
+    onStudioSplash?.('start')
+  }
+
+  /**
+   * Retire le splash studio (idempotent) avec un court fondu, et ferme la fenêtre
+   * audio de la voix « presents » ('end'). Appelé par le boot dès que l'audio est prêt
+   * (voix jouée) / au 1er input / après un filet de sécurité.
+   */
+  dismissStudioSplash(): void {
+    const el = this.studioSplashEl
+    if (el === null) {
+      return
+    }
+    this.studioSplashEl = null
+    el.classList.add('splash--out')
+    window.setTimeout(() => { el.remove() }, 420)
+    this.onStudioSplash?.('end')
   }
 
   /** Met à jour l'overlay depuis l'état applicatif. */

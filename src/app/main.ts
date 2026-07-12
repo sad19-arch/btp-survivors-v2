@@ -81,7 +81,27 @@ const audio = opts.test ? null : new AudioDirector(game.sound, app.events, () =>
 const uiRoot = document.getElementById('ui-root')
 if (uiRoot !== null) {
   // Clic souris sur un item de menu → sélection+validation via l'App.
-  const overlay = new Overlay(uiRoot, (i) => app.clickItem(i))
+  // 3e arg : voix du studio « AIL Entertainment presents » câblée SUR le splash
+  // (début → joue/arme la voix ; fin → ferme la fenêtre). Plus jamais sur le titre.
+  const overlay = new Overlay(
+    uiRoot,
+    (i) => app.clickItem(i),
+    (phase) => { if (phase === 'start') { audio?.beginStudioPresents() } else { audio?.endStudioPresents() } }
+  )
+  // Splash studio : PERSISTE jusqu'au 1er geste → garantit que la voix « presents » l'accompagne.
+  // - clavier/souris/tactile → déverrouille WebAudio (`unlocked`) → la voix joue, puis retrait (tail) ;
+  // - manette (ne déverrouille PAS l'audio, limite navigateur) → retrait quand même (voix impossible) ;
+  // - filet anti-blocage si aucune interaction ; en test (audio null) → retrait ~3.4s (inchangé e2e).
+  const dismissSplash = (): void => { overlay.dismissStudioSplash() }
+  if (audio !== null && game.sound.locked) {
+    // clavier/souris/tactile → déverrouille WebAudio (`unlocked`) → la voix joue, puis retrait (tail).
+    game.sound.once('unlocked', () => { window.setTimeout(dismissSplash, 2600) })
+    // Filet anti-blocage : sans geste qui déverrouille l'audio (AFK, ou MANETTE SEULE — le
+    // navigateur ne déverrouille pas l'audio sur les boutons de manette), retrait après un délai.
+    window.setTimeout(dismissSplash, 12000)
+  } else {
+    window.setTimeout(dismissSplash, 3400)
+  }
   // B5 — Jackpot coffre + bandeau d'évolution : câblés dans overlay.sync via
   // state.justEvolvedWeaponName (flag transitoire, one-shot). Plus d'event ad hoc ici.
   const tick = (): void => {
