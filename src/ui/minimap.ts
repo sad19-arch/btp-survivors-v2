@@ -22,8 +22,9 @@ export function worldToMinimap(
  * `.minimap__field` dans le constructeur, donc styles.ts n'a plus à les redéclarer
  * (fini le couplage implicite CSS ↔ JS).
  */
-const FIELD_W = 200
-const FIELD_H = 150
+const FIELD_DESKTOP = { w: 200, h: 150 } as const
+/** Version compacte mobile (ratio 4:3 conservé) — cf. Minimap.setCompact. */
+const FIELD_MOBILE = { w: 120, h: 90 } as const
 
 /**
  * Sous-ensemble de `GameState` consommé par la mini-carte (lecture seule). L'App
@@ -47,13 +48,15 @@ export class Minimap {
    * quand vx===0 && vy===0 (joueur immobile). Clé = playerId.
    */
   private readonly lastAngle = new Map<number, number>()
+  private fieldW: number = FIELD_DESKTOP.w
+  private fieldH: number = FIELD_DESKTOP.h
 
   constructor() {
     this.counter = h('div', { className: 'minimap__counter', text: 'Prisonniers 0/0' })
     this.field = h('div', { className: 'minimap__field' })
-    // Dimensions pilotées par le JS (source unique FIELD_W/FIELD_H).
-    this.field.style.width = `${FIELD_W}px`
-    this.field.style.height = `${FIELD_H}px`
+    // Dimensions pilotées par le JS (source unique). setCompact() les réduit sur mobile.
+    this.field.style.width = `${this.fieldW}px`
+    this.field.style.height = `${this.fieldH}px`
     this.el = h('div', { className: 'minimap' }, this.counter, this.field)
   }
 
@@ -92,6 +95,15 @@ export class Minimap {
     this.el.style.display = visible ? 'flex' : 'none'
   }
 
+  /** Passe le champ en taille compacte (mobile) ou desktop. Appelé au boot + au resize par l'overlay. */
+  setCompact(compact: boolean): void {
+    const dim = compact ? FIELD_MOBILE : FIELD_DESKTOP
+    this.fieldW = dim.w
+    this.fieldH = dim.h
+    this.field.style.width = `${this.fieldW}px`
+    this.field.style.height = `${this.fieldH}px`
+  }
+
   /**
    * Construit un chevron orienté selon la direction du joueur.
    *
@@ -107,7 +119,7 @@ export class Minimap {
    * Coloré par `playerColor(player.id).hex`.
    */
   private playerChevron(player: PlayerState): HTMLElement {
-    const { mx, my } = worldToMinimap(player.x, player.y, WORLD.width, WORLD.height, FIELD_W, FIELD_H)
+    const { mx, my } = worldToMinimap(player.x, player.y, WORLD.width, WORLD.height, this.fieldW, this.fieldH)
     const color = playerColor(player.id).hex
 
     // Calcul de l'angle d'orientation.
@@ -143,7 +155,7 @@ export class Minimap {
 
   /** Construit un marqueur positionné (absolu) via `worldToMinimap`. */
   private dot(x: number, y: number, className: string): HTMLElement {
-    const { mx, my } = worldToMinimap(x, y, WORLD.width, WORLD.height, FIELD_W, FIELD_H)
+    const { mx, my } = worldToMinimap(x, y, WORLD.width, WORLD.height, this.fieldW, this.fieldH)
     const el = h('div', { className })
     el.style.left = `${mx}px`
     el.style.top = `${my}px`

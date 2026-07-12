@@ -1,6 +1,4 @@
-import type { FrameInput, NavAction } from './intents'
-
-const EMPTY: FrameInput = { move: { x: 0, y: 0 }, pressed: [], action: false }
+import { EMPTY_FRAME, type FrameInput, type NavAction } from './intents'
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v))
@@ -18,21 +16,23 @@ export function mergeFrames(a: FrameInput, b: FrameInput): FrameInput {
 }
 
 /**
- * Map par-joueur : joueur 1 = clavier ⊕ pad0 (jouable clavier OU manette 0, comme le solo actuel) ;
- * joueur k≥2 = pad(k-1) (FrameInput vide si absent). Boucle 1..max(playerCount, 1) pour que P1
- * existe TOUJOURS (même hors partie, au titre où playerCount vaut 0) → la nav menu reste dispo.
+ * Map par-joueur : joueur 1 = clavier ⊕ pad0 ⊕ tactile (jouable clavier OU manette 0
+ * OU stick tactile, comme le solo actuel) ; joueur k≥2 = pad(k-1) (FrameInput vide si
+ * absent). Boucle 1..max(playerCount, 1) pour que P1 existe TOUJOURS (même hors partie,
+ * au titre où playerCount vaut 0) → la nav menu reste dispo. Le tactile n'alimente QUE P1.
  */
 export function buildPlayerInputs(
   keyboard: FrameInput,
   pads: ReadonlyArray<FrameInput>,
-  playerCount: number
+  playerCount: number,
+  touch: FrameInput = EMPTY_FRAME
 ): Map<number, FrameInput> {
   const map = new Map<number, FrameInput>()
   for (let id = 1; id <= Math.max(playerCount, 1); id++) {
     if (id === 1) {
-      map.set(id, mergeFrames(keyboard, pads[0] ?? EMPTY))
+      map.set(id, mergeFrames(mergeFrames(keyboard, pads[0] ?? EMPTY_FRAME), touch))
     } else {
-      map.set(id, pads[id - 1] ?? EMPTY)
+      map.set(id, pads[id - 1] ?? EMPTY_FRAME)
     }
   }
   return map

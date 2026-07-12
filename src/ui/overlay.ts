@@ -4,6 +4,7 @@ import { formatTime, formatNumber } from './format'
 import { playerColor } from '@content/players'
 import { gamepadHudModel } from './gamepadHud'
 import { Minimap } from './minimap'
+import { isNarrow, isTouchPrimary } from './responsive'
 import { approach } from './anim'
 import { cardEnterStyle } from './cardEnter'
 import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView } from '@/app/appState'
@@ -14,6 +15,9 @@ import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView } from 
  * passe par la couche input → App). Style 16-bit (panneaux pixel), focus visible.
  */
 export class Overlay {
+  private readonly root: HTMLElement
+  /** Recalcule le mode compact/échelle au redimensionnement (référence stable). */
+  private readonly onResize = (): void => this.applyResponsive()
   private readonly hud: HTMLElement
   private readonly screenLayer: HTMLElement
   /** Couche des éléments transitoires (bandeau « ZONE À SÉCURISER → »). */
@@ -104,6 +108,7 @@ export class Overlay {
     injectStyles()
     this.onSelect = onSelect
     root.id = 'ui-root'
+    this.root = root
     this.hud = h('div', { className: 'hud' })
     this.screenLayer = h('div')
     this.bannerLayer = h('div')
@@ -145,6 +150,21 @@ export class Overlay {
     this.onStudioSplash = onStudioSplash
     // Signale l'apparition → l'audio arme/joue « AIL Entertainment presents » EN SYNC.
     onStudioSplash?.('start')
+    // Responsive HUD : mode compact mobile (classe .ui-mobile + --ui-scale), au boot + au resize.
+    this.applyResponsive()
+    window.addEventListener('resize', this.onResize)
+  }
+
+  /** Mode compact mobile : pose `.ui-mobile` + calcule `--ui-scale`. Desktop → neutre (scale 1). */
+  private applyResponsive(): void {
+    const mobile = isNarrow() || isTouchPrimary()
+    this.root.classList.toggle('ui-mobile', mobile)
+    this.minimap.setCompact(mobile)
+    // Ramène la largeur naturelle du HUD (~720px) dans le viewport, plancher 0.5, snap 0.05
+    // (bordures 1px nettes). Desktop (mobile=false) : 1 → aucune mise à l'échelle.
+    const raw = mobile ? (window.innerWidth - 16) / 720 : 1
+    const scale = Math.max(0.5, Math.min(1, Math.round(raw * 20) / 20))
+    this.root.style.setProperty('--ui-scale', String(scale))
   }
 
   /**

@@ -115,3 +115,38 @@ describe('buildPlayerInputs', () => {
     expect(map.get(2)?.action).toBe(true)
   })
 })
+
+describe('buildPlayerInputs — tactile (P1 uniquement)', () => {
+  const kb: FrameInput = { move: { x: 0, y: 0 }, pressed: [], action: false }
+
+  it('le move tactile fusionne dans P1', () => {
+    const touch: FrameInput = { move: { x: 0.5, y: 0.5 }, pressed: [], action: false }
+    const map = buildPlayerInputs(kb, [], 1, touch)
+    expect(map.get(1)?.move.x).toBeCloseTo(0.5)
+    expect(map.get(1)?.move.y).toBeCloseTo(0.5)
+  })
+
+  it('le pause tactile s’unionne dans P1.pressed', () => {
+    const touch: FrameInput = { move: { x: 0, y: 0 }, pressed: ['pause'], action: false }
+    const map = buildPlayerInputs(kb, [], 1, touch)
+    expect(map.get(1)?.pressed).toEqual(['pause'])
+  })
+
+  it('le tactile ne fuit JAMAIS vers P2+', () => {
+    const touch: FrameInput = { move: { x: 1, y: 0 }, pressed: ['pause'], action: false }
+    const pads: FrameInput[] = [
+      { move: { x: 0, y: 0 }, pressed: [], action: false },
+      { move: { x: 0.2, y: 0 }, pressed: [], action: false },
+    ]
+    const map = buildPlayerInputs(kb, pads, 2, touch)
+    expect(map.get(2)?.move.x).toBe(0.2)
+    expect(map.get(2)?.pressed).toEqual([])
+  })
+
+  it('défaut sans tactile = P1 inchangé (rétro-compat)', () => {
+    const keyboard: FrameInput = { move: { x: 1, y: 0 }, pressed: ['down'], action: false }
+    const map = buildPlayerInputs(keyboard, [], 1)
+    expect(map.get(1)?.move.x).toBe(1)
+    expect(map.get(1)?.pressed).toEqual(['down'])
+  })
+})

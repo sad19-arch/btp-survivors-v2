@@ -13,4 +13,7 @@ describe('worldToMinimap', () => {
     expect(p.mx).toBeLessThanOrEqual(200)
     expect(p.my).toBeGreaterThanOrEqual(0)
   })
+  it('champ compact mobile (120×90) : centre → (60,45)', () => {
+    expect(worldToMinimap(500, 400, 1000, 800, 120, 90)).toEqual({ mx: 60, my: 45 })
+  })
 })

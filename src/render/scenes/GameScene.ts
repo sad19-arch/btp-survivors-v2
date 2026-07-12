@@ -5,6 +5,8 @@ import { KeyboardInput } from '@input/keyboard'
 import { GamepadInput } from '@input/gamepad'
 import { routeInput, type FrameInput } from '@input/intents'
 import { buildPlayerInputs } from '@input/players'
+import { TouchInput } from '@input/touch'
+import { isTouchPrimary } from '@ui/responsive'
 import { WORLD } from '@content/config'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
 import { createGround } from '@render/ground'
@@ -65,6 +67,7 @@ export class GameScene extends Phaser.Scene {
   private stage!: StageRender
   private keyboardInput: KeyboardInput | null = null
   private gamepads: GamepadInput[] = []
+  private touchInput: TouchInput | null = null
   /** Caméra (suivi solo + groupe coop) extraite de GameScene — détient l'état `following`. */
   private readonly camera = new CameraController(this)
   /** Effets visuels transitoires (extraits de GameScene) — observer-only, sans état de sim. */
@@ -582,6 +585,8 @@ export class GameScene extends Phaser.Scene {
       this.siteRenderer.dispose()
       this.siteStructures.dispose()
       this.siteWorkers.dispose()
+      this.touchInput?.dispose()
+      this.touchInput = null
     })
 
     if (this.input.keyboard !== null) {
@@ -590,6 +595,14 @@ export class GameScene extends Phaser.Scene {
     const gamepadPlugin = this.input.gamepad
     if (gamepadPlugin !== null) {
       this.gamepads = [0, 1, 2, 3].map((i) => new GamepadInput(gamepadPlugin, i))
+    }
+    // Adaptateur TACTILE : seulement sur pointeur grossier (téléphone/tablette). Overlay DOM
+    // propre à l'input, alimente P1 comme le clavier ; desktop-souris → jamais créé.
+    if (isTouchPrimary()) {
+      const uiRoot = document.getElementById('ui-root')
+      if (uiRoot !== null) {
+        this.touchInput = new TouchInput(uiRoot)
+      }
     }
 
     if (this.seam !== null) {
@@ -645,6 +658,8 @@ export class GameScene extends Phaser.Scene {
       this.scene.restart(this.sceneData)
       return
     }
+    // Overlay tactile visible en jeu uniquement (inconditionnel, même en test → l'e2e l'observe).
+    this.touchInput?.setVisible(st.screen === 'game' && !st.introActive)
     if (!this.testMode) {
       routeInput(this.app, this.readPlayerInputs(st.players.length))
       this.perf.measure('sim', () => this.app.advanceTime(Math.min(delta, MAX_FRAME_MS)))
@@ -676,7 +691,8 @@ export class GameScene extends Phaser.Scene {
     const empty: FrameInput = { move: { x: 0, y: 0 }, pressed: [], action: false }
     const kb = this.keyboardInput !== null ? this.keyboardInput.readFrame() : empty
     const pads = this.gamepads.map((g) => g.readFrame())
-    return buildPlayerInputs(kb, pads, playerCount)
+    const touch = this.touchInput !== null ? this.touchInput.readFrame() : empty
+    return buildPlayerInputs(kb, pads, playerCount, touch)
   }
 
   /** Synchronise les sprites avec l'état courant de la simulation. */

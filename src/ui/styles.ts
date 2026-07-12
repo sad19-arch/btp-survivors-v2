@@ -586,6 +586,31 @@ const CSS = `
 #ui-root .splash.splash--out { animation: splash-out 0.4s ease forwards; pointer-events: none; }
 @keyframes splash-hint { 0%, 49% { opacity: 0.18; } 50%, 100% { opacity: 0.95; } }
 @keyframes splash-out { to { opacity: 0; } }
+
+/* ── Contrôles tactiles (mobile) : stick zone-gauche dynamique + bouton pause ── */
+/* Overlay créé UNIQUEMENT sur device tactile (TouchInput) ; affiché en jeu. Coins carrés, palette imposée. */
+#ui-root .touch-layer { position: absolute; inset: 0; z-index: 40; pointer-events: auto; touch-action: none; }
+#ui-root .touch-stick { position: absolute; left: max(28px, env(safe-area-inset-left)); bottom: max(28px, env(safe-area-inset-bottom)); width: 132px; height: 132px; box-sizing: border-box; background: ${PALETTE.brunSombre}; border: 4px solid ${PALETTE.contour}; box-shadow: 5px 5px 0 rgba(0,0,0,0.45); opacity: 0.5; }
+#ui-root .touch-stick.touch-stick--active { transform: translate(-50%, -50%); opacity: 0.95; }
+#ui-root .touch-stick__knob { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 58px; height: 58px; box-sizing: border-box; background: ${PALETTE.solSable}; border: 4px solid ${PALETTE.contour}; box-shadow: 3px 3px 0 rgba(0,0,0,0.5); }
+#ui-root .touch-pause { position: absolute; right: max(24px, env(safe-area-inset-right)); bottom: max(28px, env(safe-area-inset-bottom)); width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; pointer-events: auto; font-family: 'Pixelify Sans', monospace; font-weight: 700; font-size: 30px; letter-spacing: 4px; color: ${PALETTE.jauneSecurite}; background: ${PALETTE.contour}; border: 4px solid ${PALETTE.jauneSecurite}; box-shadow: 5px 5px 0 rgba(0,0,0,0.5); }
+
+/* ── Mode compact mobile (#ui-root.ui-mobile) — piloté par --ui-scale ────────── */
+/* Posé seulement si viewport étroit / tactile (Overlay.applyResponsive). Desktop → jamais (aucun de ces sélecteurs ne matche). */
+#ui-root.ui-mobile .hud { transform: scale(var(--ui-scale, 1)); transform-origin: top left; }
+#ui-root.ui-mobile .pads { display: none; }
+#ui-root.ui-mobile .inv { transform: scale(var(--ui-scale, 1)); transform-origin: top left; }
+#ui-root.ui-mobile .banner { transform: scale(var(--ui-scale, 1)); transform-origin: top right; }
+#ui-root.ui-mobile .bossbar { transform: translateX(-50%) scale(var(--ui-scale, 1)); transform-origin: top center; }
+#ui-root.ui-mobile .banner--boss, #ui-root.ui-mobile .banner--boss-final, #ui-root.ui-mobile .banner--evolution { transform: translateX(-50%) scale(var(--ui-scale, 1)); transform-origin: top center; }
+#ui-root.ui-mobile .stagecard { transform: translateX(-50%) scale(var(--ui-scale, 1)); transform-origin: top center; }
+#ui-root.ui-mobile .panel { transform: scale(var(--ui-scale, 1)); transform-origin: center; min-width: 0; max-width: 96vw; }
+#ui-root.ui-mobile .jackpot { min-width: 0; max-width: 96vw; }
+/* Cartes d'upgrade : pile verticale (choix user), tapables, scroll si débordement (paysage). */
+#ui-root.ui-mobile .cards { flex-direction: column; gap: 10px; align-items: center; max-height: 88vh; overflow-y: auto; }
+#ui-root.ui-mobile .card { width: min(80vw, 300px); }
+/* Minimap : plus petite (JS setCompact) + déplacée en haut-droite (hors zone du pouce/stick). */
+#ui-root.ui-mobile .minimap { left: auto; bottom: auto; right: max(12px, env(safe-area-inset-right)); top: max(12px, env(safe-area-inset-top)); padding: 5px; }
 `
 
 let injected = false

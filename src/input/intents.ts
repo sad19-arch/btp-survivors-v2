@@ -12,6 +12,9 @@ export interface FrameInput {
   action: boolean
 }
 
+/** Frame sans entrée — repère neutre réutilisable (merge, périphérique absent). */
+export const EMPTY_FRAME: FrameInput = { move: { x: 0, y: 0 }, pressed: [], action: false }
+
 /**
  * Route les entrées d'une frame par joueur vers l'App (logique pure, testable) :
  *  - chaque joueur déplace son propre personnage (ignoré hors jeu) ;
