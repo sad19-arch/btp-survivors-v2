@@ -24,11 +24,14 @@ const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; f
   // (remplace l'écrou gris terne) + échelle relevée 0.55→0.68 pour la lisibilité.
   boulons: { key: 'proj_boulons', scale: 0.68, spin: false, faceVel: true },
   tempete_boulons: { key: 'proj_boulons', scale: 0.68, spin: false, faceVel: true },
-  cle_molette: { key: 'proj_cle', scale: 0.7, spin: true, faceVel: false },
-  cle_choc: { key: 'proj_cle', scale: 0.7, spin: true, faceVel: false },
-  // B3 : réutilise l'icône de carte brouette (plus reconnaissable qu'un bloc de granit).
-  brouette: { key: 'icon_brouette', scale: 0.45, spin: false, faceVel: true },
-  transpalette: { key: 'icon_brouette', scale: 0.55, spin: false, faceVel: true },
+  // Clé à molette : sprite PixelLab dédié (clé anglaise qui tournoie en boomerang).
+  cle_molette: { key: 'proj_cle', scale: 0.52, spin: true, faceVel: false },
+  cle_choc: { key: 'proj_cle', scale: 0.58, spin: true, faceVel: false },
+  // Brouette : VRAI sprite PixelLab (brouette d'acier pleine de gravats) — remplace
+  // l'ancienne icône UI 64px minuscule ; grosse et lisible. Pas de rotation (le sprite
+  // a une orientation propre : la faire pivoter vers la vitesse la rendrait de travers).
+  brouette: { key: 'proj_brouette', scale: 0.62, spin: false, faceVel: false },
+  transpalette: { key: 'proj_brouette', scale: 0.82, spin: false, faceVel: false },
 }
 /**
  * Sprites de pickups par type. Typé `Record<PickupKind, …>` : le compilateur
