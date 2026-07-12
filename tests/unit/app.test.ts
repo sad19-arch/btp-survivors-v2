@@ -33,7 +33,7 @@ describe('App — écrans & navigation', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     const s = app.getState()
     expect(s.screen).toBe('title')
-    expect(s.menu?.items.map((i) => i.id)).toEqual(['jouer', 'players', 'stage', 'options', 'credits'])
+    expect(s.menu?.items.map((i) => i.id)).toEqual(['jouer', 'players', 'stage', 'options'])
     expect(s.players.length).toBe(0)
   })
 

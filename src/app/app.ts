@@ -619,15 +619,14 @@ export class App {
     return items
   }
 
-  /** Items du titre : Jouer, sélecteur de joueurs (◄/►), sélecteur de niveau (◄/►), Options, Crédits. */
+  /** Items du titre : Jouer, sélecteur de joueurs (◄/►), sélecteur de niveau (◄/►), Options. */
   private titleItems(): MenuItemView[] {
     const phase = ORDERED_PHASES.find((p) => p.id === this.selectedPhase)
     return [
       { id: 'jouer', label: 'Jouer', hint: null },
       { id: 'players', label: `◄ Joueurs : ${this.selectedPlayers} ►`, hint: 'Gauche/Droite pour changer' },
       { id: 'stage', label: `◄ Niveau ${phase?.order ?? 1}/10 : ${phase?.title ?? '—'} ►`, hint: 'Gauche/Droite pour changer' },
-      { id: 'options', label: 'Options', hint: null },
-      { id: 'credits', label: 'Crédits', hint: null }
+      { id: 'options', label: 'Options', hint: null }
     ]
   }
 
