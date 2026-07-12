@@ -84,12 +84,21 @@ const SFX_NAMES: readonly string[] = [
 ]
 
 /** Fichiers SFX à précharger (clé `sfx_<nom>` → chemin). */
+/**
+ * Armes dont le SFX est un FICHIER généré (ElevenLabs) — clé `sfx_weapon_<id>`.
+ * S'ils sont chargés, `AudioDirector.playWeaponSfx` joue le FICHIER en priorité,
+ * sinon repli sur le zzfx procédural (marteau / court_circuit / scie muette et les
+ * armes évoluées restent en zzfx taillé main).
+ * Ajouter une arme = poser `public/audio/sfx/weapons/weapon_<id>.mp3` + son id ici.
+ */
+export const WEAPON_SFX_IDS: readonly string[] = [
+  'cloueur', 'boulons', 'cle_molette', 'brouette', 'pied_de_biche', 'extincteur', 'goudron'
+]
+
 export const SFX_FILES: ReadonlyArray<readonly [string, string]> = [
   ...SFX_NAMES.map((n) => [`sfx_${n}`, `audio/sfx/${n}.wav`] as const),
   ['sfx_stage_clear', 'audio/sfx/stage_clear.ogg'],
-  // SFX d'armes générés (ElevenLabs) : clé `sfx_weapon_<id>`. S'ils sont chargés,
-  // AudioDirector.playWeaponSfx joue le FICHIER en priorité, sinon repli zzfx procédural.
-  ['sfx_weapon_cloueur', 'audio/sfx/weapons/weapon_cloueur.mp3']
+  ...WEAPON_SFX_IDS.map((id) => [`sfx_weapon_${id}`, `audio/sfx/weapons/weapon_${id}.mp3`] as const)
 ]
 
 const VOICE_NAMES: readonly string[] = [
