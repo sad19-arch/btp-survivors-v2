@@ -45,6 +45,40 @@ export class VfxManager {
     return fx
   }
 
+  /**
+   * Flourish de montée d'arme (Piste C) : anneau cyan qui s'étend + éclats jaunes
+   * radiaux au niveau du joueur, pour signaler « ton arme monte de niveau » — le
+   * feedback qui manquait (« je vois pas de changement »). Rendu pur, auto-détruit.
+   */
+  spawnLevelUpFlourish(x: number, y: number): void {
+    const ring = this.scene.add.circle(x, y, 80, 0x000000, 0)
+      .setStrokeStyle(4, PALETTE_HEX.cyanAccent, 1)
+      .setDepth(7)
+      .setScale(0.15)
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 1,
+      alpha: 0,
+      duration: 620,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy()
+    })
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2
+      const spark = this.scene.add.rectangle(x, y, 5, 5, PALETTE_HEX.jauneSecurite).setDepth(8)
+      this.scene.tweens.add({
+        targets: spark,
+        x: x + Math.cos(a) * 70,
+        y: y + Math.sin(a) * 70,
+        alpha: 0,
+        scale: 0.3,
+        duration: 560,
+        ease: 'Quad.easeOut',
+        onComplete: () => spark.destroy()
+      })
+    }
+  }
+
   /** Éclair blanc bref (primitive, sans asset) — accompagne la fumée à la mort d'un ennemi. */
   spawnFlash(x: number, y: number): void {
     const flash = this.scene.add.circle(x, y, 9, 0xffffff).setDepth(6)
@@ -160,6 +194,46 @@ export class VfxManager {
     const centerAngle = Math.atan2(dy, dx)
     const startAngle = centerAngle - CONE_HALF_ANGLE
     const endAngle = centerAngle + CONE_HALF_ANGLE
+
+    // Piste C : nuage de mousse (sprite PixelLab) posé au joueur, ORIENTÉ vers la
+    // cible et ÉTIRÉ (plus long que large → lit comme un jet), avec quelques bulles.
+    // Repli sur le dessin de secteurs ci-dessous si la texture est absente (tests/lite).
+    const FOAM_KEY = 'vfx_foam_cone'
+    if (this.scene.textures.exists(FOAM_KEY)) {
+      const foam = this.scene.add.sprite(x, y, FOAM_KEY).setDepth(6).setOrigin(0.5, 0.82)
+      foam.setRotation(centerAngle + Math.PI / 2) // le sprite s'évase vers le haut (-y)
+      const sy = radius / 110 // longueur ≈ portée
+      const sx = radius / 170 // plus étroit
+      foam.setScale(sx * 0.55, sy * 0.5).setAlpha(0.95)
+      this.scene.tweens.add({
+        targets: foam,
+        scaleX: sx,
+        scaleY: sy,
+        alpha: 0,
+        duration: 300,
+        ease: 'Quad.easeOut',
+        onComplete: () => foam.destroy()
+      })
+      for (let i = 0; i < 8; i++) {
+        const spread = (Math.random() * 2 - 1) * CONE_HALF_ANGLE
+        const a = centerAngle + spread
+        const dist = radius * (0.35 + Math.random() * 0.55)
+        const bx = x + Math.cos(a) * dist
+        const by = y + Math.sin(a) * dist
+        const b = this.scene.add.circle(bx, by, 2 + Math.random() * 2, PALETTE_HEX.blanc).setDepth(7).setAlpha(0.8)
+        this.scene.tweens.add({
+          targets: b,
+          x: bx + Math.cos(a) * 28,
+          y: by + Math.sin(a) * 28,
+          alpha: 0,
+          scale: 0.2,
+          duration: 260,
+          ease: 'Quad.easeOut',
+          onComplete: () => b.destroy()
+        })
+      }
+      return
+    }
 
     // Couche 1 : secteur vert-mousse large — naît petit (scale-pop), s'élargit.
     const g1 = this.scene.add.graphics().setDepth(5).setPosition(x, y).setScale(0.3)

@@ -271,6 +271,8 @@ export class GameScene extends Phaser.Scene {
     this.load.image('proj_boulons', 'stage01/weapons/proj_boulons.png')
     this.load.image('proj_cle', 'stage01/weapons/proj_cle.png')
     this.load.image('proj_brouette', 'stage01/weapons/proj_brouette.png')
+    // Piste C : nuage de mousse de l'extincteur (sprite PixelLab, rendu orienté).
+    this.load.image('vfx_foam_cone', 'stage01/weapons/vfx_foam_cone.png')
     // B3 : icône de carte brouette réutilisée comme sprite de projectile (plus lisible).
     this.load.image('icon_brouette', 'stage01/ui/icon_brouette_64.png')
     this.load.image('vfx_goudron', 'stage01/vfx/vfx_goudron.png')

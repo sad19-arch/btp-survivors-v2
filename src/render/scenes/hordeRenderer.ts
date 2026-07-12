@@ -20,9 +20,10 @@ const DEFAULT_CHAR_SCALE = 0.516
 const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; faceVel: boolean }> = {
   scie: { key: 'proj_scie', scale: 0.8, spin: true, faceVel: false },
   cloueur: { key: 'proj_cloueur', scale: 0.8, spin: false, faceVel: true },
-  // Armes Phase A (Persos) — sprites dédiés PixelLab (A2 lot 2).
-  boulons: { key: 'proj_boulons', scale: 0.55, spin: false, faceVel: true },
-  tempete_boulons: { key: 'proj_boulons', scale: 0.55, spin: false, faceVel: true },
+  // Armes Phase A (Persos) — sprites dédiés PixelLab. Piste C : boulon doré brillant
+  // (remplace l'écrou gris terne) + échelle relevée 0.55→0.68 pour la lisibilité.
+  boulons: { key: 'proj_boulons', scale: 0.68, spin: false, faceVel: true },
+  tempete_boulons: { key: 'proj_boulons', scale: 0.68, spin: false, faceVel: true },
   cle_molette: { key: 'proj_cle', scale: 0.7, spin: true, faceVel: false },
   cle_choc: { key: 'proj_cle', scale: 0.7, spin: true, faceVel: false },
   // B3 : réutilise l'icône de carte brouette (plus reconnaissable qu'un bloc de granit).
@@ -38,8 +39,10 @@ const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; f
 const PICKUP_SPRITE: Record<PickupKind, { key: string; scale: number }> = {
   // B4 : gemmes plus grosses (visuel seul, hitbox core inchangée).
   xp: { key: 'pickup_xp', scale: 0.8 },
-  heal: { key: 'pickup_health', scale: 0.55 },
-  magnet: { key: 'pickup_magnet', scale: 0.55 },
+  // Piste C : soin = casse-croûte (sandwich, sprite 64px) rendu plus GROS et lisible
+  // qu'avant (ex-trousse ~20px) ; aimant/valise idem, plus repérable.
+  heal: { key: 'pickup_health', scale: 0.72 },
+  magnet: { key: 'pickup_magnet', scale: 0.9 },
   chest: { key: 'pickup_crate', scale: 0.6 },
   // Coffre d'évolution (boss mi-parcours) : réutilise la caisse, un cran plus
   // gros que `chest` pour marquer le moment d'évolution.
@@ -95,6 +98,8 @@ export class HordeRenderer {
   private readonly prevEnemyHp = new Map<number, number>()
   /** Fin de la fenêtre de flash blanc par ennemi touché. */
   private readonly enemyFlashUntil = new Map<number, number>()
+  /** Niveaux d'arme de la frame précédente (par playerId) → détecte les montées d'arme (flourish). */
+  private readonly prevWeaponLevels = new Map<number, number[]>()
   // Ensembles « vus cette frame » réutilisés (culling), vidés au lieu d'être recréés.
   private readonly seenHaz = new Set<number>()
   private readonly seenEnemy = new Set<number>()
@@ -144,6 +149,29 @@ export class HordeRenderer {
         hs.destroy()
         this.hazardSprites.delete(id)
       }
+    }
+
+    // ── Flourish de montée d'arme (Piste C) : diff des niveaux d'arme par joueur ──
+    // Une arme qui gagne un niveau (ou une nouvelle arme) → anneau + éclats sur le
+    // joueur. Garde anti-restart : si un niveau BAISSE (nouvelle run), on re-synchronise
+    // sans déclencher. Rendu pur (aucun état sim).
+    for (const p of state.players) {
+      const cur = p.weaponLevels
+      const prev = this.prevWeaponLevels.get(p.id)
+      if (prev !== undefined && p.alive) {
+        let leveled = cur.length > prev.length
+        let reset = cur.length < prev.length
+        for (let i = 0; i < cur.length; i++) {
+          const cl = cur[i] ?? 0
+          const pl = prev[i] ?? 0
+          if (cl > pl) { leveled = true }
+          if (cl < pl) { reset = true }
+        }
+        if (leveled && !reset) {
+          this.vfx.spawnLevelUpFlourish(p.x, p.y)
+        }
+      }
+      this.prevWeaponLevels.set(p.id, cur.slice())
     }
 
     // ── Ennemis (spawn poolé + skin, orientation vers le leader, feedback de coup) ──
@@ -227,6 +255,22 @@ export class HordeRenderer {
             sprite.clearTint()
           }
           this.enemyFlashUntil.delete(en.id)
+        }
+      }
+      // ── Télégraphe de charge du boss (behavior 'boss') ──
+      // Wind-up = clignotement rouge (fenêtre d'esquive lisible) ; charge = teinte
+      // rouge pleine. N'écrase pas le hit-flash blanc (priorité au feedback de coup).
+      if (en.isBoss && sprite instanceof Phaser.GameObjects.Sprite) {
+        const flashing = flashUntil !== undefined && this.scene.time.now < flashUntil
+        if (!flashing) {
+          if (en.bossCharge === 'telegraph') {
+            const blinkOn = Math.floor(this.scene.time.now / 100) % 2 === 0
+            if (blinkOn) { sprite.setTint(PALETTE_HEX.rougeAlerte) } else { sprite.clearTint() }
+          } else if (en.bossCharge === 'charge') {
+            sprite.setTint(PALETTE_HEX.orangeDanger)
+          } else {
+            sprite.clearTint()
+          }
         }
       }
       // Mémorise les HP courants pour la comparaison de la prochaine frame.
@@ -378,6 +422,13 @@ export class HordeRenderer {
           this.xpSparkleEpoch.set(pk.id, epoch)
           this.vfx.spawnPixelPop(pk.x, pk.y, PALETTE_HEX.vertBonus, 5, 180)
         }
+      }
+      // Piste C — soin (casse-croûte) & aimant : bob d'échelle discret pour qu'ils
+      // « appellent » à être ramassés (l'aimant pulse un peu plus fort qu'un soin).
+      if ((pk.type === 'heal' || pk.type === 'magnet') && sprite instanceof Phaser.GameObjects.Sprite) {
+        const phase = (pk.id * 1.7) % (Math.PI * 2)
+        const amp = pk.type === 'magnet' ? 0.14 : 0.09
+        sprite.setScale(cfg.scale * (1 + amp * Math.sin(this.scene.time.now / 240 + phase)))
       }
     }
     for (const [id, sprite] of this.pickupSprites) {
