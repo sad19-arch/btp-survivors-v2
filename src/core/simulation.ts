@@ -695,7 +695,7 @@ export class Simulation {
       this.events.dispatchEvent(new PickupCollectedEvent(c))
     }
     for (const p of pulses) {
-      this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius, p.kind, p.dirX, p.dirY))
+      this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius, p.kind, p.dirX, p.dirY, p.weaponId))
     }
     for (const f of freed) {
       this.events.dispatchEvent(new PrisonerFreedEvent(f.x, f.y))

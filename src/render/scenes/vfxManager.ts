@@ -292,6 +292,77 @@ export class VfxManager {
   }
 
   /**
+   * Jet de flammes (chalumeau / lance thermique) : sprite PixelLab posé au joueur,
+   * ORIENTÉ vers la cible et étiré sur la portée — même géométrie que la mousse de
+   * l'extincteur. Scalé par NIVEAU (recette golden pied-de-biche : plus grand/plus
+   * dense à haut niveau) ; braises procédurales en COMPLÉMENT du sprite. L'évoluée
+   * (lance thermique) utilise son propre sprite (jet de découpe) + gouttes de métal
+   * en fusion (pops blancs). Render-only ; Math.random cosmétique OK.
+   *
+   * Orientation des arts : `vfx_flame_cone` s'évase vers le HAUT (-y) comme la
+   * mousse → rotation = angle + π/2 ; `vfx_flame_lance` jaillit en diagonale
+   * bas-droite (≈ +π/4) → rotation = angle − π/4, pivot à la naissance du jet.
+   */
+  spawnFlameCone(x: number, y: number, radius: number, dirX?: number, dirY?: number, level = 1, evolved = false): void {
+    const dx = dirX ?? 0
+    const dy = dirY ?? -1
+    const centerAngle = Math.atan2(dy, dx)
+    const lf = Math.max(0, Math.min(1, (level - 1) / 7)) // 0 au niv 1 → 1 au niv 8
+
+    const key = evolved ? 'vfx_flame_lance' : 'vfx_flame_cone'
+    if (this.scene.textures.exists(key)) {
+      const flame = this.scene.add.sprite(x, y, key).setDepth(6)
+      if (evolved) {
+        flame.setOrigin(0.25, 0.25).setRotation(centerAngle - Math.PI / 4)
+      } else {
+        flame.setOrigin(0.5, 0.85).setRotation(centerAngle + Math.PI / 2)
+      }
+      // Longueur ≈ portée ; grossit avec le niveau (progression visible).
+      const grow = 0.8 + lf * 0.35
+      const sy = (radius / 130) * grow
+      const sx = (radius / 175) * grow
+      flame.setScale(sx * 0.5, sy * 0.45).setAlpha(0.98)
+      this.scene.tweens.add({
+        targets: flame,
+        scaleX: sx,
+        scaleY: sy,
+        alpha: 0,
+        duration: evolved ? 260 : 300,
+        ease: 'Quad.easeOut',
+        onComplete: () => flame.destroy()
+      })
+    } else {
+      // Repli sans asset (tests/lite sans preload) : flash chaud, jamais de plantage.
+      this.spawnPixelPop(x, y, PALETTE_HEX.orangeDanger, 12, 200)
+    }
+
+    // Braises éjectées dans le cône — nombre croissant avec le niveau.
+    const embers = 5 + Math.round(lf * 6) + (evolved ? 4 : 0)
+    for (let i = 0; i < embers; i++) {
+      const a = centerAngle + (Math.random() * 2 - 1) * CONE_HALF_ANGLE
+      const dist = radius * (0.3 + Math.random() * 0.6)
+      const px = x + Math.cos(a) * dist
+      const py = y + Math.sin(a) * dist
+      const sp = 34 + lf * 30 + Math.random() * 26
+      // Lance thermique : gouttes de métal en fusion (blanc) parmi les braises.
+      const molten = evolved && i % 3 === 0
+      const col = molten ? PALETTE_HEX.blanc : (i % 2 === 0 ? PALETTE_HEX.orangeDanger : PALETTE_HEX.jauneSecurite)
+      const ember = this.scene.add.rectangle(px, py, molten ? 4 : 3, molten ? 4 : 3, col).setDepth(7).setAlpha(0.95)
+      this.scene.tweens.add({
+        targets: ember,
+        x: px + Math.cos(a) * sp,
+        y: py + Math.sin(a) * sp,
+        alpha: 0,
+        scaleX: 0.2,
+        scaleY: 0.2,
+        duration: 240 + Math.random() * 120,
+        ease: 'Quad.easeOut',
+        onComplete: () => ember.destroy()
+      })
+    }
+  }
+
+  /**
    * Arc électrique (court-circuit) : tracé en zigzag brisé du JOUEUR (`fromX/fromY`)
    * jusqu'à la CIBLE (`toX/toY`) + 2 fourches secondaires + flash d'impact.
    * Tracé double (halo cyan épais + cœur blanc fin) — rendu « foudre » pixel-art.

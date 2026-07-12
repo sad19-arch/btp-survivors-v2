@@ -152,9 +152,11 @@ export class App {
     this.selectedCharacters = [...characters] // persiste pour restart/stage suivant/setSeed
     this.sim = new Simulation({ seed: this.seed, mode, phaseId: this.selectedPhase, characters })
     // Relaie les événements de sim (ex. onde d'aura, libération) vers l'App → rendu.
+    // Relai COMPLET : dirX/dirY (orientation des cônes — leur omission faisait pointer
+    // tous les jets vers le haut) + weaponId (choix du VFX mousse vs flammes).
     this.sim.events.addEventListener('auraPulse', (e) => {
       const p = e as AuraPulseEvent
-      this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius, p.kind))
+      this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius, p.kind, p.dirX, p.dirY, p.weaponId))
     })
     this.sim.events.addEventListener('prisonerFreed', (e) => {
       const p = e as PrisonerFreedEvent

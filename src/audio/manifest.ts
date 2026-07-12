@@ -93,9 +93,9 @@ const SFX_NAMES: readonly string[] = [
  */
 export const WEAPON_SFX_IDS: readonly string[] = [
   // Armes de base (scie = whir périodique discret, throttlé côté AudioDirector).
-  'cloueur', 'boulons', 'cle_molette', 'brouette', 'pied_de_biche', 'extincteur', 'goudron', 'scie',
+  'cloueur', 'boulons', 'cle_molette', 'brouette', 'pied_de_biche', 'extincteur', 'goudron', 'scie', 'chalumeau',
   // Armes évoluées.
-  'mitrailleuse_clous', 'haute_tension', 'coulee_bitume', 'tempete_boulons', 'cle_choc', 'canon_mousse', 'transpalette'
+  'mitrailleuse_clous', 'haute_tension', 'coulee_bitume', 'tempete_boulons', 'cle_choc', 'canon_mousse', 'transpalette', 'lance_thermique'
 ]
 
 export const SFX_FILES: ReadonlyArray<readonly [string, string]> = [

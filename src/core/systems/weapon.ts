@@ -74,7 +74,7 @@ export function weaponSystem(
           tickHazard(world, slot, def, eff, pos, player.playerId, dtMs, world.get(e, 'velocity'))
           break
         case 'cone':
-          tickCone(slot, eff, pos, dtMs, world, def.kind, pulses, grid, player.playerId)
+          tickCone(slot, eff, pos, dtMs, world, def.kind, pulses, grid, player.playerId, def.id)
           break
       }
       // Une arme qui vient de TIRER ce pas a rechargé son cooldown (valeur > celle
@@ -487,7 +487,8 @@ function tickCone(
   kind: string,
   pulses?: AuraPulse[],
   grid?: SpatialGrid,
-  ownerId?: number
+  ownerId?: number,
+  weaponId?: string
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -527,8 +528,10 @@ function tickCone(
     }
   }
 
-  // VFX : pulse de kind 'cone' avec la portée et la direction (le rendu l'oriente grâce à l'événement).
-  pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind, dirX, dirY })
+  // VFX : pulse de kind 'cone' avec portée + direction + id d'arme (le rendu oriente
+  // le jet et choisit le bon visuel : mousse d'extincteur vs flammes de chalumeau).
+  // Spread conditionnel : exactOptionalPropertyTypes interdit `weaponId: undefined`.
+  pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind, dirX, dirY, ...(weaponId !== undefined ? { weaponId } : {}) })
 }
 
 /**

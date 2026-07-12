@@ -16,6 +16,12 @@ export interface AuraPulse {
   /** Direction du cône (vecteur unitaire) — uniquement pour `kind === 'cone'`, undefined sinon. */
   dirX?: number
   dirY?: number
+  /**
+   * Id de l'ARME à l'origine de l'impulsion (ex. `'extincteur'` | `'chalumeau'`) —
+   * cosmétique pur : permet au rendu de choisir le bon VFX quand plusieurs armes
+   * partagent un même `kind` (mousse vs flammes). Jamais relu par la sim.
+   */
+  weaponId?: string
 }
 
 /** Émis à chaque impulsion d'une arme d'aura/sweep/strike/cone (pour un VFX d'onde de choc). */
@@ -26,7 +32,8 @@ export class AuraPulseEvent extends Event {
     readonly radius: number,
     readonly kind: string = 'aura',
     readonly dirX?: number,
-    readonly dirY?: number
+    readonly dirY?: number,
+    readonly weaponId?: string
   ) {
     super('auraPulse')
   }

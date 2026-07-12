@@ -149,6 +149,13 @@ export class GameScene extends Phaser.Scene {
       return
     }
     if (p.kind === 'cone') {
+      // Deux armes partagent le kind 'cone' : extincteur (mousse) et chalumeau /
+      // lance thermique (flammes) — le pulse porte l'id d'arme pour router le VFX.
+      if (p.weaponId === 'chalumeau' || p.weaponId === 'lance_thermique') {
+        const level = p.weaponId === 'lance_thermique' ? 8 : this.weaponLevelNear(p.x, p.y, 'chalumeau')
+        this.vfx.spawnFlameCone(p.x, p.y, p.radius, p.dirX, p.dirY, level, p.weaponId === 'lance_thermique')
+        return
+      }
       this.vfx.spawnConeVfx(p.x, p.y, p.radius, p.dirX, p.dirY)
       return
     }
@@ -309,6 +316,9 @@ export class GameScene extends Phaser.Scene {
     this.load.image('proj_brouette', 'stage01/weapons/proj_brouette.png')
     // Piste C : nuage de mousse de l'extincteur (sprite PixelLab, rendu orienté).
     this.load.image('vfx_foam_cone', 'stage01/weapons/vfx_foam_cone.png')
+    // Chalumeau / lance thermique : jets de flammes (PixelLab), orientés comme la mousse.
+    this.load.image('vfx_flame_cone', 'stage01/vfx/vfx_flame_cone.png')
+    this.load.image('vfx_flame_lance', 'stage01/vfx/vfx_flame_lance.png')
     // B3 : icône de carte brouette réutilisée comme sprite de projectile (plus lisible).
     this.load.image('icon_brouette', 'stage01/ui/icon_brouette_64.png')
     this.load.image('vfx_goudron', 'stage01/vfx/vfx_goudron.png')
