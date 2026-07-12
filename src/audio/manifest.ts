@@ -86,7 +86,10 @@ const SFX_NAMES: readonly string[] = [
 /** Fichiers SFX à précharger (clé `sfx_<nom>` → chemin). */
 export const SFX_FILES: ReadonlyArray<readonly [string, string]> = [
   ...SFX_NAMES.map((n) => [`sfx_${n}`, `audio/sfx/${n}.wav`] as const),
-  ['sfx_stage_clear', 'audio/sfx/stage_clear.ogg']
+  ['sfx_stage_clear', 'audio/sfx/stage_clear.ogg'],
+  // SFX d'armes générés (ElevenLabs) : clé `sfx_weapon_<id>`. S'ils sont chargés,
+  // AudioDirector.playWeaponSfx joue le FICHIER en priorité, sinon repli zzfx procédural.
+  ['sfx_weapon_cloueur', 'audio/sfx/weapons/weapon_cloueur.mp3']
 ]
 
 const VOICE_NAMES: readonly string[] = [

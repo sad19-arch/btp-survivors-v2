@@ -68,6 +68,8 @@ const VOICE_LEVEL = 1.0 // la voix passe au volume plein du canal SFX (annonces 
 const MUSIC_DUCK = 0.28 // pendant une voix, la musique tombe à ~28 % (annonceur au-dessus)
 const AMB_DUCK = 0.15 // et l'ambiance quasi muette (~15 %) pour dégager la voix
 const WEAPON_THROTTLE_MS = 55 // délai min entre deux SFX d'une MÊME arme (anti-double)
+/** Gain des SFX d'armes en FICHIER (ex. cloueur ElevenLabs), avant le gain SFX utilisateur. */
+const WEAPON_FILE_VOLUME = 0.5
 /** Délai min entre deux dings de gemme XP (anti-saturation horde). */
 const GEM_DING_THROTTLE_MS = 50
 /**
@@ -215,7 +217,7 @@ export class AudioDirector {
    * (0/mute → rien). Variation par tir intrinsèque à zzfx (`randomness`).
    */
   private playWeaponSfx(id: string): void {
-    if (this.audioCtx === null || this.isLocked()) {
+    if (this.isLocked()) {
       return
     }
     const gain = sfxGain(this.settings)
@@ -228,6 +230,16 @@ export class AudioDirector {
       return
     }
     this.lastSfx.set(`w_${id}`, now)
+    // SFX généré en FICHIER prioritaire (ex. cloueur ElevenLabs) ; sinon repli zzfx procédural
+    // (garde marteau/court-circuit et les armes sans fichier sur le zzfx taillé main).
+    const fileKey = `sfx_weapon_${id}`
+    if (this.hasAudio(fileKey)) {
+      this.sound.play(fileKey, { volume: WEAPON_FILE_VOLUME * gain })
+      return
+    }
+    if (this.audioCtx === null) {
+      return // le zzfx procédural nécessite WebAudio
+    }
     playZzfx(this.audioCtx, gain, weaponZzfx(id))
   }
 
