@@ -321,6 +321,90 @@ export function columnGridForChunk(
   return out
 }
 
+/**
+ * Immeubles de bordure de carte (« anneau urbain ») — placement PUR, par chunk.
+ *
+ * Pose des façades plates upright le long des 4 bords du monde, à `margin` px vers
+ * l'intérieur, sur une grille globale de pas `spacing` → deux chunks adjacents se
+ * raccordent sans couture, et un chunk revisité est IDENTIQUE (seed-stable). Le
+ * choix de la façade est déterministe par (seed, bord, index de grille).
+ *
+ * Rien n'est placé pour un chunk qui ne touche aucun bord → seuls les chunks de
+ * périphérie (chargés quand la caméra approche une limite) portent des immeubles.
+ * Render-only : la sim ne voit jamais ces objets.
+ *
+ * Repère : `origin top-left, +x right, +y down` (comme le reste du rendu).
+ */
+export function perimeterBuildingsForChunk(
+  cx: number,
+  cy: number,
+  chunkSize: number,
+  worldW: number,
+  worldH: number,
+  keyCount: number,
+  spacing: number,
+  margin: number,
+  seed: number
+): { x: number; y: number; keyIndex: number }[] {
+  const out: { x: number; y: number; keyIndex: number }[] = []
+  if (keyCount <= 0 || spacing <= 0) {
+    return out
+  }
+  const x0 = cx * chunkSize
+  const x1 = x0 + chunkSize
+  const y0 = cy * chunkSize
+  const y1 = y0 + chunkSize
+  const loX = margin
+  const hiX = worldW - margin
+  const loY = margin
+  const hiY = worldH - margin
+  if (hiX <= loX || hiY <= loY) {
+    return out
+  }
+  // Choix de façade déterministe (mélange entier, stable par (seed, bord, index)).
+  const pick = (edge: number, idx: number): number => {
+    let h = (seed ^ Math.imul(edge, 0x27d4eb2d) ^ Math.imul(idx, 0x9e3779b1)) >>> 0
+    h = Math.imul(h ^ (h >>> 15), 0x85ebca6b) >>> 0
+    h ^= h >>> 13
+    return (h >>> 0) % keyCount
+  }
+  // Bords haut/bas : grille sur X. Bords gauche/droit : grille sur Y, coins exclus
+  // (déjà couverts par haut/bas → pas de double-pose).
+  if (loY >= y0 && loY < y1) {
+    const kMin = Math.ceil(Math.max(loX, x0) / spacing)
+    const kMax = Math.floor(Math.min(hiX, x1 - 1) / spacing)
+    for (let k = kMin; k <= kMax; k++) {
+      const px = k * spacing
+      if (px >= loX && px <= hiX) { out.push({ x: px, y: loY, keyIndex: pick(0, k) }) }
+    }
+  }
+  if (hiY >= y0 && hiY < y1) {
+    const kMin = Math.ceil(Math.max(loX, x0) / spacing)
+    const kMax = Math.floor(Math.min(hiX, x1 - 1) / spacing)
+    for (let k = kMin; k <= kMax; k++) {
+      const px = k * spacing
+      if (px >= loX && px <= hiX) { out.push({ x: px, y: hiY, keyIndex: pick(1, k) }) }
+    }
+  }
+  if (loX >= x0 && loX < x1) {
+    const kMin = Math.ceil(Math.max(loY, y0) / spacing)
+    const kMax = Math.floor(Math.min(hiY, y1 - 1) / spacing)
+    for (let k = kMin; k <= kMax; k++) {
+      const py = k * spacing
+      if (py > loY && py < hiY) { out.push({ x: loX, y: py, keyIndex: pick(2, k) }) }
+    }
+  }
+  if (hiX >= x0 && hiX < x1) {
+    const kMin = Math.ceil(Math.max(loY, y0) / spacing)
+    const kMax = Math.floor(Math.min(hiY, y1 - 1) / spacing)
+    for (let k = kMin; k <= kMax; k++) {
+      const py = k * spacing
+      if (py > loY && py < hiY) { out.push({ x: hiX, y: py, keyIndex: pick(3, k) }) }
+    }
+  }
+  return out
+}
+
 export interface DecorStreamerOpts {
   chunkSize: number
   seed: number
@@ -336,6 +420,17 @@ export interface DecorStreamerOpts {
   interiorColumns?: {
     key: string
     spacing: number
+    scale: number
+  }
+  /**
+   * Anneau d'immeubles de bordure de carte (« mur de ville » aux limites). Streamé
+   * comme le reste → seuls les chunks de périphérie en portent (culling gratuit).
+   * `keys` = façades disponibles (choix déterministe par position). Render-only.
+   */
+  perimeterBuildings?: {
+    keys: readonly string[]
+    spacing: number
+    margin: number
     scale: number
   }
 }
@@ -490,6 +585,25 @@ export class DecorStreamer {
       )
       for (const { x, y } of cols) {
         const img = this.scene.add.image(x, y, ic.key).setScale(ic.scale).setDepth(-3)
+        objs.push(img)
+      }
+    }
+
+    // Immeubles de bordure (depth -4 = au-dessus des props/décalques, SOUS les
+    // colonnes intérieures et les entités → cadre visuel sans masquer le combat).
+    // Billboards upright (origin centré) : convention top-down du jeu, tous bords.
+    const pb = this.opts.perimeterBuildings
+    if (pb !== undefined && pb.keys.length > 0) {
+      const buildings = perimeterBuildingsForChunk(
+        cx, cy, this.opts.chunkSize, this.worldW, this.worldH,
+        pb.keys.length, pb.spacing, pb.margin, this.opts.seed
+      )
+      for (const { x, y, keyIndex } of buildings) {
+        const texKey = pb.keys[keyIndex]
+        if (texKey === undefined || !this.scene.textures.exists(texKey)) {
+          continue
+        }
+        const img = this.scene.add.image(x, y, texKey).setScale(pb.scale).setDepth(-4)
         objs.push(img)
       }
     }

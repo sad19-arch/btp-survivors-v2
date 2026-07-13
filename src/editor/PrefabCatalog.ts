@@ -12,7 +12,7 @@
  * y résolvent leurs clés.
  */
 
-import { STAGE_RENDER, SHARED_WORKER_NPCS, type StageRender, type StageAmbientNpc } from '@render/stages'
+import { STAGE_RENDER, SHARED_WORKER_NPCS, CITY_BUILDINGS, type StageRender, type StageAmbientNpc } from '@render/stages'
 import { CLUSTERS } from '@content/clusters'
 import { destructiblesForStage } from '@content/destructibles'
 
@@ -100,6 +100,7 @@ export const CATEGORIES: Category[] = [
   { id: 'safety', label: 'Sécurité / barrières' },
   { id: 'decor', label: 'Décor secondaire' },
   { id: 'objects', label: 'Objets isolés avancés' },
+  { id: 'buildings', label: 'Immeubles (bordure)' },
   { id: 'divers', label: 'Divers' },
   { id: 'markers', label: 'Marqueurs' }
 ]
@@ -114,7 +115,9 @@ const SHARED_DECOR_ASSETS: EditorAsset[] = [
   { key: 'fence_post', file: 'terrain/fence_post.png', label: 'Poteau de clôture', role: 'prop' },
   { key: 'site_gate', file: 'terrain/site_gate.png', label: 'Portail de chantier', role: 'structure' },
   { key: 'road_strip', file: 'terrain/road_strip.png', label: 'Bande de route', role: 'decal' },
-  { key: 'piste_strip', file: 'terrain/piste_strip.png', label: 'Bande de piste', role: 'decal' }
+  { key: 'piste_strip', file: 'terrain/piste_strip.png', label: 'Bande de piste', role: 'decal' },
+  // Immeubles de bordure (anneau urbain) — posables sur tous les stages.
+  ...CITY_BUILDINGS.map((b) => ({ key: b.key, file: b.file, label: b.label, role: 'structure' as const }))
 ]
 
 /**
@@ -162,7 +165,12 @@ const ASSET_META: Record<string, { label: string; category: string }> = {
   site_gate: { label: 'Portail de chantier', category: 'divers' },
   road_strip: { label: 'Bande de route', category: 'divers' },
   piste_strip: { label: 'Bande de piste', category: 'divers' },
-  decal_stage01_layout_line: { label: 'Ligne de marquage', category: 'marking' }
+  decal_stage01_layout_line: { label: 'Ligne de marquage', category: 'marking' },
+  // Immeubles de bordure (anneau urbain) → catégorie dédiée « Immeubles ».
+  building_office: { label: 'Immeuble de bureau', category: 'buildings' },
+  building_apartment: { label: "Immeuble d'habitation", category: 'buildings' },
+  building_tower: { label: 'Tour de bureaux', category: 'buildings' },
+  building_warehouse: { label: 'Entrepôt industriel', category: 'buildings' }
 }
 
 /** Méta (label FR + catégorie) d'un asset, ou null si non répertorié. */

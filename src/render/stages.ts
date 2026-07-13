@@ -133,6 +133,44 @@ export interface StageRender {
    * automatiquement par le jeu (aucun scatter). Le gameplay auto reste inchangé.
    */
   editorExtras?: StageEditorExtra[]
+  /**
+   * Anneau d'immeubles de bordure de carte. Optionnel — repli sur l'anneau urbain
+   * partagé `CITY_PERIMETER` (le voisinage du chantier ne dépend pas de la phase).
+   */
+  perimeter?: PerimeterRing
+}
+
+/** Anneau d'immeubles cadrant les limites de la carte (render-only, streamé au périmètre). */
+export interface PerimeterRing {
+  /** Clés de textures des façades disponibles (choix déterministe par position). */
+  keys: string[]
+  /** Pas de la grille le long des bords (px). Défaut 240. */
+  spacing?: number
+  /** Décalage vers l'intérieur depuis le bord du monde (px). Défaut 130. */
+  margin?: number
+  /** Échelle des sprites d'immeuble. Défaut 1.0. */
+  scale?: number
+}
+
+/**
+ * Façades d'immeubles PARTAGÉES par tous les stages (anneau urbain de bordure).
+ * Fichiers `public/city/*` — façades plates vue de face (PixelLab), coins
+ * transparents (QA-clean). Servent au préchargement (`GameScene`), à l'anneau
+ * streamé (`CITY_PERIMETER`) et à la palette éditeur (`SHARED_DECOR_ASSETS`).
+ */
+export const CITY_BUILDINGS: { key: string; file: string; label: string }[] = [
+  { key: 'building_office', file: 'city/building_office.png', label: 'Immeuble de bureau' },
+  { key: 'building_apartment', file: 'city/building_apartment.png', label: "Immeuble d'habitation" },
+  { key: 'building_tower', file: 'city/building_tower.png', label: 'Tour de bureaux' },
+  { key: 'building_warehouse', file: 'city/building_warehouse.png', label: 'Entrepôt industriel' }
+]
+
+/** Anneau urbain par défaut appliqué à tous les stages (sauf override `StageRender.perimeter`). */
+export const CITY_PERIMETER: PerimeterRing = {
+  keys: CITY_BUILDINGS.map((b) => b.key),
+  spacing: 240,
+  margin: 130,
+  scale: 1.0
 }
 
 /** Asset exposé dans l'éditeur (préchargé pour les compos) mais jamais scatteré par le jeu. */

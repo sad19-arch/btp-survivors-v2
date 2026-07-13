@@ -16,7 +16,7 @@ import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { resolveComposedLayout } from '@content/runtimeLayouts'
 import { walkFrame } from '@render/sprites'
 import { ambientOffset } from '@render/ambientNpc'
-import { stageRender, type StageRender, FINAL_BOSS_SKIN, CONVOYEUR_SKIN, SHARED_WORKER_NPCS } from '@render/stages'
+import { stageRender, type StageRender, FINAL_BOSS_SKIN, CONVOYEUR_SKIN, SHARED_WORKER_NPCS, CITY_BUILDINGS, CITY_PERIMETER } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { DamageNumberPool } from '@render/damageNumbers'
 import { VfxManager } from '@render/scenes/vfxManager'
@@ -416,6 +416,10 @@ export class GameScene extends Phaser.Scene {
     this.load.image('bungalow_shared', 'stage01/props/site_cabin.png')
     this.load.image('piquets_shared', 'stage01/props/survey_stakes.png')
     this.load.image('piste_strip', 'terrain/piste_strip.png')
+    // Immeubles de bordure (anneau urbain partagé — cadre les limites de la carte).
+    for (const b of CITY_BUILDINGS) {
+      this.load.image(b.key, b.file)
+    }
   }
 
   /** Réinitialise l'état par-run (indispensable car `scene.restart` réutilise l'instance). */
@@ -474,6 +478,16 @@ export class GameScene extends Phaser.Scene {
       seed: stageSeed,
       decals: this.stage.decals.map((d) => d.key),
       props: this.stage.props.map((p) => ({ key: p.key, scale: p.scale, count: p.count }))
+    }
+    // Anneau d'immeubles de bordure — cadre les limites de la carte sur tous les
+    // stages (défaut = anneau urbain partagé). Indépendant du scatter intérieur :
+    // reste posé même quand un plan de chantier éteint les props aléatoires.
+    const perim = this.stage.perimeter ?? CITY_PERIMETER
+    streamerOpts.perimeterBuildings = {
+      keys: perim.keys,
+      spacing: perim.spacing ?? 240,
+      margin: perim.margin ?? 130,
+      scale: perim.scale ?? 1.0
     }
     if (this.stage.zones !== undefined) {
       streamerOpts.zones = this.stage.zones
