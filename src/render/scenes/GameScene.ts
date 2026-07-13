@@ -13,7 +13,7 @@ import { SITE_PROGRAMS } from '@content/sitePrograms'
 import { createGround } from '@render/ground'
 import { createLandmark, createStructures, phaseSalt, resolvePlacement, type ExclusionCircle } from '@render/props'
 import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
-import { getComposedLayout } from '@content/composedLayouts'
+import { resolveComposedLayout } from '@content/runtimeLayouts'
 import { walkFrame } from '@render/sprites'
 import { ambientOffset } from '@render/ambientNpc'
 import { stageRender, type StageRender, FINAL_BOSS_SKIN, CONVOYEUR_SKIN, SHARED_WORKER_NPCS } from '@render/stages'
@@ -656,7 +656,7 @@ export class GameScene extends Phaser.Scene {
     this.decorStreamer = new DecorStreamer(this, WORLD.width, WORLD.height, streamerOpts)
     // Compo sauvée = vérité totale du décor : on coupe le streaming ambiant
     // (traces/cailloux/herbes auto). Sans compo → décor procédural conservé.
-    this.decorSuppressed = getComposedLayout(this.loadedStageId) !== null
+    this.decorSuppressed = resolveComposedLayout(this.loadedStageId) !== null
 
     this.add
       .rectangle(WORLD.width / 2, WORLD.height / 2, WORLD.width, WORLD.height)

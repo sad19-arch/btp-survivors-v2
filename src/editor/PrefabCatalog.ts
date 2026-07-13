@@ -100,7 +100,21 @@ export const CATEGORIES: Category[] = [
   { id: 'safety', label: 'Sécurité / barrières' },
   { id: 'decor', label: 'Décor secondaire' },
   { id: 'objects', label: 'Objets isolés avancés' },
+  { id: 'divers', label: 'Divers' },
   { id: 'markers', label: 'Marqueurs' }
+]
+
+/**
+ * Décor PARTAGÉ (clôtures/portail/routes) : assets réels (`public/terrain/*`)
+ * utilisés par le jeu mais absents de `STAGE_RENDER` → jamais surfacés dans la
+ * palette. On les expose sur TOUS les stages (catégorie « Divers » via ASSET_META).
+ */
+const SHARED_DECOR_ASSETS: EditorAsset[] = [
+  { key: 'fence_panel', file: 'terrain/fence_panel.png', label: 'Panneau de clôture', role: 'prop' },
+  { key: 'fence_post', file: 'terrain/fence_post.png', label: 'Poteau de clôture', role: 'prop' },
+  { key: 'site_gate', file: 'terrain/site_gate.png', label: 'Portail de chantier', role: 'structure' },
+  { key: 'road_strip', file: 'terrain/road_strip.png', label: 'Bande de route', role: 'decal' },
+  { key: 'piste_strip', file: 'terrain/piste_strip.png', label: 'Bande de piste', role: 'decal' }
 ]
 
 /**
@@ -136,6 +150,12 @@ const ASSET_META: Record<string, { label: string; category: string }> = {
   struct_stage01_plan_table: { label: 'Table avec plan', category: 'baselife' },
   decal_stage01_layout_cross: { label: 'Croix topo au sol', category: 'marking' },
   decal_stage01_layout_corner: { label: 'Angle de marquage', category: 'marking' },
+  // Décor PARTAGÉ (clôtures/portail/routes) → catégorie « Divers » sur tous les stages.
+  fence_panel: { label: 'Panneau de clôture', category: 'divers' },
+  fence_post: { label: 'Poteau de clôture', category: 'divers' },
+  site_gate: { label: 'Portail de chantier', category: 'divers' },
+  road_strip: { label: 'Bande de route', category: 'divers' },
+  piste_strip: { label: 'Bande de piste', category: 'divers' },
   decal_stage01_layout_line: { label: 'Ligne de marquage', category: 'marking' }
 }
 
@@ -226,6 +246,10 @@ function buildStageAssets(stageId: string): { assets: EditorAsset[]; groundKey: 
   // s'appuie sur ces clés.
   for (const d of destructiblesForStage(stageId)) {
     add({ key: d.assetKey, file: d.file, label: d.name, role: 'destructible' })
+  }
+  // Décor PARTAGÉ (clôtures/portail/routes) — sur tous les stages (catégorie « Divers »).
+  for (const a of SHARED_DECOR_ASSETS) {
+    add({ key: a.key, file: a.file, label: a.label, role: a.role })
   }
   if (sr.interior !== undefined) {
     add({ key: sr.interior.columnKey, file: sr.interior.columnFile, label: 'Poteau', role: 'column' })
@@ -424,6 +448,27 @@ function authoredScenes(stageId: string): PaletteEntry[] {
   return []
 }
 
+/**
+ * Scènes dérivées des CLUSTERS du stage (repli pour les stages sans scènes
+ * authorées, ex. 04→10) : toute compo `CLUSTERS` dont l'id finit par le stageId
+ * (`cluster_work_<stage>`, `cluster_storage_<stage>`, `cluster_plant_<stage>`…) —
+ * plus riche que les 2 gabarits auto.
+ */
+function clusterScenes(stageId: string): PaletteEntry[] {
+  const out: PaletteEntry[] = []
+  for (const id of Object.keys(CLUSTERS)) {
+    if (!id.endsWith(stageId)) {
+      continue
+    }
+    const label = humanize(id.replace(/^cluster_/, '').replace(/_/g, ' '))
+    const e = clusterEntry(id, label, 'scene', 'grande', 'scenes')
+    if (e !== null) {
+      out.push(e)
+    }
+  }
+  return out
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Catalogue par stage (caché) + catalogue « actif »
 // ─────────────────────────────────────────────────────────────────────────────
@@ -438,7 +483,8 @@ export function getStageCatalog(stageId: string): StageCatalog {
   const sr = STAGE_RENDER[stageId] ?? STAGE_RENDER.terrain_vierge
   const { assets, groundKey } = buildStageAssets(stageId)
   const authored = authoredScenes(stageId)
-  const scenes = authored.length > 0 ? authored : autoScenes(stageId, assets)
+  const fromClusters = authored.length > 0 ? authored : clusterScenes(stageId)
+  const scenes = fromClusters.length > 0 ? fromClusters : autoScenes(stageId, assets)
   const entries = [...scenes, ...destructibleEntries(stageId), ...npcEntries(sr), ...objectEntries(assets), ...MARKERS]
   const cat: StageCatalog = { stageId, assets, entries, groundKey }
   cache.set(stageId, cat)

@@ -9,9 +9,9 @@ test('l’écran titre s’affiche et se navigue', async ({ page }) => {
   await page.goto('/?seed=1&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
 
-  await expect(page.locator('.panel__title')).toHaveText('BTP Survivors')
-  // Menu titre : 4 items (Jouer / ◄Joueurs► / ◄Niveau► / Options) — cf. app.ts titleItems().
-  await expect(page.locator('.menu__item')).toHaveCount(4)
+  await expect(page.locator('.panel__title')).toHaveText('BTP Carnage')
+  // Menu titre : 5 items (Jouer / ◄Joueurs► / ◄Niveau► / Options / Éditeur) — cf. app.ts titleItems().
+  await expect(page.locator('.menu__item')).toHaveCount(5)
   await expect(page.locator('.menu__item--focus')).toHaveText('Jouer')
 
   // Navigue d'un cran : le focus descend sur le sélecteur de joueurs.

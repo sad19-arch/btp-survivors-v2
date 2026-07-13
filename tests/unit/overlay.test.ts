@@ -15,9 +15,9 @@ describe('Overlay (DOM)', () => {
     const { root, overlay } = mount()
     overlay.sync(app.getState())
 
-    expect(root.querySelector('.panel__title')?.textContent).toBe('BTP Survivors')
+    expect(root.querySelector('.panel__title')?.textContent).toBe('BTP Carnage')
     const items = root.querySelectorAll('.menu__item')
-    expect(items.length).toBe(4) // Jouer, Joueurs (sélecteur), Niveau (sélecteur), Options
+    expect(items.length).toBe(5) // Jouer, Joueurs (sélecteur), Niveau (sélecteur), Options, Éditeur
     expect(root.querySelectorAll('.menu__item--focus').length).toBe(1)
     expect(items[0]?.classList.contains('menu__item--focus')).toBe(true)
   })

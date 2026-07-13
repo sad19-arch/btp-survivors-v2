@@ -33,8 +33,19 @@ describe('App — écrans & navigation', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     const s = app.getState()
     expect(s.screen).toBe('title')
-    expect(s.menu?.items.map((i) => i.id)).toEqual(['jouer', 'players', 'stage', 'options'])
+    expect(s.menu?.items.map((i) => i.id)).toEqual(['jouer', 'players', 'stage', 'options', 'editeur'])
     expect(s.players.length).toBe(0)
+  })
+
+  it('l\'item « Éditeur » émet launchEditor (effet de bord câblé hors App pure)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    let launched = false
+    app.events.addEventListener('launchEditor', () => { launched = true })
+    const editorIndex = app.getState().menu?.items.findIndex((i) => i.id === 'editeur') ?? -1
+    expect(editorIndex).toBeGreaterThanOrEqual(0)
+    app.clickItem(editorIndex)
+    expect(launched).toBe(true)
+    expect(app.getState().screen).toBe('title') // l'App reste au titre ; le boot éditeur est géré par main.ts
   })
 
   it('le sélecteur « Niveau » cycle les phases et lance le stage choisi', () => {

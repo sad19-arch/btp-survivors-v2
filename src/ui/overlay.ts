@@ -435,7 +435,7 @@ export class Overlay {
     const panel = h(
       'div',
       { className: 'panel' },
-      h('h1', { className: 'panel__title', text: 'BTP Survivors' }),
+      h('h1', { className: 'panel__title', text: 'BTP Carnage' }),
       h('p', { className: 'panel__subtitle', text: 'Survis au chantier' }),
       this.menuList(state),
       h('p', { className: 'hint-line', text: 'Manette ou clavier · Valider: A / Entrée' })

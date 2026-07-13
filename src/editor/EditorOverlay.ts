@@ -6,6 +6,7 @@
 
 import { paletteEntry, STAGE_LIST } from './PrefabCatalog'
 import type { EditorScene } from './EditorScene'
+import { saveUserLayout } from '@ui/userLayouts'
 
 function btn(label: string, onClick: () => void, cls = ''): HTMLButtonElement {
   const b = document.createElement('button')
@@ -13,6 +14,50 @@ function btn(label: string, onClick: () => void, cls = ''): HTMLButtonElement {
   b.textContent = label
   b.addEventListener('click', onClick)
   return b
+}
+
+/** Groupe étiqueté de la barre d'outils (Fichier / Vue / Édition / Avancé). */
+function group(label: string): HTMLElement {
+  const g = document.createElement('div')
+  g.className = 'sce-group'
+  const lab = document.createElement('span')
+  lab.className = 'sce-group-label'
+  lab.textContent = label
+  g.appendChild(lab)
+  return g
+}
+
+/** Télécharge une chaîne comme fichier (Blob + <a download>). */
+function downloadText(filename: string, text: string): void {
+  const blob = new Blob([text], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+/** Ouvre un sélecteur de fichier .json et renvoie son texte. */
+function pickFile(onText: (text: string) => void): void {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json,application/json'
+  input.addEventListener('change', () => {
+    const file = input.files?.[0]
+    if (file === undefined) {
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const res = reader.result
+      onText(typeof res === 'string' ? res : '')
+    }
+    reader.readAsText(file)
+  })
+  input.click()
 }
 
 export class EditorOverlay {
@@ -31,10 +76,13 @@ export class EditorOverlay {
   ) {
     const state = scene.state
 
-    // ── Barre d'outils (haut) ──
+    // ── Barre d'outils (haut), groupée : Fichier · Vue · Édition · Avancé ──
     this.toolbar = document.createElement('div')
     this.toolbar.className = 'sce-panel sce-toolbar'
-    this.toolbar.appendChild(document.createTextNode('Stage Composer'))
+    const title = document.createElement('span')
+    title.className = 'sce-title'
+    title.textContent = 'Stage Composer'
+    this.toolbar.appendChild(title)
 
     // Sélecteur de stage.
     const sel = document.createElement('select')
@@ -49,22 +97,46 @@ export class EditorOverlay {
     sel.addEventListener('change', () => this.switchStage(sel.value))
     this.toolbar.appendChild(sel)
 
-    this.toolbar.appendChild(btn('Vue jeu (1.2×)', () => scene.fitGameZoom()))
-    this.toolbar.appendChild(btn('Vue d\'ensemble', () => scene.fitOverview()))
-    this.toolbar.appendChild(btn('Parcourir (P)', () => scene.toggleWalk()))
-    this.toolbar.appendChild(btn('↶ Annuler', () => state.undo()))
-    this.toolbar.appendChild(btn('↷ Rétablir', () => state.redo()))
+    // Groupe FICHIER : base vierge/existante, sauver (jouable), télécharger, charger.
+    const gFile = group('Fichier')
+    gFile.appendChild(btn('🗋 Nouveau (vierge)', () => {
+      if (window.confirm('Repartir d\'un stage VIERGE ? (efface la compo courante de ce niveau)')) { state.reset() }
+    }))
+    gFile.appendChild(btn('🏗 Partir du niveau existant', () => {
+      if (window.confirm('Charger le niveau EXISTANT comme base éditable ? (remplace la compo courante ; les engins deviennent bloquants)')) { state.importGenerated() }
+    }))
+    gFile.appendChild(btn('💾 Sauver (jouable)', () => {
+      saveUserLayout(scene.stage, state.exportGameJson())
+      window.alert('Sauvé ✓ — jouable depuis le menu titre (niveau : ' + scene.stage + ').')
+    }, 'sce-btn-primary'))
+    gFile.appendChild(btn('⬇ Télécharger', () => downloadText('stage_' + scene.stage + '.json', state.exportGameJson())))
+    gFile.appendChild(btn('⬆ Charger un fichier', () => pickFile((text) => {
+      const res = state.importJson(text)
+      if (!res.ok) { window.alert('Fichier invalide : ' + (res.error ?? 'JSON')) }
+    })))
+    this.toolbar.appendChild(gFile)
+
+    // Groupe VUE.
+    const gView = group('Vue')
+    gView.appendChild(btn('Vue jeu (1.2×)', () => scene.fitGameZoom()))
+    gView.appendChild(btn('Vue d\'ensemble', () => scene.fitOverview()))
+    gView.appendChild(btn('Parcourir (P)', () => scene.toggleWalk()))
+    this.toolbar.appendChild(gView)
+
+    // Groupe ÉDITION.
+    const gEdit = group('Édition')
+    gEdit.appendChild(btn('↶ Annuler', () => state.undo()))
+    gEdit.appendChild(btn('↷ Rétablir', () => state.redo()))
     this.gridBtn = btn('Grille', () => state.toggleGrid())
     this.snapBtn = btn('Snap', () => state.toggleSnap())
-    this.toolbar.appendChild(this.gridBtn)
-    this.toolbar.appendChild(this.snapBtn)
-    this.toolbar.appendChild(btn('Effacer sélection', () => { state.select(null); scene.clearActive() }))
-    this.toolbar.appendChild(btn('📥 Importer le stage généré', () => {
-      if (window.confirm('Remplacer la compo courante par le stage GÉNÉRÉ (base éditable) ? Les engins deviennent bloquants.')) {
-        state.importGenerated()
-      }
-    }))
-    this.toolbar.appendChild(btn('💾 Sauver au repo', () => {
+    gEdit.appendChild(this.gridBtn)
+    gEdit.appendChild(this.snapBtn)
+    gEdit.appendChild(btn('Effacer sélection', () => { state.select(null); scene.clearActive() }))
+    this.toolbar.appendChild(gEdit)
+
+    // Groupe AVANCÉ : baker au repo (dev), export/import texte.
+    const gAdv = group('Avancé')
+    gAdv.appendChild(btn('Sauver au repo (dev)', () => {
       void fetch('/__save-layout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,13 +147,11 @@ export class EditorOverlay {
           window.alert(r.ok ? `Sauvé au repo ✓ (${t})` : `Échec : ${t}`)
         })
         .catch(() => window.alert('Endpoint indisponible : « Sauver au repo » ne marche qu\'en dev (npm run dev).'))
-    }, 'sce-btn-primary'))
-    this.toolbar.appendChild(btn('Export JSON', () => this.openModal(state.exportJson(), 'export')))
-    this.toolbar.appendChild(btn('Export code', () => this.openModal(state.exportCode(), 'export')))
-    this.toolbar.appendChild(btn('Import JSON', () => this.openModal('', 'import')))
-    this.toolbar.appendChild(btn('Reset layout', () => {
-      if (window.confirm('Réinitialiser tout le layout de l\'éditeur ?')) {state.reset()}
-    }, 'sce-btn-danger'))
+    }))
+    gAdv.appendChild(btn('Export JSON', () => this.openModal(state.exportJson(), 'export')))
+    gAdv.appendChild(btn('Export code', () => this.openModal(state.exportCode(), 'export')))
+    gAdv.appendChild(btn('Import JSON', () => this.openModal('', 'import')))
+    this.toolbar.appendChild(gAdv)
     this.root.appendChild(this.toolbar)
 
     // ── Inspecteur + warnings (droite) ──

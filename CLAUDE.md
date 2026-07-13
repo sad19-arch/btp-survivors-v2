@@ -4,7 +4,7 @@ Guide pour Claude Code (claude.ai/code) sur ce dépôt. **Ces instructions prime
 
 ## Aperçu
 
-**BTP Survivors** est un jeu web type *Vampire Survivors* dans un monde de **chantier/BTP** : on survit à des vagues d'ennemis bureaucratiques (administration, inspections, non-conformités) à travers le **cycle de vie d'un chantier**. Reconstruction propre d'un prototype précédent : le *design* était bon, le *code* mauvais.
+**BTP Carnage** est un jeu web type *Vampire Survivors* dans un monde de **chantier/BTP** : on survit à des vagues d'ennemis bureaucratiques (administration, inspections, non-conformités) à travers le **cycle de vie d'un chantier**. Reconstruction propre d'un prototype précédent : le *design* était bon, le *code* mauvais.
 
 - **Cibles** : **PC navigateur + manette Xbox / clavier en priorité** (PRD) ; **borne/salon** (plein écran, manettes, multi local 2-4) ensuite ; web mobile/tactile en backlog (le modèle d'input ne doit pas l'empêcher).
 - **Pas de marque Once For All** : la couche marketing/pédago (CTA conformité, QR, quiz contextualisé) est **hors périmètre**. Le thème chantier, lui, reste l'identité du jeu.

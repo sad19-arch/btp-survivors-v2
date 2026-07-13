@@ -5,6 +5,7 @@ import { BootScene } from '@render/scenes/BootScene'
 import { Overlay } from '@ui/overlay'
 import { AudioDirector } from '@/audio/audioDirector'
 import { parseBootOptions, type BootOptions } from './bootOptions'
+import { applyUserLayouts } from './userLayoutBoot'
 import { phaseIdFromLevel } from '@content/phases'
 import { createSeam, installSeam } from './seam'
 import { PerfOverlay } from '@render/perf/perfOverlay'
@@ -27,6 +28,9 @@ if (opts.editor) {
 }
 
 function bootGame(opts: BootOptions): void {
+// Réinjecte les stages édités par le joueur (localStorage) AVANT de créer la sim,
+// pour que le stage choisi joue sa version sauvée. No-op si aucun (test/e2e/défaut).
+applyUserLayouts()
 const mode = opts.autostart ?? 'solo'
 const app = new App({
   seed: opts.seed,
@@ -37,6 +41,12 @@ const app = new App({
   intro: !opts.test
 })
 const seam = createSeam(app)
+
+// Item « Éditeur de niveaux » du menu titre → bascule vers le boot éditeur
+// (`?editor=true`, recharge la page). L'App reste pure ; l'effet de bord vit ici.
+app.events.addEventListener('launchEditor', () => {
+  window.location.search = '?editor=true'
+})
 
 // Gating: jamais en prod (sauf ?test=1). Pas de process.env (undefined sous Vite).
 if (import.meta.env.DEV || opts.test) {

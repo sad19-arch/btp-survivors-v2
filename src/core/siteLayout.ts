@@ -24,7 +24,7 @@ import { buildSitePlan } from '@core/sitePlan'
 import type { SitePlan, PlacedZone } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
 import type { ZonePrefab } from '@content/sitePrograms'
-import { getComposedLayout } from '@content/composedLayouts'
+import { resolveComposedLayout } from '@content/runtimeLayouts'
 import type { StageLayout, EmbeddedElement } from '@content/stageLayout'
 import { DESTRUCTIBLE_SCATTER } from '@content/destructibles'
 import type { DestructibleSpawn } from '@content/destructibles'
@@ -350,7 +350,7 @@ function computeBaseLayout(
   // ── Chemin « COMPOSITION ÉDITEUR » (source de vérité, prioritaire) ─────────
   // Si une compo committée existe pour ce stage, elle DÉFINIT les scènes (décor +
   // collision). Pure/déterministe (aucun RNG). Registre vide → null → no-op.
-  const composed = getComposedLayout(stageId)
+  const composed = resolveComposedLayout(stageId)
   if (composed !== null) {
     const site = composedToSiteLayout(composed)
     // Backdrop procédural : pour un stage PROGRAMMÉ, le rendu dessine toujours les

@@ -1,4 +1,4 @@
-# BTP Survivors v2
+# BTP Carnage
 
 Jeu web type *Vampire Survivors* dans un monde de chantier/BTP. Reconstruction propre : cœur de simulation TypeScript déterministe + rendu Phaser, pensé pour être **testable en « jouant »** (sim headless + Playwright).
 

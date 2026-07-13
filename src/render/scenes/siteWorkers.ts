@@ -27,7 +27,7 @@ import { buildSiteLayout, type PlacedCluster } from '@core/siteLayout'
 import { buildSitePlan } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
 import { commutePos, loadVisible, panicDecision, pathFollow, fleeVelocity, planNpcJobs, PANIC_R } from '@render/workerBehavior'
-import { getComposedLayout } from '@content/composedLayouts'
+import { resolveComposedLayout } from '@content/runtimeLayouts'
 import type { StageLayout } from '@content/stageLayout'
 import { dirRow, idleFrame, walkFrame } from '@render/sprites'
 import type { AppViewState } from '@/app/appState'
@@ -230,7 +230,7 @@ export class SiteWorkers {
     // Un stage AVEC compo sauvée est la VÉRITÉ TOTALE : pas d'auto-peuplement
     // d'ouvriers (porteurs/navetteurs/baseline) ; seuls les PNJ POSÉS + les
     // chemins tracés sont rendus. Sans compo → auto-peuplement (fallback).
-    const composed = getComposedLayout(stageId)
+    const composed = resolveComposedLayout(stageId)
     if (composed !== null) {
       this._addComposedNpcsAndPaths(composed, worldW, worldH, npcKeys)
       return

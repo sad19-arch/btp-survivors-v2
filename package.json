@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "BTP Survivors — reconstruction propre (Vampire-Survivors-like, monde chantier). Cœur de simulation TypeScript déterministe + rendu Phaser.",
+  "description": "BTP Carnage — reconstruction propre (Vampire-Survivors-like, monde chantier). Cœur de simulation TypeScript déterministe + rendu Phaser.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

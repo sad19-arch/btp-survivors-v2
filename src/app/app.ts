@@ -663,7 +663,8 @@ export class App {
       { id: 'jouer', label: 'Jouer', hint: null },
       { id: 'players', label: `◄ Joueurs : ${this.selectedPlayers} ►`, hint: 'Gauche/Droite pour changer' },
       { id: 'stage', label: `◄ Niveau ${phase?.order ?? 1}/10 : ${phase?.title ?? '—'} ►`, hint: 'Gauche/Droite pour changer' },
-      { id: 'options', label: 'Options', hint: null }
+      { id: 'options', label: 'Options', hint: null },
+      { id: 'editeur', label: 'Éditeur de niveaux', hint: 'Créer / modifier un stage' }
     ]
   }
 
@@ -794,6 +795,10 @@ export class App {
         this.cycleStage()
       } else if (id === 'options') {
         this.optionsOpen = true
+      } else if (id === 'editeur') {
+        // L'ouverture de l'éditeur est un effet de bord `window.location` (boot
+        // séparé `?editor=true`) → l'App PURE se contente d'émettre ; `main.ts` réagit.
+        this.events.dispatchEvent(new Event('launchEditor'))
       }
       this.refreshFocus()
       return
