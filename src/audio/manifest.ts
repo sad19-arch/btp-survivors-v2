@@ -101,6 +101,10 @@ export const WEAPON_SFX_IDS: readonly string[] = [
 export const SFX_FILES: ReadonlyArray<readonly [string, string]> = [
   ...SFX_NAMES.map((n) => [`sfx_${n}`, `audio/sfx/${n}.wav`] as const),
   ['sfx_stage_clear', 'audio/sfx/stage_clear.ogg'],
+  // Casse des destructibles (ElevenLabs) : un son par matériau.
+  ['sfx_break_wood', 'audio/sfx/destructibles/break_wood.mp3'],
+  ['sfx_break_metal', 'audio/sfx/destructibles/break_metal.mp3'],
+  ['sfx_break_rubble', 'audio/sfx/destructibles/break_rubble.mp3'],
   ...WEAPON_SFX_IDS.map((id) => [`sfx_weapon_${id}`, `audio/sfx/weapons/weapon_${id}.mp3`] as const)
 ]
 
@@ -172,7 +176,11 @@ export const SFX: Readonly<Record<string, SfxCue>> = {
   screenTransition: { keys: ['sfx_ui_door'], volume: 0.55 },
   jackpotWin: { keys: ['sfx_ui_jackpot_win'], volume: 0.7 },
   gameOver: { keys: ['sfx_lose_1'], volume: 0.7 },
-  stageClear: { keys: ['sfx_stage_clear'], volume: 0.7 }
+  stageClear: { keys: ['sfx_stage_clear'], volume: 0.7 },
+  // Casse des destructibles, par matériau (throttlé : un AoE peut casser plusieurs objets/frame).
+  break_wood: { keys: ['sfx_break_wood'], volume: 0.5, rateJitter: 0.12, throttleMs: 80 },
+  break_metal: { keys: ['sfx_break_metal'], volume: 0.5, rateJitter: 0.12, throttleMs: 80 },
+  break_rubble: { keys: ['sfx_break_rubble'], volume: 0.5, rateJitter: 0.12, throttleMs: 80 }
 }
 
 /** Pools de VOIX arcade (annonceur) par moment de jeu. `playVoice` pioche → alternance. */

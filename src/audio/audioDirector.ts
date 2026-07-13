@@ -1,6 +1,7 @@
 import type Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
-import type { WeaponFiredEvent, PickupCollectedEvent, BossSpawnedEvent, ChestOpenedEvent } from '@core/events'
+import type { WeaponFiredEvent, PickupCollectedEvent, BossSpawnedEvent, ChestOpenedEvent, DestructibleBrokenEvent } from '@core/events'
+import { destructibleDef } from '@content/destructibles'
 import { SFX, VOICE, voiceRunStart, musicForState, MUSIC, AMB, MUSIC_FILES_STAGE, type MusicKey } from './manifest'
 import { musicGain, sfxGain, duckedGain, type AudioLevels } from './settings'
 import { playZzfx } from './zzfx'
@@ -189,6 +190,13 @@ export class AudioDirector {
       if ((e as ChestOpenedEvent).kind !== 'evolution') { this.playCue('jackpotWin') }
     })
     on('upgradePick', () => { this.playCue('upgradePick') })
+    // Casse d'un destructible : son PAR MATÉRIAU (bois/métal/gravats), throttlé côté cue.
+    on('destructibleBroken', (e) => {
+      const def = destructibleDef((e as DestructibleBrokenEvent).typeId)
+      if (def !== undefined) {
+        this.playCue(def.breakSfx)
+      }
+    })
     on('menuMove', () => { this.playCue('menuMove') })
     on('menuConfirm', () => { this.playCue('menuConfirm') })
     on('menuBack', () => { this.playCue('menuBack') })

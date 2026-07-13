@@ -33,10 +33,25 @@ export interface DestructibleDef {
   /** Bornes du nombre de pièces si l'objet en contient. */
   coinMin: number
   coinMax: number
+  /**
+   * Matériau (JUICE) : pilote la TEINTE du boom, le nombre de fragments qui
+   * giclent et le son de casse. Purement cosmétique (sim-neutre).
+   */
+  material: 'wood' | 'metal' | 'rubble'
+  /** Feuille de fragments PixelLab qui giclent à la casse (texture + fichier preload). */
+  fragmentKey: string
+  fragmentFile: string
+  /** Id de cue SFX joué à la casse (par matériau, cf. `manifest.ts`). */
+  breakSfx: string
 }
 
 const DEBRIS_01 = 'debris_stage01_generic'
 const DEBRIS_01_FILE = 'stage01/decals/debris_stage01_generic.png'
+
+// Fragments de casse (PixelLab) par matériau — sheet dans `public/stage01/vfx/`.
+const FRAG_WOOD = 'vfx_debris_wood', FRAG_WOOD_FILE = 'stage01/vfx/vfx_debris_wood.png'
+const FRAG_METAL = 'vfx_debris_metal', FRAG_METAL_FILE = 'stage01/vfx/vfx_debris_metal.png'
+const FRAG_RUBBLE = 'vfx_debris_rubble', FRAG_RUBBLE_FILE = 'stage01/vfx/vfx_debris_rubble.png'
 
 export const DESTRUCTIBLES: Record<string, DestructibleDef> = {
   // Stage 01 — terrain vierge (implantation / topographie)
@@ -44,19 +59,22 @@ export const DESTRUCTIBLES: Record<string, DestructibleDef> = {
     id: 'd01_caisse_outils', name: 'Caisse à outils', stageId: 'terrain_vierge',
     assetKey: 'prop_stage01_caisse_outils', file: 'stage01/props/prop_stage01_caisse_outils.png',
     debrisKey: DEBRIS_01, debrisFile: DEBRIS_01_FILE,
-    hp: 30, scale: 0.72, radius: 36, coinChance: 1, coinMin: 3, coinMax: 6
+    hp: 30, scale: 0.72, radius: 36, coinChance: 1, coinMin: 3, coinMax: 6,
+    material: 'metal', fragmentKey: FRAG_METAL, fragmentFile: FRAG_METAL_FILE, breakSfx: 'break_metal'
   },
   d01_palette_bois: {
     id: 'd01_palette_bois', name: 'Palette de bois', stageId: 'terrain_vierge',
     assetKey: 'prop_stage01_palette_bois', file: 'stage01/props/prop_stage01_palette_bois.png',
     debrisKey: DEBRIS_01, debrisFile: DEBRIS_01_FILE,
-    hp: 22, scale: 0.72, radius: 36, coinChance: 0.35, coinMin: 1, coinMax: 3
+    hp: 22, scale: 0.72, radius: 36, coinChance: 0.35, coinMin: 1, coinMax: 3,
+    material: 'wood', fragmentKey: FRAG_WOOD, fragmentFile: FRAG_WOOD_FILE, breakSfx: 'break_wood'
   },
   d01_tas_gravats: {
     id: 'd01_tas_gravats', name: 'Tas de gravats', stageId: 'terrain_vierge',
     assetKey: 'prop_stage01_tas_gravats', file: 'stage01/props/prop_stage01_tas_gravats.png',
     debrisKey: DEBRIS_01, debrisFile: DEBRIS_01_FILE,
-    hp: 16, scale: 0.7, radius: 32, coinChance: 0.15, coinMin: 1, coinMax: 2
+    hp: 16, scale: 0.7, radius: 32, coinChance: 0.15, coinMin: 1, coinMax: 2,
+    material: 'rubble', fragmentKey: FRAG_RUBBLE, fragmentFile: FRAG_RUBBLE_FILE, breakSfx: 'break_rubble'
   }
 }
 

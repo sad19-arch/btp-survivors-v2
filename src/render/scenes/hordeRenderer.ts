@@ -93,6 +93,8 @@ export class HordeRenderer {
   private readonly chestAura = new Map<number, Phaser.GameObjects.Arc>()
   private readonly chestSparkleEpoch = new Map<number, number>()
   private readonly xpSparkleEpoch = new Map<number, number>()
+  private readonly coinSpawnedAt = new Map<number, number>()
+  private readonly coinSparkleEpoch = new Map<number, number>()
   /**
    * Aura argentée (Arc strokeStyle) derrière chaque ennemi élite.
    * Même cycle de vie que `enemySprites` : créée à la première frame de l'élite,
@@ -456,6 +458,34 @@ export class HordeRenderer {
           this.vfx.spawnPixelPop(pk.x, pk.y, PALETTE_HEX.vertBonus, 5, 180)
         }
       }
+      // JUICE — Pièce d'or (butin de casse) : pop-in avec REBOND (jaillit de l'objet)
+      // + brillance pulsée + scintillement or → « appelle » à être ramassée.
+      if (pk.type === 'coin' && sprite instanceof Phaser.GameObjects.Sprite) {
+        let spawnedAt = this.coinSpawnedAt.get(pk.id)
+        if (spawnedAt === undefined) {
+          spawnedAt = this.scene.time.now
+          this.coinSpawnedAt.set(pk.id, spawnedAt)
+        }
+        const age = this.scene.time.now - spawnedAt
+        const POP_MS = 260
+        let mul: number
+        if (age < POP_MS) {
+          const t = age / POP_MS
+          const c1 = 2.4 // rebond franc pour un « jaillissement »
+          const u = t - 1
+          mul = 1 + (c1 + 1) * u * u * u + c1 * u * u
+        } else {
+          mul = 1 + 0.12 * Math.sin(this.scene.time.now / 180 + (pk.id % 7))
+        }
+        sprite.setScale(cfg.scale * mul)
+        const period = 620
+        const offset = (pk.id * 173) % period
+        const epoch = Math.floor((this.scene.time.now + offset) / period)
+        if (this.coinSparkleEpoch.get(pk.id) !== epoch) {
+          this.coinSparkleEpoch.set(pk.id, epoch)
+          this.vfx.spawnPixelPop(pk.x, pk.y, PALETTE_HEX.jauneSecurite, 5, 170)
+        }
+      }
       // Piste C — soin (casse-croûte) & aimant : bob d'échelle discret pour qu'ils
       // « appellent » à être ramassés (l'aimant pulse un peu plus fort qu'un soin).
       if ((pk.type === 'heal' || pk.type === 'magnet') && sprite instanceof Phaser.GameObjects.Sprite) {
@@ -476,6 +506,8 @@ export class HordeRenderer {
         // Nettoyage des epochs de scintillement (évite une fuite sur les pickups collectés).
         this.xpSparkleEpoch.delete(id)
         this.chestSparkleEpoch.delete(id)
+        this.coinSpawnedAt.delete(id)
+        this.coinSparkleEpoch.delete(id)
         // Nettoyage de l'anim + de l'aura du coffre (évite une fuite / aura fantôme).
         this.chestAnim.delete(id)
         const aura = this.chestAura.get(id)

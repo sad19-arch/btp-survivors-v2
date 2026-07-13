@@ -208,10 +208,36 @@ export class GameScene extends Phaser.Scene {
     // Screen-shake plus fort que le marteau (événement majeur du run).
     this.cameras.main.shake(160, 0.007)
   }
-  /** Casse d'un objet destructible : boom + pièces + débris persistants (VFX pur). */
+  // Budget de VFX de casse PAR FRAME (perf) : au-delà, casse allégée (pas de burst
+  // de fragments) ; le screen-shake est COALESCÉ (1 seul par frame, le 1er break).
+  private breakFxFrame = -1
+  private breakFxCount = 0
+  /** Casse JOUISSIVE d'un destructible : boom matériau + fragments + shake (VFX pur, borné). */
   private readonly onDestructibleBroken = (e: Event): void => {
     const ev = e as DestructibleBrokenEvent
-    this.vfx.spawnDestructibleBreak(ev.x, ev.y, destructibleDef(ev.typeId)?.debrisKey ?? '')
+    const def = destructibleDef(ev.typeId)
+    if (def === undefined) {
+      return
+    }
+    const frame = this.game.getFrame()
+    if (frame !== this.breakFxFrame) {
+      this.breakFxFrame = frame
+      this.breakFxCount = 0
+    }
+    const heavy = this.breakFxCount < 4 // budget de bursts lourds par frame (AoE)
+    this.breakFxCount++
+    const sizeScale = def.radius / 34
+    this.vfx.spawnDestructibleBreak(
+      ev.x, ev.y,
+      { fragmentKey: def.fragmentKey, debrisKey: def.debrisKey, material: def.material, sizeScale },
+      heavy
+    )
+    // Shake coalescé : une seule fois par frame (1er break), scalé par la taille.
+    // Pas de zoom-punch : GameScene tire le zoom adaptatif du ViewportBus chaque
+    // frame → un zoom ponctuel serait écrasé (P4).
+    if (this.breakFxCount === 1) {
+      this.cameras.main.shake(90 + Math.round(sizeScale * 30), 0.0035 + sizeScale * 0.0016)
+    }
   }
 
   /**
@@ -278,6 +304,7 @@ export class GameScene extends Phaser.Scene {
     for (const d of destructiblesForStage(this.loadedStageId)) {
       this.load.image(d.assetKey, d.file)
       this.load.image(d.debrisKey, d.debrisFile)
+      this.load.image(d.fragmentKey, d.fragmentFile) // fragments qui giclent à la casse (JUICE)
     }
     // Landmark de bâtiment (image décor) — chargé comme les autres décors.
     if (this.stage.landmark !== undefined) {
@@ -424,7 +451,7 @@ export class GameScene extends Phaser.Scene {
     // Rendu des clusters de terrain (T5) : instance fraîche par scène.
     this.siteRenderer = new SiteRenderer(this)
     // Rendu des objets destructibles : instance fraîche par scène (Map de sprites).
-    this.destructibles = new DestructibleRenderer(this)
+    this.destructibles = new DestructibleRenderer(this, this.vfx)
     // Structures bâties (refonte cohérence) : instance fraîche par scène.
     this.siteStructures = new SiteStructures(this)
     // Ouvriers navetteurs (T6) : instance fraîche par scène.

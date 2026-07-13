@@ -5,6 +5,23 @@ import { PALETTE_HEX } from '@ui/palette'
 /** Un sprite de héros/ennemi rendu (Sprite animé ou Arc de repli en mode « lite »). */
 type CharSprite = Phaser.GameObjects.Sprite | Phaser.GameObjects.Arc
 
+/** Matériau d'un destructible → couleur de poussière/étincelles de casse (complément procédural). */
+type BreakMaterial = 'wood' | 'metal' | 'rubble'
+const MATERIAL_TINT: Record<BreakMaterial, number> = {
+  wood: PALETTE_HEX.solSable, // éclats/poussière de bois (tan)
+  metal: PALETTE_HEX.jauneSecurite, // étincelles métalliques (jaune)
+  rubble: PALETTE_HEX.blanc // nuage de poussière béton (blanc/gris)
+}
+
+/** Options de casse d'un destructible (données résolues côté GameScene depuis le Def). */
+export interface DestructibleBreakOpts {
+  fragmentKey: string
+  debrisKey: string
+  material: BreakMaterial
+  /** Facteur de taille (≈ radius/34) : + gros = + de fragments, boom + gros. */
+  sizeScale: number
+}
+
 /**
  * Effets visuels transitoires (VFX) de la scène de jeu, extraits de `GameScene`
  * pour l'alléger. Chaque effet crée des GameObjects Phaser qui s'auto-détruisent
@@ -531,17 +548,76 @@ export class VfxManager {
   }
 
   /**
-   * Casse JOUISSIVE d'un objet destructible : boom (poussière + flash + éclats)
-   * + gerbe de pixels dorés (flair par-dessus les vraies pièces ramassables) +
-   * débris persistants au sol. Purement cosmétique.
+   * Gerbe de FRAGMENTS qui giclent (sprites PixelLab par matériau) : `count`
+   * morceaux lancés vers l'extérieur en tournoyant, qui retombent, se posent,
+   * dwellent ~2,5-3,5 s puis s'estompent. Cœur du « jouissif » à la casse.
+   * Repli procédural (carrés teintés) si la texture manque (lite/tests) → jamais de crash.
+   * Rendu-only : `Math.random` autorisé (cf. en-tête de fichier).
    */
-  spawnDestructibleBreak(x: number, y: number, debrisKey: string): void {
-    this.spawnDeathBoom(x, y, 1)
-    for (let i = 0; i < 6; i++) {
-      const a = (i * Math.PI * 2) / 6
-      this.spawnPixelPop(x + Math.cos(a) * 16, y + Math.sin(a) * 16, PALETTE_HEX.jauneSecurite, 7, 260)
+  spawnFragmentBurst(x: number, y: number, key: string, count: number, tint: number, sizeScale = 1): void {
+    const hasTex = this.scene.textures.exists(key)
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + Math.random() * 0.7
+      const dist = (30 + Math.random() * 44) * sizeScale
+      const landX = x + Math.cos(a) * dist
+      const landY = y + Math.sin(a) * dist
+      const spin = (Math.random() < 0.5 ? 1 : -1) * (170 + Math.random() * 280)
+      const dur = 300 + Math.random() * 180
+      if (hasTex) {
+        const s = this.scene.add
+          .image(x, y, key)
+          .setDepth(-3) // au-dessus du sol, sous les entités
+          .setScale((0.32 + Math.random() * 0.3) * sizeScale)
+          .setRotation(Math.random() * Math.PI * 2)
+          .setFlipX(Math.random() < 0.5)
+        this.scene.tweens.add({
+          targets: s, x: landX, y: landY, angle: spin, duration: dur, ease: 'Quad.easeOut',
+          onComplete: () => {
+            this.scene.tweens.add({
+              targets: s, alpha: 0, delay: 2200 + Math.random() * 900, duration: 700,
+              ease: 'Quad.easeIn', onComplete: () => s.destroy()
+            })
+          }
+        })
+      } else {
+        const par = this.scene.add.rectangle(x, y, 6 * sizeScale, 6 * sizeScale, tint).setDepth(-3)
+        this.scene.tweens.add({
+          targets: par, x: landX, y: landY, angle: spin, alpha: 0, scaleX: 0.3, scaleY: 0.3,
+          duration: dur, ease: 'Quad.easeOut', onComplete: () => par.destroy()
+        })
+      }
     }
-    this.spawnDebris(x, y, debrisKey)
+  }
+
+  /**
+   * Casse JOUISSIVE d'un objet destructible : boom TEINTÉ PAR MATÉRIAU (poussière +
+   * flash + pop) + `heavy` → gerbe de FRAGMENTS qui giclent + éclats dorés (flair
+   * par-dessus les vraies pièces) ; débris persistant au sol. Purement cosmétique.
+   * `heavy=false` (dépassement du budget/frame, AoE) → version allégée sans burst.
+   */
+  spawnDestructibleBreak(x: number, y: number, opts: DestructibleBreakOpts, heavy = true): void {
+    const tint = MATERIAL_TINT[opts.material]
+    this.spawnVfx('vfx_dust', x, y, 0.2, 1.9 * opts.sizeScale, 400)
+    this.spawnFlash(x, y)
+    this.spawnPixelPop(x, y, tint, Math.round(11 * opts.sizeScale), 220)
+    if (heavy) {
+      this.spawnFragmentBurst(x, y, opts.fragmentKey, 5 + Math.round(opts.sizeScale * 3), tint, opts.sizeScale)
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI * 2) / 6
+        this.spawnPixelPop(x + Math.cos(a) * 18, y + Math.sin(a) * 18, PALETTE_HEX.jauneSecurite, 7, 280)
+      }
+    }
+    this.spawnDebris(x, y, opts.debrisKey)
+  }
+
+  /** Éclats matériau projetés à CHAQUE coup encaissé par un destructible (feedback réactif). */
+  spawnDestructibleChip(x: number, y: number, material: BreakMaterial): void {
+    const tint = MATERIAL_TINT[material]
+    for (let i = 0; i < 2; i++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.6
+      const dist = 9 + Math.random() * 11
+      this.spawnPixelPop(x + Math.cos(a) * dist, y + Math.sin(a) * dist, tint, 4, 170)
+    }
   }
 
   /** Bulle « Merci ! » (sprite pré-cuit) montant au-dessus d'un ouvrier libéré. */
