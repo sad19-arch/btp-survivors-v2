@@ -43,7 +43,14 @@ export interface Warning {
 
 export class EditorState {
   private layout: StageLayout
-  private selectedId: string | null = null
+  /** Sélection MULTIPLE : ids d'instances ET de npcs (espace d'ids partagé). */
+  private selectedIds = new Set<string>()
+  /** Élément « primaire » (dernier cliqué) — ce que l'inspecteur mono affiche. */
+  private primaryId: string | null = null
+  /** Presse-papier (copier/coller multi) : instances + npcs clonés, ids retirés au collage. */
+  private clipboard: { instances: LayoutInstance[]; npcs: LayoutNpc[] } | null = null
+  /** Coalescence d'historique : pendant un batch, les mutations ne poussent pas de snapshot. */
+  private batching = false
   private listeners: Array<() => void> = []
   grid = true
   snap = false
@@ -66,6 +73,12 @@ export class EditorState {
   }
   /** Émet un changement : enregistre l'historique SI le layout a bougé, puis notifie. */
   private emit(): void {
+    // Pendant un batch (glisser de groupe), on rafraîchit l'affichage sans pousser
+    // de snapshot : `endBatch()` en poussera UN seul pour toute l'opération.
+    if (this.batching) {
+      this.notify()
+      return
+    }
     const cur = serializeLayout(this.layout)
     if (cur !== this.lastCommitted) {
       this.history.push(this.lastCommitted)
@@ -108,7 +121,7 @@ export class EditorState {
       this.layout = res.layout
     }
     this.lastCommitted = raw
-    this.selectedId = null
+    this.selectOnly(null)
     this.notify()
   }
 
@@ -131,27 +144,149 @@ export class EditorState {
   get cameraPreview(): { width: number; height: number } {
     return this.layout.cameraPreview
   }
+  /** Id primaire (dernier cliqué) — rétro-compat mono. */
   get selected(): string | null {
-    return this.selectedId
+    return this.primaryId
+  }
+  /** Ids de TOUTE la sélection (instances + npcs). */
+  selectedIdSet(): string[] {
+    return [...this.selectedIds]
+  }
+  get selectionCount(): number {
+    return this.selectedIds.size
+  }
+  isSelected(id: string): boolean {
+    return this.selectedIds.has(id)
   }
   selectedInstance(): LayoutInstance | null {
-    return this.layout.instances.find((i) => i.id === this.selectedId) ?? null
+    return this.layout.instances.find((i) => i.id === this.primaryId) ?? null
   }
   selectedNpc(): LayoutNpc | null {
-    return this.layout.npcs.find((n) => n.id === this.selectedId) ?? null
+    return this.layout.npcs.find((n) => n.id === this.primaryId) ?? null
   }
 
   // ── sélection ───────────────────────────────────────────────────────────────
+  /** Fixe la sélection mono (ou vide) SANS émettre — usage interne. */
+  private selectOnly(id: string | null): void {
+    this.selectedIds.clear()
+    if (id !== null) {
+      this.selectedIds.add(id)
+    }
+    this.primaryId = id
+  }
+  /** Sélection mono (remplace) — API historique. */
   select(id: string | null): void {
-    this.selectedId = id
+    this.selectOnly(id)
     this.emit()
+  }
+  /** Sélectionne un ensemble d'ids (le dernier devient primaire). */
+  selectMany(ids: string[]): void {
+    this.selectedIds = new Set(ids)
+    this.primaryId = ids.length > 0 ? (ids[ids.length - 1] ?? null) : null
+    this.emit()
+  }
+  /** Ajoute/retire un id de la sélection (clic Maj/Ctrl sur un objet). */
+  toggleSelection(id: string): void {
+    if (this.selectedIds.has(id)) {
+      this.selectedIds.delete(id)
+      if (this.primaryId === id) {
+        const rest = [...this.selectedIds]
+        this.primaryId = rest.length > 0 ? (rest[rest.length - 1] ?? null) : null
+      }
+    } else {
+      this.selectedIds.add(id)
+      this.primaryId = id
+    }
+    this.emit()
+  }
+  clearSelection(): void {
+    this.selectOnly(null)
+    this.emit()
+  }
+
+  // ── batch d'historique (glisser de groupe = 1 seul pas d'undo) ───────────────
+  beginBatch(): void {
+    this.batching = true
+  }
+  endBatch(): void {
+    this.batching = false
+    this.emit()
+  }
+
+  // ── déplacement / presse-papier de la sélection ─────────────────────────────
+  /** Déplace TOUTE la sélection de (dx,dy) — instances non verrouillées + npcs. */
+  moveSelectionBy(dx: number, dy: number): void {
+    let changed = false
+    for (const id of this.selectedIds) {
+      const inst = this.layout.instances.find((i) => i.id === id)
+      if (inst !== undefined) {
+        if (!inst.locked) {
+          inst.x += dx
+          inst.y += dy
+          changed = true
+        }
+        continue
+      }
+      const npc = this.layout.npcs.find((n) => n.id === id)
+      if (npc !== undefined) {
+        npc.x += dx
+        npc.y += dy
+        changed = true
+      }
+    }
+    if (changed) {
+      this.emit()
+    }
+  }
+  /** Copie la sélection (instances + npcs) dans le presse-papier (clone profond). */
+  copySelection(): void {
+    const ids = this.selectedIds
+    const instances = this.layout.instances.filter((i) => ids.has(i.id)).map((i) => JSON.parse(JSON.stringify(i)) as LayoutInstance)
+    const npcs = this.layout.npcs.filter((n) => ids.has(n.id)).map((n) => ({ ...n }))
+    if (instances.length === 0 && npcs.length === 0) {
+      return
+    }
+    this.clipboard = { instances, npcs }
+    this.notify()
+  }
+  get hasClipboard(): boolean {
+    return this.clipboard !== null
+  }
+  /**
+   * Colle le presse-papier. Si (atX,atY) est fourni (coords COMPO), le groupe est
+   * translaté pour que son coin haut-gauche s'y place ; sinon décalage +64,+64.
+   * Un seul `emit()` (via `selectMany`) → 1 pas d'undo ; sélectionne les collages.
+   */
+  paste(atX?: number, atY?: number): void {
+    const clip = this.clipboard
+    if (clip === null || (clip.instances.length === 0 && clip.npcs.length === 0)) {
+      return
+    }
+    const xs = [...clip.instances.map((i) => i.x), ...clip.npcs.map((n) => n.x)]
+    const ys = [...clip.instances.map((i) => i.y), ...clip.npcs.map((n) => n.y)]
+    const refX = Math.min(...xs)
+    const refY = Math.min(...ys)
+    const offX = atX !== undefined ? atX - refX : 64
+    const offY = atY !== undefined ? atY - refY : 64
+    const newSel: string[] = []
+    for (const i of clip.instances) {
+      const copy: LayoutInstance = { ...(JSON.parse(JSON.stringify(i)) as LayoutInstance), id: newId('instance'), x: i.x + offX, y: i.y + offY }
+      this.layout.instances.push(copy)
+      newSel.push(copy.id)
+    }
+    for (const n of clip.npcs) {
+      const copy: LayoutNpc = { ...n, id: newId('npc'), x: n.x + offX, y: n.y + offY }
+      this.layout.npcs.push(copy)
+      newSel.push(copy.id)
+    }
+    this.selectMany(newSel)
   }
 
   // ── instances ─────────────────────────────────────────────────────────────
   addInstance(prefab: string, x: number, y: number): LayoutInstance {
     const inst: LayoutInstance = { id: newId('instance'), prefab, x, y, flipX: false, variant: 0, rotation: 0, locked: false }
     this.layout.instances.push(inst)
-    this.selectedId = inst.id
+    this.selectOnly(inst.id)
     this.emit()
     return inst
   }
@@ -162,37 +297,40 @@ export class EditorState {
     inst.y = y
     this.emit()
   }
+  /** Décale la sélection (flèches clavier) — déplace TOUT le set. */
   nudge(dx: number, dy: number): void {
-    const inst = this.selectedInstance()
-    if (inst !== null) {
-      if (inst.locked) {return}
-      inst.x += dx
-      inst.y += dy
-      this.emit()
-      return
-    }
-    const npc = this.selectedNpc()
-    if (npc !== null) {
-      npc.x += dx
-      npc.y += dy
-      this.emit()
-    }
+    this.moveSelectionBy(dx, dy)
   }
+  /** Supprime TOUTE la sélection (instances + npcs). */
   deleteSelected(): void {
-    if (this.selectedId === null) {return}
-    const id = this.selectedId
-    this.layout.instances = this.layout.instances.filter((i) => i.id !== id)
-    this.layout.npcs = this.layout.npcs.filter((n) => n.id !== id)
-    this.selectedId = null
+    if (this.selectedIds.size === 0) {return}
+    const ids = this.selectedIds
+    this.layout.instances = this.layout.instances.filter((i) => !ids.has(i.id))
+    this.layout.npcs = this.layout.npcs.filter((n) => !ids.has(n.id))
+    this.selectOnly(null)
     this.emit()
   }
+  /** Duplique TOUTE la sélection (offset +96) et sélectionne les copies. */
   duplicateSelected(): void {
-    const inst = this.selectedInstance()
-    if (inst === null) {return}
-    const copy: LayoutInstance = { ...inst, id: newId('instance'), x: inst.x + 96, y: inst.y + 96 }
-    this.layout.instances.push(copy)
-    this.selectedId = copy.id
-    this.emit()
+    const ids = [...this.selectedIds]
+    if (ids.length === 0) {return}
+    const newSel: string[] = []
+    for (const id of ids) {
+      const inst = this.layout.instances.find((i) => i.id === id)
+      if (inst !== undefined) {
+        const copy: LayoutInstance = { ...inst, id: newId('instance'), x: inst.x + 96, y: inst.y + 96 }
+        this.layout.instances.push(copy)
+        newSel.push(copy.id)
+        continue
+      }
+      const npc = this.layout.npcs.find((n) => n.id === id)
+      if (npc !== undefined) {
+        const copy: LayoutNpc = { ...npc, id: newId('npc'), x: npc.x + 96, y: npc.y + 96 }
+        this.layout.npcs.push(copy)
+        newSel.push(copy.id)
+      }
+    }
+    this.selectMany(newSel)
   }
   flipSelected(): void {
     const inst = this.selectedInstance()
@@ -218,9 +356,9 @@ export class EditorState {
     inst.locked = !inst.locked
     this.emit()
   }
-  /** Ordre de plan : passe l'instance sélectionnée devant (fin du tableau = dessus). */
+  /** Ordre de plan : passe l'instance primaire devant (fin du tableau = dessus). */
   bringSelectedToFront(): void {
-    const id = this.selectedId
+    const id = this.primaryId
     if (id === null) {return}
     const i = this.layout.instances.findIndex((x) => x.id === id)
     if (i < 0) {return}
@@ -231,7 +369,7 @@ export class EditorState {
     this.emit()
   }
   sendSelectedToBack(): void {
-    const id = this.selectedId
+    const id = this.primaryId
     if (id === null) {return}
     const i = this.layout.instances.findIndex((x) => x.id === id)
     if (i < 0) {return}
@@ -250,7 +388,7 @@ export class EditorState {
   addNpc(skin: string, kind: NpcKind, worldX: number, worldY: number): LayoutNpc {
     const npc: LayoutNpc = { id: newId('npc'), skin, kind, x: worldX - WORLD_W / 2, y: worldY - WORLD_H / 2 }
     this.layout.npcs.push(npc)
-    this.selectedId = npc.id
+    this.selectOnly(npc.id)
     this.emit()
     return npc
   }
@@ -467,7 +605,7 @@ export class EditorState {
     this.layout = emptyLayout(this.stage)
     this.layout.instances = instances
     this.layout.npcs = npcs
-    this.selectedId = null
+    this.selectOnly(null)
     this.emit()
   }
   /** Snippet TS prêt à coller (composition → constante typée que je consomme). */
@@ -498,13 +636,13 @@ export class EditorState {
     const res = parseLayout(raw, this.stage)
     if (!res.ok || res.layout === undefined) {return { ok: false, error: res.error ?? 'JSON invalide' }}
     this.layout = res.layout
-    this.selectedId = null
+    this.selectOnly(null)
     this.emit()
     return { ok: true }
   }
   reset(): void {
     this.layout = emptyLayout(this.stage)
-    this.selectedId = null
+    this.selectOnly(null)
     this.emit()
   }
 

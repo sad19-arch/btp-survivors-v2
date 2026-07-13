@@ -48,6 +48,16 @@ export interface EditorSceneData {
   onReady?: (scene: EditorScene) => void
 }
 
+/** Région visible du monde (barres de défilement DOM) : coin haut-gauche + taille + monde. */
+export interface EditorViewRect {
+  x: number
+  y: number
+  w: number
+  h: number
+  worldW: number
+  worldH: number
+}
+
 /** Taille (px monde) de la poignée de redimensionnement de la zone signature. */
 const SIG_HANDLE = 90
 
@@ -73,6 +83,16 @@ export class EditorScene extends Phaser.Scene {
   private panning = false
   private panStart = { x: 0, y: 0, sx: 0, sy: 0 }
   private resizingSig = false
+
+  // Multi-sélection (lasso), glisser de groupe, presse-papier, barres de défilement.
+  private groupDragLast: Vec2 | null = null
+  private marqueeStart: Vec2 | null = null // coin de départ du lasso (coords MONDE)
+  private marqueeAdditive = false
+  private marqueeGfx!: Phaser.GameObjects.Graphics
+  private batchActive = false // 1 pas d'undo par glisser/redimensionnement
+  private lastPointerCompo: Vec2 = { x: 0, y: 0 } // dernière position curseur (compo) → coller au curseur
+  private camSig = ''
+  private onCameraChange: ((v: EditorViewRect) => void) | null = null
 
   // Mode « parcourir » : un marqueur joueur pilotable au clavier (WASD/flèches).
   private walk = false
@@ -113,10 +133,14 @@ export class EditorScene extends Phaser.Scene {
       this.add.tileSprite(0, 0, WORLD_W, WORLD_H, gk).setOrigin(0, 0).setDepth(DEPTH_GROUND)
     }
 
+    // Caméra bornée au monde → le scroll (barres/molette/glisser) ne sort jamais.
+    this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H)
+
     this.pathGfx = this.add.graphics().setDepth(DEPTH_PATH)
     this.gfx = this.add.graphics().setDepth(DEPTH_MARKER)
     this.guideGfx = this.add.graphics().setDepth(DEPTH_MARKER + 1)
     this.selGfx = this.add.graphics().setDepth(DEPTH_SELECT)
+    this.marqueeGfx = this.add.graphics().setDepth(DEPTH_SELECT + 2)
     this.walkGfx = this.add.graphics().setDepth(DEPTH_SELECT + 1)
 
     // Touches de déplacement du marqueur « parcourir ».
@@ -139,6 +163,13 @@ export class EditorScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    // Notifie le DOM (barres de défilement) quand la région visible a changé.
+    const wv = this.cameras.main.worldView
+    const sig = `${Math.round(wv.x)}|${Math.round(wv.y)}|${Math.round(wv.width)}|${Math.round(wv.height)}`
+    if (sig !== this.camSig) {
+      this.camSig = sig
+      this.onCameraChange?.({ x: wv.x, y: wv.y, w: wv.width, h: wv.height, worldW: WORLD_W, worldH: WORLD_H })
+    }
     if (!this.walk) {
       return
     }
@@ -231,14 +262,34 @@ export class EditorScene extends Phaser.Scene {
     this.cameras.main.setZoom(0.32)
     this.cameras.main.centerOn(OFFSET_X, OFFSET_Y - 300)
   }
+  /** Abonne le DOM (barres de défilement) aux mouvements de caméra. */
+  onCamera(fn: (v: EditorViewRect) => void): void {
+    this.onCameraChange = fn
+  }
+  /** Positionne le coin haut-gauche visible (glisser d'une barre de défilement). */
+  setViewTopLeft(x: number | null, y: number | null): void {
+    const cam = this.cameras.main
+    const wv = cam.worldView
+    const cx = x !== null ? x + wv.width / 2 : cam.midPoint.x
+    const cy = y !== null ? y + wv.height / 2 : cam.midPoint.y
+    cam.centerOn(cx, cy)
+  }
 
   // ── Entrées souris ──────────────────────────────────────────────────────────
   private setupInput(): void {
-    // Zoom molette autour du curseur.
-    this.input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+    // Molette = défilement (choix DA) : vertical par défaut, Maj = horizontal,
+    // Ctrl = zoom. Le monde étant borné, le scroll est clampé automatiquement.
+    this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, dx: number, dy: number) => {
       const cam = this.cameras.main
-      const factor = dy > 0 ? 0.9 : 1.1
-      cam.setZoom(Phaser.Math.Clamp(cam.zoom * factor, ZOOM_MIN, ZOOM_MAX))
+      const ev = p.event as WheelEvent | undefined
+      if (ev?.ctrlKey === true) {
+        const factor = dy > 0 ? 0.9 : 1.1
+        cam.setZoom(Phaser.Math.Clamp(cam.zoom * factor, ZOOM_MIN, ZOOM_MAX))
+      } else if (ev?.shiftKey === true) {
+        cam.scrollX += (dy !== 0 ? dy : dx) / cam.zoom
+      } else {
+        cam.scrollY += dy / cam.zoom
+      }
     })
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onPointerDown(p))
@@ -263,10 +314,12 @@ export class EditorScene extends Phaser.Scene {
 
     const w = this.worldPoint(p)
     const comp = { x: w.x - OFFSET_X, y: w.y - OFFSET_Y }
+    this.lastPointerCompo = comp
 
     // Poignée SE de la zone signature (redimensionnement) — prioritaire quand
     // aucun outil de pose n'est actif.
     if (this.activeMarker === null && this.activePrefab === null && this.hitSignatureHandle(w)) {
+      this.startBatch()
       this.resizingSig = true
       return
     }
@@ -288,26 +341,47 @@ export class EditorScene extends Phaser.Scene {
       this.state.addInstance(this.activePrefab, s.x, s.y)
       return
     }
-    // Sinon : sélection. Les PNJ (rendus au-dessus) sont prioritaires, puis les
-    // instances (la plus haute).
+    // Sinon : sélection. Maj/Ctrl = ajout/toggle ; sinon lasso sur espace vide.
+    // PNJ (rendus au-dessus) prioritaires, puis instance la plus haute.
+    const ev = p.event as { shiftKey?: boolean; ctrlKey?: boolean } | undefined
+    const additive = ev?.shiftKey === true || ev?.ctrlKey === true
     const npcHit = this.pickNpc(w)
-    if (npcHit !== null) {
-      this.state.select(npcHit)
-      this.dragId = npcHit
-      this.dragIsNpc = true
-      const npc = this.state.npcs.find((n) => n.id === npcHit)
-      if (npc !== undefined) {this.dragOffset = { x: comp.x - npc.x, y: comp.y - npc.y }}
+    const hit = npcHit ?? this.pickInstance(w)
+    if (hit !== null) {
+      if (additive) {
+        this.state.toggleSelection(hit)
+        return
+      }
+      // Objet déjà dans une multi-sélection → glisser TOUT le groupe (1 pas d'undo).
+      if (this.state.isSelected(hit) && this.state.selectionCount > 1) {
+        this.startBatch()
+        this.groupDragLast = { x: comp.x, y: comp.y }
+        return
+      }
+      // Sélection mono + glisser simple.
+      this.state.select(hit)
+      this.startBatch()
+      this.dragId = hit
+      this.dragIsNpc = npcHit !== null
+      const obj = npcHit !== null ? this.state.npcs.find((n) => n.id === hit) : this.state.instances.find((i) => i.id === hit)
+      if (obj !== undefined) {this.dragOffset = { x: comp.x - obj.x, y: comp.y - obj.y }}
       return
     }
-    const hit = this.pickInstance(w)
-    if (hit !== null) {
-      this.state.select(hit)
-      this.dragId = hit
-      this.dragIsNpc = false
-      const inst = this.state.instances.find((i) => i.id === hit)
-      if (inst !== undefined) {this.dragOffset = { x: comp.x - inst.x, y: comp.y - inst.y }}
-    } else {
-      this.state.select(null)
+    // Espace vide → démarrer un lasso (rectangle de sélection).
+    this.marqueeStart = { x: w.x, y: w.y }
+    this.marqueeAdditive = additive
+  }
+
+  private startBatch(): void {
+    if (!this.batchActive) {
+      this.batchActive = true
+      this.state.beginBatch()
+    }
+  }
+  private endBatchIfAny(): void {
+    if (this.batchActive) {
+      this.batchActive = false
+      this.state.endBatch()
     }
   }
 
@@ -315,6 +389,32 @@ export class EditorScene extends Phaser.Scene {
     if (this.panning) {
       const cam = this.cameras.main
       cam.setScroll(this.panStart.sx - (p.x - this.panStart.x) / cam.zoom, this.panStart.sy - (p.y - this.panStart.y) / cam.zoom)
+      return
+    }
+    const w0 = this.worldPoint(p)
+    this.lastPointerCompo = { x: w0.x - OFFSET_X, y: w0.y - OFFSET_Y }
+
+    // Lasso en cours : dessine le rectangle de sélection.
+    if (this.marqueeStart !== null && p.leftButtonDown()) {
+      const g = this.marqueeGfx
+      g.clear()
+      const x = Math.min(this.marqueeStart.x, w0.x)
+      const y = Math.min(this.marqueeStart.y, w0.y)
+      const ww = Math.abs(w0.x - this.marqueeStart.x)
+      const hh = Math.abs(w0.y - this.marqueeStart.y)
+      g.fillStyle(0x66ccff, 0.12).fillRect(x, y, ww, hh)
+      g.lineStyle(2, 0x66ccff, 0.9).strokeRect(x, y, ww, hh)
+      return
+    }
+    // Glisser de groupe : déplace toute la sélection du delta curseur.
+    if (this.groupDragLast !== null && p.leftButtonDown()) {
+      const comp = { x: w0.x - OFFSET_X, y: w0.y - OFFSET_Y }
+      const dx = comp.x - this.groupDragLast.x
+      const dy = comp.y - this.groupDragLast.y
+      if (dx !== 0 || dy !== 0) {
+        this.state.moveSelectionBy(dx, dy)
+        this.groupDragLast = comp
+      }
       return
     }
     if (this.resizingSig && p.leftButtonDown()) {
@@ -372,10 +472,53 @@ export class EditorScene extends Phaser.Scene {
 
   private onPointerUp(): void {
     this.panning = false
+    // Finalise le lasso (sélection par intersection) s'il y en a un.
+    if (this.marqueeStart !== null) {
+      this.finishMarquee()
+    }
+    this.groupDragLast = null
     this.dragId = null
     this.dragIsNpc = false
     this.resizingSig = false
+    this.endBatchIfAny()
     this.guideGfx.clear()
+  }
+
+  /** Termine un lasso : sélectionne toutes les instances/npcs intersectés par le rect. */
+  private finishMarquee(): void {
+    const start = this.marqueeStart
+    if (start === null) {return}
+    this.marqueeStart = null
+    this.marqueeGfx.clear()
+    const end = this.worldPoint(this.input.activePointer)
+    const rx = Math.min(start.x, end.x)
+    const ry = Math.min(start.y, end.y)
+    const rw = Math.abs(end.x - start.x)
+    const rh = Math.abs(end.y - start.y)
+    // Rectangle minuscule = simple clic sur le vide → désélectionne (sauf Maj/Ctrl).
+    if (rw < 8 && rh < 8) {
+      if (!this.marqueeAdditive) {this.state.clearSelection()}
+      this.marqueeAdditive = false
+      return
+    }
+    const rect = new Phaser.Geom.Rectangle(rx, ry, rw, rh)
+    const ids: string[] = []
+    for (const inst of this.state.instances) {
+      const v = this.views.get(inst.id)
+      if (v !== undefined && Phaser.Geom.Rectangle.Overlaps(rect, v.container.getBounds())) {ids.push(inst.id)}
+    }
+    for (const npc of this.state.npcs) {
+      const v = this.npcViews.get(npc.id)
+      if (v !== undefined && Phaser.Geom.Rectangle.Overlaps(rect, v.container.getBounds())) {ids.push(npc.id)}
+    }
+    if (this.marqueeAdditive) {
+      const set = new Set(this.state.selectedIdSet())
+      for (const id of ids) {set.add(id)}
+      this.state.selectMany([...set])
+    } else {
+      this.state.selectMany(ids)
+    }
+    this.marqueeAdditive = false
   }
 
   private hitSignatureHandle(world: Vec2): boolean {
@@ -475,6 +618,17 @@ export class EditorScene extends Phaser.Scene {
     }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
       this.state.redo()
+      e.preventDefault()
+      return
+    }
+    // Copier / coller multi (Ctrl/Cmd + C / V) — colle au curseur.
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+      this.state.copySelection()
+      e.preventDefault()
+      return
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
+      this.state.paste(this.lastPointerCompo.x, this.lastPointerCompo.y)
       e.preventDefault()
       return
     }
@@ -701,24 +855,13 @@ export class EditorScene extends Phaser.Scene {
       const lb = v.container.getBounds()
       sel.strokeRect(lb.x, lb.y, lb.width, lb.height)
     }
-    // Sélection courante (blanc + cyan) — instance OU PNJ.
-    const inst = this.state.selectedInstance()
-    if (inst !== null) {
-      const view = this.views.get(inst.id)
-      if (view !== undefined) {
-        const b = view.container.getBounds()
-        sel.lineStyle(3, 0xffffff, 1).strokeRect(b.x, b.y, b.width, b.height)
-        sel.lineStyle(2, 0x66ccff, 1).strokeRect(b.x - 3, b.y - 3, b.width + 6, b.height + 6)
-      }
-    }
-    const npc = this.state.selectedNpc()
-    if (npc !== null) {
-      const view = this.npcViews.get(npc.id)
-      if (view !== undefined) {
-        const b = view.container.getBounds()
-        sel.lineStyle(3, 0xffffff, 1).strokeRect(b.x, b.y, b.width, b.height)
-        sel.lineStyle(2, 0x66ccff, 1).strokeRect(b.x - 3, b.y - 3, b.width + 6, b.height + 6)
-      }
+    // Sélection courante (blanc + cyan) — chaque objet sélectionné (instance OU PNJ).
+    for (const id of this.state.selectedIdSet()) {
+      const view = this.views.get(id) ?? this.npcViews.get(id)
+      if (view === undefined) {continue}
+      const b = view.container.getBounds()
+      sel.lineStyle(3, 0xffffff, 1).strokeRect(b.x, b.y, b.width, b.height)
+      sel.lineStyle(2, 0x66ccff, 1).strokeRect(b.x - 3, b.y - 3, b.width + 6, b.height + 6)
     }
   }
 

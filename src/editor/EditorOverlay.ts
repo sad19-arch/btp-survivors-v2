@@ -131,7 +131,9 @@ export class EditorOverlay {
     this.snapBtn = btn('Snap', () => state.toggleSnap())
     gEdit.appendChild(this.gridBtn)
     gEdit.appendChild(this.snapBtn)
-    gEdit.appendChild(btn('Effacer sélection', () => { state.select(null); scene.clearActive() }))
+    gEdit.appendChild(btn('⧉ Copier', () => state.copySelection()))
+    gEdit.appendChild(btn('⧈ Coller', () => state.paste()))
+    gEdit.appendChild(btn('Effacer sélection', () => { state.clearSelection(); scene.clearActive() }))
     this.toolbar.appendChild(gEdit)
 
     // Groupe AVANCÉ : baker au repo (dev), export/import texte.
@@ -216,22 +218,36 @@ export class EditorOverlay {
 
     // Inspecteur.
     const active = this.scene.active
-    const inst = state.selectedInstance()
+    const selCount = state.selectionCount
+    // Détails mono uniquement quand un seul objet est sélectionné.
+    const inst = selCount <= 1 ? state.selectedInstance() : null
     const parts: string[] = []
     if (active.prefab !== null) {parts.push(`<div class="sce-tool">Outil : <b>${paletteEntry(active.prefab)?.label ?? active.prefab}</b> — clique pour poser (Échap pour annuler)</div>`)}
     if (active.marker !== null) {parts.push(`<div class="sce-tool">Marqueur : <b>${active.marker}</b> — clique sur la map (Échap pour annuler)</div>`)}
-    if (inst !== null) {
+    if (selCount > 1) {
+      parts.push(
+        `<div class="sce-insp-title">${selCount} objets sélectionnés</div>` +
+        '<div class="sce-insp-row">Glisser = déplacer le groupe · Ctrl+C copier · Ctrl+V coller · Suppr</div>'
+      )
+    } else if (inst !== null) {
       const label = paletteEntry(inst.prefab)?.label ?? inst.prefab
       parts.push(
         `<div class="sce-insp-title">${label}${inst.locked ? ' 🔒' : ''}</div>` +
         `<div class="sce-insp-row">x: ${Math.round(inst.x)} · y: ${Math.round(inst.y)} · flip: ${inst.flipX ? 'oui' : 'non'} · rot: ${inst.rotation}° · var: ${inst.variant}</div>`
       )
     } else if (active.prefab === null && active.marker === null) {
-      parts.push('<div class="sce-insp-hint">Clique une carte de la palette, puis clique la map pour poser. Clique une instance pour la sélectionner.</div>')
+      parts.push('<div class="sce-insp-hint">Clique une carte de la palette, puis clique la map pour poser. Clique/lasso pour sélectionner (Maj = ajouter).</div>')
     }
     this.inspector.innerHTML = parts.join('')
 
-    if (inst !== null) {
+    if (selCount > 1) {
+      const row = document.createElement('div')
+      row.className = 'sce-insp-actions'
+      row.appendChild(btn('Copier (Ctrl+C)', () => state.copySelection()))
+      row.appendChild(btn('Dupliquer (Ctrl+D)', () => state.duplicateSelected()))
+      row.appendChild(btn('Supprimer (Suppr)', () => state.deleteSelected(), 'sce-btn-danger'))
+      this.inspector.appendChild(row)
+    } else if (inst !== null) {
       const row = document.createElement('div')
       row.className = 'sce-insp-actions'
       row.appendChild(btn('Flip (F)', () => state.flipSelected()))

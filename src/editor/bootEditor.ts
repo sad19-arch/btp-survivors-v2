@@ -8,7 +8,7 @@
  */
 
 import Phaser from 'phaser'
-import { EditorScene, type EditorSceneData } from './EditorScene'
+import { EditorScene, type EditorSceneData, type EditorViewRect } from './EditorScene'
 import { EditorState } from './EditorState'
 import { EditorPalette } from './EditorPalette'
 import { EditorOverlay } from './EditorOverlay'
@@ -65,9 +65,91 @@ const CSS = `
 .sce-modal-text{flex:1;background:#0d0a07;color:#8fe07a;border:2px solid #000;font-family:monospace;font-size:12px;padding:8px;resize:none}
 .sce-modal-btns{display:flex;gap:6px;margin-top:8px}
 .sce-walk .sce-palette,.sce-walk .sce-side{display:none}
+.sce-scrolls{position:fixed;inset:0;z-index:9997;pointer-events:none}
+.sce-scroll{position:absolute;pointer-events:auto;background:#0d0a07;border:2px solid #000;box-sizing:border-box}
+.sce-scroll-h{left:348px;right:16px;bottom:0;height:15px}
+.sce-scroll-v{top:52px;right:0;bottom:16px;width:15px}
+.sce-scroll-thumb{position:absolute;background:#6b5334;border:1px solid #000;cursor:grab;box-sizing:border-box}
+.sce-scroll-h .sce-scroll-thumb{top:1px;bottom:1px;min-width:26px}
+.sce-scroll-v .sce-scroll-thumb{left:1px;right:1px;min-height:26px}
+.sce-scroll-thumb:hover{background:#8a6a40}
+.sce-scroll-thumb:active{cursor:grabbing;background:#c8892f}
+.sce-walk .sce-scrolls{display:none}
 `
 
 let booted = false
+
+/**
+ * Barres de défilement H + V pilotant la caméra de l'éditeur. Créées UNE fois
+ * (persistent aux changements de stage), abonnées à `scene.onCamera` : le pouce
+ * reflète la région visible ; le glisser du pouce appelle `scene.setViewTopLeft`.
+ */
+function mountScrollbars(getScene: () => EditorScene | null): (v: EditorViewRect) => void {
+  const layer = document.createElement('div')
+  layer.className = 'sce-scrolls'
+  const hbar = document.createElement('div')
+  hbar.className = 'sce-scroll sce-scroll-h'
+  const hthumb = document.createElement('div')
+  hthumb.className = 'sce-scroll-thumb'
+  hbar.appendChild(hthumb)
+  const vbar = document.createElement('div')
+  vbar.className = 'sce-scroll sce-scroll-v'
+  const vthumb = document.createElement('div')
+  vthumb.className = 'sce-scroll-thumb'
+  vbar.appendChild(vthumb)
+  layer.appendChild(hbar)
+  layer.appendChild(vbar)
+  document.body.appendChild(layer)
+
+  let view: EditorViewRect = { x: 0, y: 0, w: 1, h: 1, worldW: 1, worldH: 1 }
+  const update = (v: EditorViewRect): void => {
+    view = v
+    const hw = Math.min(1, v.w / v.worldW)
+    const hl = v.worldW <= v.w ? 0 : v.x / v.worldW
+    hthumb.style.left = `${Math.max(0, Math.min(1 - hw, hl)) * 100}%`
+    hthumb.style.width = `${hw * 100}%`
+    const vh = Math.min(1, v.h / v.worldH)
+    const vt = v.worldH <= v.h ? 0 : v.y / v.worldH
+    vthumb.style.top = `${Math.max(0, Math.min(1 - vh, vt)) * 100}%`
+    vthumb.style.height = `${vh * 100}%`
+  }
+
+  const dragThumb = (bar: HTMLElement, thumb: HTMLElement, axis: 'x' | 'y'): void => {
+    thumb.addEventListener('pointerdown', (e: PointerEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const rect = bar.getBoundingClientRect()
+      const trackPx = axis === 'x' ? rect.width : rect.height
+      const startPtr = axis === 'x' ? e.clientX : e.clientY
+      const thumbFrac = axis === 'x' ? view.w / view.worldW : view.h / view.worldH
+      const startFrac = axis === 'x' ? view.x / view.worldW : view.y / view.worldH
+      const move = (me: PointerEvent): void => {
+        const ptr = axis === 'x' ? me.clientX : me.clientY
+        const deltaFrac = trackPx > 0 ? (ptr - startPtr) / trackPx : 0
+        const maxFrac = Math.max(0, 1 - thumbFrac)
+        const frac = Math.max(0, Math.min(maxFrac, startFrac + deltaFrac))
+        const scene = getScene()
+        if (scene === null) {
+          return
+        }
+        if (axis === 'x') {
+          scene.setViewTopLeft(frac * view.worldW, null)
+        } else {
+          scene.setViewTopLeft(null, frac * view.worldH)
+        }
+      }
+      const up = (): void => {
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', up)
+      }
+      window.addEventListener('pointermove', move)
+      window.addEventListener('pointerup', up)
+    })
+  }
+  dragThumb(hbar, hthumb, 'x')
+  dragThumb(vbar, vthumb, 'y')
+  return update
+}
 
 export function bootEditor(): void {
   if (booted) {
@@ -87,6 +169,9 @@ export function bootEditor(): void {
   let state = new EditorState(currentStage)
   let curScene: EditorScene | null = null
   setActiveStage(currentStage)
+
+  // Barres de défilement persistantes (recâblées sur chaque scène).
+  const updateScrollbars = mountScrollbars(() => curScene)
 
   const game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -127,6 +212,7 @@ export function bootEditor(): void {
       palette.refresh()
       overlay.refresh()
     })
+    scene.onCamera(updateScrollbars)
     overlay.refresh()
   }
   function switchStage(newStage: string): void {
