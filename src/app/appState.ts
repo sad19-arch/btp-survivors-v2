@@ -22,6 +22,17 @@ export interface DeathReport {
   quote: string
 }
 
+/**
+ * Issue de l'ouverture d'un coffre (one-shot), enrichie pour la machine à sous.
+ * `weaponId`/`weaponName` renseignés seulement pour `kind === 'evolution'`.
+ */
+export interface ChestOpenView {
+  kind: 'evolution' | 'cards' | 'heal'
+  weaponId: string | null
+  weaponName: string | null
+  isSuper: boolean
+}
+
 /** Écran applicatif courant (dérivé de l'état de la simulation + surcouche Options). */
 export type Screen =
   | 'title'
@@ -112,6 +123,12 @@ export interface AppViewState extends Omit<GameState, 'players'> {
    * nom lisible pour l'overlay (qui ne dépend pas de `src/content`).
    */
   justEvolvedWeaponName: string | null
+  /**
+   * Transitoire (one-shot) : issue de l'ouverture d'un coffre ce pas, enrichie du
+   * nom + de l'icône d'arme (résolus via WEAPONS), ou `null`. Consommé par
+   * `overlay.sync` pour lancer la machine à sous. Miroir de `GameState.chestOpened`.
+   */
+  chestOpen: ChestOpenView | null
   /**
    * Rapport de mort figé — calculé UNE SEULE FOIS quand `screen === 'gameover'`,
    * stable entre les appels à `getState()`. `null` tant que le game-over n'est pas

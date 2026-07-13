@@ -26,6 +26,8 @@ import { SITE_PROGRAMS } from '@content/sitePrograms'
 import type { ZonePrefab } from '@content/sitePrograms'
 import { getComposedLayout } from '@content/composedLayouts'
 import type { StageLayout, EmbeddedElement } from '@content/stageLayout'
+import { DESTRUCTIBLE_SCATTER } from '@content/destructibles'
+import type { DestructibleSpawn } from '@content/destructibles'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes exportees (testables)
@@ -87,7 +89,16 @@ export interface Obstacle {
 export interface SiteLayout {
   clusters: PlacedCluster[]
   obstacles: Obstacle[]
+  /**
+   * Objets destructibles à faire apparaître. Renseigné par l'éditeur
+   * (`composedToSiteLayout`) OU le scatter programmatique (attaché par
+   * `buildSiteLayout`). Absent = aucun (les consommateurs lisent `?? []`).
+   */
+  destructibles?: DestructibleSpawn[]
 }
+
+/** Constante XOR pour dériver le RNG de dispersion des destructibles (isolé). */
+const DESTRUCTIBLE_XOR = 0x7d3a
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers prives
@@ -214,6 +225,7 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
   const offY = layout.worldSize.height / 2
   const clusters: PlacedCluster[] = []
   const obstacles: Obstacle[] = []
+  const destructibles: DestructibleSpawn[] = []
 
   for (const inst of layout.instances) {
     const wx = offX + inst.x
@@ -221,10 +233,30 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
     const flip = inst.flipX
     const rot = inst.rotation
     if (inst.elements !== undefined && inst.elements.length > 0) {
-      const els = inst.elements.map(embeddedToClusterElement)
-      clusters.push({ defId: inst.prefab, x: wx, y: wy, flipX: flip, rotationDeg: rot, elements: els })
-      for (const obs of extractObstacles(wx, wy, els, flip, rot)) {
-        obstacles.push(obs)
+      // Les éléments DESTRUCTIBLES sont routés vers les entités destructibles
+      // (PV/casse), PAS vers le décor statique. Le reste est du décor/collision.
+      const rad = (rot * Math.PI) / 180
+      const cos = Math.cos(rad)
+      const sin = Math.sin(rad)
+      const decorEls: EmbeddedElement[] = []
+      for (const e of inst.elements) {
+        if (e.destructible !== undefined) {
+          const lx = flip ? -e.dx : e.dx
+          destructibles.push({
+            typeId: e.destructible.typeId,
+            x: wx + lx * cos - e.dy * sin,
+            y: wy + lx * sin + e.dy * cos
+          })
+        } else {
+          decorEls.push(e)
+        }
+      }
+      if (decorEls.length > 0) {
+        const els = decorEls.map(embeddedToClusterElement)
+        clusters.push({ defId: inst.prefab, x: wx, y: wy, flipX: flip, rotationDeg: rot, elements: els })
+        for (const obs of extractObstacles(wx, wy, els, flip, rot)) {
+          obstacles.push(obs)
+        }
       }
     } else if (CLUSTERS[inst.prefab] !== undefined) {
       const cdef = CLUSTERS[inst.prefab] as ClusterDef
@@ -235,7 +267,46 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
     }
   }
 
-  return { clusters, obstacles }
+  return { clusters, obstacles, destructibles }
+}
+
+/**
+ * Dispersion programmatique déterministe des destructibles d'un stage (config
+ * `DESTRUCTIBLE_SCATTER`). RNG isolé (`seed ^ DESTRUCTIBLE_XOR`) → n'affecte pas
+ * la sim. Évite la zone de spawn (rayon `SPAWN_SAFE_R` autour du centre monde).
+ * Config vide pour un stage → `[]` (aucun destructible ⇒ `sim:check` diff 0).
+ */
+export function scatterDestructibles(
+  seed: number,
+  worldW: number,
+  worldH: number,
+  stageId: string
+): DestructibleSpawn[] {
+  const specs = DESTRUCTIBLE_SCATTER[stageId]
+  if (specs === undefined || specs.length === 0) {
+    return []
+  }
+  const rng = new Rng((seed ^ DESTRUCTIBLE_XOR) >>> 0)
+  const cx = worldW / 2
+  const cy = worldH / 2
+  const margin = 220
+  const out: DestructibleSpawn[] = []
+  for (const spec of specs) {
+    for (let i = 0; i < spec.count; i++) {
+      let x = margin
+      let y = margin
+      // Jusqu'à 8 essais pour tomber hors de la zone de spawn.
+      for (let tries = 0; tries < 8; tries++) {
+        x = margin + rng.float(0, Math.max(1, worldW - 2 * margin))
+        y = margin + rng.float(0, Math.max(1, worldH - 2 * margin))
+        if ((x - cx) ** 2 + (y - cy) ** 2 >= SPAWN_SAFE_R ** 2) {
+          break
+        }
+      }
+      out.push({ typeId: spec.typeId, x, y })
+    }
+  }
+  return out
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -251,7 +322,26 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
  * @param worldH  - Hauteur du monde (px).
  * @param stageId - Identifiant de la phase de chantier (ex. 'terrassement').
  */
+/**
+ * Point d'entrée PUBLIC : calcule le layout de base (clusters/obstacles) puis
+ * ATTACHE les destructibles — ceux de l'éditeur (source de vérité) s'ils
+ * existent, sinon le scatter programmatique du stage.
+ */
 export function buildSiteLayout(
+  seed: number,
+  worldW: number,
+  worldH: number,
+  stageId: string
+): SiteLayout {
+  const base = computeBaseLayout(seed, worldW, worldH, stageId)
+  return {
+    clusters: base.clusters,
+    obstacles: base.obstacles,
+    destructibles: base.destructibles ?? scatterDestructibles(seed, worldW, worldH, stageId)
+  }
+}
+
+function computeBaseLayout(
   seed: number,
   worldW: number,
   worldH: number,

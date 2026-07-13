@@ -46,9 +46,9 @@ describe('siteLayout — terrain_vierge', () => {
     expect(layout.obstacles.length).toBeGreaterThan(0)
   })
 
-  it('2b. stage inconnu retourne clusters:[] et obstacles:[] (garde générique)', () => {
+  it('2b. stage inconnu retourne clusters:[]/obstacles:[]/destructibles:[] (garde générique)', () => {
     const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, 'stage_inexistant')
-    expect(layout).toEqual({ clusters: [], obstacles: [] })
+    expect(layout).toEqual({ clusters: [], obstacles: [], destructibles: [] })
   })
 })
 

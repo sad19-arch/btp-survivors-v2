@@ -41,6 +41,12 @@ export interface EmbeddedElement {
   collide?: 'none' | 'both' | 'enemies'
   /** Forme collidable (requise si collide ≠ 'none' ; sinon un cercle par défaut est déduit). */
   shape?: EmbeddedShape
+  /**
+   * Objet DESTRUCTIBLE : si présent, cet élément est routé vers les entités
+   * destructibles de la sim (PV + casse + pièces), PAS vers le décor statique.
+   * `typeId` référence `DESTRUCTIBLES` (src/content/destructibles.ts).
+   */
+  destructible?: { typeId: string }
 }
 
 /** Une scène/prefab posée dans le monde. */

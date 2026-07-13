@@ -79,6 +79,22 @@ export const ENEMIES: Record<string, EnemyDef> = {
   formulaire: mk('formulaire', 'Formulaire', BASE),
   auditeur: mk('auditeur', 'Auditeur', FAST),
   commission: mk('commission', 'Commission', TANK),
+  // Élite « porteur de coffre » (générique, réutilisé tous stages). N'apparaît PAS
+  // dans les pools de phase : invoqué uniquement par le directeur de coffres
+  // (`tickChestBearer`) sur cadence. Costaud (~5× tank) et lent → mini-objectif « tue-moi
+  // pour libérer le coffre ». `archetype:'elite'` ⇒ aura argentée + dégâts orange.
+  // Sa mort lâche un coffre GARANTI (marqué `chestBearer` au spawn). PV mis à l'échelle
+  // temporelle comme une vague (reste pertinent en fin de run).
+  convoyeur: {
+    id: 'convoyeur',
+    name: 'Convoyeur',
+    hp: 300,
+    speed: 108, // < joueur (200) : kitable en le mitraillant
+    contactDamage: 16,
+    archetype: 'elite',
+    xpValue: 45,
+    behavior: 'chase'
+  },
   // Boss de fin (invoqué par le directeur temporel ~5:00). Le vaincre = victoire.
   // Non affecté par le scaling temporel (stats propres, tunées séparément).
   contremaitre: {

@@ -510,6 +510,40 @@ export class VfxManager {
     }
   }
 
+  /**
+   * Débris posé au sol (image) qui RESTE `dwellMs` ms puis s'estompe en `fadeMs`.
+   * Depth -8 (au-dessus du sol/décalques, sous les entités). Pattern `delay` du
+   * tween (cf. spawnBubble). No-op si la texture manque.
+   */
+  spawnDebris(x: number, y: number, key: string, dwellMs = 4000, fadeMs = 800): void {
+    if (!this.scene.textures.exists(key)) {
+      return
+    }
+    const d = this.scene.add.image(x, y, key).setScale(0.62).setDepth(-8).setAlpha(0.95)
+    this.scene.tweens.add({
+      targets: d,
+      alpha: 0,
+      duration: fadeMs,
+      delay: dwellMs,
+      ease: 'Quad.easeIn',
+      onComplete: () => d.destroy()
+    })
+  }
+
+  /**
+   * Casse JOUISSIVE d'un objet destructible : boom (poussière + flash + éclats)
+   * + gerbe de pixels dorés (flair par-dessus les vraies pièces ramassables) +
+   * débris persistants au sol. Purement cosmétique.
+   */
+  spawnDestructibleBreak(x: number, y: number, debrisKey: string): void {
+    this.spawnDeathBoom(x, y, 1)
+    for (let i = 0; i < 6; i++) {
+      const a = (i * Math.PI * 2) / 6
+      this.spawnPixelPop(x + Math.cos(a) * 16, y + Math.sin(a) * 16, PALETTE_HEX.jauneSecurite, 7, 260)
+    }
+    this.spawnDebris(x, y, debrisKey)
+  }
+
   /** Bulle « Merci ! » (sprite pré-cuit) montant au-dessus d'un ouvrier libéré. */
   spawnBubble(x: number, y: number): void {
     if (!this.scene.textures.exists('bubble_merci')) {

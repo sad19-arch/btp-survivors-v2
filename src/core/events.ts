@@ -101,3 +101,29 @@ export class EvolvedEvent extends Event {
     super('evolved')
   }
 }
+
+/**
+ * Un coffre vient d'être ouvert (les 3 issues : évolution / cartes / soin), pour
+ * la fanfare d'ouverture (machine à sous). Observationnel : n'altère jamais la sim.
+ * `isSuper` → fanfare plus épique (gros moment).
+ */
+export class ChestOpenedEvent extends Event {
+  constructor(
+    readonly kind: 'evolution' | 'cards' | 'heal',
+    readonly playerId: number,
+    readonly isSuper: boolean
+  ) {
+    super('chestOpened')
+  }
+}
+
+/** Un objet destructible vient d'être cassé (pour le VFX/débris + SFX). Observationnel. */
+export class DestructibleBrokenEvent extends Event {
+  constructor(
+    readonly x: number,
+    readonly y: number,
+    readonly typeId: string
+  ) {
+    super('destructibleBroken')
+  }
+}

@@ -84,21 +84,21 @@ export const PICKUP_DROPS = {
 /**
  * Directeur de coffres d'évolution.
  *
- * Contrôle l'économie de coffres : apparition périodique + drop sur mort d'élite.
- * Plafon `maxActive` garantit que jamais plus de N coffres ne coexistent.
+ * Économie de coffres : les coffres « libres » ne tombent PLUS au hasard. Ils
+ * sont lâchés (garanti) par un ennemi ÉLITE « porteur de coffre » (le `convoyeur`),
+ * invoqué toutes les `bearerIntervalMs`. Le mini-boss lâche toujours son coffre-jalon.
+ * Plafond `maxActive` : jamais plus de N coffres ne coexistent.
  *
- * Ces valeurs sont tunables séparément de `PICKUP_DROPS` (coffres d'évolution,
- * pas simples bonus de loot) — la décision est déterministe via un RNG dédié.
+ * Ces valeurs sont tunables séparément de `PICKUP_DROPS` — décisions déterministes
+ * via un RNG dédié (`chestRng`).
  */
 export const CHEST = {
-  /** Intervalle (ms) entre deux apparitions périodiques de coffre. */
-  intervalMs: 55000,
-  /** Probabilité qu'un ennemi élite lâche un coffre à sa mort (0..1). */
-  eliteDropChance: 0.35,
+  /** Intervalle (ms) entre deux apparitions d'un élite porteur de coffre. */
+  bearerIntervalMs: 55000,
+  /** Nombre max de porteurs vivants simultanément (mini-objectif ciblé, pas un essaim). */
+  bearerCap: 1,
   /** Nombre maximum de coffres actifs simultanément (inclut le coffre mini-boss). */
   maxActive: 5,
-  /** Rayon d'apparition (px) autour du joueur vivant le plus proche. */
-  spawnRadius: 260,
   /**
    * Soin de repli si aucune évolution ET aucune carte éligible (tout maxé).
    * Fraction de maxHp rendue. Ex : 0.30 → +30 % des PV max, borné à maxHp.

@@ -11,6 +11,8 @@ import {
   PickupCollectedEvent,
   BossSpawnedEvent,
   EvolvedEvent,
+  ChestOpenedEvent,
+  DestructibleBrokenEvent,
   type AuraPulse
 } from './events'
 import { STEP_MS } from './clock'
@@ -25,6 +27,8 @@ import { createWaveDirectorState, stepWaveDirector, type WaveDirectorState } fro
 import { weaponSystem } from './systems/weapon'
 import { collisionSystem } from './systems/collision'
 import { reapDeadEnemies, type ReapResult } from './systems/reap'
+import { reapDestructibles, destructibleContactSystem, type BrokenDestructible } from './systems/destructible'
+import { destructibleDef, type DestructibleSpawn } from '@content/destructibles'
 import { pickupSystem } from './systems/pickup'
 import { rescueSystem } from './systems/rescue'
 import { reviveSystem } from './systems/revive'
@@ -36,7 +40,7 @@ import { allPlayersDead } from './systems/gameRules'
 import { recomputePlayerStats } from './systems/playerStats'
 import { rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
-import { tickChestDirector, maybeDropEliteChest } from './systems/chestDirector'
+import { tickChestBearer, dropChestBearerLoot } from './systems/chestDirector'
 import { resolveObstacleCollisions } from './systems/obstacleCollision'
 import { buildSiteLayout, type Obstacle } from './siteLayout'
 import { buildFlowField, CELL_FLOW, HALF_FLOW, type FlowField } from './systems/flowField'
@@ -51,6 +55,8 @@ import type {
   EnemyState,
   EntityId,
   GameMode,
+  ChestOpenOutcome,
+  DestructibleState,
   GameState,
   HazardState,
   PendingFormation,
@@ -116,6 +122,10 @@ export class Simulation {
   private prisonerRng: Rng
   /** RNG dédié au directeur de coffres — séparé du RNG spawn/loot/upgrade. */
   private chestRng: Rng
+  /** RNG dédié aux destructibles (contenu en pièces) — séparé, ne décale pas la sim. */
+  private destructibleRng: Rng
+  /** Pièces d'or collectées durant ce run (monnaie méta, persistée côté app). */
+  private coinsThisRun = 0
   /** RNG dédié au directeur de vagues — séparé de tous les autres flux (placement déterministe). */
   private _waveRng: Rng
   /** État du directeur de vagues (cadence accalmie ↔ événement). */
@@ -153,6 +163,13 @@ export class Simulation {
    * `overlay.sync` lance le jackpot sans event ad hoc.
    */
   private _justEvolved: string | null = null
+  /**
+   * Flag transitoire (one-shot) : issue de l'ouverture d'un coffre CE pas (les 3
+   * branches), posé dans `handleChestPickups` ; réinitialisé en début d'`advanceTime`
+   * (comme `_justEvolved`). Exposé dans `GameState.chestOpened` pour que
+   * `overlay.sync` lance la machine à sous. Purement cosmétique.
+   */
+  private _chestOpened: ChestOpenOutcome | null = null
   private readonly inputs = new Map<number, PlayerInput>()
   private readonly playerEntities = new Map<number, EntityId>()
   /** Index spatial des ennemis (positions courantes, post-mouvement), reconstruit chaque pas
@@ -179,6 +196,7 @@ export class Simulation {
     this.lootRng = new Rng((opts.seed ^ 0x1007) | 0)
     this.prisonerRng = new Rng((opts.seed ^ 0x2b1d) | 0)
     this.chestRng = new Rng((opts.seed ^ 0x3c7a) | 0)
+    this.destructibleRng = new Rng((opts.seed ^ 0x6e2f) | 0)
     this._waveRng = new Rng((opts.seed ^ 0x5a1e) | 0)
     this.phaseId = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
     this.phase = resolvePhase(this.phaseId)
@@ -224,6 +242,7 @@ export class Simulation {
     // Si une évolution survient dans n'importe quel pas, le flag est posé et
     // NE SERA PAS remis à null avant le prochain `advanceTime`.
     this._justEvolved = null
+    this._chestOpened = null
     this.remainderMs += ms
     while (this.remainderMs >= STEP_MS) {
       this.remainderMs -= STEP_MS
@@ -334,6 +353,7 @@ export class Simulation {
       projectiles: this.collectProjectiles(),
       pickups: this.collectPickups(),
       prisoners: this.collectPrisoners(),
+      destructibles: this.collectDestructibles(),
       rescue: { total: RESCUE.count, rescued: this.rescuedTotal },
       hazards: this.collectHazards(),
       pendingLevelUp: this.choiceQueue[0] ?? null,
@@ -341,7 +361,9 @@ export class Simulation {
       // Flag transitoire : non null pendant tout le pas où une évolution vient d'être
       // déclenchée ; remis à null par `step()` au pas SUIVANT. Toutes les lectures de
       // `getState()` dans la même fenêtre de pas voient la même valeur (pas de reset ici).
-      justEvolved: this._justEvolved
+      justEvolved: this._justEvolved,
+      chestOpened: this._chestOpened,
+      coins: this.coinsThisRun
     }
   }
 
@@ -512,6 +534,8 @@ export class Simulation {
     this.lootRng = new Rng((seed ^ 0x1007) | 0)
     this.prisonerRng = new Rng((seed ^ 0x2b1d) | 0)
     this.chestRng = new Rng((seed ^ 0x3c7a) | 0)
+    this.destructibleRng = new Rng((seed ^ 0x6e2f) | 0)
+    this.coinsThisRun = 0
     this._waveRng = new Rng((seed ^ 0x5a1e) | 0)
     this.waveDir = createWaveDirectorState()
     this.phase = resolvePhase(this.phaseId)
@@ -529,13 +553,15 @@ export class Simulation {
     this.rescuedTotal = 0
     // Calcul du layout UNE fois — RNG interne isolé (seed ^ 0x51e0), n'affecte PAS le
     // flux RNG de la sim. Pour terrain_vierge : obstacles = [] → no-op garanti.
-    this.obstacles = buildSiteLayout(seed, WORLD.width, WORLD.height, this.phaseId).obstacles
+    const site = buildSiteLayout(seed, WORLD.width, WORLD.height, this.phaseId)
+    this.obstacles = site.obstacles
     // Réinitialise le champ de flux (sera reconstruit au premier pas si obstacles > 0).
     this.flowField = null
     this.lastFlowCol = -1
     this.lastFlowRow = -1
     this.spawnPlayers()
     this.spawnPrisoners()
+    this.spawnDestructibles(site.destructibles ?? [])
     this.prevHpTotal = this.totalPlayerHp()
   }
 
@@ -563,6 +589,31 @@ export class Simulation {
       const e = this.world.spawn()
       this.world.add(e, 'position', { x, y })
       this.world.add(e, 'prisoner', { freed: false })
+    }
+  }
+
+  /**
+   * Place les objets destructibles du layout (éditeur ou scatter). Chaque objet
+   * porte `health` + `destructible {typeId, coinDrop}`. `coinDrop` est PRÉ-TIRÉ
+   * ici (RNG dédié `destructibleRng`) → la casse reste déterministe et le reap
+   * lâche simplement ce nombre de pièces. Pas de `velocity` (immobile), pas de
+   * `enemy` (non-bloquant, non-menaçant) : ciblé par les armes via la grille.
+   */
+  private spawnDestructibles(spawns: readonly DestructibleSpawn[]): void {
+    for (const s of spawns) {
+      const def = destructibleDef(s.typeId)
+      if (def === undefined) {
+        continue
+      }
+      let coinDrop = 0
+      if (this.destructibleRng.chance(def.coinChance)) {
+        const span = Math.max(0, def.coinMax - def.coinMin)
+        coinDrop = def.coinMin + Math.floor(this.destructibleRng.float(0, span + 1))
+      }
+      const e = this.world.spawn()
+      this.world.add(e, 'position', { x: s.x, y: s.y })
+      this.world.add(e, 'health', { hp: def.hp, maxHp: def.hp })
+      this.world.add(e, 'destructible', { typeId: def.id, coinDrop })
     }
   }
 
@@ -610,10 +661,19 @@ export class Simulation {
     const fired: string[] = []
     const collected: PickupKind[] = []
     const chestCollectors: number[] = []
+    const coinsCollected: number[] = []
+    const brokenDestructibles: BrokenDestructible[] = []
     this.runSpawns(dtMs)
-    // Directeur de coffres périodiques (RNG isolé, déterministe).
+    // Directeur de porteurs de coffre (RNG isolé, déterministe) : invoque un élite
+    // « convoyeur » sur cadence — sa mort lâche le coffre. Plus de coffre au hasard.
     this.chestAccMs += dtMs
-    this.chestAccMs = tickChestDirector(this.world, this.chestRng, this.chestAccMs, this.playersCentroid())
+    this.chestAccMs = tickChestBearer(
+      this.world,
+      this.chestRng,
+      this.chestAccMs,
+      this.playersCentroid(),
+      difficultyScaleAt(this.elapsedMs)
+    )
     this.applyPlayerInputs()
     // Snapshot pré-mouvement : les armes voient les ennemis là où ils sont AVANT
     // `movementSystem` (le scan linéaire qu'elles remplaçaient itérait le monde à cet
@@ -654,18 +714,27 @@ export class Simulation {
     boomerangSystem(this.world, dtMs)
     this.rebuildEnemyGrid()
     collisionSystem(this.world, dtMs, this.enemyGrid)
-    const deadElitePositions = this.collectDeadElitePositions()
+    // Casse au CONTACT du joueur (complète la casse par les armes via la grille).
+    destructibleContactSystem(this.world)
+    const deadBearerPositions = this.collectDeadChestBearers()
     const reap: ReapResult = reapDeadEnemies(this.world, this.lootRng)
-    // Drop coffre sur mort d'élite (RNG dédié, ne perturbe pas lootRng/rng).
-    for (const pos of deadElitePositions) {
-      maybeDropEliteChest(this.world, this.chestRng, pos)
+    // Coffre GARANTI sur mort d'un porteur (convoyeur). Positions collectées AVANT
+    // le reap (qui supprime les entités). Pas de RNG : récompense méritée.
+    for (const pos of deadBearerPositions) {
+      dropChestBearerLoot(this.world, pos)
     }
+    // Destructibles cassés (armes OU contact) → lâchent leurs pièces, collectés
+    // pour le VFX/débris. Ni score ni kill (ce ne sont pas des ennemis).
+    reapDestructibles(this.world, brokenDestructibles)
     this.score += reap.total
     // Cumul des kills par joueur (attribution par dernier frappeur).
     for (const [pid, n] of reap.killsByPlayer) {
       this.killsByPlayer.set(pid, (this.killsByPlayer.get(pid) ?? 0) + n)
     }
-    pickupSystem(this.world, dtMs, collected, chestCollectors)
+    pickupSystem(this.world, dtMs, collected, chestCollectors, coinsCollected)
+    for (const v of coinsCollected) {
+      this.coinsThisRun += v
+    }
     this.handleChestPickups(chestCollectors)
     rescueSystem(this.world, freed)
     this.rescuedTotal += freed.length
@@ -700,6 +769,9 @@ export class Simulation {
     for (const f of freed) {
       this.events.dispatchEvent(new PrisonerFreedEvent(f.x, f.y))
     }
+    for (const b of brokenDestructibles) {
+      this.events.dispatchEvent(new DestructibleBrokenEvent(b.x, b.y, b.typeId))
+    }
   }
 
   /**
@@ -728,6 +800,9 @@ export class Simulation {
       if (evolvedId !== null) {
         this.events.dispatchEvent(new EvolvedEvent(evolvedId, playerId))
         this._justEvolved = evolvedId
+        // Machine à sous « super » (gros moment) : révèle l'arme évoluée.
+        this._chestOpened = { kind: 'evolution', weaponId: evolvedId, isSuper: true }
+        this.events.dispatchEvent(new ChestOpenedEvent('evolution', playerId, true))
         continue
       }
 
@@ -744,6 +819,9 @@ export class Simulation {
       const choices = rollCards(this.rng, inv, PROGRESSION.choices)
       if (choices.length > 0) {
         this.choiceQueue.push({ playerId, choices })
+        // Machine à sous : la roulette tourne puis révèle l'écran de choix (temps gelé).
+        this._chestOpened = { kind: 'cards', isSuper: false }
+        this.events.dispatchEvent(new ChestOpenedEvent('cards', playerId, false))
         continue
       }
 
@@ -752,6 +830,9 @@ export class Simulation {
       if (health !== undefined) {
         health.hp = Math.min(health.maxHp, health.hp + health.maxHp * CHEST.fallbackHealPct)
       }
+      // Machine à sous : révèle une icône de soin.
+      this._chestOpened = { kind: 'heal', isSuper: false }
+      this.events.dispatchEvent(new ChestOpenedEvent('heal', playerId, false))
     }
   }
 
@@ -977,6 +1058,7 @@ export class Simulation {
         maxHp: health.maxHp,
         isElite: enemy.isElite,
         isBoss: enemy.isBoss,
+        ...(enemy.chestBearer === true ? { chestBearer: true } : {}),
         ...(enemy.bossRole !== undefined ? { bossRole: enemy.bossRole } : {}),
         ...(enemy.behavior === 'boss' && (enemy.bMode === 1 || enemy.bMode === 2)
           ? { bossCharge: enemy.bMode === 1 ? ('telegraph' as const) : ('charge' as const) }
@@ -1036,6 +1118,20 @@ export class Simulation {
     return prisoners
   }
 
+  private collectDestructibles(): DestructibleState[] {
+    const out: DestructibleState[] = []
+    for (const e of this.world.query('destructible', 'position', 'health')) {
+      const pos = this.world.get(e, 'position')
+      const comp = this.world.get(e, 'destructible')
+      const health = this.world.get(e, 'health')
+      if (pos === undefined || comp === undefined || health === undefined) {
+        continue
+      }
+      out.push({ id: e, x: pos.x, y: pos.y, typeId: comp.typeId, hp: health.hp, maxHp: health.maxHp })
+    }
+    return out
+  }
+
   private collectHazards(): HazardState[] {
     const hazards: HazardState[] = []
     for (const e of this.world.query('hazard', 'position')) {
@@ -1067,6 +1163,16 @@ export class Simulation {
         this.enemyGrid.insert(e, p.x, p.y)
       }
     }
+    // Destructibles insérés dans la MÊME grille → ciblés par les armes (AoE, cône,
+    // projectiles) qui infligent des dégâts à toute entité avec `health`. Les sites
+    // de dégât gardent déjà `enemy.lastHitBy` (posé seulement si `enemy` présent).
+    // AUCUN destructible ⇒ boucle vide ⇒ grille identique ⇒ sim:check diff 0.
+    for (const e of this.world.query('destructible', 'position')) {
+      const p = this.world.get(e, 'position')
+      if (p !== undefined) {
+        this.enemyGrid.insert(e, p.x, p.y)
+      }
+    }
   }
 
   private countEnemies(): number {
@@ -1079,17 +1185,17 @@ export class Simulation {
   }
 
   /**
-   * Collecte les positions des ennemis élites dont les PV sont à 0 ou moins,
-   * AVANT leur reap — pour pouvoir faire apparaître des coffres à leur position
-   * de mort sans modifier la signature de `reapDeadEnemies`.
+   * Collecte les positions des porteurs de coffre (`chestBearer`) morts, AVANT
+   * leur reap — pour faire apparaître le coffre garanti à leur position de mort
+   * sans modifier la signature de `reapDeadEnemies`.
    */
-  private collectDeadElitePositions(): Vec2[] {
+  private collectDeadChestBearers(): Vec2[] {
     const positions: Vec2[] = []
     for (const e of this.world.query('enemy', 'health', 'position')) {
       const health = this.world.get(e, 'health')
       const enemy = this.world.get(e, 'enemy')
       const pos = this.world.get(e, 'position')
-      if (health !== undefined && health.hp <= 0 && enemy?.isElite === true && pos !== undefined) {
+      if (health !== undefined && health.hp <= 0 && enemy?.chestBearer === true && pos !== undefined) {
         positions.push({ x: pos.x, y: pos.y })
       }
     }

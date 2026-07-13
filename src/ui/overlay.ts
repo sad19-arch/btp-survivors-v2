@@ -7,7 +7,7 @@ import { Minimap } from './minimap'
 import type { ViewportState } from './viewport'
 import { approach } from './anim'
 import { cardEnterStyle } from './cardEnter'
-import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView } from '@/app/appState'
+import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView } from '@/app/appState'
 
 /**
  * Overlay DOM des écrans (Titre / Pause / Upgrade / Game Over) + HUD. Observe
@@ -58,11 +58,12 @@ export class Overlay {
   /** Callback de cycle de vie du splash (émet 'end' à son retrait). */
   private onStudioSplash: ((phase: 'start' | 'end') => void) | undefined
   /**
-   * Nom de l'arme pour laquelle le jackpot+bandeau ont déjà été déclenchés
-   * (null = pas encore ou déjà consommé). Garde contre les appels répétés dans
-   * la fenêtre d'un même pas sim où `justEvolvedWeaponName` est non-null.
+   * Garde one-shot : `true` tant que la machine à sous du coffre courant a déjà
+   * été jouée. Évite de la rejouer à chaque rAF pendant que `chestOpen` reste
+   * non-null (notamment sur l'écran de choix gelé, où la sim ne réinitialise pas
+   * le flag). Réinitialisé quand `chestOpen` repasse à `null` (pas suivant).
    */
-  private lastJackpotWeaponName: string | null = null
+  private chestSlotShown = false
   /** Callback de sélection d'un item par index (clic souris) ; route vers l'App. */
   private readonly onSelect: ((index: number) => void) | undefined
   /**
@@ -194,16 +195,18 @@ export class Overlay {
     this.syncInventory(state)
     this.syncGamepads(state)
     this.syncMinimap(state)
-    // Jackpot coffre : déclenché une seule fois par évolution (garde sur le nom
-    // pour éviter de rejouer l'animation sur chaque rAF frame tant que le flag
-    // transitoire est non-null). Le nom est résolu côté App (overlay sans dep content).
-    if (state.justEvolvedWeaponName !== null && state.justEvolvedWeaponName !== this.lastJackpotWeaponName) {
-      this.lastJackpotWeaponName = state.justEvolvedWeaponName
-      this.showJackpot(state.justEvolvedWeaponName)
-      this.showEvolutionBanner(state.justEvolvedWeaponName)
-    } else if (state.justEvolvedWeaponName === null) {
-      // Flag remis à null (nouveau pas sim) : réinitialise le verrou pour la prochaine évolution.
-      this.lastJackpotWeaponName = null
+    // Machine à sous coffre : déclenchée UNE fois à chaque ouverture de coffre
+    // (les 3 issues), via le one-shot `chestOpen`. Garde `chestSlotShown` pour ne
+    // pas rejouer à chaque rAF tant que `chestOpen` reste non-null.
+    const chest = state.chestOpen
+    if (chest !== null && !this.chestSlotShown) {
+      this.chestSlotShown = true
+      this.showSlotMachine(chest)
+      if (chest.kind === 'evolution' && chest.weaponName !== null) {
+        this.showEvolutionBanner(chest.weaponName)
+      }
+    } else if (chest === null) {
+      this.chestSlotShown = false
     }
   }
 
@@ -327,7 +330,9 @@ export class Overlay {
         h('span', { className: 'hud__sep', text: '·' }),
         h('span', { text: `Niv. ${level}` }),
         h('span', { className: 'hud__sep', text: '·' }),
-        h('span', { text: `Score ${state.score}` })
+        h('span', { text: `Score ${state.score}` }),
+        h('span', { className: 'hud__sep', text: '·' }),
+        h('span', { className: 'hud__coins', text: `Or ${state.coins}` })
       ),
       h(
         'div',
@@ -520,84 +525,132 @@ export class Overlay {
     }
   }
 
-  showJackpot(weaponName: string, onDone?: () => void): void {
-    // Annuler tout jackpot en cours (timers + rAF) avant de reconstruire.
+  /**
+   * Machine à sous (casino) jouée à CHAQUE ouverture de coffre. Reprend l'esprit
+   * de l'ancienne version : coffre qui rebondit + pluie de pièces + rouleau(x)
+   * d'icônes d'armes qui décélèrent (cubic-bezier + léger overshoot) → arrêt PILE
+   * sur le gain + flash blanc→doré. `isSuper` (évolution) : 3 rouleaux « escalier »
+   * alignés sur le même gain (triple-match) + cadre arc-en-ciel.
+   *
+   * Purement cosmétique (l'issue est déjà appliquée par la sim). S'auto-ferme.
+   * Ne bloque aucune interaction — pour les cartes, la roulette se joue par-dessus
+   * l'écran de choix (temps gelé), qui apparaît quand elle se dismisse.
+   */
+  showSlotMachine(outcome: ChestOpenView, onDone?: () => void): void {
     this.clearJackpotTimers()
     clear(this.jackpotLayer)
 
-    // Liste d'items défilants (mots-clés chantier + nom final).
-    const reelItems = [
-      'Niveau max', 'Passif actif', 'Coffre ouvert', 'Combinaison',
-      weaponName, 'Niveau max', 'Passif actif', weaponName
-    ]
+    const CELL = 96 // hauteur d'une cellule (== CSS .jackpot__cell) — plus de désync itemH
+    const WINNER_INDEX = 13 // le gain arrive après 13 leurres (défilement franc)
+    const BUFFER = 2 // cellules après le gain (couvre l'overshoot du cubic-bezier)
+    const isSuper = outcome.isSuper
+    const nReels = isSuper ? 3 : 1
 
-    // Durées (ms).
-    const anticipationMs = 500  // phase de suspense avant la roulette
-    const reelDurationMs = 900  // durée de défilement
-    const flashDelayMs = 950     // flash après arrêt de la roulette
-    const totalMs = 1500         // durée de la roulette avant fermeture
+    // Durées (ms) — total borné < 2,5 s (contrainte e2e).
+    const anticipationMs = 340
+    const spinMs = 1180
+    const staggerMs = 180
+    const settleTailMs = 500 // laisse le gain lisible (total super ≈ 2380 ms < 2,5 s e2e)
+    const lastReelStart = anticipationMs + (nReels - 1) * staggerMs
+    const flashAtMs = lastReelStart + spinMs
+    const totalMs = flashAtMs + settleTailMs
 
-    const itemH = 48 // hauteur d'un item en px (sync CSS .jackpot__item height)
-    const winnerIndex = reelItems.length - 1 // dernier item = le vrai nom
+    // Titre + libellé de révélation selon l'issue (aucun emoji — DA + e2e).
+    const title = outcome.kind === 'evolution' ? 'ÉVOLUTION' : 'COFFRE'
+    const revealLabel =
+      outcome.kind === 'evolution'
+        ? (outcome.weaponName ?? 'Arme évoluée')
+        : outcome.kind === 'cards'
+          ? 'Choisis ta carte'
+          : 'Soin d\'urgence'
 
-    const reel = h('div', { className: 'jackpot__reel' })
-    reelItems.forEach((label, i) => {
-      reel.append(h('div', {
-        className: i === winnerIndex ? 'jackpot__item jackpot__item--winner' : 'jackpot__item',
-        text: label
-      }))
-    })
+    // Construit la cellule gagnante selon l'issue (icône d'arme / tuile ? / tuile +).
+    const winnerCell = (): HTMLElement => {
+      if (outcome.kind === 'evolution' && outcome.weaponId !== null) {
+        const cell = h('div', { className: 'jackpot__cell jackpot__cell--winner' })
+        cell.append(icon(outcome.weaponId, outcome.weaponName ?? '', 'jackpot__icon', 'jackpot__icon-img', 'jackpot__icon-mono'))
+        return cell
+      }
+      const glyph = outcome.kind === 'heal' ? '+' : '?'
+      const mod = outcome.kind === 'heal' ? 'jackpot__cell--heal' : 'jackpot__cell--mystery'
+      return h('div', { className: `jackpot__cell jackpot__cell--winner ${mod}` }, h('div', { className: 'jackpot__glyph', text: glyph }))
+    }
 
-    // Position initiale : tout en haut (item 0 visible).
-    reel.style.transform = 'translateY(0px)'
+    // Un rouleau : WINNER_INDEX leurres (icônes d'armes) + gain + BUFFER leurres.
+    const buildReel = (): HTMLElement => {
+      const reel = h('div', { className: 'jackpot__reel' })
+      for (let i = 0; i < WINNER_INDEX; i++) {
+        const filler = h('div', { className: 'jackpot__cell' })
+        const id = SLOT_FILLER_ICONS[(i * 7 + reel.childElementCount) % SLOT_FILLER_ICONS.length] ?? 'cloueur'
+        filler.append(icon(id, id, 'jackpot__icon', 'jackpot__icon-img', 'jackpot__icon-mono'))
+        reel.append(filler)
+      }
+      reel.append(winnerCell())
+      for (let i = 0; i < BUFFER; i++) {
+        const filler = h('div', { className: 'jackpot__cell' })
+        const id = SLOT_FILLER_ICONS[(WINNER_INDEX + i) % SLOT_FILLER_ICONS.length] ?? 'cloueur'
+        filler.append(icon(id, id, 'jackpot__icon', 'jackpot__icon-img', 'jackpot__icon-mono'))
+        reel.append(filler)
+      }
+      reel.style.transform = 'translateY(0px)'
+      return reel
+    }
 
-    const window_ = h('div', { className: 'jackpot__window' }, reel)
+    const reels: HTMLElement[] = []
+    const reelsRow = h('div', { className: 'jackpot__reels' })
+    for (let r = 0; r < nReels; r++) {
+      const reel = buildReel()
+      reels.push(reel)
+      reelsRow.append(h('div', { className: 'jackpot__window' }, reel))
+    }
+
+    // Pluie de pièces pixel (or) — quantité bornée (perf).
+    const coins = h('div', { className: 'jackpot__coins' })
+    const COIN_COUNT = 16
+    for (let i = 0; i < COIN_COUNT; i++) {
+      const coin = h('div', { className: 'jackpot__coin' })
+      coin.style.left = `${(i * 6.1 + 3) % 100}%`
+      coin.style.animationDelay = `${(i % 8) * 130}ms`
+      coin.style.animationDuration = `${1600 + (i % 5) * 260}ms`
+      coins.append(coin)
+    }
+
     const panel = h(
       'div',
-      { className: 'jackpot' },
-      h('div', { className: 'jackpot__title', text: 'Evolution' }),
-      window_
+      { className: isSuper ? 'jackpot jackpot--super' : 'jackpot' },
+      coins,
+      h('div', { className: 'jackpot__chest' }),
+      h('div', { className: 'jackpot__title', text: title }),
+      reelsRow
     )
     this.jackpotLayer.append(panel)
-
-    // ── Phase d'anticipation (~500 ms) : panneau pulsé/tremblant avant la roulette.
     panel.classList.add('jackpot--charging')
 
-    // Timer 1 : fin de l'anticipation → démarre la roulette.
+    // Démarre chaque rouleau (transition CSS avec léger overshoot final), décalés
+    // en « escalier » pour le super. translateY cible = arrêt PILE sur le gain.
+    const targetY = -(WINNER_INDEX * CELL)
+    reels.forEach((reel, r) => {
+      this.jackpotTimers.push(window.setTimeout(() => {
+        if (!panel.isConnected) { return }
+        if (r === 0) { panel.classList.remove('jackpot--charging') }
+        reel.style.transition = `transform ${spinMs}ms cubic-bezier(0.16, 0.86, 0.28, 1.12)`
+        reel.style.transform = `translateY(${targetY}px)`
+      }, anticipationMs + r * staggerMs))
+    })
+
+    // Flash blanc→doré + révélation du gain quand le dernier rouleau se pose.
     this.jackpotTimers.push(window.setTimeout(() => {
-      panel.classList.remove('jackpot--charging')
+      if (!panel.isConnected) { return }
+      panel.classList.add('jackpot--flash')
+      panel.append(h('div', { className: 'jackpot__reveal', text: revealLabel }))
+    }, flashAtMs))
 
-      // Animation de défilement CSS via requestAnimationFrame : décélération cubic-ease.
-      const targetY = -(winnerIndex * itemH)
-      const startTime = performance.now()
-
-      const animate = (now: number): void => {
-        const elapsed = now - startTime
-        const t = Math.min(elapsed / reelDurationMs, 1)
-        // Ease-out cubic : rapide au début, ralentit à la fin.
-        const ease = 1 - (1 - t) ** 3
-        const y = targetY * ease
-        reel.style.transform = `translateY(${Math.round(y)}px)`
-        if (t < 1) {
-          this.jackpotRaf = requestAnimationFrame(animate)
-        } else {
-          this.jackpotRaf = null
-        }
-      }
-      this.jackpotRaf = requestAnimationFrame(animate)
-
-      // Timer 2 : flash pixel après arrêt de la roulette (DA-safe : animation CSS steps).
-      this.jackpotTimers.push(window.setTimeout(() => {
-        panel.classList.add('jackpot--flash')
-      }, flashDelayMs))
-
-      // Timer 3 : fermeture automatique.
-      this.jackpotTimers.push(window.setTimeout(() => {
-        this.clearJackpotTimers()
-        clear(this.jackpotLayer)
-        onDone?.()
-      }, totalMs))
-    }, anticipationMs))
+    // Fermeture automatique (garde isConnected → pas d'action sur un panneau remplacé).
+    this.jackpotTimers.push(window.setTimeout(() => {
+      this.clearJackpotTimers()
+      clear(this.jackpotLayer)
+      onDone?.()
+    }, totalMs))
   }
 
   private showBanner(text: string, className: string): void {
@@ -959,6 +1012,16 @@ function monogram(label: string): string {
   const words = significant.length > 0 ? significant : all
   return words.slice(0, 2).map((w) => w.charAt(0)).join('').toUpperCase()
 }
+
+/**
+ * Icônes d'armes servant de LEURRES aux rouleaux de la machine à sous (cosmétique
+ * pur — si un fichier `icon_<id>_64.png` manque, `icon()` bascule sur le monogramme).
+ * Liste figée côté UI (l'overlay ne dépend pas de `src/content`).
+ */
+const SLOT_FILLER_ICONS = [
+  'cloueur', 'scie', 'marteau', 'brouette', 'goudron',
+  'cle_molette', 'pied_de_biche', 'air_comprime', 'court_circuit', 'chalumeau'
+]
 
 /**
  * Icône générique (carte d'upgrade ou tuile d'inventaire) : tente

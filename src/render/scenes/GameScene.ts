@@ -16,7 +16,7 @@ import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { getComposedLayout } from '@content/composedLayouts'
 import { walkFrame } from '@render/sprites'
 import { ambientOffset } from '@render/ambientNpc'
-import { stageRender, type StageRender, FINAL_BOSS_SKIN, SHARED_WORKER_NPCS } from '@render/stages'
+import { stageRender, type StageRender, FINAL_BOSS_SKIN, CONVOYEUR_SKIN, SHARED_WORKER_NPCS } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { DamageNumberPool } from '@render/damageNumbers'
 import { VfxManager } from '@render/scenes/vfxManager'
@@ -29,8 +29,10 @@ import { SiteRenderer } from '@render/scenes/siteRenderer'
 import { SiteStructures, hasStructurePlan } from '@render/scenes/siteStructures'
 import { SiteWorkers } from '@render/scenes/siteWorkers'
 import { buildSiteLayout } from '@core/siteLayout'
-import { AuraPulseEvent, PrisonerFreedEvent } from '@core/events'
+import { AuraPulseEvent, PrisonerFreedEvent, DestructibleBrokenEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
+import { DestructibleRenderer } from '@render/scenes/destructibleRenderer'
+import { destructibleDef, destructiblesForStage, COIN_PICKUP } from '@content/destructibles'
 import { PALETTE_HEX } from '@ui/palette'
 import { PerfProbe, type PerfSnapshot } from '@render/perf/perfProbe'
 
@@ -121,6 +123,7 @@ export class GameScene extends Phaser.Scene {
   private telegraph!: TelegraphRenderer
   /** Rendu des clusters de terrain tactique (T5) — module dédié, GameScene délègue. */
   private siteRenderer!: SiteRenderer
+  private destructibles!: DestructibleRenderer
   /** Structures bâties (tranchées/grilles/façades) — module dédié, GameScene délègue. */
   private siteStructures!: SiteStructures
   /** Ouvriers navetteurs (T6) — module dédié, GameScene délègue. */
@@ -205,6 +208,11 @@ export class GameScene extends Phaser.Scene {
     // Screen-shake plus fort que le marteau (événement majeur du run).
     this.cameras.main.shake(160, 0.007)
   }
+  /** Casse d'un objet destructible : boom + pièces + débris persistants (VFX pur). */
+  private readonly onDestructibleBroken = (e: Event): void => {
+    const ev = e as DestructibleBrokenEvent
+    this.vfx.spawnDestructibleBreak(ev.x, ev.y, destructibleDef(ev.typeId)?.debrisKey ?? '')
+  }
 
   /**
    * Zoom caméra de BASE courant, tiré de la source de vérité responsive
@@ -265,6 +273,12 @@ export class GameScene extends Phaser.Scene {
     for (const p of this.stage.props) {
       this.load.image(p.key, p.file)
     }
+    // Objets destructibles du stage + leurs débris + le pickup pièce (partagé).
+    this.load.image(COIN_PICKUP.key, COIN_PICKUP.file)
+    for (const d of destructiblesForStage(this.loadedStageId)) {
+      this.load.image(d.assetKey, d.file)
+      this.load.image(d.debrisKey, d.debrisFile)
+    }
     // Landmark de bâtiment (image décor) — chargé comme les autres décors.
     if (this.stage.landmark !== undefined) {
       this.load.image(this.stage.landmark.key, this.stage.landmark.file)
@@ -302,6 +316,12 @@ export class GameScene extends Phaser.Scene {
       this.load.spritesheet(FINAL_BOSS_SKIN.key, FINAL_BOSS_SKIN.file, {
         frameWidth: FINAL_BOSS_SKIN.frame,
         frameHeight: FINAL_BOSS_SKIN.frame
+      })
+      // Skin PARTAGÉ de l'élite porteur de coffre (convoyeur), chargé une fois pour
+      // tous les stages (invoqué par le directeur de coffres, hors pools de phase).
+      this.load.spritesheet(CONVOYEUR_SKIN.key, CONVOYEUR_SKIN.file, {
+        frameWidth: CONVOYEUR_SKIN.frame,
+        frameHeight: CONVOYEUR_SKIN.frame
       })
       // Feuilles dédiées des personnages (phase C) : NON préchargées ici. `preload`
       // s'exécute au boot (avant la sélection) puis seulement au changement de stage —
@@ -403,6 +423,8 @@ export class GameScene extends Phaser.Scene {
     this.telegraph = new TelegraphRenderer(this)
     // Rendu des clusters de terrain (T5) : instance fraîche par scène.
     this.siteRenderer = new SiteRenderer(this)
+    // Rendu des objets destructibles : instance fraîche par scène (Map de sprites).
+    this.destructibles = new DestructibleRenderer(this)
     // Structures bâties (refonte cohérence) : instance fraîche par scène.
     this.siteStructures = new SiteStructures(this)
     // Ouvriers navetteurs (T6) : instance fraîche par scène.
@@ -638,10 +660,12 @@ export class GameScene extends Phaser.Scene {
     this.app.events.addEventListener('auraPulse', this.onAuraPulse)
     this.app.events.addEventListener('prisonerFreed', this.onPrisonerFreed)
     this.app.events.addEventListener('evolved', this.onEvolved)
+    this.app.events.addEventListener('destructibleBroken', this.onDestructibleBroken)
     this.events.once('shutdown', () => {
       this.app.events.removeEventListener('auraPulse', this.onAuraPulse)
       this.app.events.removeEventListener('prisonerFreed', this.onPrisonerFreed)
       this.app.events.removeEventListener('evolved', this.onEvolved)
+      this.app.events.removeEventListener('destructibleBroken', this.onDestructibleBroken)
       this.telegraph.dispose()
       this.siteRenderer.dispose()
       this.siteStructures.dispose()
@@ -764,6 +788,9 @@ export class GameScene extends Phaser.Scene {
     this.perf.measure('playersSync', () => this.players.sync(state))
 
     this.perf.measure('hordeSync', () => this.horde.sync(state, this.stage))
+
+    // Objets destructibles (sprites + hit-flash ; casse via événement).
+    this.destructibles.sync(state.destructibles)
 
     // Télégraphe des formations (Task 10) : marqueur au sol + flèche de bord d'écran.
     this.telegraph.sync(state, this.cameras.main)

@@ -12,7 +12,8 @@ export function pickupSystem(
   world: World,
   dtMs: number,
   collected?: PickupKind[],
-  chestCollectors?: number[]
+  chestCollectors?: number[],
+  coinsOut?: number[]
 ): void {
   const dt = dtMs / 1000
   const collectDist = HITBOX.player + PICKUP.collectRadius
@@ -48,6 +49,9 @@ export function pickupSystem(
     if (dist <= collectDist) {
       applyPickup(world, target.entity, pickup)
       collected?.push(pickup.type)
+      if (pickup.type === 'coin') {
+        coinsOut?.push(pickup.value)
+      }
       if (pickup.type === 'coffre') {
         const playerId = world.get(target.entity, 'player')?.playerId
         if (playerId !== undefined) {
@@ -111,6 +115,11 @@ function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
       // Aucun effet direct : la sim gère l'évolution (ou le bonus de repli).
       break
     }
+    case 'coin': {
+      // Aucun effet joueur : le compteur de pièces du run est incrémenté par
+      // `pickupSystem` (via `coinsOut`) puis persisté côté app (monnaie méta).
+      break
+    }
   }
 }
 
@@ -124,7 +133,7 @@ function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
 export function startMagnetPull(world: World): void {
   for (const g of world.query('pickup', 'position')) {
     const pk = world.get(g, 'pickup')
-    if (pk === undefined || pk.type !== 'xp') {
+    if (pk === undefined || (pk.type !== 'xp' && pk.type !== 'coin')) {
       continue
     }
     pk.magnetized = true

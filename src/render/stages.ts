@@ -204,6 +204,18 @@ export const FINAL_BOSS_SKIN: StageEnemySprite = {
   scale: 1.3
 }
 
+/**
+ * Skin PARTAGÉ de l'élite « porteur de coffre » (convoyeur), commun à tous les
+ * stages (invoqué par le directeur de coffres, hors pools de phase). Costaud et
+ * imposant (échelle > ennemis ordinaires) pour signaler l'objectif.
+ */
+export const CONVOYEUR_SKIN: StageEnemySprite = {
+  key: 'convoyeur',
+  file: 'shared/convoyeur_walk.png',
+  frame: 192,
+  scale: 1.5
+}
+
 const TERRAIN_VIERGE_RENDER: StageRender = {
   ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_${i}`, file: `stage01/ground/tile_${i}.png` })),
   decals: [

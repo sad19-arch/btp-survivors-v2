@@ -3,7 +3,7 @@ import type { AppViewState } from '@/app/appState'
 import type { PickupKind } from '@core/types'
 import { PALETTE_HEX } from '@ui/palette'
 import { dirRow, walkFrame } from '@render/sprites'
-import { FINAL_BOSS_SKIN, type StageRender } from '@render/stages'
+import { FINAL_BOSS_SKIN, CONVOYEUR_SKIN, type StageRender } from '@render/stages'
 import { computeHitEvents } from '@render/hitDiff'
 import { hitFlashUntil, DamageNumberPool } from '@render/damageNumbers'
 import { SpritePool } from '@render/spritePool'
@@ -50,6 +50,8 @@ const PICKUP_SPRITE: Record<PickupKind, { key: string; scale: number }> = {
   // Coffre d'évolution (boss mi-parcours) : réutilise la caisse, un cran plus
   // gros que `chest` pour marquer le moment d'évolution.
   coffre: { key: 'pickup_crate', scale: 0.72 },
+  // Pièce d'or (destructibles) : petite, aimantée comme les gemmes.
+  coin: { key: 'pickup_coin', scale: 0.7 },
 }
 
 const ENEMY_COLOR = 0xe74c3c
@@ -97,6 +99,12 @@ export class HordeRenderer {
    * détruite dès que l'ennemi disparaît de l'état. Pas d'aura sur les non-élites.
    */
   private readonly eliteAuras = new Map<number, Phaser.GameObjects.Arc>()
+  /**
+   * Marqueur « porteur de coffre » (petit coffre doré flottant au-dessus de la
+   * tête) sur les élites `convoyeur` — signal « tue-moi pour libérer le coffre ».
+   * Même cycle de vie que `enemySprites`.
+   */
+  private readonly bearerMarkers = new Map<number, Phaser.GameObjects.Image>()
   /** HP de l'ennemi à la frame précédente (diff → feedback de coup). */
   private readonly prevEnemyHp = new Map<number, number>()
   /** Fin de la fenêtre de flash blanc par ennemi touché. */
@@ -192,7 +200,11 @@ export class HordeRenderer {
       seen.add(en.id)
       let sprite = this.enemySprites.get(en.id)
       if (sprite === undefined) {
-        const skin = en.isBoss ? (en.bossRole === 'final' ? FINAL_BOSS_SKIN : stage.boss) : stage.enemies[en.type]
+        const skin = en.chestBearer === true
+          ? CONVOYEUR_SKIN
+          : en.isBoss
+            ? (en.bossRole === 'final' ? FINAL_BOSS_SKIN : stage.boss)
+            : stage.enemies[en.type]
         const key = skin?.key
         const scale = skin?.scale ?? DEFAULT_CHAR_SCALE
         if (key !== undefined && this.scene.textures.exists(key)) {
@@ -225,6 +237,18 @@ export class HordeRenderer {
         const pulse = 0.5 + 0.5 * Math.sin(this.scene.time.now / 420 + en.id * 1.7)
         aura.setAlpha(0.55 + 0.3 * pulse)
         aura.setRadius(20 + 4 * pulse)
+      }
+      // ── Marqueur « porteur de coffre » : coffre doré flottant + oscillation ──
+      // Signal « tue-moi pour libérer le coffre » sur l'élite convoyeur.
+      if (en.chestBearer === true && this.scene.textures.exists('pickup_crate')) {
+        let marker = this.bearerMarkers.get(en.id)
+        if (marker === undefined) {
+          marker = this.scene.add.image(en.x, en.y, 'pickup_crate').setScale(0.5)
+          this.bearerMarkers.set(en.id, marker)
+        }
+        const bob = Math.sin(this.scene.time.now / 260 + en.id) * 5
+        marker.setPosition(en.x, en.y - 68 + bob)
+        marker.setDepth(sprite.depth + 2)
       }
       if (sprite instanceof Phaser.GameObjects.Sprite) {
         // L'ennemi poursuit le joueur → il regarde vers lui (pas de vx/vy exposé).
@@ -304,6 +328,12 @@ export class HordeRenderer {
         if (deadAura !== undefined) {
           deadAura.destroy()
           this.eliteAuras.delete(id)
+        }
+        // Marqueur porteur de coffre : détruit avec le sprite.
+        const deadMarker = this.bearerMarkers.get(id)
+        if (deadMarker !== undefined) {
+          deadMarker.destroy()
+          this.bearerMarkers.delete(id)
         }
       }
     }

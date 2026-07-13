@@ -8,9 +8,12 @@ import {
   WeaponFiredEvent,
   PickupCollectedEvent,
   BossSpawnedEvent,
-  EvolvedEvent
+  EvolvedEvent,
+  ChestOpenedEvent,
+  DestructibleBrokenEvent
 } from '@core/events'
 import { FocusModel } from '@ui/focusModel'
+import { addMetaCoins } from '@ui/metaProgress'
 import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
 import { FINAL_BOSS, INTRO, MODE_PLAYER_COUNT, modeForCount } from '@content/config'
 import { WEAPONS } from '@content/weapons'
@@ -125,6 +128,8 @@ export class App {
    * (composition root — `Math.random` AUTORISÉ hors `src/core`).
    */
   private _deathReport: DeathReport | null = null
+  /** Garde one-shot : pièces du run déjà versées au total méta (fin de run). */
+  private _coinsBanked = false
 
   constructor(opts: AppOptions) {
     this.seed = opts.seed
@@ -147,6 +152,7 @@ export class App {
   start(mode: GameMode = this.mode, characters: readonly string[] = this.selectedCharacters): void {
     this.bumpState()
     this._deathReport = null
+    this._coinsBanked = false
     const wasStarted = this.started // RE-démarrage ? (partie déjà en cours)
     this.mode = mode
     this.selectedCharacters = [...characters] // persiste pour restart/stage suivant/setSeed
@@ -180,6 +186,14 @@ export class App {
     this.sim.events.addEventListener('evolved', (e) => {
       const ev = e as EvolvedEvent
       this.events.dispatchEvent(new EvolvedEvent(ev.weaponId, ev.playerId))
+    })
+    this.sim.events.addEventListener('chestOpened', (e) => {
+      const ev = e as ChestOpenedEvent
+      this.events.dispatchEvent(new ChestOpenedEvent(ev.kind, ev.playerId, ev.isSuper))
+    })
+    this.sim.events.addEventListener('destructibleBroken', (e) => {
+      const ev = e as DestructibleBrokenEvent
+      this.events.dispatchEvent(new DestructibleBrokenEvent(ev.x, ev.y, ev.typeId))
     })
     this.introMsLeft = this.introEnabled ? INTRO.durationMs : 0
     this.started = true
@@ -466,6 +480,12 @@ export class App {
     this.refreshFocus()
     const base = this.sim?.getState() ?? emptyState(this.seed, this.selectedPhase)
     const screen = this.screen
+    // Monnaie méta : à la fin d'un run (mort OU victoire), verse les pièces du run
+    // au total persistant (localStorage), une seule fois. Réinitialisé au (re)start.
+    if ((screen === 'gameover' || screen === 'victory') && !this._coinsBanked) {
+      addMetaCoins(base.coins)
+      this._coinsBanked = true
+    }
     // Calcul figé du rapport de mort : une seule fois à l'entrée du game-over.
     if (screen === 'gameover' && this._deathReport === null) {
       const stageDurationMs = FINAL_BOSS.atMs
@@ -501,6 +521,18 @@ export class App {
       justEvolvedWeaponName:
         base.justEvolved !== null
           ? (WEAPONS[base.justEvolved]?.name ?? base.justEvolved)
+          : null,
+      chestOpen:
+        base.chestOpened !== null
+          ? {
+              kind: base.chestOpened.kind,
+              weaponId: base.chestOpened.kind === 'evolution' ? base.chestOpened.weaponId : null,
+              weaponName:
+                base.chestOpened.kind === 'evolution'
+                  ? (WEAPONS[base.chestOpened.weaponId]?.name ?? base.chestOpened.weaponId)
+                  : null,
+              isSuper: base.chestOpened.isSuper
+            }
           : null,
       deathReport: screen === 'gameover' ? this._deathReport : null
     }
@@ -829,7 +861,10 @@ function emptyState(seed: number, stageId: ConstructionPhaseId): GameState {
     hazards: [],
     pendingLevelUp: null,
     pendingFormations: [],
-    justEvolved: null
+    justEvolved: null,
+    chestOpened: null,
+    destructibles: [],
+    coins: 0
   }
 }
 

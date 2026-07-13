@@ -98,6 +98,7 @@ const CSS = `
 #ui-root .hud__bar--xp-flash { animation: xp-level-up-flash 0.2s steps(2, end); }
 #ui-root .hud__stagenum { color: ${PALETTE.jauneSecurite}; }
 #ui-root .hud__stagename { color: ${PALETTE.blanc}; font-size: 22px; }
+#ui-root .hud__coins { color: ${PALETTE.jauneSecurite}; font-weight: 700; }
 #ui-root .hud__players { display: flex; flex-direction: row; gap: 8px; margin-top: 2px; }
 #ui-root .hud__pcard {
   display: flex; align-items: center; gap: 6px;
@@ -431,45 +432,86 @@ const CSS = `
   background: ${PALETTE.vertBonus}; border: 2px solid ${PALETTE.contour};
 }
 
-/* ── Panneau jackpot (évolution) ──────────────────────────────────────── */
+/* ── Machine à sous (casino) — ouverture de coffre ────────────────────── */
 #ui-root .jackpot {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   background: var(--tex); background-size: 80px 100%;
   border: 6px solid ${PALETTE.jauneSecurite};
   box-shadow: 12px 12px 0 rgba(0,0,0,0.55),
     inset 4px 4px 0 rgba(255,255,255,0.16), inset -5px -5px 0 rgba(0,0,0,0.5);
-  padding: 26px 40px;
-  display: flex; flex-direction: column; align-items: center; gap: 16px;
-  min-width: 640px; pointer-events: none; z-index: 20;
+  padding: 20px 34px 26px; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  min-width: 380px; pointer-events: none; z-index: 20;
   animation: jackpot-in 0.18s ease-out;
+}
+#ui-root .jackpot--super { border-color: ${PALETTE.blanc}; animation: jackpot-in 0.18s ease-out, jackpot-rainbow 0.72s steps(1, end) infinite; }
+#ui-root .jackpot__title, #ui-root .jackpot__chest, #ui-root .jackpot__reels, #ui-root .jackpot__reveal { position: relative; z-index: 2; }
+/* Coffre pixel qui rebondit puis se balance (flat colors + contour noir, DA-safe). */
+#ui-root .jackpot__chest {
+  width: 60px; height: 42px; margin-top: 6px; background: ${PALETTE.jauneSecurite};
+  border: 4px solid ${PALETTE.contour}; box-shadow: inset 0 -12px 0 ${GOLD_DK};
+  animation: jackpot-chest-pop 0.5s cubic-bezier(0.68,-0.55,0.265,1.55), jackpot-chest-bob 1.1s ease-in-out 0.5s infinite;
+}
+#ui-root .jackpot__chest::before {
+  content:''; position:absolute; top:-16px; left:-4px; right:-4px; height:16px;
+  background:${GOLD_DK}; border:4px solid ${PALETTE.contour}; box-sizing:border-box;
+}
+#ui-root .jackpot__chest::after {
+  content:''; position:absolute; top:6px; left:50%; margin-left:-5px; width:10px; height:14px; background:${PALETTE.contour};
 }
 #ui-root .jackpot__title {
   font-family: 'Jersey 25', monospace; color: ${PALETTE.jauneSecurite};
-  font-size: 52px; letter-spacing: 4px;
+  font-size: 46px; letter-spacing: 4px;
   text-shadow: -2px -2px 0 ${GOLD_HI}, 3px 0 0 ${PALETTE.contour}, -3px 0 0 ${PALETTE.contour},
     0 3px 0 ${PALETTE.contour}, 0 -3px 0 ${PALETTE.contour}, 5px 5px 0 ${GOLD_DK}, 8px 8px 0 ${GOLD_DEEP};
 }
+#ui-root .jackpot__reels { display: flex; gap: 12px; }
 #ui-root .jackpot__window {
-  width: 560px; height: 96px; overflow: hidden;
+  width: 108px; height: 96px; overflow: hidden;
   border: 5px solid ${PALETTE.contour}; box-shadow: inset 3px 3px 0 #000;
   background: #120E0A; position: relative;
 }
-#ui-root .jackpot__reel { display: flex; flex-direction: column; position: absolute; top: 0; left: 0; width: 100%; will-change: transform; }
-#ui-root .jackpot__item {
-  height: 96px; display: flex; align-items: center; justify-content: center;
-  font-family: 'Jersey 25', monospace; font-size: 40px; letter-spacing: 2px;
-  color: ${PALETTE.blanc}; text-shadow: 2px 2px 0 ${PALETTE.contour};
-  padding: 0 8px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 560px;
-}
-#ui-root .jackpot__item--winner { color: ${PALETTE.jauneSecurite}; background: ${PALETTE.brunSombre}; }
 #ui-root .jackpot__window::before, #ui-root .jackpot__window::after {
   content: ''; position: absolute; left: 0; right: 0; height: 5px; background: ${PALETTE.orangeDanger}; z-index: 2; pointer-events: none;
 }
 #ui-root .jackpot__window::before { top: 0; }
 #ui-root .jackpot__window::after { bottom: 0; }
+#ui-root .jackpot__reel { display: flex; flex-direction: column; position: absolute; top: 0; left: 0; width: 100%; will-change: transform; }
+#ui-root .jackpot__cell { height: 96px; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+#ui-root .jackpot__cell--winner { background: ${PALETTE.brunSombre}; box-shadow: inset 0 0 0 3px ${PALETTE.jauneSecurite}; }
+#ui-root .jackpot__glyph {
+  font-family: 'Jersey 25', monospace; font-size: 62px; line-height: 1; color: ${PALETTE.jauneSecurite};
+  text-shadow: 3px 3px 0 ${PALETTE.contour};
+}
+#ui-root .jackpot__cell--heal .jackpot__glyph { color: ${PALETTE.vertBonus}; }
+#ui-root .jackpot__icon { width: 74px; height: 74px; display: flex; align-items: center; justify-content: center; }
+#ui-root .jackpot__icon-img { width: 74px; height: 74px; image-rendering: pixelated; }
+#ui-root .jackpot__icon-mono {
+  font-family: 'Jersey 25', monospace; font-size: 38px; color: ${PALETTE.jauneSecurite}; text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+#ui-root .jackpot__reveal {
+  font-family: 'Jersey 25', monospace; color: ${PALETTE.blanc}; font-size: 30px; letter-spacing: 2px;
+  text-shadow: 2px 2px 0 ${PALETTE.contour}; animation: jackpot-reveal-in 0.25s ease-out;
+}
+/* Pluie de pièces pixel (or) derrière les rouleaux. */
+#ui-root .jackpot__coins { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+#ui-root .jackpot__coin {
+  position: absolute; top: -16px; width: 12px; height: 12px; background: ${PALETTE.jauneSecurite};
+  border: 2px solid ${PALETTE.contour}; box-sizing: border-box;
+  animation-name: jackpot-coin-fall; animation-timing-function: linear; animation-iteration-count: infinite;
+}
+@keyframes jackpot-coin-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 0; }
+  8% { opacity: 1; }
+  100% { transform: translateY(360px) rotate(540deg); opacity: 1; }
+}
+@keyframes jackpot-chest-pop { 0% { transform: scale(0.3); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+@keyframes jackpot-chest-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes jackpot-reveal-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes jackpot-flash {
   0%,40%,80%,100% { box-shadow: 12px 12px 0 rgba(0,0,0,0.55); }
-  20%,60% { box-shadow: 12px 12px 0 rgba(0,0,0,0.55), 0 0 0 5px ${PALETTE.vertBonus}; }
+  20% { box-shadow: 12px 12px 0 rgba(0,0,0,0.55), 0 0 0 6px ${PALETTE.blanc}; }
+  60% { box-shadow: 12px 12px 0 rgba(0,0,0,0.55), 0 0 0 6px ${PALETTE.jauneSecurite}; }
 }
 #ui-root .jackpot--flash { animation: jackpot-flash 0.5s steps(2, end); }
 @keyframes jackpot-charge {
@@ -478,6 +520,15 @@ const CSS = `
   75% { transform: translate(-50%, -50%) translate(-3px,3px); }
 }
 #ui-root .jackpot--charging { animation: jackpot-charge 0.2s steps(2, end) infinite; }
+@keyframes jackpot-rainbow {
+  0% { border-color: ${PALETTE.rougeAlerte}; }
+  17% { border-color: ${PALETTE.orangeDanger}; }
+  34% { border-color: ${PALETTE.jauneSecurite}; }
+  50% { border-color: ${PALETTE.vertBonus}; }
+  67% { border-color: ${PALETTE.cyanAccent}; }
+  84% { border-color: ${PALETTE.blanc}; }
+  100% { border-color: ${PALETTE.rougeAlerte}; }
+}
 @keyframes jackpot-in { from { opacity: 0; transform: translate(-50%, calc(-50% - 10px)); } to { opacity: 1; transform: translate(-50%, -50%); } }
 
 /* ── Mini-carte ───────────────────────────────────────────────────────── */

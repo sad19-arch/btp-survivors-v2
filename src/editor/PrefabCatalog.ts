@@ -14,6 +14,7 @@
 
 import { STAGE_RENDER, SHARED_WORKER_NPCS, type StageRender, type StageAmbientNpc } from '@render/stages'
 import { CLUSTERS } from '@content/clusters'
+import { destructiblesForStage } from '@content/destructibles'
 
 export type EntryKind = 'scene' | 'stock' | 'route' | 'logistique' | 'marqueur' | 'decor' | 'objet'
 export type EntrySize = 'petite' | 'moyenne' | 'grande'
@@ -40,6 +41,8 @@ export interface PaletteEntry {
   npcSkin?: string
   /** Catégorie de PNJ : 'trade' = métier fixe ; 'worker' = ouvrier mobile. */
   npcKind?: 'trade' | 'worker'
+  /** Type de destructible posé par cette entrée (catégorie `destructibles`). */
+  destructibleTypeId?: string
 }
 
 export interface Category {
@@ -47,7 +50,7 @@ export interface Category {
   label: string
 }
 
-export type AssetRole = 'ground' | 'landmark' | 'structure' | 'prop' | 'decal' | 'worker' | 'column'
+export type AssetRole = 'ground' | 'landmark' | 'structure' | 'prop' | 'decal' | 'worker' | 'column' | 'destructible'
 
 export interface EditorAsset {
   key: string
@@ -86,6 +89,7 @@ export const CATEGORIES: Category[] = [
   { id: 'scenes', label: 'Scènes principales' },
   { id: 'npc_metier', label: 'PNJ métier (fixe)' },
   { id: 'npc_ouvrier', label: 'PNJ ouvrier (mobile)' },
+  { id: 'destructibles', label: 'Destructibles (cassables)' },
   { id: 'topo', label: 'Implantation & topographie' },
   { id: 'marking', label: 'Marquage au sol' },
   { id: 'entrance', label: 'Entrée & signalétique' },
@@ -217,6 +221,12 @@ function buildStageAssets(stageId: string): { assets: EditorAsset[]; groundKey: 
   for (const npc of SHARED_WORKER_NPCS) {
     add({ key: npc.key, file: npc.file, sheet: true, frame: npc.frame, label: humanize(npc.file), role: 'worker' })
   }
+  // Destructibles du stage (sprites props cassables) : exposés comme assets pour
+  // que `EditorScene.preload` charge leur texture ; la palette (`destructibleEntries`)
+  // s'appuie sur ces clés.
+  for (const d of destructiblesForStage(stageId)) {
+    add({ key: d.assetKey, file: d.file, label: d.name, role: 'destructible' })
+  }
   if (sr.interior !== undefined) {
     add({ key: sr.interior.columnKey, file: sr.interior.columnFile, label: 'Poteau', role: 'column' })
   }
@@ -235,6 +245,10 @@ function objectEntries(assets: EditorAsset[]): PaletteEntry[] {
     if (a.role === 'worker') {
       // Les PNJ sont gérés par `npcEntries` (2 sections dédiées) — pas de doublon
       // « Ouvrier — … » dans la catégorie « Ouvriers & chemins ».
+      continue
+    }
+    if (a.role === 'destructible') {
+      // Gérés par `destructibleEntries` (section dédiée) — pas de doublon « Objet ».
       continue
     }
     const isDecal = a.role === 'decal'
@@ -274,6 +288,24 @@ function npcEntries(sr: StageRender | undefined): PaletteEntry[] {
     push(npc)
   }
   return out
+}
+
+/**
+ * Une entrée de palette par type de DESTRUCTIBLE du stage (section « Destructibles »).
+ * Poser une entrée ajoute une `LayoutInstance` (prefab `des_<typeId>`) qui rend le
+ * sprite via `elements` ; `EditorState.exportGameJson` la convertit en
+ * `EmbeddedElement.destructible {typeId}` (non-bloquant) consommé par la sim.
+ */
+function destructibleEntries(stageId: string): PaletteEntry[] {
+  return destructiblesForStage(stageId).map((d) => ({
+    id: 'des_' + d.id,
+    label: d.name,
+    category: 'destructibles',
+    kind: 'objet',
+    size: 'moyenne',
+    destructibleTypeId: d.id,
+    elements: [{ assetKey: d.assetKey, dx: 0, dy: 0, scale: d.scale }]
+  }))
 }
 
 /** 2 gabarits auto (poste de travail + stock) pour les stages non authorés. */
@@ -407,7 +439,7 @@ export function getStageCatalog(stageId: string): StageCatalog {
   const { assets, groundKey } = buildStageAssets(stageId)
   const authored = authoredScenes(stageId)
   const scenes = authored.length > 0 ? authored : autoScenes(stageId, assets)
-  const entries = [...scenes, ...npcEntries(sr), ...objectEntries(assets), ...MARKERS]
+  const entries = [...scenes, ...destructibleEntries(stageId), ...npcEntries(sr), ...objectEntries(assets), ...MARKERS]
   const cat: StageCatalog = { stageId, assets, entries, groundKey }
   cache.set(stageId, cat)
   return cat

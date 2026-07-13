@@ -78,6 +78,12 @@ export interface EnemyComp {
   speed: number // px/seconde
   isElite: boolean
   isBoss: boolean
+  /**
+   * Porteur de coffre : sa mort lâche un coffre d'évolution GARANTI
+   * (`collectDeadChestBearers` dans simulation.ts). Posé au spawn par le
+   * directeur de coffres. Absent = ennemi ordinaire.
+   */
+  chestBearer?: boolean
   /** Rôle de boss (mini-boss intermédiaire vs boss final). Absent pour les ennemis non-boss. */
   bossRole?: 'mid' | 'final'
   contactDamage: number
@@ -116,7 +122,7 @@ export interface EnemyComp {
 }
 
 /** Types de pickups ramassables. */
-export type PickupKind = 'xp' | 'heal' | 'magnet' | 'chest' | 'coffre'
+export type PickupKind = 'xp' | 'heal' | 'magnet' | 'chest' | 'coffre' | 'coin'
 
 /** Un pickup ramassable au sol (gemme d'XP, soin, aimant, coffre). */
 export interface PickupComp {
@@ -210,6 +216,16 @@ export interface SlowComp {
   remainingMs: number
 }
 
+/**
+ * Objet DESTRUCTIBLE posé sur la carte (non-ennemi, immobile, non-bloquant).
+ * A des PV (composant `health`) ; cassé par les armes ET le contact du joueur.
+ * `coinDrop` (pré-tiré au spawn, déterministe) = nb de pièces lâchées à la casse.
+ */
+export interface DestructibleComp {
+  typeId: string
+  coinDrop: number
+}
+
 /** Une arme équipée, son niveau et son cooldown courant. */
 export interface WeaponSlot {
   id: string
@@ -249,6 +265,8 @@ export interface Components {
   orbiter: OrbiterComp
   weapons: WeaponLoadout
   prisoner: PrisonerComp
+  /** Objet destructible posé (PV + drop de pièces à la casse). */
+  destructible: DestructibleComp
   passives: PassiveLoadout
   /** Stats dérivées des passifs possédés (recalculées par `recomputePlayerStats`). */
   stats: PlayerStats
@@ -317,6 +335,8 @@ export interface EnemyState {
   maxHp: number
   isElite: boolean
   isBoss: boolean
+  /** Porteur de coffre (élite « convoyeur ») → marqueur coffre au-dessus. Cosmétique (render-only). */
+  chestBearer?: boolean
   /** Rôle de boss (mini-boss intermédiaire vs boss final). Absent pour les ennemis non-boss. */
   bossRole?: 'mid' | 'final'
   /**
@@ -349,6 +369,16 @@ export interface PrisonerState {
   x: number
   y: number
   freed: boolean
+}
+
+/** Vue d'un objet destructible (rendu observateur : sprite du type + feedback de PV). */
+export interface DestructibleState {
+  id: number
+  x: number
+  y: number
+  typeId: string
+  hp: number
+  maxHp: number
 }
 
 /** Flaque de goudron exposée dans le view-state (pour le rendu — Task 7/8). */
@@ -399,6 +429,8 @@ export interface GameState {
   pickups: PickupState[]
   /** Ouvriers prisonniers présents (cage + sosie à libérer). */
   prisoners: PrisonerState[]
+  /** Objets destructibles posés sur la carte (rendu + feedback de casse). */
+  destructibles: DestructibleState[]
   /** Progression des sauvetages (mini-carte + HUD). */
   rescue: { total: number; rescued: number }
   /** Flaques de goudron actives (pour le rendu — Task 7/8). */
@@ -419,4 +451,24 @@ export interface GameState {
    * lire deux fois sans avancer le temps.
    */
   justEvolved: string | null
+  /**
+   * Transitoire (one-shot) : résultat de l'ouverture d'un coffre CE pas (les 3
+   * branches : évolution / cartes / soin), ou `null`. Remis à `null` au pas
+   * suivant / après lecture dans `getState`. Consommé par `overlay.sync` pour
+   * lancer la machine à sous. Purement cosmétique (jamais relu par la sim).
+   */
+  chestOpened: ChestOpenOutcome | null
+  /** Pièces d'or collectées durant CE run (monnaie méta ; persistée côté app en fin de run). */
+  coins: number
 }
+
+/**
+ * Résultat de l'ouverture d'un coffre (one-shot, cosmétique) — alimente la
+ * machine à sous. `kind` : `evolution` (arme évoluée révélée), `cards` (choix de
+ * cartes proposé), `heal` (soin de repli). `isSuper` : gros moment (évolution)
+ * → variante « super coffre » arc-en-ciel à 3 rouleaux côté rendu.
+ */
+export type ChestOpenOutcome =
+  | { kind: 'evolution'; weaponId: string; isSuper: boolean }
+  | { kind: 'cards'; isSuper: boolean }
+  | { kind: 'heal'; isSuper: boolean }

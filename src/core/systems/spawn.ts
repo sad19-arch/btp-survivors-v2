@@ -121,6 +121,8 @@ export interface SpawnInit {
   behavior?: EnemyBehavior
   bPhase?: number
   bAngle?: number
+  /** Marque l'ennemi comme porteur de coffre (drop garanti à la mort). */
+  chestBearer?: boolean
 }
 
 /**
@@ -189,6 +191,7 @@ export function spawnEnemy(
     speed: def.speed * scale.speed,
     isElite: def.archetype === 'elite',
     isBoss,
+    ...(init?.chestBearer === true ? { chestBearer: true } : {}),
     ...(bossRole !== undefined ? { bossRole } : {}),
     contactDamage: def.contactDamage * scale.contactDamage,
     xpValue: def.xpValue,

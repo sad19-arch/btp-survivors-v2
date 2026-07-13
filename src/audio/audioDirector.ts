@@ -1,6 +1,6 @@
 import type Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
-import type { WeaponFiredEvent, PickupCollectedEvent, BossSpawnedEvent } from '@core/events'
+import type { WeaponFiredEvent, PickupCollectedEvent, BossSpawnedEvent, ChestOpenedEvent } from '@core/events'
 import { SFX, VOICE, voiceRunStart, musicForState, MUSIC, AMB, MUSIC_FILES_STAGE, type MusicKey } from './manifest'
 import { musicGain, sfxGain, duckedGain, type AudioLevels } from './settings'
 import { playZzfx } from './zzfx'
@@ -183,6 +183,11 @@ export class AudioDirector {
     // B5 — Fanfare d'évolution (coffre ramassé + conditions réunies) : fanfare zzfx en accord
     // majeur + voix triomphante. Remplace le cue 'bonus' générique par une fanfare dédiée.
     on('evolved', () => { this.playChestFanfare(); this.playCue('jackpotWin'); this.playVoice(VOICE.evolved, 4) })
+    // Coffre ouvert (issues cartes/soin) : même récompense sonore « jackpot » que la
+    // machine à sous. L'évolution a déjà sa fanfare complète via `evolved` → on ne double pas.
+    on('chestOpened', (e) => {
+      if ((e as ChestOpenedEvent).kind !== 'evolution') { this.playCue('jackpotWin') }
+    })
     on('upgradePick', () => { this.playCue('upgradePick') })
     on('menuMove', () => { this.playCue('menuMove') })
     on('menuConfirm', () => { this.playCue('menuConfirm') })

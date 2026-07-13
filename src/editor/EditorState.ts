@@ -21,6 +21,7 @@ import {
 } from './StageLayoutSchema'
 import { editorAsset, paletteEntry } from './PrefabCatalog'
 import { CLUSTERS } from '@content/clusters'
+import { destructibleDef } from '@content/destructibles'
 import { SHARED_WORKER_NPCS, stageRender } from '@render/stages'
 import { buildSiteLayout } from '@core/siteLayout'
 
@@ -332,7 +333,20 @@ export class EditorState {
         continue
       }
       const entry = paletteEntry(inst.prefab)
-      if (entry?.elements === undefined) {
+      if (entry === undefined) {
+        continue
+      }
+      // Destructible : un seul élément NON-BLOQUANT portant `destructible.typeId`
+      // → `composedToSiteLayout` le route vers les entités destructibles (sim).
+      if (entry.destructibleTypeId !== undefined) {
+        const el = entry.elements?.[0]
+        inst.elements =
+          el === undefined
+            ? []
+            : [{ assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide: 'none', destructible: { typeId: entry.destructibleTypeId } }]
+        continue
+      }
+      if (entry.elements === undefined) {
         continue
       }
       inst.elements = entry.elements.map((el): EmbeddedElement => {
@@ -429,6 +443,26 @@ export class EditorState {
       const r = 260
       return { id: newId('npc'), skin: s.skin, kind: s.kind, x: Math.round(Math.cos(angle) * r), y: Math.round(Math.sin(angle) * r) }
     })
+
+    // Destructibles auto (scatter) → instances ÉDITABLES `des_<typeId>` : le
+    // ré-export préserve les objets cassables (sinon la compo committée aurait
+    // zéro destructible et couperait le scatter). Coords MONDE → compo.
+    for (const d of gen.destructibles ?? []) {
+      const def = destructibleDef(d.typeId)
+      const elements: EmbeddedElement[] =
+        def === undefined ? [] : [{ assetKey: def.assetKey, dx: 0, dy: 0, scale: def.scale, collide: 'none' }]
+      instances.push({
+        id: newId('instance'),
+        prefab: 'des_' + d.typeId,
+        x: d.x - offX,
+        y: d.y - offY,
+        flipX: false,
+        variant: 0,
+        rotation: 0,
+        locked: false,
+        elements
+      })
+    }
 
     this.layout = emptyLayout(this.stage)
     this.layout.instances = instances

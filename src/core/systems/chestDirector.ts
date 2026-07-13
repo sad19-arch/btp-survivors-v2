@@ -1,24 +1,27 @@
 /**
  * Directeur de coffres d'évolution.
  *
- * Deux sources de coffres (en plus du mini-boss garanti, inchangé dans reap.ts) :
- *  1. Périodique : un coffre apparaît toutes les `CHEST.intervalMs` ms autour du
- *     joueur vivant le plus proche, si `maxActive` n'est pas atteint.
- *  2. Mort d'élite : `maybeDropEliteChest` est appelé depuis `simulation.ts`
- *     lors du reap d'un ennemi élite — probabilité `CHEST.eliteDropChance`.
+ * Source unique des coffres « libres » : un ennemi ÉLITE « porteur de coffre »
+ * (le `convoyeur`) est invoqué périodiquement ; sa mort lâche un coffre GARANTI.
+ * Plus AUCUN coffre n'apparaît « au hasard » — il faut tuer le porteur.
+ * (Le mini-boss lâche toujours son coffre-jalon garanti, cf. `reap.ts`.)
  *
  * Déterminisme : toutes les décisions passent par le `Rng` dédié `chestRng`
- * (séparé du RNG spawn/loot/upgrade) — la séquence de spawn d'ennemis est inchangée.
+ * (séparé du RNG spawn/loot/upgrade). Le convoyeur est spawné hors des pools de
+ * phase, donc la séquence de spawn des vagues normales est inchangée.
  *
- * Purs/sans effets de bord sur l'état hors du `World` : aucun `Math.random()`,
- * aucun `Date.now()`, pas de Phaser, pas de DOM.
+ * Purs/sans effets de bord hors du `World` : aucun `Math.random()`, aucun
+ * `Date.now()`, pas de Phaser, pas de DOM.
  */
 
 import type { World } from '@core/world'
 import type { Rng } from '@core/rng'
 import type { Vec2 } from '@core/types'
+import type { DifficultyScale } from '@content/spawnRamp'
 import { dropPickup } from '@core/systems/reap'
-import { CHEST } from '@content/config'
+import { spawnEnemy } from '@core/systems/spawn'
+import { ENEMIES } from '@content/enemies'
+import { CHEST, SPAWN } from '@content/config'
 
 /**
  * Compte les coffres d'évolution (`'coffre'`) actuellement au sol.
@@ -36,71 +39,85 @@ export function countActiveChests(world: World): number {
 }
 
 /**
- * Décide si un coffre périodique doit apparaître.
- * Fonction pure — toutes les décisions basées sur les paramètres fournis.
- *
- * @param world            - monde courant (pour compter les coffres actifs)
- * @param elapsedSinceLast - ms depuis le dernier coffre périodique spawné
- * @param intervalMs       - intervalle cible (ex. CHEST.intervalMs)
- * @param maxActive        - plafond de coffres simultanés (ex. CHEST.maxActive)
+ * Compte les élites « porteurs de coffre » (convoyeurs) actuellement vivants.
+ * Fait respecter le plafond `bearerCap` (un mini-objectif ciblé, pas un essaim).
  */
-export function shouldSpawnChest(
+export function countChestBearers(world: World): number {
+  let count = 0
+  for (const e of world.query('enemy')) {
+    const en = world.get(e, 'enemy')
+    if (en?.chestBearer === true) {
+      count++
+    }
+  }
+  return count
+}
+
+/**
+ * Décide si un nouveau porteur de coffre doit être invoqué. Fonction pure.
+ * Vrai seulement si la cadence est écoulée ET qu'on est sous le plafond de
+ * porteurs vivants ET sous le plafond de coffres déjà au sol (pas d'accumulation
+ * infinie si le joueur ignore les coffres).
+ */
+export function shouldSpawnBearer(
   world: World,
   elapsedSinceLast: number,
   intervalMs: number,
-  maxActive: number
+  bearerCap: number,
+  maxChests: number
 ): boolean {
   if (elapsedSinceLast < intervalMs) {
     return false
   }
-  return countActiveChests(world) < maxActive
+  if (countChestBearers(world) >= bearerCap) {
+    return false
+  }
+  return countActiveChests(world) < maxChests
 }
 
 /**
- * Tick du directeur de coffres périodiques. Appelé chaque pas fixe depuis
+ * Tick du directeur de porteurs de coffre. Appelé chaque pas fixe depuis
  * `simulation.ts` (uniquement quand la scène est 'game').
  *
- * Retourne le nouveau `elapsedSinceLast` : remis à 0 si un coffre a été spawné,
- * sinon inchangé (l'appelant y ajoute dt avant d'appeler).
+ * Retourne le nouveau `elapsedSinceLast` : remis à 0 si un convoyeur a été
+ * invoqué, sinon inchangé (l'appelant y ajoute dt avant d'appeler).
  *
  * @param world            - monde ECS courant
  * @param rng              - RNG dédié `chestRng` (seed isolé)
- * @param elapsedSinceLast - ms accumulées depuis le dernier coffre périodique
+ * @param elapsedSinceLast - ms accumulées depuis le dernier convoyeur
  * @param centroid         - position du joueur vivant le plus proche (ou centroïde)
+ * @param scale            - renforcement temporel (le porteur reste pertinent en fin de run)
  */
-export function tickChestDirector(
+export function tickChestBearer(
   world: World,
   rng: Rng,
   elapsedSinceLast: number,
-  centroid: Vec2
+  centroid: Vec2,
+  scale: DifficultyScale
 ): number {
-  if (!shouldSpawnChest(world, elapsedSinceLast, CHEST.intervalMs, CHEST.maxActive)) {
+  if (!shouldSpawnBearer(world, elapsedSinceLast, CHEST.bearerIntervalMs, CHEST.bearerCap, CHEST.maxActive)) {
     return elapsedSinceLast
   }
-  // Spawne le coffre à une position déterministe autour du centroïde.
+  const def = ENEMIES['convoyeur']
+  if (def === undefined) {
+    return elapsedSinceLast // défensif (roster mal configuré)
+  }
+  // Spawn hors écran, sur l'anneau (comme une vague) : il « vient du monde » et
+  // marche vers le joueur (behavior 'chase'), télégraphié par son aura + marqueur.
   const angle = rng.float(0, Math.PI * 2)
   const pos: Vec2 = {
-    x: centroid.x + Math.cos(angle) * CHEST.spawnRadius,
-    y: centroid.y + Math.sin(angle) * CHEST.spawnRadius
+    x: centroid.x + Math.cos(angle) * SPAWN.ringRadius,
+    y: centroid.y + Math.sin(angle) * SPAWN.ringRadius
   }
-  dropPickup(world, pos, 'coffre', 0)
+  spawnEnemy(world, def, pos, false, scale, undefined, { chestBearer: true })
   return 0 // reset le compteur
 }
 
 /**
- * Tente de lâcher un coffre à la mort d'un ennemi élite (`isElite === true`).
- * Ne fait rien si le plafond est déjà atteint.
- * Appelé depuis `simulation.ts` dans la boucle de mort (après `reapDeadEnemies`).
- *
- * @param world - monde ECS courant
- * @param rng   - RNG dédié `chestRng`
- * @param pos   - position de mort de l'ennemi élite
+ * Lâche le coffre GARANTI d'un porteur mort (appelé depuis `simulation.ts` sur
+ * les positions de mort des convoyeurs, avant leur reap). Pas de RNG : la
+ * récompense est méritée par la mise à mort de l'élite.
  */
-export function maybeDropEliteChest(world: World, rng: Rng, pos: Vec2): void {
-  if (countActiveChests(world) >= CHEST.maxActive) {
-    return
-  }
-  if (rng.chance(CHEST.eliteDropChance)) {
-    dropPickup(world, pos, 'coffre', 0)
-  }
+export function dropChestBearerLoot(world: World, pos: Vec2): void {
+  dropPickup(world, pos, 'coffre', 0)
 }
