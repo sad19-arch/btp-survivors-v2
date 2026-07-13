@@ -232,7 +232,12 @@ const TERRAIN_VIERGE_RENDER: StageRender = {
     { key: 'prop_stakes', file: 'stage01/props/survey_stakes.png', scale: 1.1, count: 4 },
     { key: 'prop_rocks',  file: 'stage01/props/rock_cluster.png',  scale: 1.0, count: 5 },
     { key: 'prop_weeds',  file: 'stage01/props/dry_weeds.png',     scale: 1.0, count: 6 },
-    { key: 'prop_soft',   file: 'stage01/props/soft_ground.png',   scale: 1.4, count: 3 }
+    { key: 'prop_soft',   file: 'stage01/props/soft_ground.png',   scale: 1.1, count: 3 },
+    // Végétation (habillage du terrain vierge) — indices 4-7, référencés en zones.
+    { key: 'prop_stage01_tree_a', file: 'stage01/props/tree_a.png', scale: 1.0, count: 4 },
+    { key: 'prop_stage01_tree_b', file: 'stage01/props/tree_b.png', scale: 1.0, count: 3 },
+    { key: 'prop_stage01_bush_a', file: 'stage01/props/bush_a.png', scale: 1.0, count: 5 },
+    { key: 'prop_stage01_bush_b', file: 'stage01/props/bush_b.png', scale: 1.0, count: 5 }
   ],
   enemies: {
     huissier:   { key: 'brute',   file: 'stage01/enemies/brute_walk.png',   frame: 192, scale: 1.0 },
@@ -288,16 +293,16 @@ const TERRAIN_VIERGE_RENDER: StageRender = {
       angleSpread:       65,
       distMin:          340,
       distMax:          760,
-      dominantPropIndices:  [2, 1], // dry_weeds + rock_cluster
+      dominantPropIndices:  [2, 1, 6, 7], // dry_weeds + rock_cluster + buissons
       dominantDecalIndices: [1, 2], // weeds + pebbles
     },
-    // Bordure Nord-Ouest — terre molle + pebbles (terrain peu foulé)
+    // Bordure Nord-Ouest — terre molle + arbres (terrain peu foulé, habillé)
     {
       angleCenter:      150,
       angleSpread:       55,
       distMin:          320,
       distMax:          720,
-      dominantPropIndices:  [3],    // soft_ground (terre remuée)
+      dominantPropIndices:  [3, 4, 5], // soft_ground + arbres
       dominantDecalIndices: [0, 2], // puddle + pebbles
     }
   ],
@@ -311,6 +316,8 @@ const TERRAIN_VIERGE_RENDER: StageRender = {
     { key: 'prop_stage01_stake1',      file: 'stage01/props/survey_stake_single.png', role: 'prop' },
     { key: 'prop_stage01_stake_bundle', file: 'stage01/props/stake_bundle.png',       role: 'prop' },
     { key: 'prop_stage01_tape_reel',   file: 'stage01/props/tape_reel.png',           role: 'prop' },
+    { key: 'prop_stage01_rubalise',    file: 'stage01/props/rubalise.png',            role: 'prop' },
+    { key: 'prop_stage01_sign_speed',  file: 'stage01/props/sign_speed.png',          role: 'prop' },
     { key: 'prop_stage01_cones',       file: 'stage01/props/cone_cluster.png',        role: 'prop' },
     { key: 'struct_stage01_wc',        file: 'stage01/props/site_toilet.png',         role: 'structure' },
     { key: 'struct_stage01_plan_table', file: 'stage01/props/plan_table.png',         role: 'structure' },
