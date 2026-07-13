@@ -10,7 +10,8 @@ describe('parseBootOptions', () => {
       level: null,
       lite: false,
       editor: false,
-      perf: false
+      perf: false,
+      debug: false
     })
   })
 
@@ -22,7 +23,8 @@ describe('parseBootOptions', () => {
       level: null,
       lite: false,
       editor: false,
-      perf: false
+      perf: false,
+      debug: false
     })
   })
 
@@ -34,7 +36,8 @@ describe('parseBootOptions', () => {
       level: 'fondations',
       lite: false,
       editor: false,
-      perf: false
+      perf: false,
+      debug: false
     })
   })
 
@@ -59,5 +62,10 @@ describe('parseBootOptions', () => {
   it('parse le flag perf', () => {
     expect(parseBootOptions('?perf=1').perf).toBe(true)
     expect(parseBootOptions('').perf).toBe(false)
+  })
+
+  it('parse le flag debug', () => {
+    expect(parseBootOptions('?debug=1').debug).toBe(true)
+    expect(parseBootOptions('').debug).toBe(false)
   })
 })

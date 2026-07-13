@@ -16,6 +16,8 @@ export interface BootOptions {
   editor: boolean
   /** Active l'overlay de diagnostic perf (`?perf=1`) — FPS + décomposition frame. */
   perf: boolean
+  /** Active le panneau de debug tactile (`?debug=1`) — spawns/level-up/arsenal (gated dev/test). */
+  debug: boolean
 }
 
 const VALID_MODES: ReadonlySet<string> = new Set<GameMode>(['solo', 'coop', 'coop3', 'coop4'])
@@ -39,6 +41,7 @@ export function parseBootOptions(search: string): BootOptions {
   const lite = params.get('lite') === '1'
   const editor = params.get('editor') === 'true'
   const perf = params.get('perf') === '1'
+  const debug = params.get('debug') === '1'
 
-  return { autostart, seed, test, level, lite, editor, perf }
+  return { autostart, seed, test, level, lite, editor, perf, debug }
 }

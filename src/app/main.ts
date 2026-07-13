@@ -43,6 +43,12 @@ if (import.meta.env.DEV || opts.test) {
   installSeam(seam)
 }
 
+// Panneau de debug tactile (`?debug=1`) : mêmes garde-fous que le seam (dev/test).
+// Import dynamique → code-split, zéro octet dans le chemin de jeu normal.
+if (opts.debug && (import.meta.env.DEV || opts.test)) {
+  void import('@ui/debugPanel').then((m) => m.mountDebugPanel(app))
+}
+
 // Source de vérité responsive UNIQUE (P3/P4) : créée AVANT la scène — GameScene
 // TIRE `current().cameraZoom` à chaque frame, l'overlay s'y ABONNE plus bas.
 const viewport = new ViewportBus()
