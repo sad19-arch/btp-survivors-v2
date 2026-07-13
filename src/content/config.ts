@@ -213,10 +213,11 @@ export const FINAL_BOSS = {
   /**
    * Multiplicateur de PV du boss FINAL (× la def `contremaitre`). La VICTOIRE
    * dépend de le tuer → battable avec un build de fin de run complet.
-   * Arc 20 min : le joueur a pu évoluer 2-3 armes. PV ajusté pour viser 25-40 %
-   * de win (cible sim `KITE_MIN_WIN_PCT`).
+   * Demande user (playtest terrassement 2026-07-13) : boss final BEAUCOUP plus
+   * costaud → ×10 par rapport à l'ancien 4.0. Rend la victoire nettement plus
+   * exigeante (impact win-rate assumé — cf. cible sim `KITE_MIN_WIN_PCT`).
    */
-  hpMult: 4.0
+  hpMult: 40.0
 } as const
 
 /**
@@ -230,7 +231,8 @@ export const FINAL_BOSS = {
  */
 export const MID_BOSS_WAVES = {
   atMs: [5 * 60_000, 10 * 60_000, 15 * 60_000] as readonly number[],
-  hpMults: [3.0, 4.0, 5.0] as readonly number[],
+  // Demande user (playtest terrassement 2026-07-13) : mini-boss ×3 (ancien [3,4,5]).
+  hpMults: [9.0, 12.0, 15.0] as readonly number[],
   spawnRadius: 320
 } as const
 

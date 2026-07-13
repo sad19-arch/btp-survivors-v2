@@ -16,7 +16,11 @@ export interface TargetReport {
  *  - pas trivial (≤ 60 % survive full), idle meurt, greedy reste punissable.
  * Oracle final = playtest humain ; ces seuils sont un garde-fou de régression.
  */
-const KITE_MIN_WIN_PCT = 20 // DOIT gagner au moins ceci sur l'arc 20 min (cible n°1)
+// Boss HARDCORE (demande user 2026-07-13 : final ×10, mini ×3) → le bot moyen ne
+// gagne plus que rarement ; l'oracle devient le PLAYTEST HUMAIN. On garde un plancher
+// bas (le boss doit rester battable EN PRINCIPE : le bot y arrive parfois) mais on
+// n'exige plus 20 %. Remonter ce seuil si un jour on re-modère les boss.
+const KITE_MIN_WIN_PCT = 3 // plancher « battable en principe » (jeu hardcore assumé)
 const KITE_MAX_WIN_PCT = 65 // mais pas trivialement toujours (tension)
 const KITE_MIN_SURVIVAL_MEDIAN_MS = 780000 // survie médiane ≥ 13:00 (vise 13-16 min réel)
 const KITE_MAX_SURVIVE_FULL_PCT = 60 // ne doit PAS survivre/gagner passivement trop souvent
