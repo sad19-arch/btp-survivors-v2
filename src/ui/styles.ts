@@ -490,9 +490,30 @@ const CSS = `
   font-family: 'Jersey 25', monospace; font-size: 38px; color: ${PALETTE.jauneSecurite}; text-shadow: 2px 2px 0 ${PALETTE.contour};
 }
 #ui-root .jackpot__reveal {
-  font-family: 'Jersey 25', monospace; color: ${PALETTE.blanc}; font-size: 30px; letter-spacing: 2px;
-  text-shadow: 2px 2px 0 ${PALETTE.contour}; animation: jackpot-reveal-in 0.25s ease-out;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  animation: jackpot-reveal-in 0.25s ease-out;
 }
+#ui-root .jackpot__reveal-name {
+  font-family: 'Jersey 25', monospace; color: ${PALETTE.blanc}; font-size: 30px; letter-spacing: 2px;
+  text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+#ui-root .jackpot__reveal-desc {
+  font-family: 'Pixelify Sans', sans-serif; color: ${GOLD_HI}; font-size: 15px; max-width: 340px;
+  text-align: center; line-height: 1.2; text-shadow: 1px 1px 0 ${PALETTE.contour};
+}
+#ui-root .jackpot__loot {
+  font-family: 'Press Start 2P', monospace; color: ${PALETTE.jauneSecurite}; font-size: 12px; letter-spacing: 1px;
+  margin-top: 2px; padding: 3px 10px; background: ${PALETTE.contour};
+  border: 2px solid ${PALETTE.jauneSecurite}; box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+}
+/* Rayons dorés tournants derrière la révélation (reveal arcade P5). */
+#ui-root .jackpot__rays {
+  position: absolute; top: 50%; left: 50%; width: 200%; height: 200%; z-index: 0; pointer-events: none;
+  transform: translate(-50%, -50%);
+  background: repeating-conic-gradient(from 0deg, ${GOLD_DK} 0deg 12deg, transparent 12deg 24deg);
+  opacity: 0.22; animation: jackpot-rays-spin 9s linear infinite;
+}
+@keyframes jackpot-rays-spin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
 /* Pluie de pièces pixel (or) derrière les rouleaux. */
 #ui-root .jackpot__coins { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
 #ui-root .jackpot__coin {

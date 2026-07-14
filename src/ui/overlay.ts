@@ -738,6 +738,8 @@ export class Overlay {
     const panel = h(
       'div',
       { className: isSuper ? 'jackpot jackpot--super' : 'jackpot' },
+      // Rayons tournants derrière la révélation (reveal arcade, planche 2e) — décor pur.
+      h('div', { className: 'jackpot__rays', attrs: { 'aria-hidden': 'true' } }),
       coins,
       h('div', { className: 'jackpot__chest' }),
       h('div', { className: 'jackpot__title', text: title }),
@@ -759,10 +761,22 @@ export class Overlay {
     })
 
     // Flash blanc→doré + révélation du gain quand le dernier rouleau se pose.
+    // Évolution : nom + description (WEAPONS) sous le médaillon ; butin (+OR / +SOIN) sous tout.
+    const desc = outcome.kind === 'evolution' && outcome.weaponId !== null
+      ? (WEAPONS[outcome.weaponId]?.description ?? '')
+      : ''
+    const lootText = outcome.kind === 'heal' ? '+ SOIN' : '+ OR'
     this.jackpotTimers.push(window.setTimeout(() => {
       if (!panel.isConnected) { return }
       panel.classList.add('jackpot--flash')
-      panel.append(h('div', { className: 'jackpot__reveal', text: revealLabel }))
+      const reveal = h('div', { className: 'jackpot__reveal' },
+        h('div', { className: 'jackpot__reveal-name', text: revealLabel })
+      )
+      if (desc !== '') {
+        reveal.append(h('div', { className: 'jackpot__reveal-desc', text: desc }))
+      }
+      reveal.append(h('div', { className: 'jackpot__loot', text: lootText }))
+      panel.append(reveal)
     }, flashAtMs))
 
     // Fermeture automatique (garde isConnected → pas d'action sur un panneau remplacé).
