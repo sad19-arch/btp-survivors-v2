@@ -382,6 +382,12 @@ export class Overlay {
       // On quitte l'écran upgrade → réinitialise pour le prochain level-up.
       this.upgradeAppearAt = -1
     }
+    // Slam-in du logo : joué UNE fois à l'ENTRÉE sur le titre (classe portée par la
+    // racine, découplée du re-render de nav ; retirée une fois l'anim jouée).
+    if (state.screen === 'title' && this.prevScreen !== 'title') {
+      this.root.classList.add('arc-slam')
+      window.setTimeout(() => this.root.classList.remove('arc-slam'), 1700)
+    }
     this.prevScreen = state.screen
 
     const sig = this.computeSignature(state)

@@ -430,15 +430,15 @@ export class AudioDirector {
     this.rampAmbience(state.screen)
   }
 
-  /** Programme l'impact du logo titre à `delay` ms, puis se reboucle sur 5 s (= cycle du slam-in). */
+  /** Programme l'impact UNIQUE du logo titre à `delay` ms (calé sur l'écrasement du slam-in). */
   private scheduleTitleSlam(delay: number): void {
     this.titleSlamTimer = window.setTimeout(() => {
       this.playCue('titleSlam')
-      this.scheduleTitleSlam(5000)
+      this.titleSlamTimer = null
     }, delay)
   }
 
-  /** Coupe l'impact du logo titre (appelé à chaque changement d'écran). */
+  /** Annule l'impact du logo titre s'il n'a pas encore joué (changement d'écran rapide). */
   private stopTitleSlam(): void {
     if (this.titleSlamTimer !== null) {
       window.clearTimeout(this.titleSlamTimer)
@@ -473,9 +473,9 @@ export class AudioDirector {
         }
         break
       case 'title':
-        // Impact « chantier » calé sur le slam-in du logo (l'écrasement tombe à
-        // ~10 % du cycle 5 s = ~470 ms après le montage), puis rebouclé chaque cycle.
-        this.scheduleTitleSlam(470)
+        // Impact « chantier » UNIQUE, calé sur l'écrasement du slam-in (~500 ms
+        // après l'entrée sur le titre). Ne se répète pas.
+        this.scheduleTitleSlam(500)
         break
       default:
         break
