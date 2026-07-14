@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { EditorState } from '@/editor/EditorState'
 import { setActiveStage } from '@/editor/PrefabCatalog'
-import { parseLayout } from '@/editor/StageLayoutSchema'
+import { parseLayout, serializeLayout, emptyLayout } from '@/editor/StageLayoutSchema'
 import { buildSiteLayout, composedToSiteLayout } from '@core/siteLayout'
 import type { StageLayout } from '@content/stageLayout'
 
@@ -89,5 +89,37 @@ describe('EditorState.importGenerated', () => {
     expect(gen.clusters.length).toBeGreaterThan(0)
     const site = composedToSiteLayout(parseLayout(state.exportGameJson(), 'terrassement').layout as StageLayout)
     expect(site.obstacles.length).toBeGreaterThan(0)
+  })
+
+  // Régression : un stage édité sauvé (localStorage) est RÉINJECTÉ au boot via
+  // parseLayout (applyUserLayouts). Si parseLayout perd le champ `destructible`
+  // des éléments, les objets cassables deviennent du décor inerte → « ne se
+  // cassent pas en jeu » sur les niveaux créés par le joueur.
+  it('parseLayout PRÉSERVE le champ destructible d\'un élément (casse en jeu)', () => {
+    const layout = emptyLayout('terrain_vierge')
+    layout.instances.push({
+      id: 'd1', prefab: 'des_d01_tas_gravats', x: 100, y: 50,
+      flipX: false, variant: 0, rotation: 0, locked: false,
+      elements: [{ assetKey: 'prop_stage01_tas_gravats', dx: 0, dy: 0, scale: 0.7, collide: 'none', destructible: { typeId: 'd01_tas_gravats' } }]
+    })
+    const parsed = parseLayout(serializeLayout(layout), 'terrain_vierge')
+    expect(parsed.ok).toBe(true)
+    const el = parsed.layout?.instances[0]?.elements?.[0]
+    expect(el?.destructible?.typeId).toBe('d01_tas_gravats')
+  })
+
+  it('un layout destructible parsé produit bien une entité destructible (sim)', () => {
+    const layout = emptyLayout('terrain_vierge')
+    layout.instances.push({
+      id: 'd1', prefab: 'des_d01_tas_gravats', x: 0, y: 0,
+      flipX: false, variant: 0, rotation: 0, locked: false,
+      elements: [{ assetKey: 'prop_stage01_tas_gravats', dx: 0, dy: 0, scale: 0.7, collide: 'none', destructible: { typeId: 'd01_tas_gravats' } }]
+    })
+    const parsed = parseLayout(serializeLayout(layout), 'terrain_vierge').layout
+    expect(parsed).toBeDefined()
+    if (parsed === undefined) {return}
+    const site = composedToSiteLayout(parsed)
+    expect(site.destructibles?.length ?? 0).toBe(1)
+    expect(site.destructibles?.[0]?.typeId).toBe('d01_tas_gravats')
   })
 })

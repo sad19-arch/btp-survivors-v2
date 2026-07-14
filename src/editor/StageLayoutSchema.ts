@@ -49,6 +49,13 @@ function parseElements(v: unknown): EmbeddedElement[] | undefined {
     if (o.collide === 'both' || o.collide === 'enemies' || o.collide === 'none') {e.collide = o.collide}
     const shape = parseShape(o.shape)
     if (shape !== undefined) {e.shape = shape}
+    // Objet DESTRUCTIBLE : préserver le routage vers les entités cassables (sim).
+    // Sans ça, un layout joueur réinjecté au boot (applyUserLayouts → parseLayout)
+    // perd sa casse → « les objets cassables ne se cassent pas » en jeu.
+    if (typeof o.destructible === 'object' && o.destructible !== null) {
+      const d = o.destructible as Record<string, unknown>
+      if (typeof d.typeId === 'string') {e.destructible = { typeId: d.typeId }}
+    }
     out.push(e)
   }
   return out.length > 0 ? out : undefined
