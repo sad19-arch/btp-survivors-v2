@@ -42,6 +42,8 @@ export interface WeaponDef {
   description: string
   kind: WeaponKind
   maxLevel: number
+  /** Force de recul fixe, indépendante du niveau de l'arme. */
+  knockback: number
   levels: WeaponLevel[]
 }
 
@@ -85,6 +87,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     description: 'Tire des clous vers l\'ennemi le plus proche.',
     kind: 'projectile',
     maxLevel: 8,
+    knockback: 170,
     levels: buildLevels(
       { damage: 8, cooldownMs: 560, count: 1, area: 0, pierce: 0, projectileSpeed: 520, projectileLifeMs: 1500 },
       { damage: 2 },
@@ -98,6 +101,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     description: 'Des lames tournent autour de toi.',
     kind: 'orbital',
     maxLevel: 8,
+    knockback: 90,
     levels: buildLevels(
       { damage: 6, cooldownMs: 250, count: 2, area: 0, pierce: 99, orbitRadius: 104, orbitSpeed: 3.6, orbitHitRadius: 22 },
       { damage: 1.5 },
@@ -111,6 +115,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     description: 'Onde de choc qui frappe tout autour.',
     kind: 'aura',
     maxLevel: 8,
+    knockback: 360,
     levels: buildLevels(
       { damage: 10, cooldownMs: 900, count: 1, area: 175, pierce: 99 },
       { damage: 3, area: 8 },
@@ -123,6 +128,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     description: 'Frappe en arc large devant toi.',
     kind: 'sweep',
     maxLevel: 8,
+    knockback: 300,
     levels: buildLevels(
       { damage: 14, cooldownMs: 700, count: 1, area: 120, pierce: 99 },
       { damage: 4, area: 6 },
@@ -136,6 +142,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     description: 'Décharge électrique qui frappe à portée.',
     kind: 'strike',
     maxLevel: 8,
+    knockback: 140,
     levels: buildLevels(
       { damage: 12, cooldownMs: 950, count: 1, area: 60, pierce: 0 },
       { damage: 3 },
@@ -144,42 +151,42 @@ export const WEAPONS: Record<string, WeaponDef> = {
     )
   },
   goudron: {
-    id: 'goudron', name: 'Goudron chaud', description: 'Pose une flaque de goudron qui brûle les ennemis.', kind: 'hazard', maxLevel: 8,
+    id: 'goudron', name: 'Goudron chaud', description: 'Pose une flaque de goudron qui brûle les ennemis.', kind: 'hazard', maxLevel: 8, knockback: 0,
     levels: buildLevels(
       { damage: 5, cooldownMs: 1800, count: 1, area: 60, pierce: 99, tickMs: 400, projectileLifeMs: 3000 },
       { damage: 2.2, area: 4 }, 8, { 5: { count: 2 } }
     )
   },
   boulons: {
-    id: 'boulons', name: 'Boulons ricochets', description: 'Lance des boulons qui ricochent entre les ennemis.', kind: 'projectile', maxLevel: 8,
+    id: 'boulons', name: 'Boulons ricochets', description: 'Lance des boulons qui ricochent entre les ennemis.', kind: 'projectile', maxLevel: 8, knockback: 170,
     levels: buildLevels(
       { damage: 12, cooldownMs: 820, count: 1, area: 0, pierce: 0, bounces: 3, projectileSpeed: 470, projectileLifeMs: 1700 },
       { damage: 2.5 }, 8, { 3: { bounces: 4 }, 5: { bounces: 5 }, 7: { count: 2 } }
     )
   },
   cle_molette: {
-    id: 'cle_molette', name: 'Clé à molette', description: 'Lance une clé boomerang qui transperce.', kind: 'projectile', maxLevel: 8,
+    id: 'cle_molette', name: 'Clé à molette', description: 'Lance une clé boomerang qui transperce.', kind: 'projectile', maxLevel: 8, knockback: 230,
     levels: buildLevels(
       { damage: 16, cooldownMs: 980, count: 1, area: 0, pierce: 4, projectileSpeed: 380, boomerangOutMs: 430, projectileLifeMs: 2400 },
       { damage: 5 }, 8, { 6: { count: 2 } }
     )
   },
   extincteur: {
-    id: 'extincteur', name: 'Extincteur', description: 'Cône de mousse qui ralentit les ennemis.', kind: 'cone', maxLevel: 8,
+    id: 'extincteur', name: 'Extincteur', description: 'Cône de mousse qui ralentit les ennemis.', kind: 'cone', maxLevel: 8, knockback: 260,
     levels: buildLevels(
       { damage: 8, cooldownMs: 1050, count: 1, area: 110, pierce: 99, slowMult: 0.5, slowMs: 700 },
       { damage: 3, area: 7 }, 8
     )
   },
   brouette: {
-    id: 'brouette', name: 'Brouette', description: 'Propulse une brouette lourde qui traverse tout.', kind: 'projectile', maxLevel: 8,
+    id: 'brouette', name: 'Brouette', description: 'Propulse une brouette lourde qui traverse tout.', kind: 'projectile', maxLevel: 8, knockback: 420,
     levels: buildLevels(
       { damage: 26, cooldownMs: 1400, count: 1, area: 0, pierce: 99, projectileSpeed: 240, projectileRadius: 26, projectileLifeMs: 2600 },
       { damage: 7, projectileRadius: 2 }, 8
     )
   },
   chalumeau: {
-    id: 'chalumeau', name: 'Chalumeau', description: 'Jet de flammes qui brûle devant toi.', kind: 'cone', maxLevel: 8,
+    id: 'chalumeau', name: 'Chalumeau', description: 'Jet de flammes qui brûle devant toi.', kind: 'cone', maxLevel: 8, knockback: 120,
     // Feel lance-flammes, opposé de l'extincteur : portée COURTE, cadence RAPIDE,
     // gros dégâts, pas de slow. Jalons de cadence (niv 4/7) = progression ressentie.
     levels: buildLevels(
@@ -195,6 +202,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     description: 'Rafale de clous à cadence élevée qui perce les rangs.',
     kind: 'projectile',
     maxLevel: 1,
+    knockback: 95,
     levels: [{ damage: 30, cooldownMs: 140, count: 4, area: 0, pierce: 2, projectileSpeed: 640, projectileLifeMs: 1600 }]
   },
   haute_tension: {
@@ -203,19 +211,20 @@ export const WEAPONS: Record<string, WeaponDef> = {
     description: 'Arc électrique massif qui frappe plusieurs ennemis à la fois.',
     kind: 'strike',
     maxLevel: 1,
+    knockback: 220,
     levels: [{ damage: 45, cooldownMs: 380, count: 6, area: 80, pierce: 0 }]
   },
-  coulee_bitume: { id: 'coulee_bitume', name: 'Coulée de bitume', description: 'Grandes flaques de bitume brûlant qui durent longtemps.', kind: 'hazard', maxLevel: 1,
+  coulee_bitume: { id: 'coulee_bitume', name: 'Coulée de bitume', description: 'Grandes flaques de bitume brûlant qui durent longtemps.', kind: 'hazard', maxLevel: 1, knockback: 0,
     levels: [{ damage: 28, cooldownMs: 1500, count: 2, area: 96, pierce: 99, tickMs: 300, projectileLifeMs: 4200 }] },
-  tempete_boulons: { id: 'tempete_boulons', name: 'Tempête de boulons', description: 'Grêle de boulons ricochant dans tous les sens.', kind: 'projectile', maxLevel: 1,
+  tempete_boulons: { id: 'tempete_boulons', name: 'Tempête de boulons', description: 'Grêle de boulons ricochant dans tous les sens.', kind: 'projectile', maxLevel: 1, knockback: 130,
     levels: [{ damage: 40, cooldownMs: 360, count: 3, area: 0, pierce: 0, bounces: 6, projectileSpeed: 560, projectileLifeMs: 1900 }] },
-  cle_choc: { id: 'cle_choc', name: 'Clé à choc', description: 'Double boomerang de clés à choc qui transperce les ennemis.', kind: 'projectile', maxLevel: 1,
+  cle_choc: { id: 'cle_choc', name: 'Clé à choc', description: 'Double boomerang de clés à choc qui transperce les ennemis.', kind: 'projectile', maxLevel: 1, knockback: 320,
     levels: [{ damage: 68, cooldownMs: 650, count: 2, area: 0, pierce: 5, projectileSpeed: 440, boomerangOutMs: 520, projectileLifeMs: 3000 }] },
-  canon_mousse: { id: 'canon_mousse', name: 'Canon à mousse', description: 'Jet de mousse puissant qui immobilise les ennemis.', kind: 'cone', maxLevel: 1,
+  canon_mousse: { id: 'canon_mousse', name: 'Canon à mousse', description: 'Jet de mousse puissant qui immobilise les ennemis.', kind: 'cone', maxLevel: 1, knockback: 380,
     levels: [{ damage: 40, cooldownMs: 620, count: 1, area: 190, pierce: 99, slowMult: 0.35, slowMs: 2200 }] },
-  transpalette: { id: 'transpalette', name: 'Transpallette automatisée', description: 'Transpalette géant qui écrase tout sur son passage.', kind: 'projectile', maxLevel: 1,
+  transpalette: { id: 'transpalette', name: 'Transpallette automatisée', description: 'Transpalette géant qui écrase tout sur son passage.', kind: 'projectile', maxLevel: 1, knockback: 500,
     levels: [{ damage: 110, cooldownMs: 1100, count: 1, area: 0, pierce: 99, projectileSpeed: 300, projectileRadius: 40, projectileLifeMs: 3200 }] },
-  lance_thermique: { id: 'lance_thermique', name: 'Lance thermique', description: 'Lance de découpe industrielle qui fait fondre les rangs.', kind: 'cone', maxLevel: 1,
+  lance_thermique: { id: 'lance_thermique', name: 'Lance thermique', description: 'Lance de découpe industrielle qui fait fondre les rangs.', kind: 'cone', maxLevel: 1, knockback: 180,
     levels: [{ damage: 42, cooldownMs: 300, count: 1, area: 150, pierce: 99 }] }
 }
 

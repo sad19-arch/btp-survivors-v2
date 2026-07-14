@@ -191,6 +191,7 @@ export function spawnEnemy(
     speed: def.speed * scale.speed,
     isElite: def.archetype === 'elite',
     isBoss,
+    knockbackMult: enemyKnockbackMult(def, isBoss),
     ...(init?.chestBearer === true ? { chestBearer: true } : {}),
     ...(bossRole !== undefined ? { bossRole } : {}),
     contactDamage: def.contactDamage * scale.contactDamage,
@@ -199,4 +200,17 @@ export function spawnEnemy(
     ...(init?.bPhase !== undefined ? { bPhase: init.bPhase } : {}),
     ...(init?.bAngle !== undefined ? { bAngle: init.bAngle } : {})
   })
+}
+
+/** Résistance physique commune à tous les re-skins d'un même archétype. */
+function enemyKnockbackMult(def: EnemyDef, isBoss: boolean): number {
+  if (isBoss) {
+    return 0.12
+  }
+  switch (def.archetype) {
+    case 'fast': return 1.1
+    case 'tank': return 0.55
+    case 'elite': return 0.35
+    default: return 1
+  }
 }

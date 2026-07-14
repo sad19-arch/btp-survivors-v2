@@ -101,6 +101,15 @@ describe('simulation — split de boss', () => {
         { id: 'cloueur', level: 8 },
         { id: 'scie', level: 8 },
         { id: 'marteau', level: 8 }
+      ],
+      // Ce test vérifie la transition de victoire, pas l'équilibrage d'un build.
+      // Le recul rend le kite mono-directionnel plus exposé aux vagues dispersées :
+      // un arsenal de debug complet évite que le joueur meure avant le boss final.
+      passives: [
+        { id: 'outillage_renforce', level: 5 },
+        { id: 'cadence_chantier', level: 5 },
+        { id: 'casque_homologue', level: 5 },
+        { id: 'chaussures_securite', level: 5 }
       ]
     })
     let steps = 0

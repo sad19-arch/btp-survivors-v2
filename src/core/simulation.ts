@@ -26,6 +26,7 @@ import { spawnBoss, spawnGroup, spawnSummons, spawnWave } from './systems/spawn'
 import { createWaveDirectorState, stepWaveDirector, type WaveDirectorState } from './systems/waveDirector'
 import { weaponSystem } from './systems/weapon'
 import { collisionSystem } from './systems/collision'
+import { knockbackSystem } from './systems/knockback'
 import { reapDeadEnemies, type ReapResult } from './systems/reap'
 import { reapDestructibles, destructibleContactSystem, type BrokenDestructible } from './systems/destructible'
 import { destructibleDef, type DestructibleSpawn } from '@content/destructibles'
@@ -714,6 +715,9 @@ export class Simulation {
     boomerangSystem(this.world, dtMs)
     this.rebuildEnemyGrid()
     collisionSystem(this.world, dtMs, this.enemyGrid)
+    knockbackSystem(this.world, dtMs)
+    // Le recul ne doit jamais pousser une cible à travers une structure.
+    resolveObstacleCollisions(this.world, this.obstacles)
     // Casse au CONTACT du joueur (complète la casse par les armes via la grille).
     destructibleContactSystem(this.world)
     const deadBearerPositions = this.collectDeadChestBearers()

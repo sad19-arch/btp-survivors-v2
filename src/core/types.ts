@@ -78,6 +78,8 @@ export interface EnemyComp {
   speed: number // px/seconde
   isElite: boolean
   isBoss: boolean
+  /** Résistance au recul physique (1 = standard, plus bas = plus lourd). */
+  knockbackMult?: number
   /**
    * Porteur de coffre : sa mort lâche un coffre d'évolution GARANTI
    * (`collectDeadChestBearers` dans simulation.ts). Posé au spawn par le
@@ -147,6 +149,8 @@ export interface ProjectileComp {
   radius: number
   /** Nombre d'ennemis SUPPLÉMENTAIRES que le projectile peut encore traverser après un impact (0 = despawn au 1er impact). */
   pierce: number
+  /** Force de recul transmise à l'ennemi lors de l'impact. */
+  knockback?: number
   /** Nombre de rebonds restants (ricochet). Absent ou 0 = comportement classique. */
   bounces?: number
   /**
@@ -216,6 +220,12 @@ export interface SlowComp {
   remainingMs: number
 }
 
+/** Impulsion physique indépendante de la vélocité calculée par l'IA. */
+export interface KnockbackComp {
+  vx: number
+  vy: number
+}
+
 /**
  * Objet DESTRUCTIBLE posé sur la carte (non-ennemi, immobile, non-bloquant).
  * A des PV (composant `health`) ; cassé par les armes ET le contact du joueur.
@@ -256,6 +266,7 @@ export interface PassiveLoadout {
 export interface Components {
   position: Vec2
   velocity: Vec2
+  knockback: KnockbackComp
   health: Health
   player: PlayerComp
   progress: ProgressComp

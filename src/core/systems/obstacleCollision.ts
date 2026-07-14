@@ -2,7 +2,7 @@
  * T3 — Résolution de collision obstacle → entité (push-out).
  *
  * Repousse joueurs et ennemis hors des obstacles statiques du site (siteLayout).
- * Appelé APRÈS le mouvement des entités et les bornes monde, AVANT collision.ts.
+ * Appelé après le mouvement normal, puis une seconde fois après le recul physique.
  *
  * Règles :
  * - `blocks === 'both'`    → joueur ET ennemi repoussés.
@@ -113,8 +113,8 @@ function pushOutSegment(
 /**
  * Repousse joueurs et ennemis hors des obstacles (push-out, déterministe).
  *
- * Appelé après le mouvement des entités (movementSystem + worldBoundsSystem),
- * avant collisionSystem. Avec `obstacles` vide (terrain_vierge) : no-op total.
+ * Appelé après le mouvement des entités, puis après `knockbackSystem` pour empêcher
+ * une impulsion de traverser le décor. Avec `obstacles` vide : no-op total.
  */
 export function resolveObstacleCollisions(world: World, obstacles: readonly Obstacle[]): void {
   if (obstacles.length === 0) {

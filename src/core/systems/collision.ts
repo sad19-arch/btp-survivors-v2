@@ -1,6 +1,7 @@
 import type { World } from '../world'
 import type { SpatialGrid } from '../spatialGrid'
 import { HITBOX } from '@content/config'
+import { applyEnemyHit } from './knockback'
 
 /** Rayon de recherche d'une cible de rebond, en px. */
 const BOUNCE_SEEK_RADIUS = 320
@@ -54,12 +55,12 @@ export function collisionSystem(world: World, dtMs: number, grid: SpatialGrid): 
         if (proj.hitIds !== undefined) {
           proj.hitIds.push(en)
         }
-        eh.hp -= proj.damage
-        // Attribution du dernier frappeur pour le tally de kills par joueur.
-        const eenemy = world.get(en, 'enemy')
-        if (eenemy !== undefined) {
-          eenemy.lastHitBy = proj.ownerId
-        }
+        const velocity = world.get(p, 'velocity')
+        applyEnemyHit(world, en, proj.damage, {
+          ownerId: proj.ownerId,
+          knockback: proj.knockback,
+          direction: velocity ?? { x: epos.x - ppos.x, y: epos.y - ppos.y }
+        })
         // Un seul ennemi touché par ce projectile CE pas (break) : l'ennemi visé ici
         // ne peut pas être re-touché par le même projectile dans cette même itération.
         if ((proj.bounces ?? 0) > 0) {
