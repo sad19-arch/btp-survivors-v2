@@ -662,6 +662,25 @@ const CSS = `
 #ui-root.ui-mobile .card { width: min(80vw, 300px); }
 /* Minimap : plus petite (JS setCompact) + déplacée en haut-droite (hors zone du pouce/stick). */
 #ui-root.ui-mobile .minimap { left: auto; bottom: auto; right: max(12px, env(safe-area-inset-right)); top: max(12px, env(safe-area-inset-top)); padding: 5px; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Refonte ARCADE (BTP Carnage) — tokens couleur + cadre métal/CRT + keyframes.
+   Couleurs LOCALES (jamais dans palette.ts). Repère : maquette planche 2a.
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --arc-jaune: #FFD24A; --arc-jaune-clair: #FFF4CC; --arc-jaune2: #FFE9A8;
+  --arc-orange: #E86F1F; --arc-orange2: #F26A22;
+  --arc-ombre1: #C85A12; --arc-ombre2: #9c440d; --arc-ombre3: #6e2f08; --arc-ombre4: #4a1404;
+  --arc-rouge: #D83B2D; --arc-contour: #101014;
+  --arc-brun1: #2B2018; --arc-brun2: #241C16; --arc-brun3: #17120E;
+  --arc-creme: #EAD9B8; --arc-creme2: #E8B27A;
+}
+#ui-root .arc-metal { background: url('metal_v.png') repeat, var(--arc-brun2); box-shadow: inset 0 2px 0 rgba(255,255,255,.14), inset 0 -3px 0 rgba(0,0,0,.5); }
+#ui-root .arc-crt { background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 2px, transparent 2px 4px); }
+@keyframes slamIn { 0%,8% { opacity: 0; transform: scale(3.2) translateY(-22px); } 15% { opacity: 1; transform: scale(.9); } 20% { transform: scale(1.06); } 25% { transform: scale(.98); } 30%,100% { transform: scale(1); } }
+@keyframes impactFlash { 0%,100% { opacity: 0; } 12% { opacity: .9; } }
+@keyframes impactDust { 0% { opacity: .7; transform: scale(.4); } 100% { opacity: 0; transform: scale(1.4); } }
+@keyframes blinkSlow { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
 `
 
 let injected = false
