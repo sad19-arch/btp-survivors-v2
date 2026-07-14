@@ -113,6 +113,8 @@ export class AudioDirector {
   private studioUnlockArmed = false
   /** Compteur de level-ups, pour l'alternance des voix (pair/impair). */
   private upgradeVoiceCount = 0
+  /** Minuteur de l'impact « chantier » du logo titre (rebouclé tant qu'on est sur le titre). */
+  private titleSlamTimer: number | null = null
   /** « Finish him » dit une seule fois par boss (remis à zéro quand le boss disparaît). */
   private bossFinishSaid = false
   /** Appel à l'aide dit une fois par passage en PV bas (hystérésis pour re-déclencher). */
@@ -428,7 +430,25 @@ export class AudioDirector {
     this.rampAmbience(state.screen)
   }
 
+  /** Programme l'impact du logo titre à `delay` ms, puis se reboucle sur 5 s (= cycle du slam-in). */
+  private scheduleTitleSlam(delay: number): void {
+    this.titleSlamTimer = window.setTimeout(() => {
+      this.playCue('titleSlam')
+      this.scheduleTitleSlam(5000)
+    }, delay)
+  }
+
+  /** Coupe l'impact du logo titre (appelé à chaque changement d'écran). */
+  private stopTitleSlam(): void {
+    if (this.titleSlamTimer !== null) {
+      window.clearTimeout(this.titleSlamTimer)
+      this.titleSlamTimer = null
+    }
+  }
+
   private onScreenEnter(state: AppViewState): void {
+    // On quitte (ou re-entre) un écran → couper l'impact titre en cours.
+    this.stopTitleSlam()
     switch (state.screen) {
       case 'gameover':
         this.playCue('gameOver')
@@ -451,6 +471,11 @@ export class AudioDirector {
         if (RUN_START_FROM.has(this.prevScreen)) {
           this.playVoice(voiceRunStart(state.stageOrder), 2)
         }
+        break
+      case 'title':
+        // Impact « chantier » calé sur le slam-in du logo (l'écrasement tombe à
+        // ~10 % du cycle 5 s = ~470 ms après le montage), puis rebouclé chaque cycle.
+        this.scheduleTitleSlam(470)
         break
       default:
         break

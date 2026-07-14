@@ -101,6 +101,7 @@ export const WEAPON_SFX_IDS: readonly string[] = [
 export const SFX_FILES: ReadonlyArray<readonly [string, string]> = [
   ...SFX_NAMES.map((n) => [`sfx_${n}`, `audio/sfx/${n}.wav`] as const),
   ['sfx_stage_clear', 'audio/sfx/stage_clear.ogg'],
+  ['sfx_title_slam', 'audio/sfx/title_slam.mp3'],
   // Casse des destructibles (ElevenLabs) : un son par matériau.
   ['sfx_break_wood', 'audio/sfx/destructibles/break_wood.mp3'],
   ['sfx_break_metal', 'audio/sfx/destructibles/break_metal.mp3'],
@@ -180,7 +181,9 @@ export const SFX: Readonly<Record<string, SfxCue>> = {
   // Casse des destructibles, par matériau (throttlé : un AoE peut casser plusieurs objets/frame).
   break_wood: { keys: ['sfx_break_wood'], volume: 0.5, rateJitter: 0.12, throttleMs: 80 },
   break_metal: { keys: ['sfx_break_metal'], volume: 0.5, rateJitter: 0.12, throttleMs: 80 },
-  break_rubble: { keys: ['sfx_break_rubble'], volume: 0.5, rateJitter: 0.12, throttleMs: 80 }
+  break_rubble: { keys: ['sfx_break_rubble'], volume: 0.5, rateJitter: 0.12, throttleMs: 80 },
+  // Impact « chantier » synchro sur le slam-in du logo du titre (refonte arcade).
+  titleSlam: { keys: ['sfx_title_slam'], volume: 0.9 }
 }
 
 /** Pools de VOIX arcade (annonceur) par moment de jeu. `playVoice` pioche → alternance. */
