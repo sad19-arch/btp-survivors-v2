@@ -23,6 +23,9 @@ export interface ClusterElement {
   rotation?: number
   collide: CollideKind
   shape?: ObstacleShape // requis si collide !== 'none' ; interdit si 'none'
+  /** Surface circulaire qui ralentit les joueurs sans infliger de degats. */
+  surfaceSlow?: { radius: number; multiplier: number }
+  animation?: { frameRate: number }
 }
 
 export interface ClusterDef {
@@ -468,16 +471,19 @@ export const CLUSTERS: Record<string, ClusterDef> = {
     elements: [
       // Le spawn est juste au sud de cette dalle : le premier ecran doit lire
       // "coulage de fondations", pas "carrefour de pistes".
-      { assetKey: 'landmark_stage03', dx: 0, dy: 90, scale: 1.28, collide: 'none' },
-      { assetKey: 'struct_stage03_bay', dx: 0, dy: 52, scale: 0.92, collide: 'none' },
-      { assetKey: 'prop_stage03_rebar', dx: -80, dy: 60, scale: 0.95, collide: 'none' },
-      { assetKey: 'prop_stage03_formwork', dx: -160, dy: 105, scale: 0.82, collide: 'none' },
+      { assetKey: 'struct_stage03_slab_rebar', dx: 0, dy: 68, scale: 1.0, collide: 'none', surfaceSlow: { radius: 105, multiplier: 0.62 } },
+      { assetKey: 'landmark_stage03', dx: -100, dy: 74, scale: 0.72, collide: 'none' },
+      { assetKey: 'struct_stage03_bay', dx: -15, dy: 48, scale: 0.78, collide: 'none' },
+      { assetKey: 'prop_stage03_rebar', dx: -86, dy: 56, scale: 0.84, collide: 'none' },
+      { assetKey: 'prop_stage03_formwork', dx: -190, dy: 112, scale: 0.68, collide: 'none' },
       // Flux beton : route sud-est -> toupie active -> pompe -> dalle.
-      { assetKey: 'piste_strip', dx: 360, dy: 280, scale: 1.05, collide: 'none' },
-      { assetKey: 'struct_stage03_pump', dx: 170, dy: 100, scale: 1.18, collide: 'none' },
-      { assetKey: 'struct_stage03_mixer', dx: 330, dy: 125, scale: 1.06, flipX: true, collide: 'none' },
-      { assetKey: 'decal_stage03_spill', dx: 275, dy: 124, scale: 0.65, collide: 'none' },
-      { assetKey: 'decal_stage03_spill', dx: 210, dy: 112, scale: 0.76, collide: 'none' },
+      { assetKey: 'struct_stage03_pump', dx: 155, dy: 92, scale: 0.58, collide: 'none' },
+      { assetKey: 'struct_stage03_mixer', dx: 420, dy: 126, scale: 0.58, flipX: true, collide: 'none' },
+      { assetKey: 'prop_stage03_chute', dx: 92, dy: 92, scale: 0.72, collide: 'none' },
+      { assetKey: 'prop_stage03_vibrator', dx: 34, dy: 146, scale: 0.66, collide: 'none' },
+      { assetKey: 'prop_stage03_hose_active', dx: 112, dy: 126, scale: 2.1, collide: 'none', animation: { frameRate: 8 } },
+      { assetKey: 'decal_stage03_spill', dx: 330, dy: 124, scale: 0.65, collide: 'none' },
+      { assetKey: 'decal_stage03_spill', dx: 235, dy: 112, scale: 0.76, collide: 'none' },
       { assetKey: 'decal_stage03_spill', dx: 105, dy: 106, scale: 0.62, collide: 'none' },
     ],
   },
@@ -487,9 +493,12 @@ export const CLUSTERS: Record<string, ClusterDef> = {
     footprintRadius: 280,
     gates: [{ dx: 0, dy: 210 }],
     elements: [
-      { assetKey: 'struct_stage03_bay', dx: 0, dy: 0, scale: 0.85, collide: 'none' },
-      { assetKey: 'prop_stage03_rebar', dx: -40, dy: -4, scale: 0.75, collide: 'none' },
-      { assetKey: 'prop_stage03_formwork', dx: 108, dy: 24, scale: 0.75, collide: 'none' },
+      { assetKey: 'struct_stage03_bay', dx: 0, dy: -20, scale: 0.8, collide: 'none' },
+      { assetKey: 'struct_stage03_strip_rebar', dx: -20, dy: 18, scale: 0.88, collide: 'both', shape: { kind: 'segment', x2: 142, y2: 0, thickness: 24 } },
+      { assetKey: 'prop_stage03_boards', dx: -120, dy: 78, scale: 0.72, collide: 'none' },
+      { assetKey: 'prop_stage03_circular_saw', dx: 116, dy: 82, scale: 0.64, collide: 'none' },
+      { assetKey: 'prop_stage03_hammer', dx: 62, dy: 102, scale: 0.86, collide: 'none' },
+      { assetKey: 'prop_stage03_clamps', dx: -48, dy: 110, scale: 0.68, collide: 'none' },
     ],
   },
 
@@ -510,10 +519,12 @@ export const CLUSTERS: Record<string, ClusterDef> = {
     footprintRadius: 290,
     gates: [{ dx: 0, dy: 120 }],
     elements: [
-      { assetKey: 'prop_stage03_rebar', dx: -210, dy: -18, scale: 0.78, collide: 'none' },
-      { assetKey: 'prop_stage03_rebar', dx: -70, dy: -6, scale: 0.78, collide: 'none' },
-      { assetKey: 'prop_stage03_rebar', dx: 70, dy: 6, scale: 0.78, collide: 'none' },
-      { assetKey: 'prop_stage03_rebar', dx: 210, dy: 18, scale: 0.78, collide: 'none' },
+      { assetKey: 'prop_stage03_steel_props', dx: -170, dy: -34, scale: 0.82, collide: 'both', shape: { kind: 'circle', r: 52 } },
+      { assetKey: 'prop_stage03_footing_cage', dx: 12, dy: -8, scale: 0.82, collide: 'both', shape: { kind: 'segment', x2: 116, y2: 0, thickness: 34 } },
+      { assetKey: 'prop_stage03_column_cage', dx: 182, dy: -28, scale: 0.78, collide: 'both', shape: { kind: 'circle', r: 34 } },
+      { assetKey: 'prop_stage03_pliers', dx: -40, dy: 92, scale: 0.82, collide: 'none' },
+      { assetKey: 'prop_stage03_binding_wire', dx: 46, dy: 94, scale: 0.82, collide: 'none' },
+      { assetKey: 'prop_stage03_spacers', dx: 124, dy: 92, scale: 0.72, collide: 'none' },
     ],
   },
 
@@ -546,6 +557,75 @@ export const CLUSTERS: Record<string, ClusterDef> = {
     elements: [
       { assetKey: 'decal_stage03_crack', dx: 0, dy: 0, scale: 0.7, collide: 'none' },
       { assetKey: 'decal_stage03_spill', dx: 64, dy: 30, scale: 0.58, collide: 'none' },
+    ],
+  },
+
+  scene_layout_implantation: {
+    id: 'scene_layout_implantation',
+    footprintRadius: 230,
+    gates: [{ dx: 0, dy: 150 }],
+    elements: [
+      { assetKey: 'decal_stage03_layout', dx: 0, dy: 0, scale: 1.0, collide: 'none' },
+      { assetKey: 'prop_stage03_laser_level', dx: -118, dy: -42, scale: 0.72, collide: 'none' },
+      { assetKey: 'prop_stage03_stakes', dx: 108, dy: -42, scale: 0.68, collide: 'none' },
+      { assetKey: 'prop_stage03_marking_spray', dx: -76, dy: 86, scale: 0.82, collide: 'none' },
+      { assetKey: 'prop_stage03_mason_rule', dx: 58, dy: 94, scale: 0.72, collide: 'none' },
+      { assetKey: 'prop_stage03_chalk_line', dx: 126, dy: 72, scale: 0.68, collide: 'none' },
+    ],
+  },
+
+  scene_concrete_preparation: {
+    id: 'scene_concrete_preparation',
+    footprintRadius: 250,
+    gates: [{ dx: 0, dy: 170 }],
+    elements: [
+      { assetKey: 'prop_stage03_concrete_mixer', dx: -78, dy: -30, scale: 0.72, collide: 'both', shape: { kind: 'circle', r: 38 } },
+      { assetKey: 'prop_stage03_wheelbarrow_concrete', dx: 88, dy: -16, scale: 0.74, collide: 'none' },
+      { assetKey: 'prop_stage03_bag_open', dx: -154, dy: 76, scale: 0.74, collide: 'none' },
+      { assetKey: 'prop_stage03_mixing_tub', dx: -30, dy: 92, scale: 0.72, collide: 'none' },
+      { assetKey: 'prop_stage03_bucket', dx: 72, dy: 92, scale: 0.78, collide: 'none' },
+      { assetKey: 'prop_stage03_shovel', dx: 146, dy: 82, scale: 0.9, rotation: 0.35, collide: 'none' },
+      { assetKey: 'prop_stage03_trowel', dx: 16, dy: 126, scale: 0.86, collide: 'none' },
+    ],
+  },
+
+  scene_footing_reinforced: {
+    id: 'scene_footing_reinforced',
+    footprintRadius: 300,
+    gates: [{ dx: 0, dy: 210 }],
+    elements: [
+      { assetKey: 'struct_stage03_blinding', dx: 0, dy: 8, scale: 1.0, collide: 'none' },
+      { assetKey: 'prop_stage03_footing_cage', dx: -76, dy: -6, scale: 0.82, collide: 'both', shape: { kind: 'segment', x2: 142, y2: 0, thickness: 34 } },
+      { assetKey: 'struct_stage03_pad_starters', dx: 116, dy: 12, scale: 0.72, collide: 'both', shape: { kind: 'circle', r: 52 } },
+      { assetKey: 'prop_stage03_starter_rebars', dx: -154, dy: 84, scale: 0.7, collide: 'none' },
+      { assetKey: 'prop_stage03_pliers', dx: 12, dy: 112, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage03_spirit_level', dx: 118, dy: 106, scale: 0.72, collide: 'none' },
+    ],
+  },
+
+  scene_slab_in_progress: {
+    id: 'scene_slab_in_progress',
+    footprintRadius: 300,
+    gates: [{ dx: 0, dy: 210 }],
+    elements: [
+      { assetKey: 'struct_stage03_slab_rebar', dx: 0, dy: 0, scale: 1.0, collide: 'none', surfaceSlow: { radius: 110, multiplier: 0.62 } },
+      { assetKey: 'prop_stage03_vibrator', dx: -138, dy: 72, scale: 0.7, collide: 'none' },
+      { assetKey: 'prop_stage03_power_trowel', dx: 132, dy: 54, scale: 0.72, collide: 'none' },
+      { assetKey: 'prop_stage03_chute', dx: 142, dy: -60, scale: 0.68, collide: 'none' },
+      { assetKey: 'prop_stage03_float', dx: -24, dy: 126, scale: 0.84, collide: 'none' },
+    ],
+  },
+
+  scene_curing_zone: {
+    id: 'scene_curing_zone',
+    footprintRadius: 270,
+    gates: [{ dx: 0, dy: 190 }],
+    elements: [
+      { assetKey: 'struct_stage03_strip_fresh', dx: -34, dy: -34, scale: 0.9, collide: 'none', surfaceSlow: { radius: 92, multiplier: 0.62 } },
+      { assetKey: 'struct_stage03_grade_beam', dx: 64, dy: 48, scale: 0.78, collide: 'both', shape: { kind: 'segment', x2: 132, y2: 0, thickness: 28 } },
+      { assetKey: 'prop_stage03_tarp_covered', dx: -126, dy: 80, scale: 0.72, collide: 'both', shape: { kind: 'circle', r: 46 } },
+      { assetKey: 'prop_stage03_tarp_folded', dx: 82, dy: 112, scale: 0.76, collide: 'none' },
+      { assetKey: 'prop_stage03_bucket', dx: 154, dy: 88, scale: 0.74, collide: 'none' },
     ],
   },
 

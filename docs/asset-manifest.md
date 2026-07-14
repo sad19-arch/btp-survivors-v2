@@ -487,5 +487,29 @@ Par défaut PixelLab sort des props 3D avec ombre. Pour un décalque sol, prompt
 ### 17.7 Icônes = create_map_object (PAS create_ui_asset)
 `create_ui_asset` génère des **panneaux** (min 192px, 20-40 générations) — inadapté aux icônes 64px. Générer les **icônes d'armes/upgrades** comme objets vue `side` via `create_map_object` (64px), puis trim (`tools/assets/trim-object.mjs`). **Projectiles/pickups** = `create_map_object` vue `high top-down`. Au rendu, distinguer les projectiles via `ProjectileState.type` (= weaponId : `cloueur`, `scie`) et les pickups via `PickupState.type` (`xp`) → mapping `PROJ_SPRITE`/`PICKUP_SPRITE` dans `GameScene`. Un objet fin/ambigu vu de dessus (ex : clou top-down) sort mal → le générer en `side` et l'orienter en jeu vers la vitesse.
 
+## 18. Pack Fondations 2026-07-14
+
+Le stage 03 dispose de **54 assets maîtres** : 18 outils/mesure, 20 matériaux,
+7 étapes de construction, 5 équipements et 4 remplacements (`concrete_pump`,
+`mixer_truck`, `formwork`, `slab`). Les sources runtime vivent dans
+`public/stage03/` et sont composées en huit scènes métier déterministes :
+implantation, préparation béton, coffrage, stock ferraillage, semelle armée,
+coulage, dalle en cours et cure.
+
+Préfixe de production :
+`16-bit clean arcade pixel art, top-down three-quarter RPG view, matching player_j1 proportions, bold dark outline, compact readable silhouette, limited SNES/Mega Drive palette, crisp pixels, transparent background`.
+
+Négatif commun :
+`side view, frontal view, photorealism, modern vector art, soft painting, gradients, excessive detail, text, logo, watermark, opaque background, blur, anti-aliasing`.
+
+Règles validées :
+- petits outils en `64x64` ou `96x96`, volontairement agrandis ;
+- matériaux en `128x96`/`128x128`, fondations jusqu'à `256x192`, engins en `384x256` ;
+- orientation nord-ouest/sud-est, même ligne de sol et palette béton/bois/acier/orange ;
+- contrôle obligatoire à taille de gameplay, transparence réelle et silhouette reconnaissable ;
+- objets cassables branchés sur les matériaux `wood`, `metal`, `rubble` existants ;
+- béton frais : ralentissement joueur `0.62`, aucun dégât ;
+- cordeau portatif corrigé séparément pour éviter toute confusion avec un bidon ou un laser.
+
 ### 17.6 Valider le late-game / boss via un bot kiting (seam)
 Le tuning « skill récompensé » fait **mourir le jeu passif** en milieu de run → impossible d'atteindre le boss (5:00) en restant immobile. Pour capturer le boss : piloter un **bot kiting** via le seam (`setInput` fuyant l'ennemi le plus proche + biais vers le centre du monde, `chooseUpgrade(0)` à chaque montée de niveau, `advanceTime` par pas de 200ms). Le temps est **gelé** sur l'écran upgrade → toujours gérer le cas `screen==='upgrade'`.

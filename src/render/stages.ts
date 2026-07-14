@@ -175,6 +175,8 @@ export interface StageEditorExtra {
   key: string
   file: string
   role: 'prop' | 'structure' | 'decal'
+  /** Largeur d'une frame si l'asset est une feuille horizontale. */
+  frame?: number
 }
 
 /** PNJ d'ambiance : skin perso + comportement + période d'animation optionnelle. */
@@ -451,14 +453,21 @@ const FONDATIONS_RENDER: StageRender = {
   ground: [0, 1, 2, 3, 4, 5].map((i) => ({ key: `ground_stage03_${i}`, file: `stage03/ground/tile_${i}.png` })),
   decals: [
     { key: 'decal_stage03_spill', file: 'stage03/decals/spill.png' },
-    { key: 'decal_stage03_crack', file: 'stage03/decals/crack.png' }
+    { key: 'decal_stage03_crack', file: 'stage03/decals/crack.png' },
+    { key: 'decal_stage03_layout', file: 'stage03/decals/layout_chalk.png' }
   ],
   // Seul clutter streamé : béton mini + ferraillage + coffrage.
   // Les GROS ENGINS (toupies, pompe) sont dans `structures` (placés 1 fois).
   props: [
     { key: 'prop_stage03_concrete_mixer', file: 'stage03/props/concrete_mixer.png', scale: 0.65, count: 3 },
     { key: 'prop_stage03_rebar',          file: 'stage03/props/rebar.png',           scale: 0.75, count: 4 },
-    { key: 'prop_stage03_formwork',       file: 'stage03/props/formwork.png',        scale: 0.80, count: 3 }
+    { key: 'prop_stage03_wheelbarrow',    file: 'stage03/props/wheelbarrow_empty.png', scale: 0.78, count: 2 },
+    { key: 'prop_stage03_wheelbarrow_concrete', file: 'stage03/props/wheelbarrow_concrete.png', scale: 0.78, count: 2 },
+    { key: 'prop_stage03_sand',           file: 'stage03/props/sand_pile.png',        scale: 0.82, count: 2 },
+    { key: 'prop_stage03_gravel',         file: 'stage03/props/gravel_pile.png',      scale: 0.82, count: 2 },
+    { key: 'prop_stage03_big_bag',        file: 'stage03/props/aggregate_big_bag.png', scale: 0.78, count: 2 },
+    { key: 'prop_stage03_hose_coiled',    file: 'stage03/props/pump_hose_coiled.png', scale: 0.72, count: 1 },
+    { key: 'prop_stage03_tarp_folded',    file: 'stage03/props/curing_tarp_folded.png', scale: 0.75, count: 1 }
   ],
   enemies: {
     gachee:      { key: 'enemy_stage03_base', file: 'stage03/enemies/base_walk.png', frame: 256, scale: 1.18 },
@@ -467,12 +476,12 @@ const FONDATIONS_RENDER: StageRender = {
   },
   boss: { key: 'boss_stage03', file: 'stage03/boss/boss_walk.png', frame: 256, scale: 1.25 },
   // Fondations : dalle-héros + toupies + coulées de béton + ferrailleur au travail.
-  landmark: { key: 'landmark_stage03', file: 'stage03/landmarks/slab.png', scale: 1.5, count: 1 },
+  landmark: { key: 'landmark_stage03', file: 'stage03/landmarks/slab.png', scale: 1.12, count: 1 },
   // Engins-héros placés UNE fois (toupie jaune NE, pompe orange SE)
   // + travées de coffrage en fond. Ordre = ordre des angles scriptés.
   structures: [
-    { key: 'struct_stage03_mixer',    file: 'stage03/props/mixer_truck.png',     scale: 1.1,  count: 1, band: 'near' },
-    { key: 'struct_stage03_pump',     file: 'stage03/props/concrete_pump.png',   scale: 1.05, count: 1, band: 'near' },
+    { key: 'struct_stage03_mixer',    file: 'stage03/props/mixer_truck.png',     scale: 0.72, count: 1, band: 'near' },
+    { key: 'struct_stage03_pump',     file: 'stage03/props/concrete_pump.png',   scale: 0.72, count: 1, band: 'near' },
     { key: 'struct_stage03_bay',      file: 'stage03/structures/formwork_bay.png', scale: 0.85, count: 5, band: 'mid'  }
   ],
   ambient: [
@@ -510,7 +519,7 @@ const FONDATIONS_RENDER: StageRender = {
       angleSpread: 60,
       distMin: 340,
       distMax: 760,
-      dominantPropIndices: [2],       // formwork (coffrage)
+      dominantPropIndices: [8],       // bache de cure : le coffrage reste compose en scene
       dominantDecalIndices: [1],      // crack (fissures)
     },
     // Passage pompe (SE) — béton frais + ferraillage
@@ -522,6 +531,45 @@ const FONDATIONS_RENDER: StageRender = {
       dominantPropIndices: [0, 1],    // concrete_mixer + rebar
       dominantDecalIndices: [0],      // spill
     }
+  ],
+  editorExtras: [
+    { key: 'prop_stage03_formwork', file: 'stage03/props/formwork.png', role: 'structure' },
+    { key: 'prop_stage03_shovel', file: 'stage03/props/tool_shovel.png', role: 'prop' },
+    { key: 'prop_stage03_pickaxe', file: 'stage03/props/tool_pickaxe.png', role: 'prop' },
+    { key: 'prop_stage03_trowel', file: 'stage03/props/tool_trowel.png', role: 'prop' },
+    { key: 'prop_stage03_mason_rule', file: 'stage03/props/tool_mason_rule.png', role: 'prop' },
+    { key: 'prop_stage03_spirit_level', file: 'stage03/props/tool_spirit_level.png', role: 'prop' },
+    { key: 'prop_stage03_laser_level', file: 'stage03/props/tool_laser_level.png', role: 'prop' },
+    { key: 'prop_stage03_chalk_line', file: 'stage03/props/tool_chalk_line.png', role: 'prop' },
+    { key: 'prop_stage03_stakes', file: 'stage03/props/stakes_bundle.png', role: 'prop' },
+    { key: 'prop_stage03_marking_spray', file: 'stage03/props/tool_marking_spray.png', role: 'prop' },
+    { key: 'prop_stage03_hand_saw', file: 'stage03/props/tool_hand_saw.png', role: 'prop' },
+    { key: 'prop_stage03_circular_saw', file: 'stage03/props/tool_circular_saw.png', role: 'prop' },
+    { key: 'prop_stage03_hammer', file: 'stage03/props/tool_formwork_hammer.png', role: 'prop' },
+    { key: 'prop_stage03_mixing_tub', file: 'stage03/props/mixing_tub.png', role: 'prop' },
+    { key: 'prop_stage03_bucket', file: 'stage03/props/mason_bucket.png', role: 'prop' },
+    { key: 'prop_stage03_float', file: 'stage03/props/tool_float_trowel.png', role: 'prop' },
+    { key: 'prop_stage03_pliers', file: 'stage03/props/tool_rebar_pliers.png', role: 'prop' },
+    { key: 'prop_stage03_bag_open', file: 'stage03/props/concrete_bag_open.png', role: 'prop' },
+    { key: 'prop_stage03_boards', file: 'stage03/props/formwork_boards_loose.png', role: 'prop' },
+    { key: 'prop_stage03_clamps', file: 'stage03/props/formwork_clamps_kit.png', role: 'prop' },
+    { key: 'prop_stage03_starter_rebars', file: 'stage03/props/starter_rebars.png', role: 'prop' },
+    { key: 'prop_stage03_column_cage', file: 'stage03/props/column_rebar_cage.png', role: 'structure' },
+    { key: 'prop_stage03_footing_cage', file: 'stage03/props/footing_rebar_cage.png', role: 'structure' },
+    { key: 'prop_stage03_spacers', file: 'stage03/props/rebar_spacers.png', role: 'prop' },
+    { key: 'prop_stage03_binding_wire', file: 'stage03/props/binding_wire.png', role: 'prop' },
+    { key: 'prop_stage03_vibrator', file: 'stage03/props/concrete_vibrator.png', role: 'prop' },
+    { key: 'prop_stage03_hose_active', file: 'stage03/props/pump_hose_active.png', role: 'prop', frame: 32 },
+    { key: 'prop_stage03_chute', file: 'stage03/props/concrete_chute.png', role: 'prop' },
+    { key: 'prop_stage03_power_trowel', file: 'stage03/props/power_trowel.png', role: 'prop' },
+    { key: 'struct_stage03_blinding', file: 'stage03/structures/blinding_concrete.png', role: 'structure' },
+    { key: 'struct_stage03_strip_rebar', file: 'stage03/structures/strip_footing_rebar.png', role: 'structure' },
+    { key: 'struct_stage03_strip_fresh', file: 'stage03/structures/strip_footing_fresh.png', role: 'structure' },
+    { key: 'struct_stage03_pad_starters', file: 'stage03/structures/pad_footing_starters.png', role: 'structure' },
+    { key: 'struct_stage03_grade_beam', file: 'stage03/structures/grade_beam.png', role: 'structure' },
+    { key: 'struct_stage03_slab_rebar', file: 'stage03/structures/slab_rebar_exposed.png', role: 'structure' },
+    { key: 'prop_stage03_tarp_covered', file: 'stage03/props/tarp_covered_materials.png', role: 'prop' },
+    { key: 'prop_stage03_steel_props', file: 'stage03/props/steel_props_rack.png', role: 'structure' }
   ],
   baseTileIndex: 0,            // tuile béton de base (index 0)
   decalDensityMultiplier: 1.35 // chantier actif brut, densité forte (coulage béton)

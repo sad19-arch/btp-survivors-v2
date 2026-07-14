@@ -81,7 +81,7 @@ function depthFor(elem: ClusterElement): number {
  */
 export class SiteRenderer {
   /** Sprites des clusters posés — détruits et recréés à chaque `reset()`. */
-  private sprites: Phaser.GameObjects.Image[] = []
+  private sprites: Array<Phaser.GameObjects.Image | Phaser.GameObjects.Sprite> = []
 
   /** Objets du plan masse (clôtures/pistes/terre excavée) — même cycle de vie. */
   private planObjects: Phaser.GameObjects.GameObject[] = []
@@ -171,6 +171,24 @@ export class SiteRenderer {
             .setDepth(depthFor(elem))
             .setRotation(angle)
 
+          this.sprites.push(sp)
+        } else if (elem.animation !== undefined) {
+          const animationKey = `site_${elem.assetKey}`
+          if (!this.scene.anims.exists(animationKey)) {
+            this.scene.anims.create({
+              key: animationKey,
+              frames: this.scene.anims.generateFrameNumbers(elem.assetKey),
+              frameRate: elem.animation.frameRate,
+              repeat: -1,
+            })
+          }
+          const sp = this.scene.add
+            .sprite(ax, ay, elem.assetKey, 0)
+            .setScale(elem.scale)
+            .setDepth(depthFor(elem))
+            .setFlipX(flip !== (elem.flipX === true))
+            .setRotation(rot + (elem.rotation ?? 0))
+          sp.play(animationKey)
           this.sprites.push(sp)
         } else {
           // Cercle ou décoration sans collision : placement direct à (ax, ay).

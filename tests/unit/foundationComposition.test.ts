@@ -20,7 +20,23 @@ const FOUNDATION_SCENES = new Set([
   'scene_mixer_waiting',
   'scene_small_mixer_patch',
   'scene_concrete_defect_minor',
+  'scene_layout_implantation',
+  'scene_concrete_preparation',
+  'scene_footing_reinforced',
+  'scene_slab_in_progress',
+  'scene_curing_zone',
 ])
+
+const REQUIRED_TRADE_SCENES = [
+  'scene_foundation_pour_spawn',
+  'scene_layout_implantation',
+  'scene_concrete_preparation',
+  'scene_formwork_bay_active',
+  'scene_rebar_stock',
+  'scene_footing_reinforced',
+  'scene_slab_in_progress',
+  'scene_curing_zone',
+] as const
 
 function definedCluster(id: string): ClusterDef {
   const def = CLUSTERS[id]
@@ -104,6 +120,19 @@ describe('stage 03 fondations - composition contract', () => {
         FOUNDATION_SCENES.has(placed.defId),
         `${placed.defId} contains stage03 assets but is not an allowed causal scene`
       ).toBe(true)
+    }
+  })
+
+  it.each(SEEDS)('places all eight trade scenes and three fresh-concrete surfaces (seed %i)', (seed) => {
+    const layout = buildSiteLayout(seed, W, H, STAGE)
+    const ids = new Set(layout.clusters.map((cluster) => cluster.defId))
+    for (const sceneId of REQUIRED_TRADE_SCENES) {
+      expect(ids.has(sceneId), `${sceneId} missing`).toBe(true)
+    }
+    expect(layout.slowZones).toHaveLength(3)
+    for (const zone of layout.slowZones ?? []) {
+      expect(zone.multiplier).toBe(0.62)
+      expect(zone.radius).toBeGreaterThanOrEqual(90)
     }
   })
 
@@ -254,8 +283,11 @@ describe('stage 03 fondations - composition contract', () => {
 
     for (const def of usedDefs) {
       if (elements(def, 'prop_stage03_concrete_mixer').length > 0) {
-        expect(elements(def, 'prop_stage03_formwork').length).toBeGreaterThan(0)
-        expect(elements(def, 'decal_stage03_spill').length).toBeGreaterThan(0)
+        const supportingTools =
+          elements(def, 'prop_stage03_formwork').length +
+          elements(def, 'prop_stage03_bag_open').length +
+          elements(def, 'prop_stage03_wheelbarrow_concrete').length
+        expect(supportingTools).toBeGreaterThan(0)
       }
 
       if (elements(def, 'prop_stage03_rebar').length > 0) {

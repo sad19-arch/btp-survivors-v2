@@ -94,6 +94,7 @@ export function parseLayout(raw: string, fallbackStage: string): ParseResult {
           flipX: o.flipX === true,
           variant: num(o.variant, 0),
           rotation: num(o.rotation, 0),
+          scale: num(o.scale, 1),
           locked: o.locked === true
         }
         const els = parseElements(o.elements)

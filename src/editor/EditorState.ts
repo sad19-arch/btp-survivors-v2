@@ -284,7 +284,7 @@ export class EditorState {
 
   // ── instances ─────────────────────────────────────────────────────────────
   addInstance(prefab: string, x: number, y: number): LayoutInstance {
-    const inst: LayoutInstance = { id: newId('instance'), prefab, x, y, flipX: false, variant: 0, rotation: 0, locked: false }
+    const inst: LayoutInstance = { id: newId('instance'), prefab, x, y, flipX: false, variant: 0, rotation: 0, scale: 1, locked: false }
     this.layout.instances.push(inst)
     this.selectOnly(inst.id)
     this.emit()
@@ -349,6 +349,22 @@ export class EditorState {
     if (inst === null || inst.locked) {return}
     inst.rotation = (((inst.rotation + deg) % 360) + 360) % 360
     this.emit()
+  }
+  /** Échelle UNIFORME de l'instance primaire (redimensionnement sans déformation). */
+  static readonly SCALE_MIN = 0.25
+  static readonly SCALE_MAX = 5
+  /** Fixe l'échelle (bornée [0.25, 5]). */
+  setSelectedScale(value: number): void {
+    const inst = this.selectedInstance()
+    if (inst === null || inst.locked) {return}
+    inst.scale = Math.min(EditorState.SCALE_MAX, Math.max(EditorState.SCALE_MIN, value))
+    this.emit()
+  }
+  /** Ajuste l'échelle d'un pas additif (boutons +/− et clavier). */
+  nudgeSelectedScale(step: number): void {
+    const inst = this.selectedInstance()
+    if (inst === null || inst.locked) {return}
+    this.setSelectedScale((inst.scale ?? 1) + step)
   }
   toggleLockSelected(): void {
     const inst = this.selectedInstance()
@@ -499,6 +515,21 @@ export class EditorState {
         }
         return e
       })
+    }
+    // Cuit l'échelle UNIFORME de l'instance dans ses éléments résolus (résolus
+    // ci-dessus OU embarqués via import) : redimensionnement sans déformation →
+    // le jeu rend les éléments à `scale × inst.scale` (collision incluse).
+    for (const inst of clone.instances) {
+      const s = inst.scale ?? 1
+      if (s === 1 || inst.elements === undefined) {continue}
+      inst.elements = inst.elements.map((e): EmbeddedElement => {
+        const scaled: EmbeddedElement = { ...e, scale: e.scale * s }
+        if (scaled.shape?.kind === 'circle') {
+          scaled.shape = { kind: 'circle', r: scaled.shape.r * s }
+        }
+        return scaled
+      })
+      inst.scale = 1
     }
     return serializeLayout(clone)
   }

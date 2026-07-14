@@ -647,6 +647,8 @@ export class EditorScene extends Phaser.Scene {
       case 'f': case 'F': this.state.flipSelected(); break
       case 'v': case 'V': this.state.cycleVariant(); break
       case 'r': case 'R': this.state.rotateSelected(e.shiftKey ? -15 : 15); break
+      case '+': case '=': this.state.nudgeSelectedScale(0.1); e.preventDefault(); break
+      case '-': case '_': this.state.nudgeSelectedScale(-0.1); e.preventDefault(); break
       case 'l': case 'L': this.state.toggleLockSelected(); break
       case ']': this.state.bringSelectedToFront(); break
       case '[': this.state.sendSelectedToBack(); break
@@ -726,10 +728,12 @@ export class EditorScene extends Phaser.Scene {
         view.container.add(this.buildChildren(elements, inst.flipX))
         view.sig = sig
       }
-      // Position, ordre de plan (index → depth) et rotation par instance.
+      // Position, ordre de plan (index → depth), rotation ET échelle uniforme par
+      // instance (redimensionnement sans déformation — un seul facteur).
       view.container.setPosition(wx, wy)
       view.container.setDepth(DEPTH_INSTANCE + idx * 0.01)
       view.container.setRotation(Phaser.Math.DegToRad(inst.rotation))
+      view.container.setScale(inst.scale ?? 1)
     }
     // Détruit les vues orphelines.
     for (const [id, view] of this.views) {

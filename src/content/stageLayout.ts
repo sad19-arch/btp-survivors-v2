@@ -58,6 +58,8 @@ export interface LayoutInstance {
   flipX: boolean
   variant: number
   rotation: number
+  /** Échelle UNIFORME de l'instance (redimensionnement sans déformation). Défaut 1. */
+  scale?: number
   locked: boolean
   /** Éléments résolus (sauvegarde « jeu ») — absent en sauvegarde éditable. */
   elements?: EmbeddedElement[]

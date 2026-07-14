@@ -86,9 +86,18 @@ export interface Obstacle {
   blocks: 'both' | 'enemies'
 }
 
+export interface SurfaceSlowZone {
+  x: number
+  y: number
+  radius: number
+  multiplier: number
+}
+
 export interface SiteLayout {
   clusters: PlacedCluster[]
   obstacles: Obstacle[]
+  /** Surfaces environnementales ralentissantes, sans degats. */
+  slowZones?: SurfaceSlowZone[]
   /**
    * Objets destructibles à faire apparaître. Renseigné par l'éditeur
    * (`composedToSiteLayout`) OU le scatter programmatique (attaché par
@@ -196,6 +205,32 @@ function extractObstacles(
   return result
 }
 
+function extractSurfaceSlowZones(
+  cx: number,
+  cy: number,
+  elements: ReadonlyArray<ClusterElement>,
+  flipX = false,
+  rotationDeg = 0
+): SurfaceSlowZone[] {
+  const rad = (rotationDeg * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  const result: SurfaceSlowZone[] = []
+  for (const elem of elements) {
+    if (elem.surfaceSlow === undefined) {
+      continue
+    }
+    const lx = flipX ? -elem.dx : elem.dx
+    result.push({
+      x: cx + lx * cos - elem.dy * sin,
+      y: cy + lx * sin + elem.dy * cos,
+      radius: elem.surfaceSlow.radius,
+      multiplier: elem.surfaceSlow.multiplier
+    })
+  }
+  return result
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Composition éditeur → SiteLayout (pur, déterministe)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -225,6 +260,7 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
   const offY = layout.worldSize.height / 2
   const clusters: PlacedCluster[] = []
   const obstacles: Obstacle[] = []
+  const slowZones: SurfaceSlowZone[] = []
   const destructibles: DestructibleSpawn[] = []
 
   for (const inst of layout.instances) {
@@ -257,6 +293,7 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
         for (const obs of extractObstacles(wx, wy, els, flip, rot)) {
           obstacles.push(obs)
         }
+        slowZones.push(...extractSurfaceSlowZones(wx, wy, els, flip, rot))
       }
     } else if (CLUSTERS[inst.prefab] !== undefined) {
       const cdef = CLUSTERS[inst.prefab] as ClusterDef
@@ -264,10 +301,11 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
       for (const obs of extractObstacles(wx, wy, cdef.elements, flip, rot)) {
         obstacles.push(obs)
       }
+      slowZones.push(...extractSurfaceSlowZones(wx, wy, cdef.elements, flip, rot))
     }
   }
 
-  return { clusters, obstacles, destructibles }
+  return { clusters, obstacles, slowZones, destructibles }
 }
 
 /**
@@ -334,11 +372,15 @@ export function buildSiteLayout(
   stageId: string
 ): SiteLayout {
   const base = computeBaseLayout(seed, worldW, worldH, stageId)
-  return {
+  const result: SiteLayout = {
     clusters: base.clusters,
     obstacles: base.obstacles,
     destructibles: base.destructibles ?? scatterDestructibles(seed, worldW, worldH, stageId)
   }
+  if (base.slowZones !== undefined) {
+    result.slowZones = base.slowZones
+  }
+  return result
 }
 
 function computeBaseLayout(
@@ -506,6 +548,7 @@ function layoutFromPlan(plan: SitePlan, stageId: string, seed: number): SiteLayo
   const rng = new Rng((seed ^ LAYOUT_XOR) >>> 0)
   const placed: PlacedCluster[] = []
   const obstacles: Obstacle[] = []
+  const slowZones: SurfaceSlowZone[] = []
   const program = SITE_PROGRAMS[stageId]
 
   const push = (def: ClusterDef, x: number, y: number): void => {
@@ -513,6 +556,7 @@ function layoutFromPlan(plan: SitePlan, stageId: string, seed: number): SiteLayo
     for (const obs of extractObstacles(x, y, def.elements)) {
       obstacles.push(obs)
     }
+    slowZones.push(...extractSurfaceSlowZones(x, y, def.elements))
   }
 
   // ── 1. Route (bord sud) — identique au legacy (bande continue). ───────────
@@ -596,7 +640,7 @@ function layoutFromPlan(plan: SitePlan, stageId: string, seed: number): SiteLayo
     }
   }
 
-  return { clusters: placed, obstacles }
+  return { clusters: placed, obstacles, slowZones }
 }
 
 /** Place `count` exemplaires d'un prefab dans la zone selon l'arrangement. */

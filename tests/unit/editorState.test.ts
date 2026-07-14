@@ -120,3 +120,56 @@ describe('EditorState — multi-sélection / copier-coller / batch', () => {
     expect(s.instances.find((i) => i.id === a.id)?.x).toBe(0)
   })
 })
+
+describe('EditorState — échelle uniforme (redimensionnement sans déformation)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+  const make = (): EditorState => new EditorState('terrain_vierge')
+
+  it('addInstance donne une échelle 1 par défaut', () => {
+    const a = make().addInstance('obj_fence_panel', 0, 0)
+    expect(a.scale).toBe(1)
+  })
+
+  it('setSelectedScale borne l\'échelle à [0.25, 5]', () => {
+    const s = make()
+    s.addInstance('obj_fence_panel', 0, 0)
+    s.setSelectedScale(3)
+    expect(s.selectedInstance()?.scale).toBe(3)
+    s.setSelectedScale(99)
+    expect(s.selectedInstance()?.scale).toBe(5)
+    s.setSelectedScale(0.01)
+    expect(s.selectedInstance()?.scale).toBe(0.25)
+  })
+
+  it('nudgeSelectedScale ajoute un pas additif et borne', () => {
+    const s = make()
+    s.addInstance('obj_fence_panel', 0, 0)
+    s.nudgeSelectedScale(0.5)
+    expect(s.selectedInstance()?.scale).toBeCloseTo(1.5)
+    s.setSelectedScale(4.9)
+    s.nudgeSelectedScale(0.5)
+    expect(s.selectedInstance()?.scale).toBe(5)
+  })
+
+  it('une instance verrouillée n\'est pas redimensionnée', () => {
+    const s = make()
+    s.addInstance('obj_fence_panel', 0, 0)
+    s.toggleLockSelected()
+    s.setSelectedScale(3)
+    expect(s.selectedInstance()?.scale).toBe(1)
+  })
+
+  it('exportGameJson cuit l\'échelle dans les éléments (× inst.scale) et remet inst.scale à 1', () => {
+    const s = make()
+    s.addInstance('obj_fence_panel', 0, 0)
+    s.setSelectedScale(2)
+    const out = JSON.parse(s.exportGameJson()) as {
+      instances: Array<{ scale?: number; elements?: Array<{ scale: number }> }>
+    }
+    const inst = out.instances[0]
+    expect(inst?.elements?.[0]?.scale).toBeCloseTo(2)
+    expect(inst?.scale).toBe(1)
+  })
+})

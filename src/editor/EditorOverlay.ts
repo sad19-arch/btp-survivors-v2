@@ -233,7 +233,7 @@ export class EditorOverlay {
       const label = paletteEntry(inst.prefab)?.label ?? inst.prefab
       parts.push(
         `<div class="sce-insp-title">${label}${inst.locked ? ' 🔒' : ''}</div>` +
-        `<div class="sce-insp-row">x: ${Math.round(inst.x)} · y: ${Math.round(inst.y)} · flip: ${inst.flipX ? 'oui' : 'non'} · rot: ${inst.rotation}° · var: ${inst.variant}</div>`
+        `<div class="sce-insp-row">x: ${Math.round(inst.x)} · y: ${Math.round(inst.y)} · flip: ${inst.flipX ? 'oui' : 'non'} · rot: ${inst.rotation}° · taille: ${Math.round((inst.scale ?? 1) * 100)}% · var: ${inst.variant}</div>`
       )
     } else if (active.prefab === null && active.marker === null) {
       parts.push('<div class="sce-insp-hint">Clique une carte de la palette, puis clique la map pour poser. Clique/lasso pour sélectionner (Maj = ajouter).</div>')
@@ -252,6 +252,9 @@ export class EditorOverlay {
       row.className = 'sce-insp-actions'
       row.appendChild(btn('Flip (F)', () => state.flipSelected()))
       row.appendChild(btn('Pivoter (R)', () => state.rotateSelected(15)))
+      row.appendChild(btn('Réduire (−)', () => state.nudgeSelectedScale(-0.1)))
+      row.appendChild(btn('Agrandir (+)', () => state.nudgeSelectedScale(0.1)))
+      row.appendChild(btn('Taille 100%', () => state.setSelectedScale(1)))
       row.appendChild(btn(inst.locked ? 'Déverrouiller (L)' : 'Verrouiller (L)', () => state.toggleLockSelected(), inst.locked ? 'sce-btn-on' : ''))
       row.appendChild(btn('Devant (])', () => state.bringSelectedToFront()))
       row.appendChild(btn('Derrière ([)', () => state.sendSelectedToBack()))

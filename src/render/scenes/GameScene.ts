@@ -323,7 +323,11 @@ export class GameScene extends Phaser.Scene {
     // Assets réservés éditeur : préchargés pour que les compos sauvées soient
     // jouables (le rendu des clusters composés retrouve la texture). Non scatterés.
     for (const e of this.stage.editorExtras ?? []) {
-      this.load.image(e.key, e.file)
+      if (e.frame !== undefined) {
+        this.load.spritesheet(e.key, e.file, { frameWidth: e.frame, frameHeight: e.frame })
+      } else {
+        this.load.image(e.key, e.file)
+      }
     }
     // Feuilles de personnages 4×4 (lourdes) — sautées en mode allégé (→ cercles).
     if (!this.lite) {

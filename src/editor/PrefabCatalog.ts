@@ -261,7 +261,11 @@ function buildStageAssets(stageId: string): { assets: EditorAsset[]; groundKey: 
   // Assets réservés éditeur (implantation, WC, marquages…) : exposés dans la
   // palette + miniature, jamais scatterés par le jeu.
   for (const e of sr.editorExtras ?? []) {
-    add({ key: e.key, file: e.file, label: humanize(e.file), role: e.role })
+    if (e.frame !== undefined) {
+      add({ key: e.key, file: e.file, sheet: true, frame: e.frame, label: humanize(e.file), role: e.role })
+    } else {
+      add({ key: e.key, file: e.file, label: humanize(e.file), role: e.role })
+    }
   }
   // PNJ « métier » du stage (tous les skins ambient) + ouvriers génériques
   // PARTAGÉS (SHARED_WORKER_NPCS, identiques sur tous les stages) : exposés

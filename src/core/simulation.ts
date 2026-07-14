@@ -43,7 +43,8 @@ import { rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
 import { tickChestBearer, dropChestBearerLoot } from './systems/chestDirector'
 import { resolveObstacleCollisions } from './systems/obstacleCollision'
-import { buildSiteLayout, type Obstacle } from './siteLayout'
+import { buildSiteLayout, type Obstacle, type SurfaceSlowZone } from './siteLayout'
+import { surfaceSlowMultiplierAt } from './systems/surfaceSlow'
 import { buildFlowField, CELL_FLOW, HALF_FLOW, type FlowField } from './systems/flowField'
 import { bossLevelHpMult, CHEST, coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
 import { SPAWN_RAMP, difficultyScaleAt } from '@content/spawnRamp'
@@ -182,6 +183,8 @@ export class Simulation {
   private readonly enemyGrid = new SpatialGrid(64)
   /** Obstacles statiques du site (calculés UNE fois au reset, vide pour terrain_vierge). */
   private obstacles: readonly Obstacle[] = []
+  /** Beton frais et autres surfaces sans degats qui affectent uniquement les joueurs. */
+  private slowZones: readonly SurfaceSlowZone[] = []
   /** Champ de flux courant (null si aucun obstacle ou pas encore construit). */
   private flowField: FlowField | null = null
   /** Colonne de la cellule du joueur lors du dernier build du champ de flux. */
@@ -556,6 +559,7 @@ export class Simulation {
     // flux RNG de la sim. Pour terrain_vierge : obstacles = [] → no-op garanti.
     const site = buildSiteLayout(seed, WORLD.width, WORLD.height, this.phaseId)
     this.obstacles = site.obstacles
+    this.slowZones = site.slowZones ?? []
     // Réinitialise le champ de flux (sera reconstruit au premier pas si obstacles > 0).
     this.flowField = null
     this.lastFlowCol = -1
@@ -999,8 +1003,10 @@ export class Simulation {
         continue
       }
       const dir = normalize(input.move)
-      vel.x = dir.x * player.speed
-      vel.y = dir.y * player.speed
+      const pos = this.world.get(e, 'position')
+      const surfaceMult = pos === undefined ? 1 : surfaceSlowMultiplierAt(pos.x, pos.y, this.slowZones)
+      vel.x = dir.x * player.speed * surfaceMult
+      vel.y = dir.y * player.speed * surfaceMult
     }
   }
 
