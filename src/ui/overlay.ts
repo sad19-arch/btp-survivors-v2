@@ -436,6 +436,7 @@ export class Overlay {
       'div',
       { className: 'panel' },
       h('div', { className: 'panel__title logo' },
+        h('div', { className: 'logo__flash', attrs: { 'aria-hidden': 'true' } }),
         h('div', { className: 'logo__topper', text: 'SUPER CHANTIER-001' }),
         h('div', { className: 'logo__btp', text: 'BTP' }),
         h('div', { className: 'logo__carnage', text: 'CARNAGE' }),

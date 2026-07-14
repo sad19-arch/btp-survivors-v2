@@ -677,9 +677,21 @@ const CSS = `
 }
 #ui-root .arc-metal { background: url('metal_v.png') repeat, var(--arc-brun2); box-shadow: inset 0 2px 0 rgba(255,255,255,.14), inset 0 -3px 0 rgba(0,0,0,.5); }
 #ui-root .arc-crt { background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 2px, transparent 2px 4px); }
-@keyframes slamIn { 0%,8% { opacity: 0; transform: scale(3.2) translateY(-22px); } 15% { opacity: 1; transform: scale(.9); } 20% { transform: scale(1.06); } 25% { transform: scale(.98); } 30%,100% { transform: scale(1); } }
-@keyframes impactFlash { 0%,100% { opacity: 0; } 12% { opacity: .9; } }
-@keyframes impactDust { 0% { opacity: .7; transform: scale(.4); } 100% { opacity: 0; transform: scale(1.4); } }
+@keyframes slamIn {
+  0% { opacity: 0; transform: scale(5.2) translateY(-90px) rotate(-5deg); }
+  9% { opacity: 0; transform: scale(4.6) translateY(-70px) rotate(-4deg); animation-timing-function: cubic-bezier(.75,0,.95,.25); }
+  10% { opacity: 1; transform: scale(.74) translateY(12px) rotate(2.4deg); }   /* SLAM — écrasement à l'impact */
+  12% { transform: scale(1.18) translateY(-8px) rotate(-1.6deg); }              /* rebond violent */
+  13.5% { transform: translateX(-10px) scale(1.02) rotate(1.1deg); }            /* secousses */
+  15% { transform: translateX(9px) scale(.97) rotate(-.8deg); }
+  16.5% { transform: translateX(-6px) scale(1.015) rotate(.5deg); }
+  18% { transform: translateX(4px) scale(.995) rotate(-.3deg); }
+  19.5% { transform: translateX(-2px) scale(1.012); }
+  21% { transform: scale(.998); }
+  24%, 100% { transform: scale(1) translateY(0) rotate(0); }
+}
+@keyframes impactFlash { 0%, 9% { opacity: 0; } 10% { opacity: .92; } 15% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes impactDust { 0%, 9% { opacity: 0; transform: scaleX(.3) scaleY(.5); } 11% { opacity: .95; transform: scaleX(1) scaleY(1); } 22% { opacity: 0; transform: scaleX(1.7) scaleY(1.5); } 100% { opacity: 0; } }
 @keyframes blinkSlow { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
 /* Logo sculpté BTP / CARNAGE (titre 2a, Metal Slug) — fidèle à la maquette :
    géant, biseau étagé (highlight + contour 4px + 3 couches d'ombre) + slam-in
@@ -691,7 +703,8 @@ const CSS = `
 #ui-root .logo__topper::after { background: linear-gradient(90deg, var(--arc-creme2), transparent); }
 #ui-root .logo__btp { font-family: 'Jersey 25'; font-size: clamp(52px, 12vw, 150px); line-height: .8; color: var(--arc-jaune); letter-spacing: 6px; text-shadow: -0.02em -0.02em 0 var(--arc-jaune-clair), 0.02em 0 0 var(--arc-contour), -0.02em 0 0 var(--arc-contour), 0 0.02em 0 var(--arc-contour), 0 -0.02em 0 var(--arc-contour), 0.033em 0.033em 0 var(--arc-ombre1), 0.06em 0.06em 0 var(--arc-ombre2), 0.087em 0.087em 0 var(--arc-ombre3), 0.107em 0.107em 0 var(--arc-contour); }
 #ui-root .logo__carnage { font-family: 'Jersey 25'; font-size: clamp(88px, 20vw, 250px); line-height: .78; margin-top: -.03em; color: var(--arc-orange2); letter-spacing: 2px; text-shadow: -0.012em -0.012em 0 #FFD08A, 0.016em 0 0 var(--arc-contour), -0.016em 0 0 var(--arc-contour), 0 0.016em 0 var(--arc-contour), 0 -0.016em 0 var(--arc-contour), 0.028em 0.028em 0 #B23A0C, 0.048em 0.048em 0 #7c2408, 0.068em 0.068em 0 var(--arc-ombre4), 0.088em 0.096em 0 rgba(0,0,0,.55); }
-#ui-root .logo__dust { width: min(640px, 80vw); height: 40px; margin-top: 6px; background: radial-gradient(ellipse at center, rgba(120,96,64,.9) 0%, rgba(120,96,64,0) 70%); animation: impactDust 5s steps(4) infinite; }
+#ui-root .logo__dust { width: min(640px, 80vw); height: 40px; margin-top: 6px; background: radial-gradient(ellipse at center, rgba(120,96,64,.95) 0%, rgba(120,96,64,0) 70%); transform-origin: center top; animation: impactDust 5s ease-out infinite; }
+#ui-root .logo__flash { position: absolute; left: 50%; top: 52%; width: 150%; height: 220%; transform: translate(-50%, -50%); z-index: -1; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, rgba(255,244,204,.95) 0%, rgba(255,210,74,.45) 34%, rgba(255,210,74,0) 66%); animation: impactFlash 5s ease-out infinite; }
 `
 
 let injected = false
