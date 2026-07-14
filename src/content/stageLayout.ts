@@ -65,7 +65,12 @@ export interface LayoutInstance {
   elements?: EmbeddedElement[]
 }
 
-export type MarkerType = 'signature_zone'
+/**
+ * Type de marqueur (outil de conception ÉDITEUR). `signature_zone` = macro-zone A
+ * (compat cartes existantes) ; les 3 autres = macro-zones B/C/D. Ces marqueurs ne
+ * sont JAMAIS lus par la sim/le rendu jeu (voir src/editor/zones.ts).
+ */
+export type MarkerType = 'signature_zone' | 'zone_main_work' | 'zone_logistics' | 'zone_atmosphere'
 
 export interface LayoutMarker {
   id: string

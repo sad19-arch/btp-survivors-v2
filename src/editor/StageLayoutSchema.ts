@@ -7,7 +7,8 @@
  * Ne dépend NI de Phaser NI du DOM.
  */
 
-import { emptyLayout, type EmbeddedElement, type EmbeddedShape, type LayoutInstance, type LayoutMarker, type LayoutNpc, type LayoutPath, type NpcKind, type StageLayout, type Vec2 } from '@content/stageLayout'
+import { emptyLayout, type EmbeddedElement, type EmbeddedShape, type LayoutInstance, type LayoutMarker, type MarkerType, type LayoutNpc, type LayoutPath, type NpcKind, type StageLayout, type Vec2 } from '@content/stageLayout'
+import { ZONE_BY_TYPE } from './zones'
 
 export { SCHEMA_VERSION, emptyLayout } from '@content/stageLayout'
 export type { Vec2, LayoutInstance, LayoutMarker, LayoutPath, LayoutNpc, NpcKind, StageLayout, MarkerType, PathType, EmbeddedElement, EmbeddedShape } from '@content/stageLayout'
@@ -109,14 +110,17 @@ export function parseLayout(raw: string, fallbackStage: string): ParseResult {
       .map((it): LayoutMarker | null => {
         if (typeof it !== 'object' || it === null) {return null}
         const o = it as Record<string, unknown>
-        if (o.type !== 'signature_zone') {return null}
+        // Accepte les 4 macro-zones (A=signature_zone + B/C/D) via ZONE_DEFS ;
+        // rejette tout autre type. Tailles par défaut = celles de la zone.
+        const def = typeof o.type === 'string' ? ZONE_BY_TYPE.get(o.type as MarkerType) : undefined
+        if (def === undefined) {return null}
         return {
-          id: typeof o.id === 'string' ? o.id : 'signature_zone',
-          type: 'signature_zone',
-          x: num(o.x, -700),
-          y: num(o.y, -500),
-          w: num(o.w, 1400),
-          h: num(o.h, 1000)
+          id: typeof o.id === 'string' ? o.id : def.type,
+          type: def.type,
+          x: num(o.x, -def.w / 2),
+          y: num(o.y, -def.h / 2),
+          w: num(o.w, def.w),
+          h: num(o.h, def.h)
         }
       })
       .filter((v): v is LayoutMarker => v !== null)

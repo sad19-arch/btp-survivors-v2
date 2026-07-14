@@ -15,6 +15,7 @@
 import { STAGE_RENDER, SHARED_WORKER_NPCS, CITY_BUILDINGS, type StageRender, type StageAmbientNpc } from '@render/stages'
 import { CLUSTERS } from '@content/clusters'
 import { destructiblesForStage } from '@content/destructibles'
+import { ZONE_DEFS } from './zones'
 
 export type EntryKind = 'scene' | 'stock' | 'route' | 'logistique' | 'marqueur' | 'decor' | 'objet'
 export type EntrySize = 'petite' | 'moyenne' | 'grande'
@@ -27,7 +28,7 @@ export interface PrefabElement {
   flipX?: boolean
 }
 
-export type MarkerTool = 'spawn' | 'signature_zone' | 'worker_path' | 'truck_path'
+export type MarkerTool = 'spawn' | 'signature_zone' | 'worker_path' | 'truck_path' | 'zone_main_work' | 'zone_logistics' | 'zone_atmosphere'
 
 export interface PaletteEntry {
   id: string
@@ -220,7 +221,10 @@ function humanize(file: string): string {
 
 const MARKERS: PaletteEntry[] = [
   { id: 'marker_spawn', label: 'Spawn joueur', category: 'markers', kind: 'marqueur', size: 'petite', marker: 'spawn' },
-  { id: 'marker_signature_zone', label: 'Zone signature', category: 'markers', kind: 'marqueur', size: 'grande', marker: 'signature_zone' },
+  // Les 4 macro-zones de conception (A=signature_zone + B/C/D), dérivées de ZONE_DEFS.
+  ...ZONE_DEFS.map((z): PaletteEntry => ({
+    id: 'marker_' + z.type, label: z.label, category: 'markers', kind: 'marqueur', size: 'grande', marker: z.type
+  })),
   { id: 'marker_truck_path', label: 'Chemin camion', category: 'markers', kind: 'marqueur', size: 'petite', marker: 'truck_path' },
   { id: 'marker_worker_path', label: 'Chemin ouvrier', category: 'workers', kind: 'marqueur', size: 'petite', marker: 'worker_path' }
 ]

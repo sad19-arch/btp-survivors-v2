@@ -12,7 +12,8 @@
 import Phaser from 'phaser'
 import { activeAssets, activeGroundKey, editorAsset, paletteEntry, setActiveStage, type MarkerTool, type PaletteEntry } from './PrefabCatalog'
 import { EditorState } from './EditorState'
-import type { Vec2 } from './StageLayoutSchema'
+import type { Vec2, MarkerType } from './StageLayoutSchema'
+import { ZONE_DEFS, isZoneType } from './zones'
 
 /** Zoom de jeu réel (identique à CameraController.SOLO_ZOOM). */
 const GAME_ZOOM = 1.2
@@ -82,7 +83,11 @@ export class EditorScene extends Phaser.Scene {
   private dragOffset: Vec2 = { x: 0, y: 0 }
   private panning = false
   private panStart = { x: 0, y: 0, sx: 0, sy: 0 }
-  private resizingSig = false
+  // Macro-zones de conception (marqueurs éditeur) : redimension, déplacement, libellés.
+  private resizingZone: MarkerType | null = null
+  private movingZone: MarkerType | null = null
+  private zoneDragLast: Vec2 | null = null
+  private zoneLabels = new Map<MarkerType, Phaser.GameObjects.Text>()
 
   // Multi-sélection (lasso), glisser de groupe, presse-papier, barres de défilement.
   private groupDragLast: Vec2 | null = null
@@ -316,12 +321,16 @@ export class EditorScene extends Phaser.Scene {
     const comp = { x: w.x - OFFSET_X, y: w.y - OFFSET_Y }
     this.lastPointerCompo = comp
 
-    // Poignée SE de la zone signature (redimensionnement) — prioritaire quand
+    // Poignée SE d'une macro-zone (redimensionnement) — prioritaire quand
     // aucun outil de pose n'est actif.
-    if (this.activeMarker === null && this.activePrefab === null && this.hitSignatureHandle(w)) {
-      this.startBatch()
-      this.resizingSig = true
-      return
+    if (this.activeMarker === null && this.activePrefab === null) {
+      const handleZone = this.hitZoneHandle(w)
+      if (handleZone !== null) {
+        this.startBatch()
+        this.resizingZone = handleZone
+        this.state.selectZone(handleZone)
+        return
+      }
     }
 
     // Outil marqueur actif ?
@@ -367,6 +376,17 @@ export class EditorScene extends Phaser.Scene {
       if (obj !== undefined) {this.dragOffset = { x: comp.x - obj.x, y: comp.y - obj.y }}
       return
     }
+    // Macro-zone sous le curseur (aucune instance/PNJ touché) → sélection +
+    // glisser du corps de la zone. État SÉPARÉ de la sélection d'instances.
+    const zoneHit = this.pickZone(comp)
+    if (zoneHit !== null) {
+      this.state.selectZone(zoneHit)
+      this.startBatch()
+      this.movingZone = zoneHit
+      this.zoneDragLast = { x: comp.x, y: comp.y }
+      return
+    }
+    this.state.selectZone(null)
     // Espace vide → démarrer un lasso (rectangle de sélection).
     this.marqueeStart = { x: w.x, y: w.y }
     this.marqueeAdditive = additive
@@ -417,11 +437,24 @@ export class EditorScene extends Phaser.Scene {
       }
       return
     }
-    if (this.resizingSig && p.leftButtonDown()) {
+    // Redimension d'une macro-zone (poignée SE) → largeur/hauteur libres.
+    if (this.resizingZone !== null && p.leftButtonDown()) {
       const w = this.worldPoint(p)
-      const s = this.state.signature
-      if (s !== null) {
-        this.state.setSignatureSize(w.x - OFFSET_X - s.x, w.y - OFFSET_Y - s.y)
+      const z = this.state.zoneOf(this.resizingZone)
+      if (z !== null) {
+        this.state.setZoneSize(this.resizingZone, w.x - OFFSET_X - z.x, w.y - OFFSET_Y - z.y)
+      }
+      return
+    }
+    // Glisser le corps d'une macro-zone → déplacement du delta curseur.
+    if (this.movingZone !== null && p.leftButtonDown()) {
+      const comp = { x: w0.x - OFFSET_X, y: w0.y - OFFSET_Y }
+      const last = this.zoneDragLast ?? comp
+      const dx = comp.x - last.x
+      const dy = comp.y - last.y
+      if (dx !== 0 || dy !== 0) {
+        this.state.moveZone(this.movingZone, dx, dy)
+        this.zoneDragLast = comp
       }
       return
     }
@@ -479,7 +512,9 @@ export class EditorScene extends Phaser.Scene {
     this.groupDragLast = null
     this.dragId = null
     this.dragIsNpc = false
-    this.resizingSig = false
+    this.resizingZone = null
+    this.movingZone = null
+    this.zoneDragLast = null
     this.endBatchIfAny()
     this.guideGfx.clear()
   }
@@ -521,14 +556,28 @@ export class EditorScene extends Phaser.Scene {
     this.marqueeAdditive = false
   }
 
-  private hitSignatureHandle(world: Vec2): boolean {
-    const s = this.state.signature
-    if (s === null) {
-      return false
+  /** Type de la macro-zone dont la poignée SE est sous `world` (monde), ou null. */
+  private hitZoneHandle(world: Vec2): MarkerType | null {
+    for (const def of ZONE_DEFS) {
+      const z = this.state.zoneOf(def.type)
+      if (z === null) {continue}
+      const hx = OFFSET_X + z.x + z.w
+      const hy = OFFSET_Y + z.y + z.h
+      if (Math.abs(world.x - hx) <= SIG_HANDLE && Math.abs(world.y - hy) <= SIG_HANDLE) {return def.type}
     }
-    const hx = OFFSET_X + s.x + s.w
-    const hy = OFFSET_Y + s.y + s.h
-    return Math.abs(world.x - hx) <= SIG_HANDLE && Math.abs(world.y - hy) <= SIG_HANDLE
+    return null
+  }
+
+  /** Type de la macro-zone la plus haute (dessinée en dernier) sous `comp` (compo), ou null. */
+  private pickZone(comp: Vec2): MarkerType | null {
+    for (let i = ZONE_DEFS.length - 1; i >= 0; i--) {
+      const def = ZONE_DEFS[i]
+      if (def === undefined) {continue}
+      const z = this.state.zoneOf(def.type)
+      if (z === null) {continue}
+      if (comp.x >= z.x && comp.x <= z.x + z.w && comp.y >= z.y && comp.y <= z.y + z.h) {return def.type}
+    }
+    return null
   }
 
   private finishPath(): void {
@@ -546,8 +595,9 @@ export class EditorScene extends Phaser.Scene {
       this.state.setSpawn(comp.x, comp.y)
       return
     }
-    if (tool === 'signature_zone') {
-      this.state.setSignature(comp.x, comp.y)
+    if (isZoneType(tool)) {
+      this.state.placeZone(tool, comp.x, comp.y) // sélectionne + émet déjà
+      this.drawOverlays()
       return
     }
     // Chemins : on accumule des points, double-clic (détecté par proximité) ferme.
@@ -647,8 +697,14 @@ export class EditorScene extends Phaser.Scene {
       case 'f': case 'F': this.state.flipSelected(); break
       case 'v': case 'V': this.state.cycleVariant(); break
       case 'r': case 'R': this.state.rotateSelected(e.shiftKey ? -15 : 15); break
-      case '+': case '=': this.state.nudgeSelectedScale(0.1); e.preventDefault(); break
-      case '-': case '_': this.state.nudgeSelectedScale(-0.1); e.preventDefault(); break
+      case '+': case '=':
+        if (this.state.selectedZone !== null) {this.state.scaleZone(this.state.selectedZone, 1.1)}
+        else {this.state.nudgeSelectedScale(0.1)}
+        e.preventDefault(); break
+      case '-': case '_':
+        if (this.state.selectedZone !== null) {this.state.scaleZone(this.state.selectedZone, 0.9)}
+        else {this.state.nudgeSelectedScale(-0.1)}
+        e.preventDefault(); break
       case 'l': case 'L': this.state.toggleLockSelected(); break
       case ']': this.state.bringSelectedToFront(); break
       case '[': this.state.sendSelectedToBack(); break
@@ -659,7 +715,7 @@ export class EditorScene extends Phaser.Scene {
         this.state.setSpawn(w.x - OFFSET_X, w.y - OFFSET_Y)
         break
       }
-      case 'Escape': this.clearActive(); this.state.select(null); break
+      case 'Escape': this.clearActive(); this.state.select(null); this.state.selectZone(null); break
       default: break
     }
   }
@@ -801,15 +857,34 @@ export class EditorScene extends Phaser.Scene {
       for (let x = 0; x <= WORLD_W; x += step) {g.lineBetween(x, 0, x, WORLD_H)}
       for (let y = 0; y <= WORLD_H; y += step) {g.lineBetween(0, y, WORLD_W, y)}
     }
-    // Zone signature + poignée de redimensionnement au coin SE.
-    const s = this.state.signature
-    if (s !== null) {
-      const zx = OFFSET_X + s.x
-      const zy = OFFSET_Y + s.y
-      g.fillStyle(0x2f8f6f, 0.14).fillRect(zx, zy, s.w, s.h)
-      g.lineStyle(4, 0x2f8f6f, 0.9).strokeRect(zx, zy, s.w, s.h)
-      g.fillStyle(0x2f8f6f, 0.95).fillRect(zx + s.w - SIG_HANDLE / 2, zy + s.h - SIG_HANDLE / 2, SIG_HANDLE, SIG_HANDLE)
-      g.lineStyle(3, 0x000000, 1).strokeRect(zx + s.w - SIG_HANDLE / 2, zy + s.h - SIG_HANDLE / 2, SIG_HANDLE, SIG_HANDLE)
+    // Macro-zones de conception (marqueurs éditeur) : rect coloré + libellé +
+    // poignée SE. Outil PUR — jamais lu par la sim/le rendu jeu.
+    const seenZones = new Set<MarkerType>()
+    for (const def of ZONE_DEFS) {
+      const z = this.state.zoneOf(def.type)
+      if (z === null) {continue}
+      seenZones.add(def.type)
+      const selected = this.state.selectedZone === def.type
+      const zx = OFFSET_X + z.x
+      const zy = OFFSET_Y + z.y
+      g.fillStyle(def.color, selected ? 0.22 : 0.12).fillRect(zx, zy, z.w, z.h)
+      g.lineStyle(selected ? 8 : 4, def.color, selected ? 1 : 0.85).strokeRect(zx, zy, z.w, z.h)
+      g.fillStyle(def.color, 0.95).fillRect(zx + z.w - SIG_HANDLE / 2, zy + z.h - SIG_HANDLE / 2, SIG_HANDLE, SIG_HANDLE)
+      g.lineStyle(3, 0x000000, 1).strokeRect(zx + z.w - SIG_HANDLE / 2, zy + z.h - SIG_HANDLE / 2, SIG_HANDLE, SIG_HANDLE)
+      // Libellé (pool de Text réutilisé, indexé par type).
+      let label = this.zoneLabels.get(def.type)
+      if (label === undefined) {
+        label = this.add
+          .text(0, 0, def.label, { fontFamily: 'monospace', fontSize: '80px', color: '#ffffff' })
+          .setDepth(DEPTH_MARKER + 1)
+        label.setStroke('#000000', 8)
+        this.zoneLabels.set(def.type, label)
+      }
+      label.setPosition(zx + 24, zy + 18).setVisible(true)
+    }
+    // Masque les libellés des zones absentes.
+    for (const [type, label] of this.zoneLabels) {
+      if (!seenZones.has(type)) {label.setVisible(false)}
     }
     // Rectangle caméra (ce que voit le joueur au spawn, zoom de jeu).
     const cp = this.state.cameraPreview

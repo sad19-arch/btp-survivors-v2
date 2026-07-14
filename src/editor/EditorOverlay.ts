@@ -7,6 +7,7 @@
 import { paletteEntry, STAGE_LIST } from './PrefabCatalog'
 import type { EditorScene } from './EditorScene'
 import { saveUserLayout } from '@ui/userLayouts'
+import { ZONE_BY_TYPE } from './zones'
 
 function btn(label: string, onClick: () => void, cls = ''): HTMLButtonElement {
   const b = document.createElement('button')
@@ -235,7 +236,7 @@ export class EditorOverlay {
         `<div class="sce-insp-title">${label}${inst.locked ? ' 🔒' : ''}</div>` +
         `<div class="sce-insp-row">x: ${Math.round(inst.x)} · y: ${Math.round(inst.y)} · flip: ${inst.flipX ? 'oui' : 'non'} · rot: ${inst.rotation}° · taille: ${Math.round((inst.scale ?? 1) * 100)}% · var: ${inst.variant}</div>`
       )
-    } else if (active.prefab === null && active.marker === null) {
+    } else if (active.prefab === null && active.marker === null && state.selectedZone === null) {
       parts.push('<div class="sce-insp-hint">Clique une carte de la palette, puis clique la map pour poser. Clique/lasso pour sélectionner (Maj = ajouter).</div>')
     }
     this.inspector.innerHTML = parts.join('')
@@ -261,6 +262,30 @@ export class EditorOverlay {
       row.appendChild(btn('Dupliquer (Ctrl+D)', () => state.duplicateSelected()))
       row.appendChild(btn('Supprimer (Suppr)', () => state.deleteSelected(), 'sce-btn-danger'))
       this.inspector.appendChild(row)
+    }
+
+    // Panneau macro-zone (outil de conception) — indépendant de la sélection d'objets.
+    const zoneType = state.selectedZone
+    if (zoneType !== null) {
+      const z = state.zoneOf(zoneType)
+      const def = ZONE_BY_TYPE.get(zoneType)
+      if (z !== null && def !== undefined) {
+        const title = document.createElement('div')
+        title.className = 'sce-insp-title'
+        title.textContent = 'Zone : ' + def.label
+        this.inspector.appendChild(title)
+        const info = document.createElement('div')
+        info.className = 'sce-insp-row'
+        info.textContent = `${Math.round(z.w)} × ${Math.round(z.h)} px · glisser = déplacer · poignée de coin = redimensionner`
+        this.inspector.appendChild(info)
+        const zrow = document.createElement('div')
+        zrow.className = 'sce-insp-actions'
+        zrow.appendChild(btn('Réduire (−)', () => state.scaleZone(zoneType, 0.9)))
+        zrow.appendChild(btn('Agrandir (+)', () => state.scaleZone(zoneType, 1.1)))
+        zrow.appendChild(btn('Taille par défaut', () => state.resetZoneSize(zoneType)))
+        zrow.appendChild(btn('Supprimer', () => state.deleteZone(zoneType), 'sce-btn-danger'))
+        this.inspector.appendChild(zrow)
+      }
     }
 
     // Warnings.

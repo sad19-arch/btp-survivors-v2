@@ -13,6 +13,7 @@ import {
   type EmbeddedShape,
   type LayoutInstance,
   type LayoutMarker,
+  type MarkerType,
   type LayoutNpc,
   type LayoutPath,
   type NpcKind,
@@ -20,6 +21,7 @@ import {
   type Vec2
 } from './StageLayoutSchema'
 import { editorAsset, paletteEntry } from './PrefabCatalog'
+import { ZONE_DEFS, ZONE_BY_TYPE } from './zones'
 import { CLUSTERS } from '@content/clusters'
 import { destructibleDef } from '@content/destructibles'
 import { SHARED_WORKER_NPCS, stageRender } from '@render/stages'
@@ -49,6 +51,8 @@ export class EditorState {
   private primaryId: string | null = null
   /** Presse-papier (copier/coller multi) : instances + npcs clonés, ids retirés au collage. */
   private clipboard: { instances: LayoutInstance[]; npcs: LayoutNpc[] } | null = null
+  /** Macro-zone actuellement sélectionnée (état SÉPARÉ des instances/npcs). */
+  private selectedZoneType: MarkerType | null = null
   /** Coalescence d'historique : pendant un batch, les mutations ne poussent pas de snapshot. */
   private batching = false
   private listeners: Array<() => void> = []
@@ -136,7 +140,15 @@ export class EditorState {
     return this.layout.spawn
   }
   get signature(): LayoutMarker | null {
-    return this.layout.markers.find((m) => m.type === 'signature_zone') ?? null
+    return this.zoneOf('signature_zone')
+  }
+  /** Marqueur d'une macro-zone donnée (singleton par type), ou null. */
+  zoneOf(type: MarkerType): LayoutMarker | null {
+    return this.layout.markers.find((m) => m.type === type) ?? null
+  }
+  /** Type de la macro-zone actuellement sélectionnée, ou null. */
+  get selectedZone(): MarkerType | null {
+    return this.selectedZoneType
   }
   get paths(): readonly LayoutPath[] {
     return this.layout.paths
@@ -423,29 +435,83 @@ export class EditorState {
     this.emit()
   }
 
-  // ── zone signature ──────────────────────────────────────────────────────────
-  setSignature(x: number, y: number): void {
-    const existing = this.signature
+  // ── macro-zones (outil de conception : marqueurs ÉDITEUR-only, jamais exportés) ─
+  private static readonly ZONE_MIN = 200
+  private static readonly ZONE_MAX = 20000
+  private clampZone(v: number): number {
+    return Math.min(EditorState.ZONE_MAX, Math.max(EditorState.ZONE_MIN, v))
+  }
+  /** Pose (ou recentre si déjà présente) la macro-zone `type` sur (x,y) — 1 par type. */
+  placeZone(type: MarkerType, x: number, y: number): void {
+    const def = ZONE_BY_TYPE.get(type)
+    if (def === undefined) {return}
+    const existing = this.zoneOf(type)
     if (existing !== null) {
       existing.x = x - existing.w / 2
       existing.y = y - existing.h / 2
     } else {
-      this.layout.markers.push({ id: 'signature_zone', type: 'signature_zone', x: x - 700, y: y - 500, w: 1400, h: 1000 })
+      this.layout.markers.push({ id: type, type, x: x - def.w / 2, y: y - def.h / 2, w: def.w, h: def.h })
     }
+    this.selectedZoneType = type
     this.emit()
   }
-  resizeSignature(dw: number, dh: number): void {
-    const s = this.signature
-    if (s === null) {return}
-    s.w = Math.max(200, s.w + dw)
-    s.h = Math.max(200, s.h + dh)
+  /** Taille ABSOLUE (bornée) d'une zone — libre (poignée de coin, peut re-proportionner). */
+  setZoneSize(type: MarkerType, w: number, h: number): void {
+    const z = this.zoneOf(type)
+    if (z === null) {return}
+    z.w = this.clampZone(w)
+    z.h = this.clampZone(h)
     this.emit()
   }
-  setSignatureSize(w: number, h: number): void {
-    const s = this.signature
-    if (s === null) {return}
-    s.w = Math.max(200, w)
-    s.h = Math.max(200, h)
+  /**
+   * Agrandit/réduit une zone d'un FACTEUR uniforme — ratio conservé, centre fixe
+   * (« sans déformer »). Le facteur est borné pour rester dans [MIN, MAX] sur les
+   * deux axes, donc les proportions restent exactes même aux limites.
+   */
+  scaleZone(type: MarkerType, factor: number): void {
+    const z = this.zoneOf(type)
+    if (z === null) {return}
+    const lo = EditorState.ZONE_MIN / Math.min(z.w, z.h)
+    const hi = EditorState.ZONE_MAX / Math.max(z.w, z.h)
+    const f = Math.min(hi, Math.max(lo, factor))
+    const cx = z.x + z.w / 2
+    const cy = z.y + z.h / 2
+    z.w *= f
+    z.h *= f
+    z.x = cx - z.w / 2
+    z.y = cy - z.h / 2
+    this.emit()
+  }
+  /** Rétablit la taille par défaut de la zone (centre conservé). */
+  resetZoneSize(type: MarkerType): void {
+    const z = this.zoneOf(type)
+    const def = ZONE_BY_TYPE.get(type)
+    if (z === null || def === undefined) {return}
+    const cx = z.x + z.w / 2
+    const cy = z.y + z.h / 2
+    z.w = def.w
+    z.h = def.h
+    z.x = cx - z.w / 2
+    z.y = cy - z.h / 2
+    this.emit()
+  }
+  /** Déplace une zone de (dx,dy). */
+  moveZone(type: MarkerType, dx: number, dy: number): void {
+    const z = this.zoneOf(type)
+    if (z === null) {return}
+    z.x += dx
+    z.y += dy
+    this.emit()
+  }
+  /** Supprime une zone. */
+  deleteZone(type: MarkerType): void {
+    this.layout.markers = this.layout.markers.filter((m) => m.type !== type)
+    if (this.selectedZoneType === type) {this.selectedZoneType = null}
+    this.emit()
+  }
+  /** Sélectionne (ou désélectionne avec null) une macro-zone. Indépendant des instances. */
+  selectZone(type: MarkerType | null): void {
+    this.selectedZoneType = type
     this.emit()
   }
 
@@ -683,7 +749,10 @@ export class EditorState {
     const halfW = this.layout.worldSize.width / 2
     const halfH = this.layout.worldSize.height / 2
     if (this.layout.instances.length === 0) {w.push({ level: 'warn', message: 'Aucune instance placée.' })}
-    if (this.signature === null) {w.push({ level: 'warn', message: 'Aucune zone signature définie.' })}
+    // Les 4 macro-zones obligatoires (outil de conception) : signale les manquantes.
+    for (const z of ZONE_DEFS) {
+      if (this.zoneOf(z.type) === null) {w.push({ level: 'warn', message: `Zone manquante : ${z.label}.` })}
+    }
     const scenes = this.layout.instances.filter((i) => paletteEntry(i.prefab)?.kind === 'scene')
     if (scenes.length < 3) {w.push({ level: 'warn', message: `Moins de 3 scènes principales (${scenes.length}).` })}
     for (const i of this.layout.instances) {
