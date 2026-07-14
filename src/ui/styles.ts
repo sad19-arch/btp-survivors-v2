@@ -230,7 +230,7 @@ const CSS = `
   overflow: hidden;
   pointer-events: auto;
   cursor: pointer;
-  width: 340px;
+  width: 400px;
   background: var(--tex);
   background-size: 90px 100%;
   border: 6px solid ${PALETTE.contour};
@@ -242,8 +242,8 @@ const CSS = `
   box-shadow: 10px 10px 0 rgba(0,0,0,0.55),
     inset 4px 4px 0 rgba(255,255,255,0.14), inset -5px -5px 0 rgba(0,0,0,0.5);
 }
-#ui-root .card__icon { width: 110px; height: 110px; align-self: center; display: flex; align-items: center; justify-content: center; }
-#ui-root .card__img { width: 96px; height: 96px; image-rendering: pixelated; }
+#ui-root .card__icon { width: 148px; height: 148px; align-self: center; display: flex; align-items: center; justify-content: center; }
+#ui-root .card__img { width: 132px; height: 132px; image-rendering: pixelated; }
 #ui-root .card__mono {
   width: 110px; height: 110px; box-sizing: border-box;
   display: flex; align-items: center; justify-content: center;

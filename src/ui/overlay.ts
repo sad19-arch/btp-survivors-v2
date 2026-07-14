@@ -52,6 +52,9 @@ export class Overlay {
   private prevInGame = false
   private prevHadBoss = false
   private bannerTimer: number | null = null
+  /** Bandeaux « toast » suspendus tant que l'écran de level-up est ouvert (bug z-index 2d). */
+  private bannerSuspended = false
+  private pendingBanner: { text: string; className: string } | null = null
   /** Carton d'intro affiché (évite de le reconstruire chaque frame). */
   private introShown = false
   /** Élément du splash studio tant qu'il est affiché (null une fois retiré). */
@@ -514,6 +517,25 @@ export class Overlay {
    * du mécanisme de signature (couche transitoire propre).
    */
   private syncBanner(state: AppViewState): void {
+    // Écran de level-up ouvert → masque et SUSPEND les bandeaux « toast » : ils sont
+    // dans une couche AU-DESSUS de screenLayer et couvriraient les cartes (bug 2d).
+    // Le dernier bandeau suspendu est rejoué à la fermeture.
+    const suspend = state.screen === 'upgrade'
+    if (suspend && !this.bannerSuspended) {
+      this.bannerSuspended = true
+      clear(this.bannerLayer)
+      if (this.bannerTimer !== null) {
+        window.clearTimeout(this.bannerTimer)
+        this.bannerTimer = null
+      }
+    } else if (!suspend && this.bannerSuspended) {
+      this.bannerSuspended = false
+      const held = this.pendingBanner
+      this.pendingBanner = null
+      if (held !== null) {
+        this.showBanner(held.text, held.className)
+      }
+    }
     const inGame = state.screen === 'game' && !state.introActive
     const boss = state.enemies.find((e) => e.isBoss)
     const hasBoss = boss !== undefined
@@ -693,6 +715,11 @@ export class Overlay {
   }
 
   private showBanner(text: string, className: string): void {
+    // Level-up ouvert → on met en file (rejoué à la fermeture) au lieu de couvrir les cartes.
+    if (this.bannerSuspended) {
+      this.pendingBanner = { text, className }
+      return
+    }
     clear(this.bannerLayer)
     this.bannerLayer.append(h('div', { className, text }))
     if (this.bannerTimer !== null) {

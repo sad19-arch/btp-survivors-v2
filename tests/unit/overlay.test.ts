@@ -15,7 +15,8 @@ describe('Overlay (DOM)', () => {
     const { root, overlay } = mount()
     overlay.sync(app.getState())
 
-    expect(root.querySelector('.panel__title')?.textContent).toBe('BTP Carnage')
+    expect(root.querySelector('.logo__btp')?.textContent).toBe('BTP')
+    expect(root.querySelector('.logo__carnage')?.textContent).toBe('CARNAGE')
     const items = root.querySelectorAll('.menu__item')
     expect(items.length).toBe(5) // Jouer, Joueurs (sélecteur), Niveau (sélecteur), Options, Éditeur
     expect(root.querySelectorAll('.menu__item--focus').length).toBe(1)
@@ -291,6 +292,30 @@ describe('Overlay — bandeau d’évolution', () => {
     const banner = root.querySelector('.banner--evolution')
     expect(banner).not.toBeNull()
     expect(banner?.textContent).toContain('Mitrailleuse à clous')
+  })
+
+  it('level-up ouvert : le bandeau est SUSPENDU (ne couvre pas les cartes) puis rejoué après le choix (fix 2d)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    app.debugAddXp(30)
+    for (let t = 0; t < 5_000 && app.getState().screen !== 'upgrade'; t += 50) {
+      app.advanceTime(50)
+    }
+    expect(app.getState().screen).toBe('upgrade')
+    overlay.sync(app.getState())
+    // Un bandeau tenté PENDANT le level-up est mis en file, PAS affiché.
+    overlay.showEvolutionBanner('Mitrailleuse à clous')
+    expect(root.querySelector('.banner--evolution')).toBeNull()
+    // On vide la file de level-ups → sortie de l'écran (au-delà de la fenêtre du
+    // bandeau « Zone à sécuriser » de début de run) → le bandeau en attente est rejoué.
+    for (let t = 0; t < 5_000 && app.getState().screen === 'upgrade'; t += 50) {
+      app.chooseUpgrade(0)
+      app.advanceTime(50)
+    }
+    expect(app.getState().screen).not.toBe('upgrade')
+    app.advanceTime(800)
+    overlay.sync(app.getState())
+    expect(root.querySelector('.banner--evolution')).not.toBeNull()
   })
 })
 
