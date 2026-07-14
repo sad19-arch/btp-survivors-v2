@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { getStageCatalog, STAGE_LIST, CATEGORIES } from '@/editor/PrefabCatalog'
-import { SHARED_WORKER_NPCS } from '@render/stages'
+import { CITY_BUILDINGS, SHARED_WORKER_NPCS } from '@render/stages'
 import { destructiblesForStage } from '@content/destructibles'
 
 /**
@@ -61,5 +61,15 @@ describe('PrefabCatalog — complétude par stage', () => {
   it('stage 01 (terrain vierge) a au moins un cassable (garde de non-régression)', () => {
     const entries = getStageCatalog('terrain_vierge').entries.filter((e) => e.destructibleTypeId !== undefined)
     expect(entries.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('classe automatiquement tous les immeubles générés dans la palette dédiée', () => {
+    const entries = getStageCatalog('terrain_vierge').entries
+    for (const building of CITY_BUILDINGS) {
+      const entry = entries.find((candidate) => candidate.id === `obj_${building.key}`)
+      expect(entry, `${building.key} absent du catalogue`).toBeDefined()
+      expect(entry?.category).toBe('buildings')
+      expect(entry?.label).toBe(building.label)
+    }
   })
 })

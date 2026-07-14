@@ -9,6 +9,10 @@
  * mêmes stats). Sol/décalques/props/ennemis/boss changent d'un stage à l'autre.
  */
 
+import { CITY_BUILDINGS } from './cityBuildings.generated'
+
+export { CITY_BUILDINGS }
+
 export interface StageKeyFile {
   key: string
   file: string
@@ -158,13 +162,6 @@ export interface PerimeterRing {
  * transparents (QA-clean). Servent au préchargement (`GameScene`), à l'anneau
  * streamé (`CITY_PERIMETER`) et à la palette éditeur (`SHARED_DECOR_ASSETS`).
  */
-export const CITY_BUILDINGS: { key: string; file: string; label: string }[] = [
-  { key: 'building_office', file: 'city/building_office.png', label: 'Immeuble de bureau' },
-  { key: 'building_apartment', file: 'city/building_apartment.png', label: "Immeuble d'habitation" },
-  { key: 'building_tower', file: 'city/building_tower.png', label: 'Tour de bureaux' },
-  { key: 'building_warehouse', file: 'city/building_warehouse.png', label: 'Entrepôt industriel' }
-]
-
 /** Anneau urbain par défaut appliqué à tous les stages (sauf override `StageRender.perimeter`). */
 export const CITY_PERIMETER: PerimeterRing = {
   keys: CITY_BUILDINGS.map((b) => b.key),

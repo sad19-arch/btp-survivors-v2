@@ -170,12 +170,30 @@ const ASSET_META: Record<string, { label: string; category: string }> = {
   building_office: { label: 'Immeuble de bureau', category: 'buildings' },
   building_apartment: { label: "Immeuble d'habitation", category: 'buildings' },
   building_tower: { label: 'Tour de bureaux', category: 'buildings' },
-  building_warehouse: { label: 'Entrepôt industriel', category: 'buildings' }
+  building_warehouse: { label: 'Entrepôt industriel', category: 'buildings' },
+  building_shops: { label: 'Commerces de quartier', category: 'buildings' },
+  building_rowhouses: { label: 'Maisons mitoyennes', category: 'buildings' },
+  building_parking: { label: 'Parking à étages', category: 'buildings' },
+  building_factory: { label: 'Usine en briques', category: 'buildings' },
+  building_hotel: { label: 'Hôtel Art déco', category: 'buildings' },
+  building_lyon_vieux_lyon: { label: 'Façade du Vieux Lyon', category: 'buildings' },
+  building_lyon_canut: { label: 'Immeuble canut', category: 'buildings' },
+  building_lyon_bouchon: { label: 'Bouchon lyonnais', category: 'buildings' },
+  building_lyon_fourviere: { label: 'Basilique de Fourvière', category: 'buildings' },
+  building_lyon_hotel_dieu: { label: 'Grand Hôtel-Dieu', category: 'buildings' }
 }
 
 /** Méta (label FR + catégorie) d'un asset, ou null si non répertorié. */
 export function assetMeta(key: string): { label: string; category: string } | null {
-  return ASSET_META[key] ?? null
+  const building = CITY_BUILDINGS.find((candidate) => candidate.key === key)
+  if (building !== undefined) {
+    return { label: building.label, category: 'buildings' }
+  }
+  const explicit = ASSET_META[key]
+  if (explicit !== undefined) {
+    return explicit
+  }
+  return null
 }
 
 export function kindLabel(kind: EntryKind): string {
@@ -278,7 +296,7 @@ function objectEntries(assets: EditorAsset[]): PaletteEntry[] {
     if (a.role === 'ground') {
       continue
     }
-    const meta = ASSET_META[a.key]
+    const meta = assetMeta(a.key)
     const label = meta?.label ?? a.label
     if (a.role === 'worker') {
       // Les PNJ sont gérés par `npcEntries` (2 sections dédiées) — pas de doublon
