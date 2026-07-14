@@ -36,6 +36,6 @@ test('paysage tactile → invite masquée + HUD compact (non géant)', async ({ 
   // la hauteur du viewport paysage (sans le fix d'échelle, il dévorait la moitié).
   const hud = page.locator('.hud')
   const box = await hud.boundingBox()
-  expect(box).not.toBeNull()
-  expect(box!.height).toBeLessThan(412 * 0.45)
+  if (box === null) {throw new Error('HUD introuvable')}
+  expect(box.height).toBeLessThan(412 * 0.45)
 })

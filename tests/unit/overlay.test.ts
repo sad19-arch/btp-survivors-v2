@@ -403,7 +403,7 @@ describe('Overlay — machine à sous (coffre)', () => {
     expect(root.querySelector('.jackpot__cell--winner')).not.toBeNull()
     // Le libellé de révélation apparaît quand le dernier rouleau se pose (flash).
     vi.advanceTimersByTime(1880)
-    expect(root.querySelector('.jackpot__reveal')?.textContent).toBe('Lance thermique')
+    expect(root.querySelector('.jackpot__reveal-name')?.textContent).toBe('Lance thermique')
     // Titre exact (donc sans emoji — interdit DA/e2e).
     expect(root.querySelector('.jackpot__title')?.textContent).toBe('ÉVOLUTION')
   })
