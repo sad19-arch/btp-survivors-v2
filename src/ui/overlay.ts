@@ -472,9 +472,17 @@ export class Overlay {
         h('span', { className: 'studio', text: '© 2026 AIL ENTERTAINMENT' })
       )
     )
+    // Décor : ouvriers de chantier assombris en bas (frame 0 = face, croppée),
+    // silhouettes d'ambiance derrière le menu et l'habillage.
+    const base = import.meta.env.BASE_URL
+    const crew = h('div', { className: 'title-crew', attrs: { 'aria-hidden': 'true' } },
+      h('div', { className: 'crew-fig crew-fig--left' }, h('img', { className: 'crew-fig__img', attrs: { src: `${base}player_terrassier.png`, alt: '' } })),
+      h('div', { className: 'crew-fig crew-fig--right' }, h('img', { className: 'crew-fig__img', attrs: { src: `${base}player_soudeur.png`, alt: '' } }))
+    )
     // Décor titre tramé derrière le panneau (screen--title allège le voile sombre).
     return h('div', { className: 'screen screen--title' },
-      h('img', { className: 'title-bg', attrs: { src: `${import.meta.env.BASE_URL}bg_dusk.png`, alt: '' } }),
+      h('img', { className: 'title-bg', attrs: { src: `${base}bg_dusk.png`, alt: '' } }),
+      crew,
       arcbar,
       panel,
       chrome

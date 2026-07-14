@@ -728,6 +728,12 @@ const CSS = `
 #ui-root .credit { font-size: clamp(16px, 2.4vw, 30px); color: var(--arc-creme); }
 #ui-root .credit::after { content: ' 00'; color: var(--arc-jaune); }
 #ui-root .studio { font-size: clamp(14px, 2.2vw, 28px); color: #B78345; }
+/* Ouvriers assombris (frame 0 = face) en silhouette d'ambiance, aux coins bas. */
+#ui-root .title-crew { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+#ui-root .crew-fig { position: absolute; bottom: clamp(64px, 13vh, 150px); width: clamp(84px, 12vw, 150px); height: clamp(84px, 12vw, 150px); overflow: hidden; filter: brightness(.5) contrast(1.1) saturate(.8); opacity: .7; }
+#ui-root .crew-fig__img { position: absolute; left: 0; top: 0; width: 400%; height: 400%; image-rendering: pixelated; }
+#ui-root .crew-fig--left { left: clamp(6px, 6vw, 120px); }
+#ui-root .crew-fig--right { right: clamp(6px, 6vw, 120px); transform: scaleX(-1); }
 `
 
 let injected = false
