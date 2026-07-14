@@ -681,6 +681,11 @@ const CSS = `
 @keyframes impactFlash { 0%,100% { opacity: 0; } 12% { opacity: .9; } }
 @keyframes impactDust { 0% { opacity: .7; transform: scale(.4); } 100% { opacity: 0; transform: scale(1.4); } }
 @keyframes blinkSlow { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
+/* Logo sculpté BTP / CARNAGE (titre 2a) — pile de text-shadow biseau. */
+#ui-root .logo { display: flex; flex-direction: column; align-items: center; gap: 2px; animation: slamIn .9s ease-out both; }
+#ui-root .logo__topper { font-family: 'Pixelify Sans'; font-weight: 700; color: var(--arc-creme2); letter-spacing: 8px; font-size: 14px; }
+#ui-root .logo__btp { font-family: 'Jersey 25'; color: var(--arc-jaune); font-size: 44px; line-height: .8; text-shadow: 0 3px 0 var(--arc-ombre3), 0 -2px 0 var(--arc-contour); }
+#ui-root .logo__carnage { font-family: 'Jersey 25'; color: var(--arc-orange2); font-size: 104px; line-height: .82; text-shadow: 0 2px 0 var(--arc-ombre1), 0 4px 0 var(--arc-ombre2), 0 6px 0 var(--arc-ombre3), 0 8px 0 var(--arc-ombre4), 0 10px 12px rgba(0,0,0,.6); }
 `
 
 let injected = false
