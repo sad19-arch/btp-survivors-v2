@@ -123,6 +123,9 @@ export class Overlay {
    */
   private upgradeAppearAt = -1
 
+  /** Invite « tourne l'appareil » (tactile + portrait) — P6 mobile paysage. */
+  private readonly rotateHint: HTMLElement
+
   constructor(
     root: HTMLElement,
     onSelect?: (index: number) => void,
@@ -156,6 +159,14 @@ export class Overlay {
       this.minimap.el
     )
     root.append(h('div', { className: 'frame__scan' }))
+    // Invite « tourne l'appareil » (P6) : superposée en tactile + portrait ; masquée
+    // par défaut, montrée par applyResponsive. Le jeu se joue en PAYSAGE.
+    this.rotateHint = h('div', { className: 'rotate-hint' },
+      h('div', { className: 'rotate-hint__icon', attrs: { 'aria-hidden': 'true' } }),
+      h('div', { className: 'rotate-hint__title', text: 'TOURNE L\'APPAREIL' }),
+      h('div', { className: 'rotate-hint__sub', text: 'Le chantier se joue en paysage' })
+    )
+    root.append(this.rotateHint)
     // Splash studio « AIL Entertainment » : affiché au boot, retiré par le boot
     // (dismissStudioSplash) dès que l'audio est prêt / au 1er input — la voix « presents »
     // l'accompagne À COUP SÛR. L'invite « appuie pour commencer » clignote après le reveal.
@@ -187,6 +198,10 @@ export class Overlay {
     this.root.classList.toggle('ui-mobile', v.uiMobile)
     this.minimap.setCompact(v.uiMobile)
     this.root.style.setProperty('--ui-scale', String(v.uiScale))
+    // P6 : sur un vrai tactile tenu en portrait, invite à tourner (jeu = paysage).
+    // Jamais sur desktop (pointer) — une fenêtre étroite reste jouable à la souris.
+    const showRotate = v.inputType === 'touch' && v.orientation === 'portrait'
+    this.rotateHint.classList.toggle('rotate-hint--show', showRotate)
   }
 
   /**

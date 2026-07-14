@@ -773,6 +773,16 @@ const CSS = `
 #ui-root .charsel-cell { position: relative; aspect-ratio: 1; overflow: hidden; background: var(--arc-brun3); border: 3px solid var(--arc-contour); filter: brightness(.62) saturate(.8); }
 #ui-root .charsel-cell--active { filter: none; border-color: var(--arc-jaune); box-shadow: 0 0 0 3px var(--arc-orange2), 0 0 14px rgba(255,210,74,.6); }
 #ui-root .charsel-cell__img { position: absolute; left: 0; top: 0; width: 400%; height: 400%; image-rendering: pixelated; }
+/* --- Invite « tourne l'appareil » (P6 : tactile + portrait) --------------- */
+#ui-root .rotate-hint { display: none; position: fixed; inset: 0; z-index: 90; background: var(--arc-brun3, #17120E);
+  flex-direction: column; align-items: center; justify-content: center; gap: 22px; text-align: center; padding: 24px; }
+#ui-root .rotate-hint--show { display: flex; }
+#ui-root .rotate-hint__icon { width: 84px; height: 132px; border: 6px solid var(--arc-jaune, #FFD24A); box-sizing: border-box;
+  box-shadow: inset 0 0 0 4px var(--arc-contour, #101014); animation: rotate-hint-turn 1.8s ease-in-out infinite; }
+#ui-root .rotate-hint__title { font-family: 'Press Start 2P', monospace; font-size: clamp(14px, 5vw, 24px); color: var(--arc-jaune, #FFD24A);
+  letter-spacing: 2px; text-shadow: 3px 3px 0 var(--arc-contour, #101014); }
+#ui-root .rotate-hint__sub { font-family: 'Pixelify Sans', sans-serif; font-size: clamp(13px, 3.6vw, 18px); color: var(--arc-creme, #EAD9B8); }
+@keyframes rotate-hint-turn { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(90deg); } }
 `
 
 let injected = false
