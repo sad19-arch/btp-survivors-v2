@@ -681,11 +681,17 @@ const CSS = `
 @keyframes impactFlash { 0%,100% { opacity: 0; } 12% { opacity: .9; } }
 @keyframes impactDust { 0% { opacity: .7; transform: scale(.4); } 100% { opacity: 0; transform: scale(1.4); } }
 @keyframes blinkSlow { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
-/* Logo sculpté BTP / CARNAGE (titre 2a) — pile de text-shadow biseau. */
-#ui-root .logo { display: flex; flex-direction: column; align-items: center; gap: 2px; animation: slamIn .9s ease-out both; }
-#ui-root .logo__topper { font-family: 'Pixelify Sans'; font-weight: 700; color: var(--arc-creme2); letter-spacing: 8px; font-size: 14px; }
-#ui-root .logo__btp { font-family: 'Jersey 25'; color: var(--arc-jaune); font-size: 44px; line-height: .8; text-shadow: 0 3px 0 var(--arc-ombre3), 0 -2px 0 var(--arc-contour); }
-#ui-root .logo__carnage { font-family: 'Jersey 25'; color: var(--arc-orange2); font-size: 104px; line-height: .82; text-shadow: 0 2px 0 var(--arc-ombre1), 0 4px 0 var(--arc-ombre2), 0 6px 0 var(--arc-ombre3), 0 8px 0 var(--arc-ombre4), 0 10px 12px rgba(0,0,0,.6); }
+/* Logo sculpté BTP / CARNAGE (titre 2a, Metal Slug) — fidèle à la maquette :
+   géant, biseau étagé (highlight + contour 4px + 3 couches d'ombre) + slam-in
+   qui reboucle. Tailles en clamp() + ombres en em → proportionnel jusqu'au mobile. */
+#ui-root .logo { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; animation: slamIn 5s cubic-bezier(.2,.9,.3,1) infinite; will-change: transform; }
+#ui-root .logo__topper { display: flex; align-items: center; gap: 14px; font-family: 'Pixelify Sans'; font-weight: 700; font-size: clamp(16px, 3vw, 38px); color: var(--arc-creme2); letter-spacing: 8px; text-shadow: 2px 2px 0 var(--arc-contour); white-space: nowrap; }
+#ui-root .logo__topper::before, #ui-root .logo__topper::after { content: ''; height: 5px; width: clamp(40px, 8vw, 120px); }
+#ui-root .logo__topper::before { background: linear-gradient(90deg, transparent, var(--arc-creme2)); }
+#ui-root .logo__topper::after { background: linear-gradient(90deg, var(--arc-creme2), transparent); }
+#ui-root .logo__btp { font-family: 'Jersey 25'; font-size: clamp(52px, 12vw, 150px); line-height: .8; color: var(--arc-jaune); letter-spacing: 6px; text-shadow: -0.02em -0.02em 0 var(--arc-jaune-clair), 0.02em 0 0 var(--arc-contour), -0.02em 0 0 var(--arc-contour), 0 0.02em 0 var(--arc-contour), 0 -0.02em 0 var(--arc-contour), 0.033em 0.033em 0 var(--arc-ombre1), 0.06em 0.06em 0 var(--arc-ombre2), 0.087em 0.087em 0 var(--arc-ombre3), 0.107em 0.107em 0 var(--arc-contour); }
+#ui-root .logo__carnage { font-family: 'Jersey 25'; font-size: clamp(88px, 20vw, 250px); line-height: .78; margin-top: -.03em; color: var(--arc-orange2); letter-spacing: 2px; text-shadow: -0.012em -0.012em 0 #FFD08A, 0.016em 0 0 var(--arc-contour), -0.016em 0 0 var(--arc-contour), 0 0.016em 0 var(--arc-contour), 0 -0.016em 0 var(--arc-contour), 0.028em 0.028em 0 #B23A0C, 0.048em 0.048em 0 #7c2408, 0.068em 0.068em 0 var(--arc-ombre4), 0.088em 0.096em 0 rgba(0,0,0,.55); }
+#ui-root .logo__dust { width: min(640px, 80vw); height: 40px; margin-top: 6px; background: radial-gradient(ellipse at center, rgba(120,96,64,.9) 0%, rgba(120,96,64,0) 70%); animation: impactDust 5s steps(4) infinite; }
 `
 
 let injected = false
