@@ -709,6 +709,25 @@ const CSS = `
 #ui-root.arc-slam .logo__dust { animation: impactDust 5s ease-out both; }
 #ui-root .logo__flash { position: absolute; left: 50%; top: 52%; width: 150%; height: 220%; transform: translate(-50%, -50%); z-index: -1; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, rgba(255,244,204,.95) 0%, rgba(255,210,74,.45) 34%, rgba(255,210,74,0) 66%); }
 #ui-root.arc-slam .logo__flash { animation: impactFlash 5s ease-out both; }
+
+/* ── Habillage arcade de l'écran titre (planche 2a) ───────────────────────── */
+@keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+@keyframes tapeflow { from { background-position: 0 0; } to { background-position: 88px 0; } }
+#ui-root .screen--title { position: absolute; inset: 0; }
+#ui-root .arcbar { position: absolute; top: max(14px, env(safe-area-inset-top)); left: 24px; right: 24px; display: flex; justify-content: space-between; font-family: 'Press Start 2P'; font-size: clamp(9px, 1.5vw, 15px); color: var(--arc-jaune); text-shadow: 2px 2px 0 var(--arc-contour); letter-spacing: 1px; z-index: 4; }
+#ui-root .arcbar__hi { color: var(--arc-jaune-clair); }
+#ui-root .arcbar__2up { color: #ff5a5a; }
+#ui-root .title-chrome { position: absolute; bottom: max(18px, env(safe-area-inset-bottom)); left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 12px; z-index: 4; }
+#ui-root .insertcoin { background: var(--arc-contour); border: 4px solid var(--arc-orange2); box-shadow: 5px 5px 0 rgba(0,0,0,.5); padding: 6px clamp(14px, 4vw, 30px); font-family: 'Press Start 2P'; font-size: clamp(12px, 3vw, 26px); color: var(--arc-jaune); letter-spacing: 3px; animation: blink .9s steps(1, end) infinite; }
+#ui-root .pushstart { width: min(600px, 90vw); height: clamp(38px, 8vw, 56px); background: repeating-linear-gradient(45deg, var(--arc-jaune) 0 22px, var(--arc-contour) 22px 44px); background-size: 88px 100%; border: 5px solid var(--arc-contour); box-shadow: 6px 6px 0 rgba(0,0,0,.5); animation: tapeflow 1.2s linear infinite; display: flex; align-items: center; justify-content: center; }
+#ui-root .pushstart__label { display: inline-flex; align-items: center; gap: 12px; background: var(--arc-contour); padding: 5px 22px; font-family: 'Press Start 2P'; font-size: clamp(11px, 2.4vw, 22px); color: var(--arc-jaune); letter-spacing: 2px; animation: blink 1s steps(1, end) infinite; }
+#ui-root .pushstart__label::before, #ui-root .pushstart__label::after { content: ''; width: 0; height: 0; border-top: .5em solid transparent; border-bottom: .5em solid transparent; }
+#ui-root .pushstart__label::before { border-right: .6em solid var(--arc-jaune); }
+#ui-root .pushstart__label::after { border-left: .6em solid var(--arc-jaune); }
+#ui-root .title-credits { display: flex; justify-content: space-between; width: min(680px, 92vw); font-family: 'VT323'; letter-spacing: 1px; }
+#ui-root .credit { font-size: clamp(16px, 2.4vw, 30px); color: var(--arc-creme); }
+#ui-root .credit::after { content: ' 00'; color: var(--arc-jaune); }
+#ui-root .studio { font-size: clamp(14px, 2.2vw, 28px); color: #B78345; }
 `
 
 let injected = false

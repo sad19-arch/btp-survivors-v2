@@ -7,6 +7,7 @@ import { Minimap } from './minimap'
 import type { ViewportState } from './viewport'
 import { approach } from './anim'
 import { cardEnterStyle } from './cardEnter'
+import { readHiScore } from './hiscore'
 import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView } from '@/app/appState'
 
 /**
@@ -455,10 +456,28 @@ export class Overlay {
     if (state.goldSkin) {
       panel.append(h('p', { className: 'unlock-line', text: 'Casque doré débloqué' }))
     }
+    // Habillage arcade (planche 2a) : barre 1UP/HI-SCORE/2UP en haut ; INSERT COIN,
+    // bandeau PUSH START, CREDIT et copyright en bas. Purement décoratif (le vrai
+    // menu reste dans `.panel`). HI-SCORE persisté en localStorage.
+    const arcbar = h('div', { className: 'arcbar', attrs: { 'aria-hidden': 'true' } },
+      h('span', { className: 'arcbar__cell', text: '1UP 001250' }),
+      h('span', { className: 'arcbar__cell arcbar__hi', text: `HI-SCORE ${String(readHiScore()).padStart(6, '0')}` }),
+      h('span', { className: 'arcbar__cell arcbar__2up', text: '2UP 000000' })
+    )
+    const chrome = h('div', { className: 'title-chrome', attrs: { 'aria-hidden': 'true' } },
+      h('div', { className: 'insertcoin', text: 'INSERT COIN' }),
+      h('div', { className: 'pushstart' }, h('span', { className: 'pushstart__label', text: 'PUSH START' })),
+      h('div', { className: 'title-credits' },
+        h('span', { className: 'credit', text: 'CREDIT 00' }),
+        h('span', { className: 'studio', text: '© 2026 AIL ENTERTAINMENT' })
+      )
+    )
     // Décor titre tramé derrière le panneau (screen--title allège le voile sombre).
     return h('div', { className: 'screen screen--title' },
       h('img', { className: 'title-bg', attrs: { src: `${import.meta.env.BASE_URL}bg_dusk.png`, alt: '' } }),
-      panel
+      arcbar,
+      panel,
+      chrome
     )
   }
 
