@@ -515,7 +515,7 @@ export class App {
       stageSubtitle: phase?.subtitle ?? '',
       stageOrder: phase?.order ?? 0,
       characterSelect: this.charSelectOpen
-        ? { player: this.charSelectPlayer, total: this.selectedPlayers }
+        ? { player: this.charSelectPlayer, total: this.selectedPlayers, charId: this.rosterIds()[this.charCursor] ?? DEFAULT_CHARACTER_ID }
         : null,
       minimapVisible: this.minimapVisible,
       justEvolvedWeaponName:

@@ -84,7 +84,7 @@ test('le titre se navigue à la manette/clavier (via le seam) et lance la partie
   })
   const picking = await page.evaluate(() => window.__GAME__?.getState())
   expect(picking?.screen).toBe('characterSelect')
-  expect(picking?.characterSelect).toEqual({ player: 1, total: 1 })
+  expect(picking?.characterSelect).toEqual({ player: 1, total: 1, charId: 'ouvrier' })
 
   // Valide le personnage (par défaut du carrousel) → lance la partie.
   await page.evaluate(() => window.__GAME__?.confirm())

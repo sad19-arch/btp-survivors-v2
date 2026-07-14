@@ -8,7 +8,27 @@ import type { ViewportState } from './viewport'
 import { approach } from './anim'
 import { cardEnterStyle } from './cardEnter'
 import { readHiScore } from './hiscore'
+import { CHARACTER_IDS, characterDef } from '@content/characters'
+import { WEAPONS } from '@content/weapons'
 import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView } from '@/app/appState'
+
+/**
+ * Punchlines arcade par personnage (couche UI, purement cosmétique). Une phrase
+ * d'accroche « select screen » façon borne, affichée sous le portrait dans le
+ * sélecteur de personnage. Indexé par `CharacterDef.id`.
+ */
+const PUNCHLINES: Readonly<Record<string, string>> = {
+  ouvrier: 'Polyvalent, increvable. Cloue tout ce qui bouge.',
+  soudeur: 'Fait tourner ses lames, personne n\'approche.',
+  macon: 'Béton dans les veines, marteau-piqueur en main.',
+  terrassier: 'Ouvre les hostilités au pied-de-biche.',
+  electricien: 'Envoie le jus. 380 volts dans la nuque.',
+  ouvriere: 'Charge la brouette et écrase tout devant.',
+  charpentier: 'Ses boulons ricochent de crâne en crâne.',
+  grutier: 'Étale du goudron brûlant sur leur passage.',
+  plombier: 'Sa clé revient toujours, comme un boomerang.',
+  samoyede: 'La mascotte. Mousse tout le monde à l\'extincteur.'
+}
 
 /**
  * Overlay DOM des écrans (Titre / Pause / Upgrade / Game Over) + HUD. Observe
@@ -498,17 +518,56 @@ export class Overlay {
     const player = sel?.player ?? 1
     const total = sel?.total ?? 1
     const color = playerColor(player)
-    const header = h('h1', { className: 'panel__title', text: `Joueur ${player}/${total}` })
-    header.style.color = color.hex
+    const base = import.meta.env.BASE_URL
+    const activeId = sel?.charId ?? CHARACTER_IDS[0] ?? 'ouvrier'
+    const def = characterDef(activeId)
+    const weapon = WEAPONS[def.startingWeapon]
+    const punch = PUNCHLINES[def.id] ?? ''
+    // La clé de feuille 'player' (ouvrier) mappe le fichier de référence `player_j1.png`
+    // (cf. GameScene.SHARED_SHEETS) : aucun `player.png` n'existe. Résolu ici pour l'<img> DOM.
+    const sheetFile = (sheet: string): string => (sheet === 'player' ? 'player_j1' : sheet)
+
+    // En-tête « SELECT YOUR CREW » + joueur courant (couleur du joueur).
+    const header = h('h1', { className: 'panel__title charsel__heading', text: 'SELECT YOUR CREW' })
+    const who = h('p', { className: 'charsel__who', text: `JOUEUR ${player}/${total}` })
+    who.style.color = color.hex
+
+    // Portrait géant du perso courant (frame 0 = face, croppée dans un cadre pixel).
+    const portrait = h('div', { className: 'charsel-portrait' },
+      h('img', { className: 'charsel-portrait__img', attrs: { src: `${base}${sheetFile(def.sheet)}.png`, alt: '' } })
+    )
+    const info = h('div', { className: 'charsel__info' },
+      h('div', { className: 'charsel__name', text: def.name.toUpperCase() }),
+      h('div', { className: 'charsel__weapon' },
+        h('span', { className: 'charsel__weapon-label', text: 'ARME' }),
+        h('span', { className: 'charsel__weapon-name', text: weapon?.name ?? def.startingWeapon })
+      ),
+      h('p', { className: 'charsel__desc', text: weapon?.description ?? '' }),
+      h('p', { className: 'charsel__punch', text: punch })
+    )
+    const stage = h('div', { className: 'charsel__stage' }, portrait, info)
+
+    // Grille des 10 têtes (frame 0 croppée) — la sélection courante est mise en avant.
+    const grid = h('div', { className: 'charsel-grid', attrs: { 'aria-hidden': 'true' } })
+    for (const id of CHARACTER_IDS) {
+      const cd = characterDef(id)
+      const cell = h('div', {
+        className: id === activeId ? 'charsel-cell charsel-cell--active' : 'charsel-cell'
+      }, h('img', { className: 'charsel-cell__img', attrs: { src: `${base}${sheetFile(cd.sheet)}.png`, alt: '' } }))
+      grid.append(cell)
+    }
+
     const panel = h(
       'div',
-      { className: 'panel' },
+      { className: 'panel panel--charsel arc-metal' },
       header,
-      h('p', { className: 'panel__subtitle', text: 'Choisis ton personnage' }),
+      who,
+      stage,
+      grid,
       this.menuList(state),
       h('p', { className: 'hint-line', text: 'Gauche/Droite pour changer • Valider: A / Entrée' })
     )
-    return h('div', { className: 'screen' }, panel)
+    return h('div', { className: 'screen screen--charsel' }, panel)
   }
 
   /**

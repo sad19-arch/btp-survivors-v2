@@ -113,8 +113,8 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   stageSubtitle: string
   /** Numéro de phase dans le cycle (1..10). */
   stageOrder: number
-  /** Sélection de personnage en cours (joueur actif / total) ; `null` hors de ce flux. */
-  characterSelect: { player: number; total: number } | null
+  /** Sélection de personnage en cours (joueur actif / total + perso courant) ; `null` hors de ce flux. */
+  characterSelect: { player: number; total: number; charId: string } | null
   /** Mini-carte affichée (bas-gauche) — bascule clavier M / manette Back/Select. */
   minimapVisible: boolean
   /**

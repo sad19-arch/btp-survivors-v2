@@ -92,9 +92,9 @@ describe('App — écrans & navigation', () => {
     app.nav('up') // focus « Jouer »
     app.confirm() // ouvre la sélection de personnage — joueur 1/2
     expect(app.getState().screen).toBe('characterSelect')
-    expect(app.getState().characterSelect).toEqual({ player: 1, total: 2 })
+    expect(app.getState().characterSelect).toEqual({ player: 1, total: 2, charId: 'ouvrier' })
     app.confirm() // P1 valide son perso → tour du joueur 2
-    expect(app.getState().characterSelect).toEqual({ player: 2, total: 2 })
+    expect(app.getState().characterSelect).toEqual({ player: 2, total: 2, charId: 'ouvrier' })
     app.confirm() // P2 valide son perso → lance la partie
     expect(app.getState().screen).toBe('game')
     expect(app.getState().players.length).toBe(2)
@@ -168,7 +168,7 @@ describe('App — sélection SÉQUENTIELLE de personnage (titre → characterSel
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     app.confirm() // « Jouer » (focus par défaut = index 0)
     expect(app.getState().screen).toBe('characterSelect')
-    expect(app.getState().characterSelect).toEqual({ player: 1, total: 1 })
+    expect(app.getState().characterSelect).toEqual({ player: 1, total: 1, charId: 'ouvrier' })
     const label0 = app.getState().menu?.items[0]?.label
     app.nav('right') // cycle vers le perso suivant du roster
     const label1 = app.getState().menu?.items[0]?.label
@@ -189,11 +189,11 @@ describe('App — sélection SÉQUENTIELLE de personnage (titre → characterSel
     app.nav('right') // 2 joueurs
     app.nav('up') // focus « Jouer »
     app.confirm() // ouvre characterSelect — P1
-    expect(app.getState().characterSelect).toEqual({ player: 1, total: 2 })
+    expect(app.getState().characterSelect).toEqual({ player: 1, total: 2, charId: 'ouvrier' })
     app.nav('right') // P1 choisit le perso suivant (index 1 du roster)
     const p1Label = app.getState().menu?.items[0]?.label
     app.confirm() // valide P1 → tour de P2
-    expect(app.getState().characterSelect).toEqual({ player: 2, total: 2 })
+    expect(app.getState().characterSelect).toEqual({ player: 2, total: 2, charId: 'ouvrier' })
     // Le curseur est remis à 0 pour le joueur suivant (le carrousel repart du début).
     const p2Label = app.getState().menu?.items[0]?.label
     app.confirm() // valide P2 (perso par défaut du carrousel) → lance la partie
@@ -231,10 +231,10 @@ describe('App — sélection SÉQUENTIELLE de personnage (titre → characterSel
     app.nav('up')
     app.confirm() // characterSelect P1/2
     app.confirm() // valide P1 → P2/2
-    expect(app.getState().characterSelect).toEqual({ player: 2, total: 2 })
+    expect(app.getState().characterSelect).toEqual({ player: 2, total: 2, charId: 'ouvrier' })
     app.back() // retour à P1
     expect(app.getState().screen).toBe('characterSelect')
-    expect(app.getState().characterSelect).toEqual({ player: 1, total: 2 })
+    expect(app.getState().characterSelect).toEqual({ player: 1, total: 2, charId: 'ouvrier' })
     app.back() // retour au titre
     expect(app.getState().screen).toBe('title')
   })

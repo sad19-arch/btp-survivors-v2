@@ -734,6 +734,24 @@ const CSS = `
 #ui-root .crew-fig__img { position: absolute; left: 0; top: 0; width: 400%; height: 400%; image-rendering: pixelated; }
 #ui-root .crew-fig--left { left: clamp(6px, 6vw, 120px); }
 #ui-root .crew-fig--right { right: clamp(6px, 6vw, 120px); transform: scaleX(-1); }
+/* --- Sélecteur de personnage (écran « SELECT YOUR CREW » arcade) ---------- */
+#ui-root .panel--charsel { width: min(760px, 94vw); gap: 14px; }
+#ui-root .charsel__heading { font-family: 'Press Start 2P'; font-size: clamp(16px, 3.4vw, 34px); color: var(--arc-jaune); letter-spacing: 2px; text-shadow: 3px 3px 0 var(--arc-contour); margin: 0; }
+#ui-root .charsel__who { font-family: 'Press Start 2P'; font-size: clamp(9px, 1.6vw, 15px); letter-spacing: 2px; text-shadow: 2px 2px 0 var(--arc-contour); margin: 0; }
+#ui-root .charsel__stage { display: flex; align-items: center; gap: clamp(14px, 3vw, 30px); width: 100%; }
+#ui-root .charsel-portrait { position: relative; flex: 0 0 auto; width: clamp(140px, 26vw, 208px); height: clamp(140px, 26vw, 208px); overflow: hidden; background: var(--arc-brun3); border: 5px solid var(--arc-contour); box-shadow: inset 0 0 0 3px var(--arc-orange2), 6px 6px 0 rgba(0,0,0,.5); image-rendering: pixelated; }
+#ui-root .charsel-portrait__img { position: absolute; left: 0; top: 0; width: 400%; height: 400%; image-rendering: pixelated; }
+#ui-root .charsel__info { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; text-align: left; min-width: 0; }
+#ui-root .charsel__name { font-family: 'Jersey 25'; font-size: clamp(34px, 7vw, 62px); line-height: .9; color: var(--arc-jaune); letter-spacing: 2px; text-shadow: 0.03em 0.03em 0 var(--arc-ombre2), 0.06em 0.06em 0 var(--arc-contour); }
+#ui-root .charsel__weapon { display: flex; align-items: baseline; gap: 10px; font-family: 'Pixelify Sans'; }
+#ui-root .charsel__weapon-label { font-family: 'Press Start 2P'; font-size: clamp(8px, 1.3vw, 12px); color: var(--arc-creme2); letter-spacing: 1px; }
+#ui-root .charsel__weapon-name { font-size: clamp(18px, 3vw, 28px); font-weight: 700; color: var(--arc-orange2); text-shadow: 2px 2px 0 var(--arc-contour); }
+#ui-root .charsel__desc { font-family: 'Pixelify Sans'; font-size: clamp(13px, 2vw, 18px); color: var(--arc-creme); margin: 0; line-height: 1.25; }
+#ui-root .charsel__punch { font-family: 'Pixelify Sans'; font-style: italic; font-size: clamp(13px, 2vw, 19px); color: var(--arc-jaune-clair); margin: 2px 0 0; line-height: 1.2; }
+#ui-root .charsel-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; width: 100%; }
+#ui-root .charsel-cell { position: relative; aspect-ratio: 1; overflow: hidden; background: var(--arc-brun3); border: 3px solid var(--arc-contour); filter: brightness(.62) saturate(.8); }
+#ui-root .charsel-cell--active { filter: none; border-color: var(--arc-jaune); box-shadow: 0 0 0 3px var(--arc-orange2), 0 0 14px rgba(255,210,74,.6); }
+#ui-root .charsel-cell__img { position: absolute; left: 0; top: 0; width: 400%; height: 400%; image-rendering: pixelated; }
 `
 
 let injected = false
