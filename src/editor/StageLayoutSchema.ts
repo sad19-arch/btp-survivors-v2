@@ -109,6 +109,13 @@ export function parseLayout(raw: string, fallbackStage: string): ParseResult {
     base.groundKey = d.groundKey
   }
 
+  // keepSitePlan:false : préserver, sinon la compo redemanderait le plan de
+  // chantier procédural par-dessus elle à chaque rechargement (même classe de
+  // bug que `destructible`/`layer`/`tile`/les réglages de chemin ci-dessous).
+  if (typeof d.keepSitePlan === 'boolean') {
+    base.keepSitePlan = d.keepSitePlan
+  }
+
   if (Array.isArray(d.instances)) {
     base.instances = d.instances
       .map((it, i): LayoutInstance | null => {

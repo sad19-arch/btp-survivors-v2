@@ -194,6 +194,14 @@ export interface StageLayout {
    * (comportement historique). C'est une donnée de RENDU : la sim ne la lit pas.
    */
   groundKey?: string
+  /**
+   * `false` : le plan de chantier PROCÉDURAL ne doit PAS se superposer à la
+   * compo (la compo se suffit à elle-même). Absent = comportement actuel
+   * inchangé (plan conservé) — défaut sûr, aucune compo existante ne bouge.
+   * Champ pur (pas de logique ici) : le branchement sim/rendu est une tâche
+   * séparée.
+   */
+  keepSitePlan?: boolean
 }
 
 /** Layout vide par défaut (spawn au centre = origine composition). */
