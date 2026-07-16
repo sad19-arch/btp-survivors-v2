@@ -20,6 +20,7 @@
 import { Rng } from '@core/rng'
 import { CLUSTERS, STAGE_CLUSTERS } from '@content/clusters'
 import type { ClusterDef, ClusterElement } from '@content/clusters'
+import { resolveSolidity, type Solidity } from '@content/assetSolidity'
 import { buildSitePlan } from '@core/sitePlan'
 import type { SitePlan, PlacedZone } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
@@ -242,11 +243,18 @@ function embeddedToClusterElement(e: EmbeddedElement): ClusterElement {
   const base = { assetKey: e.assetKey, dx: e.dx, dy: e.dy, scale: e.scale, flipX: e.flipX === true }
   const withLayer = e.layer === undefined ? base : { ...base, layer: e.layer }
   const layered = e.tile === undefined ? withLayer : { ...withLayer, tile: e.tile }
-  if (e.collide !== undefined && e.collide !== 'none') {
-    const shape = e.shape ?? { kind: 'circle', r: Math.max(16, e.scale * 40) }
-    return { ...layered, collide: e.collide, shape }
+  const written: Solidity =
+    e.collide === undefined || e.collide === 'none'
+      ? { collide: 'none' }
+      : { collide: e.collide, shape: e.shape ?? { kind: 'circle', r: Math.max(16, e.scale * 40) } }
+  // La SOLIDITÉ DÉCLARÉE prime sur ce que le JSON transporte : une compo joueur
+  // exportée AVANT `assetSolidity` (pelleteuse `collide:'none'`) redevient
+  // correcte au chargement, sans migration de fichier.
+  const solid = resolveSolidity(e.assetKey, written)
+  if (solid.collide === 'none') {
+    return { ...layered, collide: 'none' }
   }
-  return { ...layered, collide: 'none' }
+  return { ...layered, collide: solid.collide, shape: solid.shape }
 }
 
 /**

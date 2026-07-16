@@ -36,16 +36,31 @@ describe('CLUSTERS — intégrité des définitions', () => {
     }
   })
 
-  it('3. tout cluster ayant au moins un élément collidable a gates.length >= 1', () => {
+  /**
+   * Ce que l'invariant protège vraiment : un ENCLOS (anneau de palissade) sans
+   * ouverture = zone inatteignable et joueur qui s'y coince.
+   *
+   * Il visait « au moins un élément collidable » tant que collision ⇔ clôture.
+   * Depuis que la solidité est DÉCLARÉE (assetSolidity), un bulldozer garé rend
+   * `cluster_plant` « collidable » sans rien enclore : la règle d'origine y
+   * exigeait un gate fictif. On la recentre donc sur son intention — la clôture,
+   * qui est ce qui enferme — sans rien relâcher pour les vrais enclos.
+   */
+  it('3. tout cluster qui pose une CLÔTURE (enclos) a gates.length >= 1', () => {
+    const FENCES = new Set(['fence_panel'])
+    let checked = 0
     for (const [clusterId, def] of Object.entries(CLUSTERS)) {
-      const hasCollidable = def.elements.some((el) => el.collide !== 'none')
-      if (hasCollidable) {
+      const encloses = def.elements.some((el) => FENCES.has(el.assetKey) && el.collide !== 'none')
+      if (encloses) {
+        checked++
         expect(
           def.gates.length >= 1,
-          `${clusterId} a des éléments collidables mais aucun gate (enclos 100 % fermé)`
+          `${clusterId} pose une clôture bloquante mais aucun gate (enclos 100 % fermé)`
         ).toBe(true)
       }
     }
+    // Sans ça, un renommage d'asset viderait le test en silence.
+    expect(checked, 'aucun cluster clôturé trouvé : le test ne vérifie plus rien').toBeGreaterThan(0)
   })
 
   it('4. footprintRadius > 0 et ≥ à la distance max (|dx,dy|) de ses éléments', () => {

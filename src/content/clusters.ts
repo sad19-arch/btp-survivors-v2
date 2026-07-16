@@ -6,14 +6,14 @@
  * Le placement (T2) et le rendu (T3) lisent ces données ; elles n'en dépendent pas.
  */
 import type { RenderLayer, TilePatch } from './stageLayout'
+import { resolveSolidity, type CollideKind, type ObstacleShape, type Solidity } from './assetSolidity'
 
-/** Qui peut être bloqué par un élément. */
-export type CollideKind = 'both' | 'enemies' | 'none'
-
-/** Forme collidable d'un élément, en coordonnées LOCALES au cluster (origine = ancre). */
-export type ObstacleShape =
-  | { kind: 'circle'; r: number }
-  | { kind: 'segment'; x2: number; y2: number; thickness: number } // segment de (dx,dy) à (dx+x2, dy+y2)
+/**
+ * `CollideKind`/`ObstacleShape` vivent désormais dans `assetSolidity` (la source
+ * unique de la solidité) et sont ré-exportés ici : les consommateurs historiques
+ * importent toujours depuis `@content/clusters`.
+ */
+export type { CollideKind, ObstacleShape } from './assetSolidity'
 
 export interface ClusterElement {
   assetKey: string // clé d'asset (le rendu la résoudra ; ici juste une chaîne non vide)
@@ -120,8 +120,13 @@ function plantCluster(id: string, keys: [string, string]): ClusterDef {
   }
 }
 
-/** Registre global des prefabs par id. */
-export const CLUSTERS: Record<string, ClusterDef> = {
+/**
+ * Prefabs TELS QU'ÉCRITS À LA MAIN. **Ne pas consommer directement** : la
+ * solidité y est encore celle que l'auteur du cluster a tapée, donc faillible
+ * (la même clé s'y contredisait d'un cluster à l'autre). Le registre public
+ * `CLUSTERS`, plus bas, est la version dont la solidité est RÉSOLUE.
+ */
+const RAW_CLUSTERS: Record<string, ClusterDef> = {
   // ─────────────────────────────────────────────────────────────────────────
   // PREFABS « PLAN DE CHANTIER » (méthode 6-étapes) — placés PAR ZONE via
   // sitePrograms/sitePlan (plus jamais d'assets isolés éparpillés).
@@ -292,7 +297,9 @@ export const CLUSTERS: Record<string, ClusterDef> = {
   cluster_gate_main: {
     id: 'cluster_gate_main',
     footprintRadius: 185,
-    gates: [],
+    // L'ouverture, c'est le portail lui-même : depuis que les poteaux sont des
+    // corps solides (solidité déclarée), ce cluster doit dire où l'on passe.
+    gates: [{ dx: 0, dy: -20 }],
     elements: [
       { assetKey: 'site_gate', dx: 0, dy: -20, scale: 1.35, collide: 'none' },
       { assetKey: 'fence_post', dx: -170, dy: -10, scale: 0.9, collide: 'none' },
@@ -483,7 +490,16 @@ export const CLUSTERS: Record<string, ClusterDef> = {
       { assetKey: 'prop_stage03_rebar', dx: -86, dy: 56, scale: 0.84, collide: 'none' },
       { assetKey: 'prop_stage03_formwork', dx: -190, dy: 112, scale: 0.68, collide: 'none' },
       // Flux beton : route sud-est -> toupie active -> pompe -> dalle.
-      { assetKey: 'struct_stage03_pump', dx: 155, dy: 92, scale: 0.58, collide: 'none' },
+      // La pompe est un ENGIN : depuis qu'elle bloque (solidité déclarée), sa
+      // place historique (155, 92) tombait à 201 px du spawn, sous le contrat
+      // « rien de bloquant à moins de 350 px du spawn » (poche de départ libre).
+      // Deux contrats l'encadrent désormais (foundationComposition.test) : ≥ 350
+      // (poche libre) et ≤ 360 (elle doit rester dans le cadre du 1er écran).
+      // Elle se pose donc PILE au bord de la poche — 355 px, au nord-est : on la
+      // voit, elle ne barre pas le départ, et le flux toupie(SE) → pompe(NE) →
+      // tuyau → dalle reste lisible. ⚠️ Fenêtre de 10 px : la déplacer casse un
+      // des deux contrats.
+      { assetKey: 'struct_stage03_pump', dx: 218, dy: -60, scale: 0.58, collide: 'none' },
       { assetKey: 'struct_stage03_mixer', dx: 420, dy: 126, scale: 0.58, flipX: true, collide: 'none' },
       { assetKey: 'prop_stage03_chute', dx: 92, dy: 92, scale: 0.72, collide: 'none' },
       { assetKey: 'prop_stage03_vibrator', dx: 34, dy: 146, scale: 0.66, collide: 'none' },
@@ -725,6 +741,39 @@ export const CLUSTERS: Record<string, ClusterDef> = {
     plantCluster('cluster_plant_livraison', ['prop_stage10_projector', 'struct_stage10_building'])
   ].map((c) => [c.id, c]))
 }
+
+/**
+ * Solidité écrite par l'auteur du cluster → solidité DÉCLARÉE (`assetSolidity`).
+ * Un engin écrit `collide:'none'` dans un cluster et `'both'` dans le suivant
+ * ressort bloquant dans les DEUX : la contradiction n'est plus représentable.
+ */
+function withDeclaredSolidity(el: ClusterElement): ClusterElement {
+  const written: Solidity =
+    el.collide === 'none'
+      ? { collide: 'none' }
+      : // Invariant T1 : `collide !== 'none'` ⇒ `shape` défini. Le repli garde le
+        // fichier chargeable si un futur cluster l'oublie (même défaut que la sim).
+        { collide: el.collide, shape: el.shape ?? { kind: 'circle', r: Math.max(16, el.scale * 40) } }
+  const solid = resolveSolidity(el.assetKey, written)
+  if (solid.collide === 'none') {
+    const inert: ClusterElement = { ...el, collide: 'none' }
+    // `collide:'none'` ⇒ `shape` absent (invariant vérifié par clusters.test.ts).
+    delete inert.shape
+    return inert
+  }
+  return { ...el, collide: solid.collide, shape: solid.shape }
+}
+
+/**
+ * Registre global des prefabs par id — **solidité résolue**, donc cohérente avec
+ * l'éditeur et avec les compos joueur (tous lisent `assetSolidity`).
+ */
+export const CLUSTERS: Record<string, ClusterDef> = Object.fromEntries(
+  Object.entries(RAW_CLUSTERS).map(([id, def]): [string, ClusterDef] => [
+    id,
+    { ...def, elements: def.elements.map(withDeclaredSolidity) }
+  ])
+)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Association stage → liste de (rôle de zone, clusterId à y placer).

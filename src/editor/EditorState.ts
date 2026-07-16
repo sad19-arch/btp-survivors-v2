@@ -10,7 +10,6 @@ import {
   parseLayout,
   serializeLayout,
   type EmbeddedElement,
-  type EmbeddedShape,
   type LayoutInstance,
   type LayoutMarker,
   type MarkerType,
@@ -22,6 +21,7 @@ import {
 } from './StageLayoutSchema'
 import { editorAsset, paletteEntry, type AssetRole } from './PrefabCatalog'
 import type { RenderLayer } from '@content/stageLayout'
+import { resolveSolidity, type Solidity } from '@content/assetSolidity'
 
 /**
  * Rôle de palette → couche d'affichage en jeu. La correspondance est explicite
@@ -41,6 +41,18 @@ function layerForRole(role: AssetRole | undefined): RenderLayer | undefined {
     default: return undefined
   }
 }
+/**
+ * REPLI de solidité pour un asset NON DÉCLARÉ dans `assetSolidity` : on rejoue
+ * exactement l'heuristique historique (un landmark/structure/poteau est un corps
+ * solide, cercle synthétisé depuis l'échelle). Ce n'est plus la règle — c'est le
+ * défaut sûr qui évite de faire traverser d'un coup ~200 assets non déclarés.
+ * Toute clé DÉCLARÉE ignore ce repli.
+ */
+function roleSolidityFallback(role: AssetRole | undefined, scale: number): Solidity | undefined {
+  const block = role === 'landmark' || role === 'structure' || role === 'column'
+  return block ? { collide: 'both', shape: { kind: 'circle', r: Math.max(16, scale * 40) } } : undefined
+}
+
 import { ZONE_DEFS, ZONE_BY_TYPE } from './zones'
 import { CLUSTERS } from '@content/clusters'
 import { destructibleDef } from '@content/destructibles'
@@ -591,8 +603,12 @@ export class EditorState {
       }
       inst.elements = entry.elements.map((el): EmbeddedElement => {
         const role = editorAsset(el.assetKey)?.role
-        const block = role === 'landmark' || role === 'structure' || role === 'column'
-        const e: EmbeddedElement = { assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide: block ? 'both' : 'none' }
+        // La solidité est DÉCLARÉE (`assetSolidity`), plus déduite du rôle : le
+        // rôle ne survit qu'en REPLI, pour les assets non déclarés. C'est ce qui
+        // empêche l'éditeur de diverger des clusters écrits à la main — il se
+        // trompait sur 4 cas / 4 (pelleteuse traversable, portail scellé…).
+        const solid = resolveSolidity(el.assetKey, undefined, roleSolidityFallback(role, el.scale))
+        const e: EmbeddedElement = { assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide: solid.collide }
         // Le rôle était consommé pour décider la collision puis JETÉ : le rendu
         // devait ensuite redeviner la profondeur depuis le préfixe de la clé, et
         // se trompait (cf. `RenderLayer`). On le transporte désormais.
@@ -603,8 +619,10 @@ export class EditorState {
         if (el.tile !== undefined) {
           e.tile = { w: el.tile.w, h: el.tile.h }
         }
-        if (block) {
-          e.shape = { kind: 'circle', r: Math.max(16, el.scale * 40) }
+        // La forme DÉCLARÉE est transportée telle quelle — elle n'est plus
+        // fabriquée depuis l'échelle : une clôture reste un SEGMENT.
+        if (solid.collide !== 'none') {
+          e.shape = solid.shape
         }
         if (el.flipX === true) {
           e.flipX = true
@@ -622,6 +640,12 @@ export class EditorState {
         const scaled: EmbeddedElement = { ...e, scale: e.scale * s }
         if (scaled.shape?.kind === 'circle') {
           scaled.shape = { kind: 'circle', r: scaled.shape.r * s }
+        }
+        // Le SEGMENT suit l'échelle lui aussi : une clôture agrandie ×2 doit
+        // barrer ×2 plus large. La solidité déclarée exporte désormais de vrais
+        // segments (avant, tout était converti en cercle → jamais rencontré).
+        if (scaled.shape?.kind === 'segment') {
+          scaled.shape = { kind: 'segment', x2: scaled.shape.x2 * s, y2: scaled.shape.y2 * s, thickness: scaled.shape.thickness * s }
         }
         // Plaque de sol : agrandir couvre PLUS DE SURFACE, ça ne grossit pas le
         // motif. L'échelle se cuit donc dans w/h, pas dans `scale` (que le rendu
@@ -657,34 +681,31 @@ export class EditorState {
       }
       const elements: EmbeddedElement[] = def.elements.map((el): EmbeddedElement => {
         const role = editorAsset(el.assetKey)?.role
-        // Un engin/structure/landmark = corps solide → collision. On reconnaît le
-        // rôle via le catalogue actif OU, en repli, via la convention de nommage
-        // (les engins/landmarks sont préfixés `struct_`/`landmark`), pour couvrir
-        // les assets absents du catalogue courant.
+        // Repli pour les assets NON DÉCLARÉS : un structure/landmark décoratif est
+        // rendu bloquant (comportement historique). On reconnaît le rôle via le
+        // catalogue actif OU, à défaut, via la convention de nommage — les clés
+        // DÉCLARÉES, elles, n'ont besoin d'aucune de ces devinettes.
         const key = el.assetKey
         const isEngine =
           role === 'structure' ||
           role === 'landmark' ||
           key.startsWith('struct_') ||
           key.startsWith('landmark')
-        let collide: 'none' | 'both' | 'enemies' = el.collide
-        let shape: EmbeddedShape | undefined =
-          el.shape === undefined
-            ? undefined
-            : el.shape.kind === 'circle'
-              ? { kind: 'circle', r: el.shape.r }
-              : { kind: 'segment', x2: el.shape.x2, y2: el.shape.y2, thickness: el.shape.thickness }
-        // Engins/héros décoratifs → rendus BLOQUANTS (cercle).
-        if (isEngine && collide === 'none') {
-          collide = 'both'
-          shape = { kind: 'circle', r: Math.max(24, el.scale * 44) }
-        }
-        const e: EmbeddedElement = { assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide }
+        const written: Solidity =
+          el.collide === 'none'
+            ? { collide: 'none' }
+            : { collide: el.collide, shape: el.shape ?? { kind: 'circle', r: Math.max(16, el.scale * 40) } }
+        const fallback: Solidity | undefined = isEngine
+          ? { collide: 'both', shape: { kind: 'circle', r: Math.max(24, el.scale * 44) } }
+          : undefined
+        const solid = resolveSolidity(key, written, fallback)
+        const e: EmbeddedElement = { assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide: solid.collide }
         if (el.flipX === true) {
           e.flipX = true
         }
-        if (shape !== undefined) {
-          e.shape = shape
+        // Forme TRANSPORTÉE (segment de clôture inclus), jamais re-synthétisée.
+        if (solid.collide !== 'none') {
+          e.shape = solid.shape
         }
         return e
       })
