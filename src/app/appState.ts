@@ -1,25 +1,90 @@
 import type { GameState, PlayerState } from '@core/types'
 import type { CardKind } from '@core/systems/cards'
 
-/**
- * Rapport figé généré UNE SEULE FOIS à l'entrée du game-over.
- * Jamais recalculé entre deux appels à `getState()` : la phrase est stable.
- */
-export interface DeathReport {
-  /** Temps écoulé au moment de la mort (ms). */
-  elapsedMs: number
-  /** Nombre d'ennemis tués (= score). */
+/** Issue d'une run terminée : chantier interrompu (mort) ou livré (boss final tué). */
+export type RunOutcome = 'defeat' | 'victory'
+
+/** Ligne de récap d'un joueur dans le rapport (co-op : une par joueur). */
+export interface RunReportPlayer {
+  id: number
+  /** Ennemis tués par CE joueur (attribution au dernier frappeur). */
   kills: number
-  /** Progression [0, 1] dans le stage. */
+  level: number
+  alive: boolean
+}
+
+/**
+ * Rapport de fin de run, figé UNE SEULE FOIS à l'entrée de l'écran de fin
+ * (game-over OU victoire). Jamais recalculé entre deux appels à `getState()` :
+ * phrase et stats sont stables.
+ *
+ * Les DEUX issues partagent la même structure — l'écran est le même « Rapport de
+ * chantier », seule la présentation diffère (`outcome`). Avant, la victoire lisait
+ * l'état VIVANT et n'avait ni phrase, ni barre, ni kills, ni or.
+ */
+export interface RunReport {
+  outcome: RunOutcome
+  /** Libellé de la phase jouée (ex. « Terrain vierge »). */
+  stageTitle: string
+  /** Temps écoulé à la fin de la run (ms). */
+  elapsedMs: number
+  /** Durée totale du stage (ms). */
+  stageDurationMs: number
+  /** Progression [0, 1] dans le stage (toujours 1 en victoire : chantier livré). */
   progressRatio: number
   /** Progression arrondie en % entier. */
   progressPercent: number
-  /** Secondes restantes avant la fin du stage (≥ 0). */
+  /** Secondes restantes avant la fin du stage (≥ 0 ; 0 en victoire). */
   remainingSeconds: number
-  /** Durée totale du stage (ms). */
-  stageDurationMs: number
-  /** Phrase de mort sélectionnée une seule fois. */
+  /** Total d'ennemis tués (= score). */
+  kills: number
+  /** Or ramassé sur la run. */
+  coins: number
+  /** Niveau atteint (joueur 1 — le détail par joueur est dans `perPlayer`). */
+  level: number
+  /** Récap par joueur (1 entrée en solo, N en co-op). */
+  perPlayer: RunReportPlayer[]
+  /** Phrase sélectionnée une seule fois (moquerie en défaite, félicitation en victoire). */
   quote: string
+  /** Note de fin de stage, 0 à 3 étoiles (cumulatives strictes — cf. `computeStars`). */
+  stars: number
+  /** Au moins une arme évoluée pendant la run (n'importe quel joueur en co-op). */
+  evolvedAny: boolean
+  /** Prisonniers libérés (compteur d'ÉQUIPE : les étoiles sont une note collective). */
+  rescued: number
+  /** Prisonniers à libérer sur le stage (= RESCUE.count). */
+  rescueTotal: number
+  /**
+   * Podium co-op : meilleur / pire tueur, et leurs répliques. `null` en solo et
+   * en cas d'égalité parfaite (cf. `selectPodium`) — il n'y a alors personne à
+   * distinguer, et surtout personne à charrier.
+   */
+  podium: RunReportPodium | null
+  /** Bilan du Mode Carnage ; `null` si le mode n'a pas été activé de la run. */
+  carnage: RunReportCarnage | null
+}
+
+/**
+ * Bilan du Mode Carnage (brief §12). `null` si le mode n'a pas été activé — le
+ * rapport n'en dit alors pas un mot, comme si le secret n'existait pas.
+ */
+export interface RunReportCarnage {
+  /** Flaques posées sur la run (cumul, pas le nombre encore visible). */
+  pools: number
+  /** Morts « critiques » (les rares, ~4 %). */
+  criticals: number
+  /** Surface repeinte, en m² — estimation volontairement fantaisiste. */
+  surfaceM2: number
+}
+
+/** Podium de fin de run (co-op uniquement) : qui a porté l'équipe, qui a tenu la lampe. */
+export interface RunReportPodium {
+  bestId: number
+  worstId: number
+  /** Félicitation adressée au meilleur tueur. */
+  praise: string
+  /** Pique adressée au dernier. */
+  mock: string
 }
 
 /**
@@ -94,6 +159,16 @@ export interface MenuView {
   items: MenuItemView[]
   /** Index focalisé (-1 si pas d'items). */
   index: number
+  /**
+   * Joueur à qui appartient ce menu (écran d'upgrade uniquement ; `undefined`
+   * partout ailleurs — titre, pause, options… sont des écrans d'équipe).
+   *
+   * L'identité vient de `PendingLevelUp.playerId` : le core la connaît depuis
+   * toujours et applique bien la carte au bon joueur, mais l'UI ne l'affichait
+   * nulle part — en co-op, l'écran était identique quel que soit le joueur qui
+   * montait de niveau.
+   */
+  playerId?: number
 }
 
 /** Vue complète exposée par l'App (état du jeu + couche écrans/menus). */
@@ -101,8 +176,11 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   players: AppPlayerState[]
   screen: Screen
   menu: MenuView | null
-  /** Skin doré débloqué (code Konami au titre) — cosmétique, session. */
+  /** Skin doré débloqué — cosmétique, session. Son déclencheur est en attente
+   *  (le Konami active désormais le Mode Carnage). */
   goldSkin: boolean
+  /** Mode Carnage actif (secret, Konami au titre) — cosmétique, hors simulation. */
+  carnage: boolean
   /** Identifiant de run (incrémenté à chaque partie/restart) — le rendu s'en sert pour repartir propre. */
   runId: number
   /** Intro de run en cours (sim gelée, micro-animation d'entrée). */
@@ -113,8 +191,8 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   stageSubtitle: string
   /** Numéro de phase dans le cycle (1..10). */
   stageOrder: number
-  /** Sélection de personnage en cours (joueur actif / total) ; `null` hors de ce flux. */
-  characterSelect: { player: number; total: number } | null
+  /** Sélection de personnage en cours (joueur actif / total + perso courant) ; `null` hors de ce flux. */
+  characterSelect: { player: number; total: number; charId: string } | null
   /** Mini-carte affichée (bas-gauche) — bascule clavier M / manette Back/Select. */
   minimapVisible: boolean
   /**
@@ -130,9 +208,9 @@ export interface AppViewState extends Omit<GameState, 'players'> {
    */
   chestOpen: ChestOpenView | null
   /**
-   * Rapport de mort figé — calculé UNE SEULE FOIS quand `screen === 'gameover'`,
-   * stable entre les appels à `getState()`. `null` tant que le game-over n'est pas
-   * atteint ; redevient `null` après `restart()` / `start()`.
+   * Rapport de fin de run figé — calculé UNE SEULE FOIS à l'entrée de l'écran de
+   * fin (`gameover` OU `victory`), stable entre les appels à `getState()`. `null`
+   * tant que la run n'est pas finie ; redevient `null` après `restart()` / `start()`.
    */
-  deathReport: DeathReport | null
+  runReport: RunReport | null
 }

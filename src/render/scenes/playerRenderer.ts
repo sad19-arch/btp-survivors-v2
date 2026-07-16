@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
-import { INTRO } from '@content/config'
+import { INTRO, REVIVE } from '@content/config'
 import { dirRow, walkFrame, idleFrame } from '@render/sprites'
 import type { PlayerState, PrisonerState } from '@core/types'
 import { PALETTE_HEX, PALETTE } from '@ui/palette'
@@ -43,6 +43,14 @@ export class PlayerRenderer {
    * garanti non-nul dès l'entrée de la boucle joueur.
    */
   private playerRings!: Phaser.GameObjects.Graphics
+  /**
+   * Invite « appuie ici » au-dessus d'un joueur à terre quand un coéquipier vivant
+   * est À PORTÉE (sinon l'invite mentirait). Une image poolée par joueur, jamais
+   * détruite — juste masquée. Sans elle, la relève était invisible : rien ne disait
+   * au coéquipier qu'il y avait un bouton à maintenir.
+   */
+  private readonly revivePrompts = new Map<number, Phaser.GameObjects.Image>()
+
   /** Vrai une fois playerRings/reviveBars créés (garde de création lazy). */
   private graphicsReady = false
   /**
@@ -190,6 +198,8 @@ export class PlayerRenderer {
       if (downedActive) {
         this.drawReviveBar(p)
       }
+      // Invite bouton : seulement si un coéquipier VIVANT est à portée de relève.
+      this.syncRevivePrompt(p, state.players, downedActive)
     }
 
     // Fin d'intro : flourish d'étincelles une fois, puis le suivi caméra reprend.
@@ -306,21 +316,68 @@ export class PlayerRenderer {
   }
 
   /**
-   * Barre de progrès de relève au-dessus d'un joueur à terre : cadre sombre +
-   * remplissage coloré (couleur du joueur) proportionnel à `reviveProgress`.
+   * Invite d'action au-dessus d'un joueur à terre : le GLYPHE DU BOUTON à maintenir
+   * (manette A / touche E), pulsé pour attirer l'œil. Affichée seulement quand un
+   * coéquipier vivant est dans `REVIVE.radius` — donc quand l'action est réellement
+   * possible : l'invite apparaît pile au moment où l'on peut agir.
+   *
+   * Lecture seule sur l'état (aucune règle de jeu ici) : le rayon vient de la même
+   * constante de contenu que `reviveSystem`, donc affichage et règle ne peuvent pas diverger.
+   */
+  private syncRevivePrompt(p: PlayerState, players: readonly PlayerState[], downedActive: boolean): void {
+    const existing = this.revivePrompts.get(p.id)
+    const inRange =
+      downedActive &&
+      players.some(
+        (o) => o.id !== p.id && o.alive && Math.hypot(o.x - p.x, o.y - p.y) <= REVIVE.radius
+      )
+    if (!inRange) {
+      existing?.setVisible(false)
+      return
+    }
+    // Manette branchée → bouton A ; sinon clavier → touche E.
+    const key = (this.scene.input.gamepad?.total ?? 0) > 0 ? 'ui_btn_a' : 'ui_key_e'
+    let img = existing
+    if (img === undefined) {
+      if (!this.scene.textures.exists(key)) {
+        return
+      }
+      img = this.scene.add.image(p.x, p.y, key).setDepth(6)
+      this.revivePrompts.set(p.id, img)
+    }
+    img.setTexture(key)
+    img.setPosition(p.x, p.y - 112)
+    img.setVisible(true)
+    // Pulsation lente : ça bouge, donc ça se voit, sans clignoter agressivement.
+    const phase = (this.scene.time.now % 900) / 900
+    img.setScale(0.62 + Math.sin(phase * Math.PI * 2) * 0.07)
+  }
+
+  /**
+   * Barre de progrès de relève au-dessus d'un joueur à terre.
+   *
+   * Volontairement BLANCHE et cadrée d'or — surtout PAS la couleur du joueur :
+   * en 40×6 px à sa propre couleur, elle était prise pour une barre de vie, et on
+   * pouvait relever un coéquipier sans comprendre que c'était ça qui se passait.
    * Dessine sur le Graphics partagé `reviveBars` — aucun GameObject créé.
    */
   private drawReviveBar(p: PlayerState): void {
-    const color = playerColor(p.id).num
-    const w = 40
-    const h = 6
+    const w = 72
+    const h = 12
     const x = p.x - w / 2
-    const y = p.y - 46
-    this.reviveBars.fillStyle(0x000000, 0.6)
-    this.reviveBars.fillRect(x - 1, y - 1, w + 2, h + 2)
+    // Empilement au-dessus du joueur : chevron (-44) · étiquette JN (-58) · barre
+    // (-78) · glyphe du bouton (-112). Sinon la barre écrase l'étiquette.
+    const y = p.y - 78
+    // Cadre : contour noir + liseré doré (lisible sur n'importe quel sol).
+    this.reviveBars.fillStyle(0x101014, 0.85)
+    this.reviveBars.fillRect(x - 3, y - 3, w + 6, h + 6)
+    this.reviveBars.fillStyle(0xffd24a, 1)
+    this.reviveBars.fillRect(x - 2, y - 2, w + 4, h + 4)
+    this.reviveBars.fillStyle(0x120e0a, 1)
+    this.reviveBars.fillRect(x, y, w, h)
     const fillW = Math.max(0, Math.min(1, p.reviveProgress)) * w
     if (fillW > 0) {
-      this.reviveBars.fillStyle(color, 0.95)
+      this.reviveBars.fillStyle(0xffffff, 1)
       this.reviveBars.fillRect(x, y, fillW, h)
     }
   }

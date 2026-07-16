@@ -35,8 +35,18 @@ export interface GameSeam {
     opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] },
     playerId?: number
   ): void
-  /** [Debug] Ajoute de l'XP au joueur 1 (force un level-up déterministe). */
-  debugAddXp(amount: number): void
+  /** [Debug] Bascule le Mode Carnage (secret Konami) sans rejouer la séquence. */
+  debugCarnage(on: boolean): void
+  /** [Debug] Débloque le casque doré (son déclencheur de jeu est en attente). */
+  debugUnlockGold(): void
+  /** [Debug] Ajoute de l'XP à un joueur (1 par défaut) — force un level-up déterministe. */
+  debugAddXp(amount: number, playerId?: number): void
+  /**
+   * [Debug] Simule « le joueur N presse VALIDER », via le même chemin que le
+   * routeur d'input. `confirm()` est un appel système jamais filtré : lui seul ne
+   * permet donc pas de tester le verrou de propriété des cartes de level-up.
+   */
+  debugConfirmAs(playerId: number): void
   /** [Debug] Fait apparaître un coffre d'évolution sur la position d'un joueur (1 par défaut). */
   debugSpawnChestOnPlayer(playerId?: number): void
   /** [Debug] Fait apparaître immédiatement le boss du rôle demandé (`mid`/`final`). */
@@ -47,8 +57,12 @@ export interface GameSeam {
    * joueur (à l'écran, à portée d'arme) au lieu de l'anneau lointain hors-écran.
    */
   debugSpawnEnemies(n: number, radius?: number): void
-  /** [Debug] Met les PV de tous les joueurs à 0 → game-over au prochain pas. */
-  debugKillPlayer(): void
+  /**
+   * [Debug] Met des joueurs à terre (PV = 0). Sans argument : TOUS → game-over.
+   * Avec `playerId` : ce joueur SEUL (permet de tester la relève co-op, qui exige
+   * un coéquipier vivant).
+   */
+  debugKillPlayer(playerId?: number): void
   /** [Debug] Audition d'un SFX d'arme (procédural) par ID d'arme. */
   debugPlayWeaponSfx(id: string): void
   /**
@@ -163,8 +177,17 @@ export function createSeam(app: App): GameSeam {
     debugGrant: (opts, playerId = 1) => {
       app.debugGrant(opts, playerId)
     },
-    debugAddXp: (amount: number) => {
-      app.debugAddXp(amount)
+    debugCarnage: (on: boolean) => {
+      app.debugCarnage(on)
+    },
+    debugUnlockGold: () => {
+      app.debugUnlockGold()
+    },
+    debugAddXp: (amount: number, playerId = 1) => {
+      app.debugAddXp(amount, playerId)
+    },
+    debugConfirmAs: (playerId: number) => {
+      app.debugConfirmAs(playerId)
     },
     debugSpawnChestOnPlayer: (playerId = 1) => {
       app.debugSpawnChestOnPlayer(playerId)
@@ -175,8 +198,8 @@ export function createSeam(app: App): GameSeam {
     debugSpawnEnemies: (n: number, radius?: number) => {
       app.debugSpawnEnemies(n, radius)
     },
-    debugKillPlayer: () => {
-      app.debugKillPlayer()
+    debugKillPlayer: (playerId?: number) => {
+      app.debugKillPlayer(playerId)
     },
     debugPlayWeaponSfx: (id: string) => {
       app.debugPlayWeaponSfx(id)

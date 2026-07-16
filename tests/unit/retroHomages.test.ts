@@ -30,30 +30,64 @@ function playKonami(app: App): void {
   app.confirm()
 }
 
-describe('Clin d’œil — code Konami (casque doré)', () => {
-  it('débloque le skin doré au titre sans lancer la partie', () => {
+/**
+ * Le code Konami active désormais le MODE CARNAGE, plus le casque doré (brief §17).
+ * Le casque n'est pas supprimé pour autant : sa machinerie de rendu est intacte et
+ * attend un nouveau déclencheur (`debugUnlockGold` l'exerce en attendant).
+ */
+describe('Clin d’œil — code Konami (Mode Carnage)', () => {
+  it('active le Mode Carnage au titre sans lancer la partie', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
-    expect(app.getState().goldSkin).toBe(false)
+    expect(app.getState().carnage).toBe(false)
     playKonami(app)
     const s = app.getState()
-    expect(s.goldSkin).toBe(true)
+    expect(s.carnage).toBe(true)
     expect(s.screen).toBe('title') // la touche « valider » finale est consommée par le code
   })
 
-  it('ne débloque rien avec une mauvaise séquence', () => {
+  it('rejouer le code DÉSACTIVE le mode (c’est une bascule)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    playKonami(app)
+    expect(app.getState().carnage).toBe(true)
+    playKonami(app)
+    expect(app.getState().carnage).toBe(false)
+  })
+
+  it('ne déclenche rien avec une mauvaise séquence', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     for (let i = 0; i < 10; i++) {
       app.nav('up')
     }
+    expect(app.getState().carnage).toBe(false)
+  })
+
+  it('ne donne PLUS le casque doré (l’ancien effet est débranché)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    playKonami(app)
     expect(app.getState().goldSkin).toBe(false)
   })
 
-  it('le skin doré persiste une fois la partie lancée', () => {
+  it('le mode persiste une fois la partie lancée', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     playKonami(app)
     app.confirm() // « Jouer » → ouvre la sélection de personnage
     expect(app.getState().screen).toBe('characterSelect')
     app.confirm() // valide le perso par défaut (solo) → lance la partie
+    expect(app.getState().screen).toBe('game')
+    expect(app.getState().carnage).toBe(true)
+  })
+})
+
+describe('Casque doré — en attente d’un déclencheur', () => {
+  it('reste verrouillé par défaut, et son déblocage traverse la partie', () => {
+    // Garde la chaîne de rendu du skin doré vivante et testable tant qu'aucun
+    // déclencheur de jeu ne la rallume — sinon ce serait du code mort.
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    expect(app.getState().goldSkin).toBe(false)
+    app.debugUnlockGold()
+    expect(app.getState().goldSkin).toBe(true)
+    app.confirm()
+    app.confirm()
     expect(app.getState().screen).toBe('game')
     expect(app.getState().goldSkin).toBe(true)
   })

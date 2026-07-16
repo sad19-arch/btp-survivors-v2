@@ -9,6 +9,12 @@ export interface EnemyHitOptions {
   ownerId?: number | undefined
   knockback?: number | undefined
   direction?: Vec2 | undefined
+  /**
+   * Arme à l'origine du coup. Purement DESCRIPTIF : aucun système ne le lit, il
+   * n'est là que pour être relu à la mort par la couche rendu (Mode Carnage :
+   * la scie gicle en long, le marteau en radial). N'affecte aucun calcul.
+   */
+  weaponId?: string | undefined
 }
 
 /** Point d'entrée unique des dégâts infligés par les armes aux ennemis. */
@@ -27,6 +33,15 @@ export function applyEnemyHit(
   health.hp -= damage
   if (options.ownerId !== undefined) {
     enemy.lastHitBy = options.ownerId
+  }
+  // Traçabilité du dernier coup — DONNÉES MORTES pour la simulation : rien ici
+  // n'est relu par un système, donc le comportement (et `sim:check`) est inchangé.
+  // Seul le rendu les relit à la mort, pour orienter la projection de sang.
+  if (options.weaponId !== undefined) {
+    enemy.lastHitWeapon = options.weaponId
+  }
+  if (options.direction !== undefined) {
+    enemy.lastHitDir = { x: options.direction.x, y: options.direction.y }
   }
 
   const force = (options.knockback ?? 0) * (enemy.knockbackMult ?? 1)

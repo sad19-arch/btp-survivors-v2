@@ -25,7 +25,7 @@ test('deathScreen — debugKillPlayer → gameover → rapport peuplé + DOM cor
     .toBe('gameover')
 
   // Vérifier que deathReport est peuplé.
-  const report = await page.evaluate(() => window.__GAME__?.getState().deathReport)
+  const report = await page.evaluate(() => window.__GAME__?.getState().runReport)
   expect(report).not.toBeNull()
   expect(report?.progressPercent).toBeGreaterThanOrEqual(0)
   expect(typeof report?.quote).toBe('string')

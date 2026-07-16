@@ -9,7 +9,9 @@ test('l’écran titre s’affiche et se navigue', async ({ page }) => {
   await page.goto('/?seed=1&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
 
-  await expect(page.locator('.panel__title')).toHaveText('BTP Carnage')
+  // Le titre est désormais le logo arcade (refonte P1) : « BTP » + « CARNAGE » empilés.
+  await expect(page.locator('.logo__btp')).toHaveText('BTP')
+  await expect(page.locator('.logo__carnage')).toHaveText('CARNAGE')
   // Menu titre : 5 items (Jouer / ◄Joueurs► / ◄Niveau► / Options / Éditeur) — cf. app.ts titleItems().
   await expect(page.locator('.menu__item')).toHaveCount(5)
   await expect(page.locator('.menu__item--focus')).toHaveText('Jouer')
@@ -31,7 +33,8 @@ test('l’écran titre s’affiche et se navigue', async ({ page }) => {
   await expect
     .poll(() => page.evaluate(() => window.__GAME__?.getState().screen))
     .toBe('characterSelect')
-  await expect(page.locator('.panel__title')).toHaveText('Joueur 1/1')
+  await expect(page.locator('.panel__title')).toHaveText('SELECT YOUR CREW')
+  await expect(page.locator('.charsel__who')).toHaveText('JOUEUR 1/1')
 
   // Valide le personnage (par défaut du carrousel) → écran de jeu, HUD visible.
   await page.evaluate(() => window.__GAME__?.confirm())
@@ -75,8 +78,8 @@ test('sélectionner 2 joueurs au titre lance une coop (via la sélection de pers
   })
   await expect
     .poll(() => page.evaluate(() => window.__GAME__?.getState().characterSelect))
-    .toEqual({ player: 1, total: 2 })
-  await expect(page.locator('.panel__title')).toHaveText('Joueur 1/2')
+    .toEqual({ player: 1, total: 2, charId: 'ouvrier' })
+  await expect(page.locator('.charsel__who')).toHaveText('JOUEUR 1/2')
 
   // P1 choisit un perso (cycle une fois) puis valide → tour de P2.
   await page.evaluate(() => {
@@ -85,8 +88,8 @@ test('sélectionner 2 joueurs au titre lance une coop (via la sélection de pers
   })
   await expect
     .poll(() => page.evaluate(() => window.__GAME__?.getState().characterSelect))
-    .toEqual({ player: 2, total: 2 })
-  await expect(page.locator('.panel__title')).toHaveText('Joueur 2/2')
+    .toEqual({ player: 2, total: 2, charId: 'ouvrier' })
+  await expect(page.locator('.charsel__who')).toHaveText('JOUEUR 2/2')
 
   // P2 valide son perso (par défaut du carrousel) → la partie démarre avec 2 joueurs.
   await page.evaluate(() => window.__GAME__?.confirm())

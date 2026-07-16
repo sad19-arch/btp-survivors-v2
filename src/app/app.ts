@@ -3,6 +3,7 @@ import {
   AuraPulseEvent,
   PrisonerFreedEvent,
   EnemyKilledEvent,
+  EnemyDiedEvent,
   PlayerHurtEvent,
   LevelUpEvent,
   WeaponFiredEvent,
@@ -23,8 +24,13 @@ import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/char
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
 import { evolutionStatuses } from '@core/systems/evolution'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
-import type { AppViewState, DeathReport, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
+import type { AppViewState, RunReport, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
 import { selectDeathQuote } from '@content/deathQuotes'
+import { selectVictoryQuote } from '@content/victoryQuotes'
+import { EVOLUTIONS } from '@content/evolutions'
+import { computeStars } from '@content/stars'
+import { selectPodium } from '@content/podium'
+import { selectPraiseQuote, selectMockQuote } from '@content/podiumQuotes'
 
 export interface AppOptions {
   seed: number
@@ -84,8 +90,22 @@ export class App {
   private started = false
   private readonly focus = new FocusModel()
   private focusKey = ''
-  /** Skin doré débloqué via le code Konami (cosmétique, mémoire de session). */
+  /**
+   * Skin doré (cosmétique, mémoire de session).
+   *
+   * Le code Konami active désormais le MODE CARNAGE ; le casque doré attend un
+   * nouveau déclencheur. Toute sa machinerie est intacte (feuilles `player_gold`,
+   * `walkTextureKey`/`idleTextureKey` côté rendu) : seul le déclencheur manque.
+   * `debugUnlockGold()` (seam) permet de l'exercer en test en attendant.
+   */
   private goldSkin = false
+  /**
+   * Mode Carnage actif (secret, code Konami au titre). Cosmétique et hors sim :
+   * `src/core` ignore ce flag, comme il ignore `goldSkin`.
+   */
+  private carnage = false
+  /** Compteurs du Mode Carnage sur la run, alimentés par le rendu (pour le rapport). */
+  private carnageStats: { pools: number; criticals: number; surfaceM2: number } | null = null
   /** Historique des dernières actions au titre, pour détecter le code Konami. */
   private comboBuffer: ComboAction[] = []
   /** Intro activée (vrai joueur) ; désactivée en test/e2e/capture. */
@@ -123,11 +143,12 @@ export class App {
    */
   minimapVisible = true
   /**
-   * Rapport de mort figé — calculé une seule fois à la première entrée en game-over,
-   * remis à `null` à chaque `start()` / `restart()`. Le roll (phrase) est tiré ici
-   * (composition root — `Math.random` AUTORISÉ hors `src/core`).
+   * Rapport de fin de run figé — calculé une seule fois à la première entrée sur un
+   * écran de fin (game-over OU victoire), remis à `null` à chaque `start()` /
+   * `restart()`. Le roll (phrase) est tiré ici (composition root — `Math.random`
+   * AUTORISÉ hors `src/core`).
    */
-  private _deathReport: DeathReport | null = null
+  private _runReport: RunReport | null = null
   /** Garde one-shot : pièces du run déjà versées au total méta (fin de run). */
   private _coinsBanked = false
 
@@ -151,7 +172,7 @@ export class App {
    */
   start(mode: GameMode = this.mode, characters: readonly string[] = this.selectedCharacters): void {
     this.bumpState()
-    this._deathReport = null
+    this._runReport = null
     this._coinsBanked = false
     const wasStarted = this.started // RE-démarrage ? (partie déjà en cours)
     this.mode = mode
@@ -171,6 +192,12 @@ export class App {
     // Relais des événements sémantiques audio (sim → App → AudioDirector).
     this.sim.events.addEventListener('enemyKilled', (e) => {
       this.events.dispatchEvent(new EnemyKilledEvent((e as EnemyKilledEvent).count))
+    })
+    this.sim.events.addEventListener('enemyDied', (e) => {
+      const d = e as EnemyDiedEvent
+      this.events.dispatchEvent(
+        new EnemyDiedEvent(d.x, d.y, d.enemyType, d.isElite, d.bossRole, d.weapon, d.dirX, d.dirY)
+      )
     })
     this.sim.events.addEventListener('playerHurt', () => { this.events.dispatchEvent(new PlayerHurtEvent()) })
     this.sim.events.addEventListener('levelUp', () => { this.events.dispatchEvent(new LevelUpEvent()) })
@@ -303,11 +330,24 @@ export class App {
     this.activate(this.screen, items[index].id)
   }
 
-  /** Valide l'item focalisé du menu actif. */
-  confirm(): void {
+  /**
+   * Valide l'item focalisé du menu actif.
+   *
+   * @param byPlayers - Joueurs ayant pressé « valider » cette frame (fourni par
+   * le routeur d'input). Sur l'écran d'upgrade, la carte appartient à UN joueur :
+   * seul lui peut la choisir. Partout ailleurs (titre, pause, options, fin), les
+   * écrans sont d'équipe et n'importe qui valide.
+   *
+   * Omis (`undefined`) = appel système : le seam de test et les clics souris ne
+   * sont jamais filtrés.
+   */
+  confirm(byPlayers?: ReadonlySet<number>): void {
     this.bumpState()
     // Au titre, la touche « valider » peut compléter le code Konami : on la consomme alors.
     if (this.recordCombo('confirm')) {
+      return
+    }
+    if (!this.mayConfirm(byPlayers)) {
       return
     }
     this.refreshFocus()
@@ -316,6 +356,17 @@ export class App {
       return
     }
     this.activate(this.screen, id)
+  }
+
+  /** Vrai si ce « valider » a le droit d'agir sur l'écran courant. */
+  private mayConfirm(byPlayers?: ReadonlySet<number>): boolean {
+    if (byPlayers === undefined || this.screen !== 'upgrade') {
+      return true
+    }
+    const owner = this.sim?.getState().pendingLevelUp?.playerId
+    // Propriétaire inconnu : on ne bloque pas (on ne rend pas l'écran injouable
+    // sur un état inattendu — le soft-lock serait pire que le partage).
+    return owner === undefined || byPlayers.has(owner)
   }
 
   /** Retour / annulation, selon l'écran. */
@@ -409,10 +460,49 @@ export class App {
   }
 
   /** [Debug/seam] Ajoute de l'XP au joueur 1 (force un level-up déterministe). */
-  debugAddXp(amount: number): void {
+  debugAddXp(amount: number, playerId = 1): void {
     this.bumpState()
-    this.sim?.debugAddXp(amount)
+    this.sim?.debugAddXp(amount, playerId)
     this.refreshFocus()
+  }
+
+  /**
+   * Le rendu publie ici son bilan Carnage (il seul sait combien de flaques il a
+   * posées). Appelé chaque frame pendant la run : le rapport de fin est figé une
+   * fois, donc ce qui n'est pas remonté AVANT la mort est perdu.
+   */
+  reportCarnage(stats: { pools: number; criticals: number; surfaceM2: number }): void {
+    this.carnageStats = stats
+  }
+
+  /** [Debug/seam] Bascule le Mode Carnage sans rejouer le Konami. */
+  debugCarnage(on: boolean): void {
+    this.bumpState()
+    this.carnage = on
+  }
+
+  /**
+   * [Debug/seam] Débloque le casque doré.
+   *
+   * Le Konami donne maintenant le Carnage : sans ce helper, toute la chaîne de
+   * rendu du skin doré (`player_gold`, `walkTextureKey`…) deviendrait du code
+   * mort intestable en attendant son nouveau déclencheur.
+   */
+  debugUnlockGold(): void {
+    this.bumpState()
+    this.goldSkin = true
+  }
+
+  /**
+   * [Debug/seam] Simule « le joueur N presse VALIDER ».
+   *
+   * `confirm()` du seam est un appel système, jamais filtré — il ne peut donc pas
+   * tester le verrou de propriété des cartes de level-up. Ce helper passe par le
+   * même chemin que le routeur d'input (un ensemble d'ids), ce qui rend le verrou
+   * vérifiable en e2e.
+   */
+  debugConfirmAs(playerId: number): void {
+    this.confirm(new Set([playerId]))
   }
 
   /** [Debug/seam] Audition d'un SFX d'arme (procédural) : rejoue weaponFired(id) → zzfx. */
@@ -448,9 +538,9 @@ export class App {
    * Permet d'atteindre l'écran de mort de façon déterministe dans les tests e2e.
    * Réservé aux tests et au seam de debug — jamais appelé en jeu normal.
    */
-  debugKillPlayer(): void {
+  debugKillPlayer(playerId?: number): void {
     this.bumpState()
-    this.sim?.debugKillPlayer()
+    this.sim?.debugKillPlayer(playerId)
   }
 
   // --- état exposé ----------------------------------------------------------
@@ -460,8 +550,20 @@ export class App {
    * la séquence vient d'être complétée à cet appel (le débloquage doit consommer
    * la touche pour ne pas déclencher aussi l'item de menu focalisé).
    */
+  /**
+   * Alimente le code Konami. Renvoie vrai si le code vient d'être complété — auquel
+   * cas `confirm()` consomme la touche (sinon le « A » final lancerait la partie).
+   *
+   * Le code BASCULE le Mode Carnage : le rejouer le désactive (brief §3.3). D'où
+   * la disparition de la garde « une seule fois » qui existait pour le casque doré.
+   *
+   * ⚠️ Limite assumée : la saisie n'est possible qu'AU TITRE. Le buffer est
+   * alimenté par les intents de menu (`nav`/`back`/`confirm`), qui n'existent pas
+   * en jeu ; et sur l'écran de pause, le « B » de la séquence reprendrait la
+   * partie. On active/désactive donc avant de lancer, pas en cours de run.
+   */
   private recordCombo(action: ComboAction): boolean {
-    if (this.screen !== 'title' || this.goldSkin) {
+    if (this.screen !== 'title') {
       return false
     }
     this.comboBuffer.push(action)
@@ -469,7 +571,7 @@ export class App {
       this.comboBuffer.shift()
     }
     if (this.comboBuffer.length === KONAMI.length && KONAMI.every((a, i) => this.comboBuffer[i] === a)) {
-      this.goldSkin = true
+      this.carnage = !this.carnage
       this.comboBuffer = []
       return true
     }
@@ -486,22 +588,68 @@ export class App {
       addMetaCoins(base.coins)
       this._coinsBanked = true
     }
-    // Calcul figé du rapport de mort : une seule fois à l'entrée du game-over.
-    if (screen === 'gameover' && this._deathReport === null) {
+    const phase = ORDERED_PHASES.find((p) => (p.id as string) === base.stageId)
+    // Rapport de fin figé : UNE SEULE FOIS à l'entrée de l'écran de fin, pour les
+    // DEUX issues. La victoire est un chantier LIVRÉ → progression 100 %, 0 s restante.
+    if ((screen === 'gameover' || screen === 'victory') && this._runReport === null) {
+      const victory = screen === 'victory'
       const stageDurationMs = FINAL_BOSS.atMs
       const elapsedMs = base.elapsedMs
-      const kills = base.score
-      const progressRatio = Math.max(0, Math.min(elapsedMs / stageDurationMs, 1))
-      const progressPercent = Math.floor(progressRatio * 100)
-      const remainingSeconds = Math.max(0, Math.floor(stageDurationMs / 1000) - Math.floor(elapsedMs / 1000))
-      const quote = selectDeathQuote({
-        elapsedSeconds: Math.floor(elapsedMs / 1000),
-        stageDurationSeconds: stageDurationMs / 1000,
-        roll: Math.random()
-      })
-      this._deathReport = { elapsedMs, kills, progressRatio, progressPercent, remainingSeconds, stageDurationMs, quote }
+      const progressRatio = victory ? 1 : Math.max(0, Math.min(elapsedMs / stageDurationMs, 1))
+      const flawless = base.players.every((p) => p.alive)
+      // Une arme évoluée remplace son id in-place et DÉFINITIVEMENT pour la run
+      // (cf. tryEvolve) : l'id évolué présent dans le loadout est donc la preuve
+      // durable de l'évolution. `justEvolved` ne conviendrait pas — il est
+      // one-shot et remis à null au pas suivant.
+      const evolvedAny = base.players.some((p) =>
+        p.weapons.some((id) => EVOLUTIONS.some((e) => e.evolved === id))
+      )
+      const podiumPick = selectPodium(base.players.map((p) => ({ id: p.id, kills: p.kills })))
+      this._runReport = {
+        outcome: victory ? 'victory' : 'defeat',
+        stageTitle: phase?.title ?? '—',
+        elapsedMs,
+        stageDurationMs,
+        progressRatio,
+        progressPercent: Math.floor(progressRatio * 100),
+        remainingSeconds: victory
+          ? 0
+          : Math.max(0, Math.floor(stageDurationMs / 1000) - Math.floor(elapsedMs / 1000)),
+        kills: base.score,
+        coins: base.coins,
+        level: base.players[0]?.level ?? 1,
+        perPlayer: base.players.map((p) => ({ id: p.id, kills: p.kills, level: p.level, alive: p.alive })),
+        // `Math.random` AUTORISÉ ici (composition root, hors src/core) — le roll est figé
+        // avec le rapport, donc la phrase ne change pas d'une frame à l'autre.
+        quote: victory
+          ? selectVictoryQuote({ roll: Math.random(), flawless })
+          : selectDeathQuote({
+              elapsedSeconds: Math.floor(elapsedMs / 1000),
+              stageDurationSeconds: stageDurationMs / 1000,
+              roll: Math.random()
+            }),
+        stars: computeStars({
+          victory,
+          evolvedAny,
+          // Note COLLECTIVE : les prisonniers sont un compteur d'équipe.
+          rescuedAll: base.rescue.rescued >= base.rescue.total
+        }),
+        evolvedAny,
+        rescued: base.rescue.rescued,
+        rescueTotal: base.rescue.total,
+        podium:
+          podiumPick === null
+            ? null
+            : {
+                ...podiumPick,
+                praise: selectPraiseQuote({ roll: Math.random() }),
+                mock: selectMockQuote({ roll: Math.random() })
+              },
+        // Bilan Carnage : `null` si le mode n'a jamais été activé — le rapport
+        // n'en souffle alors pas un mot, le secret reste un secret.
+        carnage: this.carnageStats
+      }
     }
-    const phase = ORDERED_PHASES.find((p) => (p.id as string) === base.stageId)
     return {
       ...base,
       scene: base.scene,
@@ -509,13 +657,14 @@ export class App {
       screen,
       menu: this.menu(screen),
       goldSkin: this.goldSkin,
+      carnage: this.carnage,
       runId: this.runId,
       introActive: this.introMsLeft > 0,
       stageTitle: phase?.title ?? '—',
       stageSubtitle: phase?.subtitle ?? '',
       stageOrder: phase?.order ?? 0,
       characterSelect: this.charSelectOpen
-        ? { player: this.charSelectPlayer, total: this.selectedPlayers }
+        ? { player: this.charSelectPlayer, total: this.selectedPlayers, charId: this.rosterIds()[this.charCursor] ?? DEFAULT_CHARACTER_ID }
         : null,
       minimapVisible: this.minimapVisible,
       justEvolvedWeaponName:
@@ -534,7 +683,7 @@ export class App {
               isSuper: base.chestOpened.isSuper
             }
           : null,
-      deathReport: screen === 'gameover' ? this._deathReport : null
+      runReport: screen === 'gameover' || screen === 'victory' ? this._runReport : null
     }
   }
 
@@ -743,7 +892,9 @@ export class App {
     if (items.length === 0) {
       return null
     }
-    return { screen, items, index: this.focus.index }
+    // Seul l'écran d'upgrade appartient à UN joueur ; les autres sont d'équipe.
+    const playerId = screen === 'upgrade' ? this.sim?.getState().pendingLevelUp?.playerId : undefined
+    return { screen, items, index: this.focus.index, ...(playerId === undefined ? {} : { playerId }) }
   }
 
   /** Recale le modèle de focus quand l'identité du menu change. */

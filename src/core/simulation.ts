@@ -5,6 +5,7 @@ import {
   AuraPulseEvent,
   PrisonerFreedEvent,
   EnemyKilledEvent,
+  EnemyDiedEvent,
   PlayerHurtEvent,
   LevelUpEvent,
   WeaponFiredEvent,
@@ -27,7 +28,7 @@ import { createWaveDirectorState, stepWaveDirector, type WaveDirectorState } fro
 import { weaponSystem } from './systems/weapon'
 import { collisionSystem } from './systems/collision'
 import { knockbackSystem } from './systems/knockback'
-import { reapDeadEnemies, type ReapResult } from './systems/reap'
+import { reapDeadEnemies, type DiedEnemy, type ReapResult } from './systems/reap'
 import { reapDestructibles, destructibleContactSystem, type BrokenDestructible } from './systems/destructible'
 import { destructibleDef, type DestructibleSpawn } from '@content/destructibles'
 import { pickupSystem } from './systems/pickup'
@@ -87,6 +88,16 @@ export interface SimOptions {
 
 const COORD_SYSTEM = 'origin top-left, +x right, +y down'
 
+/**
+ * Plafond d'`EnemyDiedEvent` par pas (Mode Carnage).
+ *
+ * Une vague peut faucher des dizaines d'ennemis dans le même pas. Le rendu, lui,
+ * ne pose au mieux que `CARNAGE.maxPoolsPerFrame` flaques par frame : émettre
+ * au-delà allouerait des événements que personne ne peut honorer. Ce plafond est
+ * purement une économie d'allocation — il n'a AUCUN effet sur la simulation.
+ */
+const MAX_DIED_EVENTS_PER_STEP = 12
+
 /** Résout une phase du cycle de chantier (source de vérité : thème + pools d'ennemis). */
 function resolvePhase(phaseId: ConstructionPhaseId): ConstructionPhase {
   const phase = PHASES[phaseId]
@@ -145,6 +156,9 @@ export class Simulation {
   private score = 0
   /** Tally cumulatif de kills par joueur (attribution par dernier frappeur). */
   private killsByPlayer = new Map<number, number>()
+  /** Contexte des morts du pas courant (Mode Carnage) — tableau RÉUTILISÉ, vidé
+   *  à chaque pas pour ne pas allouer dans la boucle chaude. */
+  private readonly diedEnemies: DiedEnemy[] = []
   /**
    * Nombre de paliers de mid-boss déjà spawné (rôle `mid`). Chaque valeur dans
    * `MID_BOSS_WAVES.atMs` est consommée exactement une fois (palier par index).
@@ -415,8 +429,8 @@ export class Simulation {
    * passer par un pickup. Permet de forcer un level-up de façon déterministe
    * (tests, seam de debug) — jamais utilisé en jeu normal.
    */
-  debugAddXp(amount: number): void {
-    const e = this.playerEntities.get(1)
+  debugAddXp(amount: number, playerId = 1): void {
+    const e = this.playerEntities.get(playerId)
     if (e === undefined) {
       return
     }
@@ -502,8 +516,16 @@ export class Simulation {
    * secondaire hors du composant `health`. Réservé aux tests e2e et au seam
    * de debug — jamais appelé en jeu normal.
    */
-  debugKillPlayer(): void {
-    for (const e of this.playerEntities.values()) {
+  /**
+   * Met des joueurs à terre (PV = 0). Sans argument : TOUS (→ game-over, usage
+   * historique). Avec `playerId` : ce joueur SEUL — indispensable pour tester la
+   * relève co-op, qui exige un coéquipier encore vivant.
+   */
+  debugKillPlayer(playerId?: number): void {
+    for (const [id, e] of this.playerEntities) {
+      if (playerId !== undefined && id !== playerId) {
+        continue
+      }
       const health = this.world.get(e, 'health')
       if (health !== undefined) {
         health.hp = 0
@@ -725,7 +747,10 @@ export class Simulation {
     // Casse au CONTACT du joueur (complète la casse par les armes via la grille).
     destructibleContactSystem(this.world)
     const deadBearerPositions = this.collectDeadChestBearers()
-    const reap: ReapResult = reapDeadEnemies(this.world, this.lootRng)
+    // Contexte des morts, pour le rendu du Mode Carnage. Tableau réutilisé (pas
+    // d'allocation par pas) et vidé à chaque tour — même patron que `brokenDestructibles`.
+    this.diedEnemies.length = 0
+    const reap: ReapResult = reapDeadEnemies(this.world, this.lootRng, this.diedEnemies)
     // Coffre GARANTI sur mort d'un porteur (convoyeur). Positions collectées AVANT
     // le reap (qui supprime les entités). Pas de RNG : récompense méritée.
     for (const pos of deadBearerPositions) {
@@ -779,6 +804,20 @@ export class Simulation {
     }
     for (const b of brokenDestructibles) {
       this.events.dispatchEvent(new DestructibleBrokenEvent(b.x, b.y, b.typeId))
+    }
+    // Mode Carnage : une mort = un événement. BORNÉ par pas — une vague peut tuer
+    // 50 ennemis d'un coup, et le rendu ne pourra de toute façon pas poser 50
+    // flaques dans la frame (son propre budget vaut 6). Émettre au-delà ne ferait
+    // qu'allouer des événements que personne ne peut honorer.
+    const diedCap = Math.min(this.diedEnemies.length, MAX_DIED_EVENTS_PER_STEP)
+    for (let i = 0; i < diedCap; i++) {
+      const d = this.diedEnemies[i]
+      if (d === undefined) {
+        continue
+      }
+      this.events.dispatchEvent(
+        new EnemyDiedEvent(d.x, d.y, d.type, d.isElite, d.bossRole, d.weapon, d.dirX, d.dirY)
+      )
     }
   }
 

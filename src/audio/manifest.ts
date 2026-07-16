@@ -98,13 +98,24 @@ export const WEAPON_SFX_IDS: readonly string[] = [
   'mitrailleuse_clous', 'haute_tension', 'coulee_bitume', 'tempete_boulons', 'cle_choc', 'canon_mousse', 'transpalette', 'lance_thermique'
 ]
 
+/**
+ * Variantes de bruit de chair broyée du Mode Carnage (ElevenLabs).
+ * PLUSIEURS variantes : à raison d'une mort par seconde, une seule saoulerait vite.
+ * Fichiers volontairement courts (~0.7-0.8 s, ~7 Ko pièce, 40 Ko le lot).
+ */
+export const CARNAGE_GORE_IDS: readonly number[] = [1, 2, 3, 4, 5]
+
 export const SFX_FILES: ReadonlyArray<readonly [string, string]> = [
   ...SFX_NAMES.map((n) => [`sfx_${n}`, `audio/sfx/${n}.wav`] as const),
   ['sfx_stage_clear', 'audio/sfx/stage_clear.ogg'],
+  ['sfx_title_slam', 'audio/sfx/title_slam.mp3'],
   // Casse des destructibles (ElevenLabs) : un son par matériau.
   ['sfx_break_wood', 'audio/sfx/destructibles/break_wood.mp3'],
   ['sfx_break_metal', 'audio/sfx/destructibles/break_metal.mp3'],
   ['sfx_break_rubble', 'audio/sfx/destructibles/break_rubble.mp3'],
+  // Mode Carnage (ElevenLabs) : 5 bruits de chair broyée, tirés au sort à la mort.
+  // Volontairement courts (~0.7-0.8 s, ~7 Ko pièce) : ils jouent en rafale.
+  ...CARNAGE_GORE_IDS.map((n) => [`sfx_gore_${n}`, `audio/sfx/carnage/gore_${n}.mp3`] as const),
   ...WEAPON_SFX_IDS.map((id) => [`sfx_weapon_${id}`, `audio/sfx/weapons/weapon_${id}.mp3`] as const)
 ]
 
@@ -180,7 +191,24 @@ export const SFX: Readonly<Record<string, SfxCue>> = {
   // Casse des destructibles, par matériau (throttlé : un AoE peut casser plusieurs objets/frame).
   break_wood: { keys: ['sfx_break_wood'], volume: 0.5, rateJitter: 0.12, throttleMs: 80 },
   break_metal: { keys: ['sfx_break_metal'], volume: 0.5, rateJitter: 0.12, throttleMs: 80 },
-  break_rubble: { keys: ['sfx_break_rubble'], volume: 0.5, rateJitter: 0.12, throttleMs: 80 }
+  break_rubble: { keys: ['sfx_break_rubble'], volume: 0.5, rateJitter: 0.12, throttleMs: 80 },
+  // Impact « chantier » synchro sur le slam-in du logo du titre (refonte arcade).
+  titleSlam: { keys: ['sfx_title_slam'], volume: 0.9 },
+  /**
+   * Mode Carnage : bruit de chair broyée à la mort d'un ennemi.
+   *
+   * `throttleMs: 260` — BEAUCOUP plus haut que `enemyKilled` (45 ms). Ce son est
+   * gras et sale : à la cadence d'une horde il deviendrait une bouillie continue.
+   * On en garde ~4 par seconde au maximum, ce qui suffit à ponctuer sans saouler.
+   * `rateJitter` élargi : même tiré au sort parmi 5, deux lectures identiques
+   * consécutives s'entendraient.
+   */
+  carnageGore: {
+    keys: CARNAGE_GORE_IDS.map((n) => `sfx_gore_${n}`),
+    volume: 0.55,
+    rateJitter: 0.22,
+    throttleMs: 260
+  }
 }
 
 /** Pools de VOIX arcade (annonceur) par moment de jeu. `playVoice` pioche → alternance. */
