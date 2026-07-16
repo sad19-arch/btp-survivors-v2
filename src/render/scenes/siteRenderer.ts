@@ -21,9 +21,8 @@
  */
 
 import Phaser from 'phaser'
-import { buildSiteLayout } from '@core/siteLayout'
-import { buildSitePlan } from '@core/sitePlan'
-import type { PlanSeg } from '@core/sitePlan'
+import { buildSiteLayout, resolveSitePlan } from '@core/siteLayout'
+import type { PlanSeg, SitePlan } from '@core/sitePlan'
 import { CLUSTERS } from '@content/clusters'
 import type { ClusterElement } from '@content/clusters'
 
@@ -135,8 +134,11 @@ export class SiteRenderer {
     this.siteOverlays = []
 
     // Plan masse (stages programmés) : terre excavée + pistes + panneaux de clôture.
-    // MÊME source déterministe que la sim (les obstacles viennent des mêmes segments).
-    const plan = buildSitePlan(seed, worldW, worldH, stageId)
+    // MÊME source déterministe QUE LA SIM, et surtout MÊME DÉCISION : on passe par
+    // `resolveSitePlan` (et non `buildSitePlan`) pour qu'une compo `keepSitePlan:false`
+    // supprime le décor ICI exactement quand elle supprime les obstacles LÀ-BAS.
+    // Appeler `buildSitePlan` directement rouvrirait la porte au décor traversable.
+    const plan = resolveSitePlan(seed, worldW, worldH, stageId)
     if (plan !== null) {
       this.drawPlan(plan, stageId)
     }
@@ -325,7 +327,7 @@ export class SiteRenderer {
    * roulage le long des chemins, panneaux de clôture le long des anneaux
    * (les ouvertures restent vides — les poteaux les encadrent).
    */
-  private drawPlan(plan: NonNullable<ReturnType<typeof buildSitePlan>>, stageId: string): void {
+  private drawPlan(plan: SitePlan, stageId: string): void {
     // 1. Terre excavée : patch sombre sous chaque zone d'excavation.
     for (const z of plan.zones) {
       if (z.role !== 'excavation') {

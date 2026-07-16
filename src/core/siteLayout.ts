@@ -361,6 +361,41 @@ export function scatterDestructibles(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Plan de chantier effectif (décision PARTAGÉE sim ⇄ rendu)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Plan masse EFFECTIF du stage : `null` = aucun plan (ni obstacle, ni décor).
+ *
+ * POINT D'ENTRÉE UNIQUE de la sim ET du rendu. C'est volontaire : la question
+ * « ce stage a-t-il un plan procédural ? » ne doit avoir QU'UNE réponse. Si la
+ * sim et le rendu la calculaient chacun de leur côté, la moindre dérive donnerait
+ * un obstacle INVISIBLE (le joueur bute sur du vide) ou un décor TRAVERSABLE —
+ * deux bugs pénibles à diagnostiquer. Le rendu appelle donc cette fonction, pas
+ * `buildSitePlan` directement.
+ *
+ * Règle (cf. `StageLayout.keepSitePlan`) :
+ * - aucune compo               → plan présent (jeu génératif, comportement historique) ;
+ * - compo `keepSitePlan:false` → plan ABSENT (la compo se suffit à elle-même) ;
+ * - compo sans le champ / true → plan présent (non-régression des compos existantes).
+ *
+ * Stage sans `SITE_PROGRAMS` → `buildSitePlan` renvoie déjà `null` : le drapeau
+ * n'y change donc rien.
+ */
+export function resolveSitePlan(
+  seed: number,
+  worldW: number,
+  worldH: number,
+  stageId: string
+): SitePlan | null {
+  const composed = resolveComposedLayout(stageId)
+  if (composed !== null && composed.keepSitePlan === false) {
+    return null
+  }
+  return buildSitePlan(seed, worldW, worldH, stageId)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Fonction principale
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -408,16 +443,16 @@ function computeBaseLayout(
   const composed = resolveComposedLayout(stageId)
   if (composed !== null) {
     const site = composedToSiteLayout(composed)
-    // Backdrop procédural : pour un stage PROGRAMMÉ, le rendu dessine toujours les
+    // Backdrop procédural : quand le plan est CONSERVÉ, le rendu dessine les
     // panneaux de clôture des anneaux depuis le plan (siteRenderer.drawPlan). On
     // ré-injecte ici LEURS obstacles pour que la collision de la sim colle aux
-    // panneaux visibles (parité sim/rendu). Le déterminisme est préservé.
-    if (SITE_PROGRAMS[stageId] !== undefined) {
-      const plan = buildSitePlan(seed, worldW, worldH, stageId)
-      if (plan !== null) {
-        for (const f of plan.fences) {
-          site.obstacles.push({ kind: 'segment', x: f.x1, y: f.y1, x2: f.x2, y2: f.y2, thickness: 12, blocks: 'both' })
-        }
+    // panneaux visibles. `resolveSitePlan` (et NON `buildSitePlan`) : c'est la
+    // décision partagée avec le rendu qui garantit la parité — `keepSitePlan:false`
+    // ⇒ `null` ⇒ ni obstacle ici, ni décor là-bas. Déterminisme préservé.
+    const plan = resolveSitePlan(seed, worldW, worldH, stageId)
+    if (plan !== null) {
+      for (const f of plan.fences) {
+        site.obstacles.push({ kind: 'segment', x: f.x1, y: f.y1, x2: f.x2, y2: f.y2, thickness: 12, blocks: 'both' })
       }
     }
     return site
