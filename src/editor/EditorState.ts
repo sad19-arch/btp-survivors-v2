@@ -20,7 +20,26 @@ import {
   type StageLayout,
   type Vec2
 } from './StageLayoutSchema'
-import { editorAsset, paletteEntry } from './PrefabCatalog'
+import { editorAsset, paletteEntry, type AssetRole } from './PrefabCatalog'
+import type { RenderLayer } from '@content/stageLayout'
+
+/**
+ * Rôle de palette → couche d'affichage en jeu. La correspondance est explicite
+ * pour que le rendu n'ait plus à deviner la profondeur depuis le préfixe de la
+ * clé d'asset (cf. `RenderLayer` : `piste_strip` s'affichait à hauteur de prop).
+ * `ground` et `worker` sont rendus par d'autres chemins → pas de couche ici.
+ */
+function layerForRole(role: AssetRole | undefined): RenderLayer | undefined {
+  switch (role) {
+    case 'decal': return 'decal'
+    case 'landmark':
+    case 'structure':
+    case 'column': return 'struct'
+    case 'prop':
+    case 'destructible': return 'prop'
+    default: return undefined
+  }
+}
 import { ZONE_DEFS, ZONE_BY_TYPE } from './zones'
 import { CLUSTERS } from '@content/clusters'
 import { destructibleDef } from '@content/destructibles'
@@ -543,8 +562,8 @@ export class EditorState {
   /**
    * Layout « jeu » : chaque instance dont le prefab N'EST PAS un cluster connu
    * (`CLUSTERS`) reçoit ses `elements` RÉSOLUS (assetKey/dx/dy/scale/flipX +
-   * `collide` dérivé du rôle) → le cœur peut le consommer sans le catalogue.
-   * Les prefabs qui SONT des clusters gardent leur collision fine côté jeu.
+   * `collide` et `layer` dérivés du rôle) → le cœur peut le consommer sans le
+   * catalogue. Les prefabs qui SONT des clusters gardent leur collision fine.
    */
   exportGameJson(): string {
     const clone = JSON.parse(serializeLayout(this.layout)) as StageLayout
@@ -573,6 +592,13 @@ export class EditorState {
         const role = editorAsset(el.assetKey)?.role
         const block = role === 'landmark' || role === 'structure' || role === 'column'
         const e: EmbeddedElement = { assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide: block ? 'both' : 'none' }
+        // Le rôle était consommé pour décider la collision puis JETÉ : le rendu
+        // devait ensuite redeviner la profondeur depuis le préfixe de la clé, et
+        // se trompait (cf. `RenderLayer`). On le transporte désormais.
+        const layer = layerForRole(role)
+        if (layer !== undefined) {
+          e.layer = layer
+        }
         if (block) {
           e.shape = { kind: 'circle', r: Math.max(16, el.scale * 40) }
         }

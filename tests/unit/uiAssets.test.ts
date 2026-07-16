@@ -16,6 +16,14 @@ const PUBLIC_DIR = resolve(__dirname, '../../public')
 
 /** Fichiers référencés en dur par `reviveRenderer`/`reportPanel`/`starRow` de l'overlay. */
 const REFERENCED_ASSETS = [
+  // Textures de la DA 16-bit, tirées par `styles.ts` (CSS `url()`) et `overlay.ts`.
+  // Elles sont d'autant plus exposées qu'un `url()` cassé ne lève RIEN : le panneau
+  // perd juste sa texture, en silence.
+  'ui_metal_v.png',
+  'ui_dither_light.png',
+  'ui_dither_dark.png',
+  'ui_bg_dusk.png',
+  'ui_casque.png',
   // Barre de progression du rapport de fin
   'ui_death_start.png',
   'ui_death_marker.png',

@@ -237,11 +237,15 @@ function extractSurfaceSlowZones(
 
 /** Élément embarqué (compo/import) → ClusterElement (collision lossless). */
 function embeddedToClusterElement(e: EmbeddedElement): ClusterElement {
+  // `layer` traverse sans être lu ici : c'est une donnée de RENDU (profondeur
+  // d'affichage). La sim n'en dépend pas — seuls `collide`/`shape` la concernent.
+  const base = { assetKey: e.assetKey, dx: e.dx, dy: e.dy, scale: e.scale, flipX: e.flipX === true }
+  const layered = e.layer === undefined ? base : { ...base, layer: e.layer }
   if (e.collide !== undefined && e.collide !== 'none') {
     const shape = e.shape ?? { kind: 'circle', r: Math.max(16, e.scale * 40) }
-    return { assetKey: e.assetKey, dx: e.dx, dy: e.dy, scale: e.scale, flipX: e.flipX === true, collide: e.collide, shape }
+    return { ...layered, collide: e.collide, shape }
   }
-  return { assetKey: e.assetKey, dx: e.dx, dy: e.dy, scale: e.scale, flipX: e.flipX === true, collide: 'none' }
+  return { ...layered, collide: 'none' }
 }
 
 /**

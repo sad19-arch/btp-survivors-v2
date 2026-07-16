@@ -163,9 +163,13 @@ const ASSET_META: Record<string, { label: string; category: string }> = {
   // Décor PARTAGÉ (clôtures/portail/routes) → catégorie « Divers » sur tous les stages.
   fence_panel: { label: 'Panneau de clôture', category: 'divers' },
   fence_post: { label: 'Poteau de clôture', category: 'divers' },
-  site_gate: { label: 'Portail de chantier', category: 'divers' },
-  road_strip: { label: 'Bande de route', category: 'divers' },
-  piste_strip: { label: 'Bande de piste', category: 'divers' },
+  site_gate: { label: 'Portail de chantier', category: 'routes' },
+  // Les routes étaient rangées dans « Divers » alors que la catégorie « Routes &
+  // accès » existait : elle n'était peuplée que par une scène d'un seul stage,
+  // donc vide — et donc MASQUÉE — partout ailleurs. La fonctionnalité était là,
+  // c'est l'étiquette qui manquait.
+  road_strip: { label: 'Bande de route goudronnée', category: 'routes' },
+  piste_strip: { label: 'Bande de piste (terre)', category: 'routes' },
   decal_stage01_layout_line: { label: 'Ligne de marquage', category: 'marking' },
   // Immeubles de bordure (anneau urbain) → catégorie dédiée « Immeubles ».
   building_office: { label: 'Immeuble de bureau', category: 'buildings' },

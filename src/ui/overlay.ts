@@ -192,7 +192,7 @@ export class Overlay {
     const splash = h('div', { className: 'splash' },
       h('div', { className: 'splash__gyro' }),
       h('div', { className: 'splash__flash' }),
-      h('img', { className: 'splash__helmet', attrs: { src: `${base}casque.png`, alt: '' } }),
+      h('img', { className: 'splash__helmet', attrs: { src: `${base}ui_casque.png`, alt: '' } }),
       h('div', { className: 'splash__name', text: 'AIL ENTERTAINMENT' }),
       h('div', { className: 'splash__tag', text: 'PRÉSENTE' }),
       h('div', { className: 'splash__hint', text: 'Appuie pour commencer' })
@@ -575,7 +575,7 @@ export class Overlay {
     )
     // Décor titre tramé derrière le panneau (screen--title allège le voile sombre).
     return h('div', { className: 'screen screen--title' },
-      h('img', { className: 'title-bg', attrs: { src: `${base}bg_dusk.png`, alt: '' } }),
+      h('img', { className: 'title-bg', attrs: { src: `${base}ui_bg_dusk.png`, alt: '' } }),
       crew,
       arcbar,
       panel,

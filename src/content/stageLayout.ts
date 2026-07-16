@@ -31,12 +31,27 @@ export type EmbeddedShape =
  * `shape` la vraie forme (cercle OU segment) → les clôtures restent des segments,
  * les engins passent bloquants, etc. `collide:'none'` = décor pur.
  */
+/**
+ * Couche d'affichage d'un élément de décor. C'est une donnée de RENDU pure : la
+ * simulation ne la lit jamais (elle ne connaît que `collide`/`shape`).
+ *
+ * Elle existe parce que le rendu déduisait la profondeur d'un MATCH DE SOUS-CHAÎNE
+ * sur la clé d'asset (`road_*`/`decal_*`). Conséquence : `piste_strip`, pourtant
+ * déclaré « décal », ne commençait par aucun des deux et s'affichait à la hauteur
+ * d'un prop — une bande de terre qui flottait au-dessus du sol. Tout futur asset
+ * mal préfixé (les tuiles `route_*` du kit de routes, par exemple) aurait hérité
+ * du même bug silencieux. La couche est donc portée par la donnée, pas devinée.
+ */
+export type RenderLayer = 'decal' | 'prop' | 'struct'
+
 export interface EmbeddedElement {
   assetKey: string
   dx: number
   dy: number
   scale: number
   flipX?: boolean
+  /** Couche d'affichage. Absent = déduite par le rendu (contenu hérité). */
+  layer?: RenderLayer
   /** Défaut : 'none' (décor). */
   collide?: 'none' | 'both' | 'enemies'
   /** Forme collidable (requise si collide ≠ 'none' ; sinon un cercle par défaut est déduit). */

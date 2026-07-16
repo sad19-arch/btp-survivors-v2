@@ -5,6 +5,7 @@
  * Aucun Phaser, aucun DOM, aucun Math.random, aucune logique de placement.
  * Le placement (T2) et le rendu (T3) lisent ces données ; elles n'en dépendent pas.
  */
+import type { RenderLayer } from './stageLayout'
 
 /** Qui peut être bloqué par un élément. */
 export type CollideKind = 'both' | 'enemies' | 'none'
@@ -20,6 +21,8 @@ export interface ClusterElement {
   dy: number
   scale: number
   flipX?: boolean
+  /** Couche d'affichage (rendu seul). Absent = déduite par le rendu. */
+  layer?: RenderLayer
   rotation?: number
   collide: CollideKind
   shape?: ObstacleShape // requis si collide !== 'none' ; interdit si 'none'
@@ -451,14 +454,15 @@ export const CLUSTERS: Record<string, ClusterDef> = {
   // ─────────────────────────────────────────────────────────────────────────
   // cluster_route : tuile de route cosmétique (se répète le long du bord sud)
   // Pas de collision — la route est purement décorative.
-  // road_strip ~128px × 1.7 ≈ 218px, ROUTE_TILE=210 → légère superposition → bande continue.
+  // road_strip fait 192×64 (le commentaire annonçait 128, faux) : 192 × 1.7 ≈ 326 px
+  // posés tous les ROUTE_TILE=210 px → recouvrement large, donc bande continue.
   // ─────────────────────────────────────────────────────────────────────────
   cluster_route: {
     id: 'cluster_route',
     footprintRadius: 120,
     gates: [],
     elements: [
-      { assetKey: 'road_strip', dx: 0, dy: 0, scale: 1.7, collide: 'none' }
+      { assetKey: 'road_strip', dx: 0, dy: 0, scale: 1.7, collide: 'none', layer: 'decal' }
     ]
   },
 
@@ -533,7 +537,10 @@ export const CLUSTERS: Record<string, ClusterDef> = {
     footprintRadius: 260,
     gates: [{ dx: 0, dy: 150 }],
     elements: [
-      { assetKey: 'piste_strip', dx: 0, dy: 44, scale: 1.35, collide: 'none' },
+      // `layer: 'decal'` explicite : `piste_strip` ne commence ni par `road_` ni
+      // par `decal_`, donc l'ancienne déduction par préfixe le hissait à hauteur
+      // de prop — une bande de terre flottant au-dessus du sol.
+      { assetKey: 'piste_strip', dx: 0, dy: 44, scale: 1.35, collide: 'none', layer: 'decal' },
       { assetKey: 'struct_stage03_mixer', dx: 0, dy: -22, scale: 1.05, collide: 'none' },
       { assetKey: 'decal_stage03_spill', dx: 118, dy: 66, scale: 0.65, collide: 'none' },
     ],

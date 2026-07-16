@@ -53,13 +53,21 @@ function roadStyleFor(stageId: string): RoadStyle {
 }
 
 /**
- * Retourne la profondeur d'affichage pour un élément de cluster selon son
- * assetKey et son collide. Règle :
- *   - assetKey contenant 'road' ou 'decal' → DEPTH_DECAL (-9)
- *   - collide !== 'none'                   → DEPTH_STRUCT (-5)
- *   - sinon                                → DEPTH_PROP   (-6)
+ * Retourne la profondeur d'affichage d'un élément de cluster.
+ *
+ * `elem.layer` fait foi quand il est présent. Sinon on retombe sur l'ancienne
+ * déduction par PRÉFIXE DE CLÉ, conservée pour le contenu hérité — mais c'est
+ * elle le bug d'origine : `piste_strip` est un décal qui ne commence ni par
+ * `road_` ni par `decal_`, et s'affichait donc à hauteur de prop. Tout nouvel
+ * asset plat DOIT porter `layer: 'decal'` plutôt que d'espérer le bon préfixe.
  */
 function depthFor(elem: ClusterElement): number {
+  switch (elem.layer) {
+    case 'decal': return DEPTH_DECAL
+    case 'struct': return DEPTH_STRUCT
+    case 'prop': return DEPTH_PROP
+    default: break
+  }
   const k = elem.assetKey
   if (k.startsWith('road_') || k.startsWith('decal_')) {
     return DEPTH_DECAL

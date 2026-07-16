@@ -47,6 +47,10 @@ function parseElements(v: unknown): EmbeddedElement[] | undefined {
     const e: EmbeddedElement = { assetKey: o.assetKey, dx: num(o.dx, 0), dy: num(o.dy, 0), scale: num(o.scale, 1) }
     if (o.flipX === true) {e.flipX = true}
     if (o.collide === 'both' || o.collide === 'enemies' || o.collide === 'none') {e.collide = o.collide}
+    // Couche de rendu : préserver, sinon un aller-retour sauvegarde/chargement
+    // la perd et les routes/décals remontent à hauteur de prop (même classe de
+    // bug que `destructible` juste en dessous).
+    if (o.layer === 'decal' || o.layer === 'prop' || o.layer === 'struct') {e.layer = o.layer}
     const shape = parseShape(o.shape)
     if (shape !== undefined) {e.shape = shape}
     // Objet DESTRUCTIBLE : préserver le routage vers les entités cassables (sim).

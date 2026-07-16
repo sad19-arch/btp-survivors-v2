@@ -4,13 +4,13 @@ import { PALETTE } from './palette'
  * Feuille de style de l'UI — refonte « 16-bit premium » (réf. Demon's Crest /
  * SNES / Mega Drive). Conserve TOUS les noms de classes de la version d'origine
  * pour se brancher sur `overlay.ts` sans changement de DOM. Le rendu premium
- * vient de : cadres métal brossé (texture `metal_v.png` + biseaux solides),
+ * vient de : cadres métal brossé (texture `ui_metal_v.png` + biseaux solides),
  * rivets en relief, titres/logos sculptés (extrusion en rampe), tramage
- * (`dither_light.png`) sur les états actifs, coins carrés, ombres portées
+ * (`ui_dither_light.png`) sur les états actifs, coins carrés, ombres portées
  * décalées — aucun gradient moderne / flou / glow / coin arrondi.
  *
  * ASSETS REQUIS dans `public/` (servis à la racine) :
- *   metal_v.png · dither_light.png · dither_dark.png · bg_dusk.png · casque.png
+ *   ui_metal_v.png · ui_dither_light.png · ui_dither_dark.png · ui_bg_dusk.png · ui_casque.png
  * FONTES (à charger dans index.html) : "Jersey 25" (titres) + "Pixelify Sans" (UI).
  *
  * Palette : source de vérité = palette.ts. Les quelques nuances dérivées
@@ -37,8 +37,8 @@ const CSS = `
   color: ${PALETTE.blanc};
   letter-spacing: 0.5px;
   user-select: none;
-  --tex: url('${import.meta.env.BASE_URL}metal_v.png');
-  --sheen: url('${import.meta.env.BASE_URL}dither_light.png');
+  --tex: url('${import.meta.env.BASE_URL}ui_metal_v.png');
+  --sheen: url('${import.meta.env.BASE_URL}ui_dither_light.png');
 }
 #ui-root img { image-rendering: pixelated; }
 
@@ -690,7 +690,7 @@ const CSS = `
   background: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 2px, transparent 2px 4px);
 }
 /* Décor titre (backdrop tramé bg_dusk derrière le panneau du titre). Ajouter
-   <img class="title-bg" src=".../bg_dusk.png"> en 1er enfant du .screen du titre,
+   <img class="title-bg" src=".../ui_bg_dusk.png"> en 1er enfant du .screen du titre,
    et donner au .screen du titre la classe .screen--title. cf. overlay-patch.md */
 #ui-root .title-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
 #ui-root .screen--title { background: rgba(6,8,16,0.30); }
@@ -715,7 +715,7 @@ const CSS = `
 
 /* ── Splash studio (avant le titre) ───────────────────────────────────── */
 /* Overlay plein écran joué UNE fois puis retiré par JS (voir overlay-patch.md).
-   Ajoute <img class="splash__helmet" src=".../casque.png"> + le nom + PRÉSENTE. */
+   Ajoute <img class="splash__helmet" src=".../ui_casque.png"> + le nom + PRÉSENTE. */
 #ui-root .splash { position: absolute; inset: 0; z-index: 70; background: #08080d; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; }
 #ui-root .splash__gyro { position: absolute; top: -240px; left: 50%; width: 1000px; height: 1000px; margin-left: -500px; background: repeating-conic-gradient(from 0deg, rgba(232,111,31,0.07) 0deg 20deg, transparent 20deg 40deg); animation: sweep 9s linear infinite; pointer-events: none; }
 #ui-root .splash__flash { position: absolute; inset: 0; background: ${GOLD_HI}; opacity: 0; animation: splash-flash 3.4s steps(2) forwards; pointer-events: none; }
@@ -769,7 +769,7 @@ const CSS = `
   --arc-brun1: #2B2018; --arc-brun2: #241C16; --arc-brun3: #17120E;
   --arc-creme: #EAD9B8; --arc-creme2: #E8B27A;
 }
-#ui-root .arc-metal { background: url('metal_v.png') repeat, var(--arc-brun2); box-shadow: inset 0 2px 0 rgba(255,255,255,.14), inset 0 -3px 0 rgba(0,0,0,.5); }
+#ui-root .arc-metal { background: url('ui_metal_v.png') repeat, var(--arc-brun2); box-shadow: inset 0 2px 0 rgba(255,255,255,.14), inset 0 -3px 0 rgba(0,0,0,.5); }
 #ui-root .arc-crt { background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 2px, transparent 2px 4px); }
 @keyframes slamIn {
   0% { opacity: 0; transform: scale(5.2) translateY(-90px) rotate(-5deg); }

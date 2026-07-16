@@ -12,7 +12,20 @@ import { destructiblesForStage } from '@content/destructibles'
  *  - la cohérence : toute catégorie référencée par une entrée existe dans CATEGORIES.
  */
 
-const SHARED_DECOR_KEYS = ['fence_panel', 'fence_post', 'site_gate', 'road_strip', 'piste_strip']
+/**
+ * Décor partagé, avec la catégorie de palette ATTENDUE.
+ *
+ * Les routes vivaient en « Divers » alors que la catégorie « Routes & accès »
+ * existait : elle n'était peuplée que par une scène d'un seul stage, donc vide —
+ * et donc masquée — sur les neuf autres. Le kit était livré mais introuvable.
+ */
+const SHARED_DECOR: { key: string; category: string }[] = [
+  { key: 'fence_panel', category: 'divers' },
+  { key: 'fence_post', category: 'divers' },
+  { key: 'site_gate', category: 'routes' },
+  { key: 'road_strip', category: 'routes' },
+  { key: 'piste_strip', category: 'routes' }
+]
 
 describe('PrefabCatalog — complétude par stage', () => {
   const catIds = new Set(CATEGORIES.map((c) => c.id))
@@ -21,12 +34,18 @@ describe('PrefabCatalog — complétude par stage', () => {
     describe(label, () => {
       const cat = getStageCatalog(stage)
 
-      it('expose le kit de décor partagé (clôtures/portail/routes) en « Divers »', () => {
-        for (const key of SHARED_DECOR_KEYS) {
+      it('expose le kit de décor partagé (clôtures/portail/routes) dans la bonne section', () => {
+        for (const { key, category } of SHARED_DECOR) {
           const entry = cat.entries.find((e) => e.id === 'obj_' + key)
           expect(entry, `${key} manquant dans ${stage}`).toBeDefined()
-          expect(entry?.category).toBe('divers')
+          expect(entry?.category, `${key} mal rangé dans ${stage}`).toBe(category)
         }
+      })
+
+      it('la section « Routes & accès » n’est vide sur AUCUN stage', () => {
+        // C'est la garantie « disponible partout » : une section vide est MASQUÉE
+        // par la palette, donc une route rangée ailleurs = une route introuvable.
+        expect(cat.entries.some((e) => e.category === 'routes'), `aucune route sur ${stage}`).toBe(true)
       })
 
       it('expose les PNJ ouvriers mobiles génériques (npc_ouvrier)', () => {
