@@ -506,6 +506,12 @@ export class Overlay {
         case 'victory':
           this.screenLayer.append(this.reportPanel(state))
           break
+        case 'nameEntry':
+          this.screenLayer.append(this.nameEntryPanel(state))
+          break
+        case 'hiscores':
+          this.screenLayer.append(this.hiScoresPanel(state))
+          break
         case 'upgrade':
           this.screenLayer.append(this.upgradePanel(state))
           break
@@ -1005,6 +1011,80 @@ export class Overlay {
   }
 
   /**
+   * Saisie du prénom (fin de run, score qualifiant) — écran arcade.
+   *
+   * La grille de 8 cases EST le focus de cet écran : aucun item de menu n'est
+   * rendu (l'App n'en expose qu'un, invisible, pour porter la validation), et la
+   * case courante est mise en avant avec ses chevrons haut/bas. Tout se joue à la
+   * manette/au clavier — rien ici n'exige la souris (règle 8).
+   */
+  private nameEntryPanel(state: AppViewState): HTMLElement {
+    const entry = state.nameEntry
+    const grid = h('div', { className: 'namegrid' })
+    const cursor = entry?.cursor ?? 0
+    ;(entry?.chars ?? []).forEach((ch, i) => {
+      grid.append(
+        h('div', {
+          className: i === cursor ? 'namecell namecell--focus' : 'namecell',
+          // Case vide (espace) → tiret : une case blanche ne se verrait pas.
+          text: ch === ' ' ? '_' : ch
+        })
+      )
+    })
+    const panel = h(
+      'div',
+      { className: 'panel panel--name arc-metal' },
+      h('h1', { className: 'panel__title namepanel__title', text: 'TABLEAU D\'HONNEUR' }),
+      h('p', { className: 'panel__subtitle', text: `Tu entres au classement — ${entry?.stageTitle ?? ''}` }),
+      h('div', { className: 'namepanel__score', text: `SCORE ${formatNumber(entry?.score ?? 0)}` }),
+      grid,
+      h('p', { className: 'hint-line', text: state.menu?.items[0]?.hint ?? '' })
+    )
+    return h('div', { className: 'screen' }, panel)
+  }
+
+  /**
+   * Tableau des scores du stage (top 20), ligne du joueur en surbrillance.
+   *
+   * Les lignes sont CONSULTATIVES, pas des items de menu : seul « Retour » est
+   * focalisable. C'est ce qui permet de tout afficher sans scroll — le récap
+   * co-op avait déjà appris qu'un menu poussé sous l'écran devient inatteignable
+   * à la manette (cf. la doctrine de compacité dans `styles.ts`).
+   */
+  private hiScoresPanel(state: AppViewState): HTMLElement {
+    const view = state.hiScores
+    const entries = view?.entries ?? []
+    const rows = h('div', { className: 'hiscores__rows' })
+    entries.forEach((e, i) => {
+      const row = h('div', {
+        className: i === view?.rank ? 'hiscore-row hiscore-row--me' : 'hiscore-row'
+      })
+      row.append(
+        h('span', { className: 'hiscore-row__rank', text: String(i + 1).padStart(2, '0') }),
+        h('span', { className: 'hiscore-row__name', text: e.name }),
+        h('span', { className: 'hiscore-row__score', text: formatNumber(e.score) }),
+        h('span', {
+          className: 'hiscore-row__meta',
+          text: `${formatNumber(e.kills)} tués · Nv ${e.level} · ${formatTime(e.elapsedMs)}`
+        })
+      )
+      rows.append(row)
+    })
+    if (entries.length === 0) {
+      rows.append(h('div', { className: 'hiscore-row hiscore-row--empty', text: 'Aucun score enregistré' }))
+    }
+    const panel = h(
+      'div',
+      { className: 'panel panel--hiscores arc-metal' },
+      h('h1', { className: 'panel__title hiscores__title', text: 'TABLEAU DES SCORES' }),
+      h('p', { className: 'panel__subtitle', text: view?.stageTitle ?? '' }),
+      rows,
+      this.menuList(state)
+    )
+    return h('div', { className: 'screen' }, panel)
+  }
+
+  /**
    * « Rapport de chantier » — écran de fin UNIQUE pour les deux issues.
    * Même structure (titre / phrase / barre / stats / récap joueurs), la variante
    * `report--victory` porte le ton festif (or + vert, rayons, drapeau atteint) et
@@ -1065,7 +1145,10 @@ export class Overlay {
       h('span', { text: `Temps : ${formatTime(report.elapsedMs)} / ${formatTime(report.stageDurationMs)}` }),
       h('span', { text: `Ennemis tués : ${formatNumber(report.kills)}` }),
       h('span', { text: `Or ramassé : ${formatNumber(report.coins)}` }),
-      h('span', { text: `Niveau atteint : ${report.level}` })
+      h('span', { text: `Niveau atteint : ${report.level}` }),
+      // Score de classement : c'est CE nombre qui est comparé au tableau des
+      // high scores — le joueur doit le voir avant qu'on lui demande son nom.
+      h('span', { className: 'report__score', text: `Score : ${formatNumber(report.runScore)}` })
     )
     // Seule info propre à la défaite : ce qu'il restait à tenir.
     if (!victory) {
@@ -1261,7 +1344,20 @@ export class Overlay {
       state.screen === 'characterSelect' && state.characterSelect !== null
         ? `p${state.characterSelect.player}/${state.characterSelect.total}`
         : ''
-    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}|${charSelectPart}`
+    // Saisie du prénom : la grille est un état HORS menu (l'écran n'a qu'un item).
+    // Le CURSEUR est indispensable ici : le déplacer ne change ni les lettres ni le
+    // libellé de l'item → sans lui, la signature serait identique et la case
+    // focalisée ne bougerait pas à l'écran alors que l'état, lui, a changé.
+    const nameEntryPart =
+      state.screen === 'nameEntry' && state.nameEntry !== null
+        ? `${state.nameEntry.chars.join('')}#${state.nameEntry.cursor}`
+        : ''
+    // Tableau des scores : les lignes sont consultatives (hors menu) → idem.
+    const hiScoresPart =
+      state.screen === 'hiscores' && state.hiScores !== null
+        ? `${state.hiScores.stageId}#${state.hiScores.rank}#${state.hiScores.entries.length}`
+        : ''
+    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}|${charSelectPart}|${nameEntryPart}|${hiScoresPart}`
   }
 }
 

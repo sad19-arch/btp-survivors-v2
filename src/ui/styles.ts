@@ -846,6 +846,89 @@ const CSS = `
 #ui-root .charsel-cell { position: relative; aspect-ratio: 1; overflow: hidden; background: var(--arc-brun3); border: 3px solid var(--arc-contour); filter: brightness(.62) saturate(.8); }
 #ui-root .charsel-cell--active { filter: none; border-color: var(--arc-jaune); box-shadow: 0 0 0 3px var(--arc-orange2), 0 0 14px rgba(255,210,74,.6); }
 #ui-root .charsel-cell__img { position: absolute; left: 0; top: 0; width: 400%; height: 400%; image-rendering: pixelated; }
+
+/* --- Saisie du prénom + tableau des scores (fin de run) -------------------
+   Largeur 720px en border-box : le padding box fait alors 704px, soit
+   EXACTEMENT ce qu'attend l'offset de rivet codé en dur (12 + 660 + 20 + 12)
+   dans .panel::before/::after — les 4 rivets retombent symétriques sans
+   toucher à la règle partagée. Toute autre largeur les décale (cf. .panel--charsel). */
+#ui-root .panel--name { box-sizing: border-box; width: min(720px, 94vw); gap: 12px; padding: 24px 24px; }
+/* Titre/sous-titre/indice resserrés : aux tailles par défaut du panneau (64/30/26 px)
+   le titre débordait des rivets et les deux lignes de texte passaient sur 2 lignes. */
+#ui-root .panel--name .panel__title { font-size: 42px; letter-spacing: 2px; }
+#ui-root .panel--name .panel__subtitle { font-size: 21px; }
+#ui-root .panel--name .hint-line { font-size: 17px; margin: 0; }
+#ui-root .namepanel__score {
+  font-family: 'Press Start 2P'; font-size: clamp(12px, 2vw, 20px);
+  color: ${PALETTE.vertBonus}; letter-spacing: 2px; text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+/* Marges verticales = la place des chevrons de la case focalisée (ils débordent
+   de ~36 px au-dessus et en dessous) : sans elles, le chevron bas chevauche la
+   ligne d'indice. */
+#ui-root .namegrid { display: flex; gap: 9px; justify-content: center; margin: 16px 0 26px; }
+#ui-root .namecell {
+  position: relative; box-sizing: border-box;
+  width: 62px; height: 76px;
+  display: flex; align-items: center; justify-content: center;
+  background: ${PALETTE.brunSombre};
+  border: 4px solid ${PALETTE.contour};
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.5),
+    inset 3px 3px 0 rgba(255,255,255,0.12), inset -3px -3px 0 rgba(0,0,0,0.5);
+  font-family: 'Jersey 25', monospace; font-size: 50px; line-height: 1;
+  color: ${PALETTE.solSable}; text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+/* Case focalisée = le focus VISIBLE de cet écran (il n'y a aucun item de menu ici). */
+#ui-root .namecell--focus {
+  background: ${PALETTE.jauneSecurite}; color: #3A1E06; text-shadow: none;
+  box-shadow: 5px 5px 0 rgba(0,0,0,0.5),
+    inset 4px 4px 0 rgba(255,255,255,0.5), inset -4px -4px 0 rgba(160,90,10,0.55);
+}
+/* Chevrons haut/bas : disent que Haut/Bas font défiler la lettre. Triangles CSS — pas d'emoji. */
+#ui-root .namecell--focus::before, #ui-root .namecell--focus::after {
+  content: ''; position: absolute; left: 50%; margin-left: -11px;
+  width: 0; height: 0;
+  border-left: 11px solid transparent; border-right: 11px solid transparent;
+  filter: drop-shadow(1.5px 1.5px 0 ${PALETTE.contour});
+  animation: namecellbob 0.6s steps(2) infinite;
+}
+#ui-root .namecell--focus::before { top: -21px; border-bottom: 15px solid ${PALETTE.orangeDanger}; }
+#ui-root .namecell--focus::after { bottom: -21px; border-top: 15px solid ${PALETTE.orangeDanger}; }
+@keyframes namecellbob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+
+/* Tableau des scores : les 20 lignes DOIVENT tenir sans scroll (même doctrine que
+   la compacité du rapport plus haut — le jeu est 100 % manette, un menu poussé
+   hors écran est inatteignable). D'où les lignes serrées et l'unique plaque. */
+#ui-root .panel--hiscores { box-sizing: border-box; width: min(720px, 94vw); padding: 14px 24px; gap: 6px; }
+#ui-root .panel--hiscores .panel__title { font-size: 38px; }
+#ui-root .panel--hiscores .panel__subtitle { font-size: 20px; }
+#ui-root .panel--hiscores .menu { width: auto; }
+#ui-root .panel--hiscores .menu__item { font-size: 20px; padding: 8px 24px 8px 48px; }
+#ui-root .hiscores__rows { display: flex; flex-direction: column; gap: 1px; width: 100%; }
+#ui-root .hiscore-row {
+  display: grid; grid-template-columns: 34px 118px 88px 1fr; gap: 10px; align-items: baseline;
+  font-family: 'Pixelify Sans', monospace; font-size: 17px; line-height: 1.1;
+  color: ${PALETTE.solSable}; padding: 1px 6px;
+}
+#ui-root .hiscore-row__rank { color: ${PALETTE.orangeDanger}; font-weight: 700; }
+#ui-root .hiscore-row__name { color: #EAD9B8; letter-spacing: 1px; }
+#ui-root .hiscore-row__score { color: ${PALETTE.jauneSecurite}; font-weight: 700; text-align: right; }
+#ui-root .hiscore-row__meta { font-size: 14px; opacity: 0.75; }
+/* La ligne du joueur : c'est TOUT l'intérêt de l'écran → elle doit sauter aux yeux. */
+#ui-root .hiscore-row--me {
+  background: ${PALETTE.jauneSecurite}; color: #3A1E06;
+  box-shadow: inset 3px 3px 0 rgba(255,255,255,0.45), inset -3px -3px 0 rgba(160,90,10,0.5);
+  animation: hiscoremeblink 0.9s steps(2) infinite;
+}
+#ui-root .hiscore-row--me .hiscore-row__rank,
+#ui-root .hiscore-row--me .hiscore-row__name,
+#ui-root .hiscore-row--me .hiscore-row__score { color: #3A1E06; }
+#ui-root .hiscore-row--me .hiscore-row__meta { color: #5A3410; opacity: 1; }
+#ui-root .hiscore-row--empty { display: block; text-align: center; }
+@keyframes hiscoremeblink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.82; } }
+@media (prefers-reduced-motion: reduce) {
+  #ui-root .hiscore-row--me,
+  #ui-root .namecell--focus::before, #ui-root .namecell--focus::after { animation: none; }
+}
 /* --- Invite « tourne l'appareil » (P6 : tactile + portrait) --------------- */
 /* --- HUD par joueur (co-op ≥2) : un bloc à chaque coin, façon borne ---------
    Solo : la couche reste vide et AUCUNE de ces règles ne s'applique (pas de .coop). */

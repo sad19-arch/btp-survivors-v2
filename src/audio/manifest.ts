@@ -291,6 +291,11 @@ export function musicForState(ctx: MusicContext): MusicKey | null {
       return MUSIC.victory
     case 'gameover':
       return MUSIC.gameover
+    // Saisie du prénom / tableau des scores : la run est FINIE. Sans ces cas, le
+    // `default` relancerait la musique du stage par-dessus l'écran de fin.
+    case 'nameEntry':
+    case 'hiscores':
+      return MUSIC.menu
     default: // game / upgrade : la musique de jeu continue (boss prioritaire)
       if (ctx.bossPresent) {
         return MUSIC.boss

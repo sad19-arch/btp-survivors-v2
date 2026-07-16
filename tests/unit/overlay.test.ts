@@ -439,6 +439,7 @@ function makeDeathReport(overrides: Partial<import('@/app/appState').RunReport> 
     stageTitle: 'Terrain vierge',
     elapsedMs: 300_000,   // 5:00
     kills: 1248,
+    runScore: 14_054,     // score de classement (≠ kills) — cf. computeRunScore
     coins: 37,
     level: 6,
     perPlayer: [{ id: 1, kills: 1248, level: 6, alive: false }],

@@ -1,5 +1,6 @@
 import type { GameState, PlayerState } from '@core/types'
 import type { CardKind } from '@core/systems/cards'
+import type { HiScoreEntry } from '@ui/hiscores'
 
 /** Issue d'une run terminée : chantier interrompu (mort) ou livré (boss final tué). */
 export type RunOutcome = 'defeat' | 'victory'
@@ -38,6 +39,13 @@ export interface RunReport {
   remainingSeconds: number
   /** Total d'ennemis tués (= score). */
   kills: number
+  /**
+   * Score de CLASSEMENT de la run (cf. `computeRunScore`) — combine kills, temps,
+   * niveau et or, ×1.5 en victoire. Distinct de `kills` : c'est LUI qui est
+   * comparé au tableau des high scores et inscrit dans `HiScoreEntry.score`.
+   * Figé avec le reste du rapport (jamais recalculé d'une frame à l'autre).
+   */
+  runScore: number
   /** Or ramassé sur la run. */
   coins: number
   /** Niveau atteint (joueur 1 — le détail par joueur est dans `perPlayer`). */
@@ -98,7 +106,7 @@ export interface ChestOpenView {
   isSuper: boolean
 }
 
-/** Écran applicatif courant (dérivé de l'état de la simulation + surcouche Options). */
+/** Écran applicatif courant (dérivé de l'état de la simulation + surcouches). */
 export type Screen =
   | 'title'
   | 'characterSelect'
@@ -108,6 +116,43 @@ export type Screen =
   | 'gameover'
   | 'victory'
   | 'options'
+  | 'nameEntry'
+  | 'hiscores'
+
+/**
+ * Saisie du prénom en fin de run (écran `nameEntry`), résolue pour l'affichage :
+ * les CARACTÈRES (pas les index dans l'alphabet) — l'overlay n'a ainsi pas à
+ * connaître `NAME_ENTRY_ALPHABET`.
+ *
+ * `cursor` est le focus de cet écran : il ne vit PAS dans le `FocusModel` (qui
+ * n'a qu'un item ici), mais dans l'état pur `NameEntryState` — c'est pourquoi il
+ * doit figurer dans la signature de l'overlay, sinon déplacer le curseur ne
+ * redessinerait rien.
+ */
+export interface NameEntryView {
+  /** 8 caractères résolus (espace = case vide). */
+  chars: string[]
+  /** Case focalisée (0..7). */
+  cursor: number
+  /** Nom résolu (trimé) — ce qui sera inscrit au tableau. */
+  name: string
+  /** Score de classement de la run qu'on s'apprête à inscrire (cf. `RunReport.runScore`). */
+  score: number
+  /** Libellé du stage dont on rejoint le classement. */
+  stageTitle: string
+}
+
+/** Tableau des high scores affiché (écran `hiscores`) après inscription. */
+export interface HiScoresView {
+  /** Stage dont on affiche le classement (les tableaux sont PAR stage). */
+  stageId: string
+  /** Libellé humain du stage (ex. « Terrain vierge »). */
+  stageTitle: string
+  /** Top 20 trié par score décroissant. */
+  entries: HiScoreEntry[]
+  /** Rang (0-19) de la ligne du joueur, à mettre en surbrillance ; -1 si aucune. */
+  rank: number
+}
 
 /** Une entrée d'inventaire résolue : id + nom lisible + niveau courant. */
 export interface InventoryEntry {
@@ -193,6 +238,10 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   stageOrder: number
   /** Sélection de personnage en cours (joueur actif / total + perso courant) ; `null` hors de ce flux. */
   characterSelect: { player: number; total: number; charId: string } | null
+  /** Saisie du prénom en cours (fin de run, score qualifiant) ; `null` hors de ce flux. */
+  nameEntry: NameEntryView | null
+  /** Tableau des scores affiché (après inscription du nom) ; `null` hors de ce flux. */
+  hiScores: HiScoresView | null
   /** Mini-carte affichée (bas-gauche) — bascule clavier M / manette Back/Select. */
   minimapVisible: boolean
   /**
