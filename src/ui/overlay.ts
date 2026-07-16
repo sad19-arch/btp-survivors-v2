@@ -11,7 +11,7 @@ import { readHiScore } from './hiscore'
 import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { WEAPONS } from '@content/weapons'
 import { STAR_SLOTS } from '@content/stars'
-import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView } from '@/app/appState'
+import type { AchievementEntryView, AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView } from '@/app/appState'
 
 /** Durée d'affichage d'un trophée (ms). */
 export const TROPHY_VISIBLE_MS = 3000
@@ -545,6 +545,9 @@ export class Overlay {
           break
         case 'hiscores':
           this.screenLayer.append(this.hiScoresPanel(state))
+          break
+        case 'achievements':
+          this.screenLayer.append(this.achievementsPanel(state))
           break
         case 'upgrade':
           this.screenLayer.append(this.upgradePanel(state))
@@ -1270,6 +1273,75 @@ export class Overlay {
   }
 
   /**
+   * Écran des succès (consultation depuis le titre).
+   *
+   * Les succès VERROUILLÉS restent affichés, grisés : c'est la doctrine du repo
+   * (cf. `starRow` — « le joueur doit VOIR ce qu'il a raté, sinon la note
+   * n'incite à rien »). Cacher les succès non acquis ferait, sur un profil neuf,
+   * un écran VIDE — soit exactement l'inverse de l'incitation recherchée.
+   *
+   * Grille 2 colonnes : les ~10 lignes tiennent à l'écran, donc rien à scroller
+   * (même contrainte que le tableau des scores — le jeu est 100 % manette, et
+   * seul « Retour » est focalisable ici).
+   */
+  private achievementsPanel(state: AppViewState): HTMLElement {
+    const view = state.achievements
+    const entries = view?.entries ?? []
+    const grid = h('div', { className: 'ach__grid' })
+    for (const e of entries) {
+      const row = h('div', { className: e.unlocked ? 'ach-row ach-row--on' : 'ach-row' })
+      row.append(
+        this.achievementIcon(e),
+        h(
+          'div',
+          { className: 'ach__text' },
+          h('div', { className: 'ach__name', text: e.label }),
+          h('div', { className: 'ach__desc', text: e.description })
+        ),
+        // Étoile pleine/vide : le repère « acquis ou non » se lit d'un coup d'œil,
+        // sans dépendre de la seule nuance de gris (mêmes assets que `starRow`).
+        h('img', {
+          className: 'ach__star',
+          attrs: { src: e.unlocked ? 'ui_star_on.png' : 'ui_star_off.png', alt: '' }
+        })
+      )
+      grid.append(row)
+    }
+    const panel = h(
+      'div',
+      { className: 'panel panel--achievements arc-metal' },
+      h('h1', { className: 'panel__title achievements__title', text: 'SUCCÈS' }),
+      h('p', {
+        className: 'panel__subtitle',
+        text: `${view?.unlockedCount ?? 0} / ${entries.length} débloqués`
+      }),
+      grid,
+      this.menuList(state)
+    )
+    return h('div', { className: 'screen' }, panel)
+  }
+
+  /**
+   * Icône d'un succès : chemin COMPLET relatif à `public/` (deux familles
+   * cohabitent) → `iconFromSrc`, comme le trophée. Pas d'icône déclarée =
+   * monogramme, jamais un fichier inventé.
+   */
+  private achievementIcon(entry: AchievementEntryView): HTMLElement {
+    if (entry.icon === null) {
+      return h('div', { className: 'ach__plinth' },
+        h('div', { className: 'ach__mono', text: monogram(entry.label) })
+      )
+    }
+    return iconFromSrc(
+      `${import.meta.env.BASE_URL}${entry.icon}`,
+      entry.label,
+      'ach__plinth',
+      'ach__img',
+      'ach__mono'
+    )
+  }
+
+  /**
    * « Rapport de chantier » — écran de fin UNIQUE pour les deux issues.
    * Même structure (titre / phrase / barre / stats / récap joueurs), la variante
    * `report--victory` porte le ton festif (or + vert, rayons, drapeau atteint) et
@@ -1542,7 +1614,15 @@ export class Overlay {
       state.screen === 'hiscores' && state.hiScores !== null
         ? `${state.hiScores.stageId}#${state.hiScores.rank}#${state.hiScores.entries.length}`
         : ''
-    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}|${charSelectPart}|${nameEntryPart}|${hiScoresPart}`
+    // Succès : la grille est un état HORS menu (l'écran n'a que « Retour ») → sans
+    // ça, le panneau ne se redessinerait pas. On signe les DRAPEAUX de déblocage,
+    // pas leur simple compte : deux profils à 3/10 sur des succès différents
+    // partageraient la même signature, et le second afficherait le premier.
+    const achievementsPart =
+      state.screen === 'achievements' && state.achievements !== null
+        ? state.achievements.entries.map((e) => (e.unlocked ? '1' : '0')).join('')
+        : ''
+    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}|${charSelectPart}|${nameEntryPart}|${hiScoresPart}|${achievementsPart}`
   }
 }
 

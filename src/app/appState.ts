@@ -118,6 +118,7 @@ export type Screen =
   | 'options'
   | 'nameEntry'
   | 'hiscores'
+  | 'achievements'
 
 /**
  * Saisie du prénom en fin de run (écran `nameEntry`), résolue pour l'affichage :
@@ -152,6 +153,36 @@ export interface HiScoresView {
   entries: HiScoreEntry[]
   /** Rang (0-19) de la ligne du joueur, à mettre en surbrillance ; -1 si aucune. */
   rank: number
+}
+
+/**
+ * Une ligne de l'écran des succès, RÉSOLUE pour l'affichage : le catalogue
+ * (`src/content/achievements`) croisé avec le profil (`src/ui/achievements`).
+ * L'overlay affiche, il ne teste aucun prédicat et ne lit aucun `localStorage`.
+ */
+export interface AchievementEntryView {
+  id: string
+  label: string
+  description: string
+  /**
+   * Chemin d'icône relatif à `public/`, ou `null` si le succès n'en déclare pas
+   * (l'affichage retombe alors sur un monogramme). `null` plutôt qu'optionnel :
+   * `exactOptionalPropertyTypes` rendrait la construction bruyante pour rien.
+   */
+  icon: string | null
+  unlocked: boolean
+}
+
+/**
+ * Écran des succès (consultation depuis le titre). Contient TOUT le catalogue,
+ * y compris les succès verrouillés : le joueur doit VOIR ce qu'il lui reste à
+ * faire (même doctrine que `starRow` — une note qu'on ne voit pas n'incite à
+ * rien). Figé à l'ouverture : le profil ne bouge pas pendant qu'on le consulte.
+ */
+export interface AchievementsView {
+  entries: AchievementEntryView[]
+  /** Succès débloqués (dénominateur = `entries.length`). */
+  unlockedCount: number
 }
 
 /** Une entrée d'inventaire résolue : id + nom lisible + niveau courant. */
@@ -242,6 +273,8 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   nameEntry: NameEntryView | null
   /** Tableau des scores affiché (après inscription du nom) ; `null` hors de ce flux. */
   hiScores: HiScoresView | null
+  /** Écran des succès ouvert (consultation depuis le titre) ; `null` hors de ce flux. */
+  achievements: AchievementsView | null
   /** Mini-carte affichée (bas-gauche) — bascule clavier M / manette Back/Select. */
   minimapVisible: boolean
   /**

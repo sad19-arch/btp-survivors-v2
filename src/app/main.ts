@@ -3,6 +3,7 @@ import { App } from './app'
 import { GameScene, type GameSceneData } from '@render/scenes/GameScene'
 import { BootScene } from '@render/scenes/BootScene'
 import { Overlay } from '@ui/overlay'
+import { wireAchievementToasts } from './achievementBridge'
 import { AudioDirector } from '@/audio/audioDirector'
 import { parseBootOptions, type BootOptions } from './bootOptions'
 import { applyUserLayouts } from './userLayoutBoot'
@@ -115,6 +116,10 @@ if (uiRoot !== null) {
   // L'overlay CONSOMME la source de vérité responsive (émission immédiate à
   // l'abonnement → HUD correct dès le boot ; recalculs coalescés ensuite).
   viewport.subscribe((v) => overlay.applyResponsive(v))
+  // Succès → trophée. L'App émet un `achievementUnlocked` par id NOUVELLEMENT
+  // acquis (une fois par run, cf. sa garde one-shot) ; le pont résout le
+  // libellé/l'icône dans le catalogue et le passe à la file d'affichage.
+  wireAchievementToasts(app.events, overlay)
   // Overlay de diagnostic perf (`?perf=1`) : mesure sur vrai device, gated par le
   // flag seul (indépendant de l'audio, actif même en `?test=1&perf=1` pour l'e2e).
   const perfOverlay = opts.perf ? new PerfOverlay(uiRoot) : null

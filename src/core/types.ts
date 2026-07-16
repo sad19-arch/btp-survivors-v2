@@ -444,6 +444,15 @@ export interface GameState {
   elapsedMs: number
   wave: number
   score: number
+  /**
+   * Boss neutralisés depuis le début de la run (`mid` + `final` confondus).
+   *
+   * Cumul de run au même titre que `score`, et pour la même raison : c'est la
+   * seule source FIABLE de morts de boss. `EnemyDiedEvent` porte bien `bossRole`
+   * mais il est plafonné par pas (événement de rendu) — un boss tué au milieu
+   * d'une vague n'y apparaîtrait pas.
+   */
+  bossKills: number
   /** Repère documenté pour décider sans regarder l'écran. */
   coordSystem: string
   players: PlayerState[]

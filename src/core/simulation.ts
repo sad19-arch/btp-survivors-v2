@@ -154,6 +154,12 @@ export class Simulation {
   private elapsedMs = 0
   private remainderMs = 0
   private score = 0
+  /**
+   * Boss tués depuis le début de la run (`mid` + `final`) — même nature que
+   * `score` : un cumul de run, NON plafonné, exposé dans l'état. Alimente les
+   * succès, qui ne peuvent pas compter les `EnemyDiedEvent` (bornés par pas).
+   */
+  private bossKills = 0
   /** Tally cumulatif de kills par joueur (attribution par dernier frappeur). */
   private killsByPlayer = new Map<number, number>()
   /** Contexte des morts du pas courant (Mode Carnage) — tableau RÉUTILISÉ, vidé
@@ -365,6 +371,7 @@ export class Simulation {
       elapsedMs: this.elapsedMs,
       wave: 0,
       score: this.score,
+      bossKills: this.bossKills,
       coordSystem: COORD_SYSTEM,
       players: this.collectPlayers(),
       enemies: this.collectEnemies(),
@@ -760,6 +767,7 @@ export class Simulation {
     // pour le VFX/débris. Ni score ni kill (ce ne sont pas des ennemis).
     reapDestructibles(this.world, brokenDestructibles)
     this.score += reap.total
+    this.bossKills += reap.bossKills
     // Cumul des kills par joueur (attribution par dernier frappeur).
     for (const [pid, n] of reap.killsByPlayer) {
       this.killsByPlayer.set(pid, (this.killsByPlayer.get(pid) ?? 0) + n)

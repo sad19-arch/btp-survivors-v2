@@ -43,7 +43,8 @@ test('« Scores » au titre : tableau consultable SANS finir de run, 100 % manet
   await expect
     .poll(() => page.evaluate(() => window.__GAME__?.getState().screen), { timeout: 5000 })
     .toBe('title')
-  await expect(page.locator('.menu__item')).toHaveCount(6)
+  // 7 items depuis l'ajout de « Succès » (cf. app.ts titleItems()).
+  await expect(page.locator('.menu__item')).toHaveCount(7)
 })
 
 /** Mène une run solo déterministe jusqu'au rapport de fin. */

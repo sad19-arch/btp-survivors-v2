@@ -995,6 +995,53 @@ const CSS = `
 #ui-root .hiscore-row--me .hiscore-row__meta { color: #5A3410; opacity: 1; }
 #ui-root .hiscore-row--empty { display: block; text-align: center; }
 @keyframes hiscoremeblink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.82; } }
+
+/* Écran des succès : le catalogue ENTIER doit tenir sans scroll (même doctrine
+   que le tableau des scores et le rapport — seul « Retour » est focalisable).
+   D'où la grille 2 colonnes : ~10 succès = 5 rangées, pas une de plus à l'écran. */
+#ui-root .panel--achievements { box-sizing: border-box; width: min(880px, 96vw); padding: 14px 24px; gap: 6px; }
+#ui-root .panel--achievements .panel__title { font-size: 38px; }
+#ui-root .panel--achievements .panel__subtitle { font-size: 20px; }
+#ui-root .panel--achievements .menu { width: auto; }
+#ui-root .panel--achievements .menu__item { font-size: 20px; padding: 8px 24px 8px 48px; }
+#ui-root .ach__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 14px; width: 100%; }
+#ui-root .ach-row {
+  display: grid; grid-template-columns: 40px 1fr 18px; gap: 8px; align-items: center;
+  padding: 4px 6px; border: 3px solid ${PALETTE.contour};
+  background: rgba(0,0,0,0.28);
+  /* Ombre portée DÉCALÉE, blur 0 (DA 16-bit) — jamais de halo. */
+  box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+}
+/* Verrouillé = l'état PAR DÉFAUT de la règle ci-dessus (grisé), débloqué = la
+   variante qui s'allume. Le succès acquis doit se distinguer, mais le raté doit
+   rester LISIBLE : c'est sa description qui dit quoi faire. */
+#ui-root .ach-row--on { background: rgba(61,220,132,0.10); border-color: ${PALETTE.contour}; }
+#ui-root .ach__plinth {
+  width: 40px; height: 40px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: ${METAL_DARK} url('${import.meta.env.BASE_URL}ui_dither_dark.png');
+  border: 3px solid ${PALETTE.contour}; box-sizing: border-box;
+}
+#ui-root .ach__img { width: 30px; height: 30px; image-rendering: pixelated; }
+#ui-root .ach__mono {
+  font-family: 'Pixelify Sans', monospace; font-size: 15px; font-weight: 700;
+  color: ${PALETTE.jauneSecurite};
+}
+/* Le verrou se lit en un coup d'œil : icône désaturée + texte en retrait. */
+#ui-root .ach-row:not(.ach-row--on) .ach__img { filter: grayscale(1) brightness(0.45); }
+#ui-root .ach-row:not(.ach-row--on) .ach__mono { color: ${PALETTE.solSable}; opacity: 0.5; }
+#ui-root .ach__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+#ui-root .ach__name {
+  font-family: 'Pixelify Sans', monospace; font-size: 17px; font-weight: 700;
+  color: ${PALETTE.jauneSecurite}; line-height: 1.1;
+}
+#ui-root .ach__desc {
+  font-family: 'Pixelify Sans', monospace; font-size: 13px;
+  color: ${PALETTE.solSable}; opacity: 0.8; line-height: 1.1;
+}
+#ui-root .ach-row:not(.ach-row--on) .ach__name { color: ${PALETTE.solSable}; opacity: 0.55; }
+#ui-root .ach-row:not(.ach-row--on) .ach__desc { opacity: 0.5; }
+#ui-root .ach__star { width: 18px; height: 18px; image-rendering: pixelated; flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) {
   #ui-root .hiscore-row--me,
   #ui-root .namecell--focus::before, #ui-root .namecell--focus::after { animation: none; }

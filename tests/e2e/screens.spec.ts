@@ -12,8 +12,8 @@ test('l’écran titre s’affiche et se navigue', async ({ page }) => {
   // Le titre est désormais le logo arcade (refonte P1) : « BTP » + « CARNAGE » empilés.
   await expect(page.locator('.logo__btp')).toHaveText('BTP')
   await expect(page.locator('.logo__carnage')).toHaveText('CARNAGE')
-  // Menu titre : 6 items (Jouer / ◄Joueurs► / ◄Niveau► / Scores / Options / Éditeur) — cf. app.ts titleItems().
-  await expect(page.locator('.menu__item')).toHaveCount(6)
+  // Menu titre : 7 items (Jouer / ◄Joueurs► / ◄Niveau► / Scores / Succès / Options / Éditeur) — cf. app.ts titleItems().
+  await expect(page.locator('.menu__item')).toHaveCount(7)
   await expect(page.locator('.menu__item--focus')).toHaveText('Jouer')
 
   // Navigue d'un cran : le focus descend sur le sélecteur de joueurs.

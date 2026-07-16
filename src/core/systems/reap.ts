@@ -12,6 +12,16 @@ import { PICKUP, PICKUP_DROPS } from '@content/config'
 export interface ReapResult {
   total: number
   killsByPlayer: Map<number, number>
+  /**
+   * Boss tués ce pas (rôles `mid` et `final` confondus).
+   *
+   * Compté ICI, et pas depuis `EnemyDiedEvent` : ce dernier est PLAFONNÉ par pas
+   * (`MAX_DIED_EVENTS_PER_STEP`, cf. `simulation.ts`) et perdrait la mort du boss
+   * dès qu'elle survient au milieu d'une grosse vague — c'est-à-dire le cas
+   * NORMAL. `ReapResult` n'est pas plafonné et ne dépend pas de l'out-param
+   * `died` (non fourni en headless) : la mesure est fiable partout.
+   */
+  bossKills: number
 }
 
 /**
@@ -51,10 +61,14 @@ export function reapDeadEnemies(world: World, lootRng?: Rng, died?: DiedEnemy[])
     }
   }
   const killsByPlayer = new Map<number, number>()
+  let bossKills = 0
   for (const en of dead) {
     const epos = world.get(en, 'position')
     const ecomp = world.get(en, 'enemy')
     if (epos !== undefined && ecomp !== undefined) {
+      if (ecomp.bossRole !== undefined) {
+        bossKills++
+      }
       dropPickup(world, epos, 'xp', ecomp.xpValue)
       if (ecomp.bossRole === 'mid') {
         // Boss de mi-parcours : lâche un coffre d'évolution (rend une évolution
@@ -85,7 +99,7 @@ export function reapDeadEnemies(world: World, lootRng?: Rng, died?: DiedEnemy[])
     }
     world.despawn(en)
   }
-  return { total: dead.length, killsByPlayer }
+  return { total: dead.length, killsByPlayer, bossKills }
 }
 
 /** Tire au plus UN bonus (soin / aimant / coffre) selon les chances configurées. */
