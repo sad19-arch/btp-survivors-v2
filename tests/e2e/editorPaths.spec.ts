@@ -69,6 +69,31 @@ test('tracer 2 points puis Entrée crée le chemin et ouvre ses réglages', asyn
   await expect(page.locator('#path-oneway')).not.toBeChecked()
 })
 
+test('un chemin déjà tracé se RE-sélectionne au clic sur son tracé', async ({ page }) => {
+  await openEditor(page)
+  await page.locator('.sce-card[title="marker_worker_path"]').click()
+  const canvas = page.locator('canvas')
+  const box = await canvas.boundingBox()
+  expect(box).not.toBeNull()
+  if (box === null) {return}
+  const y = box.height * 0.5
+  await canvas.click({ position: { x: box.width * 0.35, y } })
+  await canvas.click({ position: { x: box.width * 0.65, y } })
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.sce-insp-title')).toContainText('Chemin ouvrier')
+
+  // Cliquer loin du tracé désélectionne (l'indice générique revient).
+  await canvas.click({ position: { x: box.width * 0.5, y: box.height * 0.85 } })
+  await expect(page.locator('.sce-insp-hint')).toBeVisible()
+
+  // Cliquer SUR le tracé le re-sélectionne. Sans `pickPath`, un chemin n'était
+  // sélectionnable par aucun moyen : ses réglages resteraient inatteignables dès
+  // qu'on clique ailleurs une fois.
+  await canvas.click({ position: { x: box.width * 0.5, y } })
+  await expect(page.locator('.sce-insp-title')).toContainText('Chemin ouvrier')
+  await expect(page.locator('#path-speed')).toBeVisible()
+})
+
 test('un chemin CAMION sur un stage sans camion le DIT (fini l’échec silencieux)', async ({ page }) => {
   await openEditor(page)
   await page.locator('.sce-card[title="marker_truck_path"]').click()
