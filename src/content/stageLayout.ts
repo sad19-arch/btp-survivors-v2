@@ -112,10 +112,56 @@ export interface LayoutMarker {
 
 export type PathType = 'truck_path' | 'worker_path'
 
+/**
+ * Bornes des réglages de chemin. CLAMPÉES au parse (jamais un rejet : une compo
+ * doit rester chargeable). `speed.min > 0` est structurel : `tTrajet = longueur
+ * / vitesse` — une vitesse nulle ferait exploser le calcul.
+ */
+export const PATH_LIMITS = {
+  count: { min: 0, max: 8 },
+  speed: { min: 10, max: 400 },
+  pauseMs: { min: 0, max: 30000 }
+} as const
+
+/**
+ * Vitesse par défaut, par famille (px/s). Ici et NON dans `render/` : c'est de
+ * la DONNÉE, et l'éditeur comme le rendu la lisent. La dupliquer ferait
+ * afficher une valeur à l'inspecteur pendant que le jeu en applique une autre.
+ */
+export const PATH_DEFAULT_SPEED: Record<PathType, number> = {
+  worker_path: 74,
+  truck_path: 150
+}
+
+/**
+ * Un trajet tracé dans l'éditeur. **Le chemin porte ses marcheurs** : il ne
+ * déplace pas un PNJ posé, il fabrique ses propres marcheurs. Les PNJ posés
+ * (`npcs[]`) restent fixes à leur poste.
+ *
+ * Tous les réglages sont OPTIONNELS : absent = comportement historique exact
+ * (1 marcheur, aller-retour continu, sans pause).
+ *
+ * `type` est CONSERVÉ et n'est pas une simple étiquette : il porte une vraie
+ * différence de RENDU (un camion ne joue pas d'animation de marche et s'oriente
+ * autrement — cf. `isCamion` dans siteWorkers). Il détermine aussi la couleur du
+ * tracé dans l'éditeur et le skin par défaut.
+ */
 export interface LayoutPath {
   id: string
   type: PathType
   points: Vec2[]
+  /** Nom libre, pour s'y retrouver dans l'inspecteur (« Livraison béton »). */
+  name?: string
+  /** Skin du marcheur. Défaut : porteur / camion selon `type`. */
+  skin?: string
+  /** Nombre de marcheurs, étalés automatiquement. Défaut 1. 0 = chemin repère. */
+  count?: number
+  /** Vitesse px/s. Défaut : 74 (ouvrier) / 150 (camion). */
+  speed?: number
+  /** Aller-retour : arrêt VISIBLE aux bouts. Sens unique : temps INVISIBLE. */
+  pauseMs?: number
+  /** true = A→B puis disparaît et réapparaît en A (flux). Défaut false. */
+  oneWay?: boolean
 }
 
 /** Catégorie de PNJ : 'trade' = métier fixe animé ; 'worker' = ouvrier mobile (marche + fuite). */

@@ -7,7 +7,7 @@
  * Ne dépend NI de Phaser NI du DOM.
  */
 
-import { emptyLayout, type EmbeddedElement, type EmbeddedShape, type LayoutInstance, type LayoutMarker, type MarkerType, type LayoutNpc, type LayoutPath, type NpcKind, type StageLayout, type Vec2 } from '@content/stageLayout'
+import { emptyLayout, type EmbeddedElement, type EmbeddedShape, type LayoutInstance, type LayoutMarker, type MarkerType, type LayoutNpc, type LayoutPath, type NpcKind, type StageLayout, type Vec2, PATH_LIMITS } from '@content/stageLayout'
 import { ZONE_BY_TYPE } from './zones'
 
 export { SCHEMA_VERSION, emptyLayout } from '@content/stageLayout'
@@ -21,6 +21,12 @@ export interface ParseResult {
 
 function num(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback
+}
+
+/** Borne une valeur numérique, ou `undefined` si ce n'est pas un nombre fini. */
+function clampNum(v: unknown, min: number, max: number): number | undefined {
+  if (typeof v !== 'number' || !Number.isFinite(v)) { return undefined }
+  return Math.min(max, Math.max(min, v))
 }
 
 /** Parse une forme collidable embarquée (cercle ou segment). null si invalide. */
@@ -163,7 +169,19 @@ export function parseLayout(raw: string, fallbackStage: string): ParseResult {
               })
               .filter((v): v is Vec2 => v !== null)
           : []
-        return { id: typeof o.id === 'string' ? o.id : `${t}_${i + 1}`, type: t, points: pts }
+        const lp: LayoutPath = { id: typeof o.id === 'string' ? o.id : `${t}_${i + 1}`, type: t, points: pts }
+        // Réglages du chemin : PRÉSERVER, sinon ils disparaissent en silence à la
+        // première sauvegarde (déjà vécu 3× ici : destructible, layer, tile).
+        if (typeof o.name === 'string' && o.name !== '') { lp.name = o.name }
+        if (typeof o.skin === 'string' && o.skin !== '') { lp.skin = o.skin }
+        const count = clampNum(o.count, PATH_LIMITS.count.min, PATH_LIMITS.count.max)
+        if (count !== undefined) { lp.count = Math.round(count) }
+        const speed = clampNum(o.speed, PATH_LIMITS.speed.min, PATH_LIMITS.speed.max)
+        if (speed !== undefined) { lp.speed = speed }
+        const pauseMs = clampNum(o.pauseMs, PATH_LIMITS.pauseMs.min, PATH_LIMITS.pauseMs.max)
+        if (pauseMs !== undefined) { lp.pauseMs = pauseMs }
+        if (typeof o.oneWay === 'boolean') { lp.oneWay = o.oneWay }
+        return lp
       })
       .filter((v): v is LayoutPath => v !== null)
   }
