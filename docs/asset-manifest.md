@@ -46,6 +46,59 @@ Prompt negatif global :
 no photorealism, no 3D render, no smooth digital painting, no soft gradients, no thin outlines, no messy tiny details, no UI text, no watermark, no isometric diamond perspective, no side-scroller perspective, no random tools as enemies, no ambiguous object-monster hybrid that cannot be read at small size
 ```
 
+## 3bis. ⚠️ LE PROMPT GLOBAL NE SUFFIT PAS — les dérives se battent par les PARAMÈTRES
+
+Découvert en produisant 55 items (2026-07-17). Le prompt négatif ci-dessus dit
+déjà « no photorealism, no 3D render » : **il n'a PAS empêché une camionnette
+photoréaliste anti-aliasée**. Ce qui l'a tuée, ce sont les **paramètres de l'API** :
+
+    detail:  'low detail'
+    shading: 'flat shading'
+
+Golden batch **3/7 → 12/12, puis 9/9, 9/9** dès la recette verrouillée. La prose
+seule est insuffisante ; le levier est dans les paramètres.
+
+### Les 4 dérives systématiques et leur parade (toutes MESURÉES)
+
+| Dérive | Ce qui NE marche PAS | Ce qui marche |
+|---|---|---|
+| **Photoréalisme / anti-aliasing** | « no photorealism » dans le prompt | `detail:'low detail'` + `shading:'flat shading'` |
+| **Vue de côté** sur les objets hauts | « NOT a side view » — **ignoré**, 2/2 sur des grues → élévation plate | **DÉCRIRE** la 3/4 : « la flèche court en DIAGONALE haut-gauche→bas-droite en perspective fuyante » · « on voit le DESSUS de la cabine » · « une ombre portée sombre au sol ». ⚠️ **Échoue sur les poteaux fins** (2/2 sur un lampadaire, bbox 35×156). Nuance : l'étalon `tree_b` fait 37×134 — un objet haut et fin **EST** la convention du jeu. Ne pas re-brûler de quota dessus. |
+| **Couleurs « embellies »** | « grey-brown » → tronc **VIOLET** · une tache d'huile sort **violette** | **Nier explicitement** : « WARM CHOCOLATE BROWN + **NOT purple/violet/mauve/lavender** ». Idem sable (gold, pas gris), mare (vert-brun, pas turquoise). |
+| **Volume sur les décalques** (qui doivent être PLATS) | corriger la couleur seule ⇒ ressort en **blob 3D brillant** | `high top-down` + `outline:'lineless'` + « **ZERO height**, no highlight, not a blob, not a dome » |
+
+### Le piège qui se reproduit à l'identique
+
+**Les vignettes de l'API MENTENT, toujours dans le même sens.** Mesuré deux fois :
+**6/6 → 3/6**, puis **7/7 → 3/7**. Juger sur `tools/assets/context-board.mjs`
+(vrai sol, vrai joueur à l'échelle, `PLAYER_SCALE = 0.516` → 99 px), **jamais sur
+vignette**.
+
+### Trois contraintes d'API mesurées
+
+- **La frame 0 de `v3` peut avoir un FOND OPAQUE** (c'est la frame de référence) :
+  elle fausse l'image **et** la mesure de raccord (95,9 % → verdict « aller-retour »
+  erroné ; sans elle : 1,74 = boucle directe). Refuser de packer un fond opaque.
+- **Max 10 jobs concurrents** (erreur 429). Canvas 256 ⇒ **`frame_count` ≤ 8**.
+- **Les objets/personnages EXPIRENT en 8 h.** Packer au fil de l'eau.
+
+### Packing d'animation : la mesure décide, SAUF quand elle est aveugle
+
+Critère : `raccord(dernière→première) > 2,2 × moyenne(frame→frame)` ⇒ sens unique
+⇒ aller-retour. Sinon **boucle directe**. Mesuré : **15/17 en boucle directe** —
+packer en aller-retour « au cas où » double la feuille pour rien.
+⚠️ **Angle mort sémantique** : le bulldozer `_work` **accumule un tas de terre** —
+la mesure dit « directe » (1,45) mais boucler ferait **disparaître le tas d'un
+coup**. La mesure est pixellique. Une animation qui **construit** quelque chose se
+juge à l'œil.
+
+### ⚠️ Le nommage §6 ci-dessous est PÉRIMÉ — `qa.ts` le dit lui-même
+
+Exiger le préfixe plat marquait **574 des 653 assets fautifs (88 %)**. La
+convention **en vigueur** : **le dossier porte la catégorie**
+(`public/<catégorie>/<nom>.png`). C'est ce que `qa.ts` valide depuis sa réparation
+(613 warnings → 0).
+
 ## 4. Methode Pixelabs recommandee
 
 | Etape | Methode |
