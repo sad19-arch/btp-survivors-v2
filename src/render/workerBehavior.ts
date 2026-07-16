@@ -134,29 +134,87 @@ export interface PathResult {
   dirX: number
   dirY: number
   atEnd: boolean
+  /**
+   * false = marcheur CACHÉ (sens unique, entre la sortie et la réapparition).
+   * Sans ce champ, un camion en sens unique se téléporterait À VUE du bout au
+   * départ — l'artefact visuel que le sens unique est censé éviter.
+   */
+  visible: boolean
+}
+
+/** Réglages de parcours. Absent = aller-retour continu (comportement historique). */
+export interface PathOpts {
+  /**
+   * Aller-retour : arrêt VISIBLE à chaque extrémité (livraison, chargement).
+   * Sens unique : temps INVISIBLE entre la sortie et la réapparition au départ
+   * (= espacement du flux). Deux sens distincts, assumés : dans un cas le
+   * marcheur attend, dans l'autre il est parti.
+   */
+  pauseMs?: number
+  /** true = A→B puis disparaît et réapparaît en A (flux). false = aller-retour. */
+  oneWay?: boolean
+}
+
+/** Position à `dist` px du début de la polyligne (0..total). */
+function pointAtDistance(
+  points: ReadonlyArray<PathPoint>,
+  segLen: ReadonlyArray<number>,
+  dist: number
+): { x: number; y: number; seg: number; dirX: number; dirY: number } {
+  let d = dist
+  for (let i = 0; i < segLen.length; i++) {
+    const l = segLen[i] as number
+    const a = points[i] as PathPoint
+    const b = points[i + 1] as PathPoint
+    if (d <= l || i === segLen.length - 1) {
+      const t = l < 0.001 ? 0 : Math.min(1, Math.max(0, d / l))
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const len = Math.hypot(dx, dy) || 1
+      return {
+        x: a.x + dx * t,
+        y: a.y + dy * t,
+        seg: i,
+        dirX: dx / len,
+        dirY: dy / len
+      }
+    }
+    d -= l
+  }
+  const first = points[0] as PathPoint
+  return { x: first.x, y: first.y, seg: 0, dirX: 1, dirY: 0 }
 }
 
 /**
- * Position sur une POLYLIGNE parcourue en aller-retour continu (ping-pong).
+ * Position sur une POLYLIGNE, en fonction PURE du temps.
  *
- * - L = longueur cumulée des segments.
- * - phase = (tMs/1000 * speed) modulo 2L ; si phase ≥ L on repart en sens inverse.
- * - `dist` = distance parcourue depuis le début (0..L), `dirX/dirY` = sens courant.
+ * Le raisonnement est en TEMPS, pas en distance : une pause est du temps. Soit
+ * `tTrajet = longueur / vitesse` et `pause = pauseMs / 1000` :
  *
- * Cas dégénérés : 0 point → origine ; 1 point (ou longueur nulle) → immobile.
+ *  - aller-retour : cycle = 2·tTrajet + 2·pause
+ *      aller → pause VISIBLE en B → retour → pause VISIBLE en A → …
+ *  - sens unique  : cycle = tTrajet + pause
+ *      aller → INVISIBLE pendant `pause` → réapparaît en A
+ *
+ * Cas dégénérés : 0 point → origine ; 1 point, longueur nulle, ou vitesse ≤ 0
+ * → immobile au départ (jamais de division par zéro, jamais de NaN).
  */
 export function pathFollow(
   points: ReadonlyArray<PathPoint>,
   tMs: number,
-  speedPxPerSec: number
+  speedPxPerSec: number,
+  opts?: PathOpts
 ): PathResult {
   const n = points.length
   if (n === 0) {
-    return { x: 0, y: 0, seg: 0, dirX: 1, dirY: 0, atEnd: true }
+    return { x: 0, y: 0, seg: 0, dirX: 1, dirY: 0, atEnd: true, visible: true }
   }
   const first = points[0] as PathPoint
-  if (n === 1) {
-    return { x: first.x, y: first.y, seg: 0, dirX: 1, dirY: 0, atEnd: true }
+  const still = (): PathResult => ({
+    x: first.x, y: first.y, seg: 0, dirX: 1, dirY: 0, atEnd: true, visible: true
+  })
+  if (n === 1 || speedPxPerSec <= 0) {
+    return still()
   }
 
   const segLen: number[] = []
@@ -169,35 +227,45 @@ export function pathFollow(
     total += l
   }
   if (total < 0.001) {
-    return { x: first.x, y: first.y, seg: 0, dirX: 1, dirY: 0, atEnd: true }
+    return still()
   }
 
-  const traveled = (tMs / 1000) * speedPxPerSec
-  const phase = traveled % (2 * total)
-  const forward = phase < total
-  const dist = forward ? phase : 2 * total - phase
+  const tTravel = total / speedPxPerSec
+  const pause = Math.max(0, opts?.pauseMs ?? 0) / 1000
+  const t = Math.max(0, tMs) / 1000
+  const oneWay = opts?.oneWay === true
 
-  // Segment contenant `dist`.
-  let acc = 0
-  let seg = 0
-  while (seg < segLen.length - 1 && acc + (segLen[seg] as number) < dist) {
-    acc += segLen[seg] as number
-    seg += 1
+  if (oneWay) {
+    const cycle = tTravel + pause
+    const u = cycle <= 0 ? 0 : t % cycle
+    if (u >= tTravel) {
+      // Sorti : caché jusqu'à la réapparition en A.
+      const p = pointAtDistance(points, segLen, total)
+      return { ...p, atEnd: true, visible: false }
+    }
+    const p = pointAtDistance(points, segLen, u * speedPxPerSec)
+    return { ...p, atEnd: false, visible: true }
   }
-  const a = points[seg] as PathPoint
-  const b = points[seg + 1] as PathPoint
-  const l = (segLen[seg] as number) || 1
-  const t = (dist - acc) / l
-  const x = a.x + (b.x - a.x) * t
-  const y = a.y + (b.y - a.y) * t
-  let dirX = (b.x - a.x) / l
-  let dirY = (b.y - a.y) / l
-  if (!forward) {
-    dirX = -dirX
-    dirY = -dirY
+
+  const cycle = 2 * tTravel + 2 * pause
+  const u = cycle <= 0 ? 0 : t % cycle
+  if (u < tTravel) {
+    const p = pointAtDistance(points, segLen, u * speedPxPerSec)
+    return { ...p, atEnd: false, visible: true }
   }
-  const atEnd = dist < AT_END_THRESHOLD || total - dist < AT_END_THRESHOLD
-  return { x, y, seg, dirX, dirY, atEnd }
+  if (u < tTravel + pause) {
+    // Arrêt visible en B, face au sens d'arrivée.
+    const p = pointAtDistance(points, segLen, total)
+    return { ...p, atEnd: true, visible: true }
+  }
+  if (u < 2 * tTravel + pause) {
+    const back = u - (tTravel + pause)
+    const p = pointAtDistance(points, segLen, total - back * speedPxPerSec)
+    return { ...p, dirX: -p.dirX, dirY: -p.dirY, atEnd: false, visible: true }
+  }
+  // Arrêt visible en A, face au sens d'arrivée (le retour).
+  const p = pointAtDistance(points, segLen, 0)
+  return { ...p, dirX: -p.dirX, dirY: -p.dirY, atEnd: true, visible: true }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
