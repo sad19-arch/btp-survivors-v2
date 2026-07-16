@@ -6,8 +6,39 @@
 
 import { paletteEntry, STAGE_LIST } from './PrefabCatalog'
 import type { EditorScene } from './EditorScene'
-import { saveUserLayout } from '@ui/userLayouts'
+import { saveUserLayout, deleteUserLayout } from '@ui/userLayouts'
+import { SITE_PROGRAMS } from '@content/sitePrograms'
 import { ZONE_BY_TYPE } from './zones'
+
+/**
+ * Un stage n'a un plan de chantier PROCÉDURAL que s'il a un `SiteProgram`
+ * (aujourd'hui : terrassement + fondations). Ailleurs, la case « Garder le plan
+ * de chantier de base » ne piloterait rien : on ne l'affiche pas plutôt que de
+ * proposer un interrupteur mort. Dérivé du registre — pas d'une liste recopiée —
+ * pour qu'un 3ᵉ programme apparaisse tout seul.
+ */
+export function stageHasSitePlan(stage: string): boolean {
+  return SITE_PROGRAMS[stage] !== undefined
+}
+
+/**
+ * Case à cocher étiquetée de la barre d'outils (l'éditeur est souris-OK).
+ * Renvoie AUSSI l'`input` : l'appelant doit pouvoir resynchroniser `checked`
+ * quand l'état bouge sans passer par la case (annuler/rétablir, import JSON).
+ */
+function checkbox(label: string, checked: boolean, onChange: (v: boolean) => void): { el: HTMLLabelElement; input: HTMLInputElement } {
+  const el = document.createElement('label')
+  el.className = 'sce-check'
+  const input = document.createElement('input')
+  input.type = 'checkbox'
+  input.checked = checked
+  input.addEventListener('change', () => onChange(input.checked))
+  el.appendChild(input)
+  const span = document.createElement('span')
+  span.textContent = label
+  el.appendChild(span)
+  return { el, input }
+}
 
 function btn(label: string, onClick: () => void, cls = ''): HTMLButtonElement {
   const b = document.createElement('button')
@@ -69,6 +100,8 @@ export class EditorOverlay {
   private readonly modalText: HTMLTextAreaElement
   private readonly gridBtn: HTMLButtonElement
   private readonly snapBtn: HTMLButtonElement
+  /** `null` sur les stages sans plan de chantier procédural (case non affichée). */
+  private keepSitePlanInput: HTMLInputElement | null = null
 
   constructor(
     private readonly root: HTMLElement,
@@ -110,6 +143,25 @@ export class EditorOverlay {
       saveUserLayout(scene.stage, state.exportGameJson())
       window.alert('Sauvé ✓ — jouable depuis le menu titre (niveau : ' + scene.stage + ').')
     }, 'sce-btn-primary'))
+    // Plan de chantier procédural : uniquement là où il en existe un.
+    if (stageHasSitePlan(scene.stage)) {
+      const cb = checkbox('Garder le plan de chantier de base', state.keepSitePlan, (v) => state.setKeepSitePlan(v))
+      this.keepSitePlanInput = cb.input
+      gFile.appendChild(cb.el)
+    }
+    // Retour arrière : sans ça, « Sauver (jouable) » enferme sur la compo custom.
+    gFile.appendChild(btn('↺ Restaurer le niveau d\'origine', () => {
+      const ok = window.confirm(
+        'Le niveau d\'origine sera régénéré. Ta composition sauvegardée pour ce stage sera supprimée. ' +
+        'Le brouillon de l\'éditeur est conservé.'
+      )
+      if (!ok) { return }
+      // deleteUserLayout ne touche QUE `btp:userLayouts` (sauvegarde jouable) ;
+      // le brouillon `stageComposer:<stage>` est un store distinct → l'utilisateur
+      // garde son travail en cours et peut re-sauver derrière.
+      deleteUserLayout(scene.stage)
+      window.alert('Niveau d\'origine restauré ✓ (niveau : ' + scene.stage + '). Le brouillon de l\'éditeur est intact.')
+    }, 'sce-btn-danger'))
     gFile.appendChild(btn('⬇ Télécharger', () => downloadText('stage_' + scene.stage + '.json', state.exportGameJson())))
     gFile.appendChild(btn('⬆ Charger un fichier', () => pickFile((text) => {
       const res = state.importJson(text)
@@ -216,6 +268,11 @@ export class EditorOverlay {
     const state = this.scene.state
     this.gridBtn.classList.toggle('sce-btn-on', state.grid)
     this.snapBtn.classList.toggle('sce-btn-on', state.snap)
+    // Resynchro : annuler/rétablir et l'import JSON changent le layout sous la
+    // case sans la notifier — sans ça elle mentirait sur l'état réel.
+    if (this.keepSitePlanInput !== null) {
+      this.keepSitePlanInput.checked = state.keepSitePlan
+    }
 
     // Inspecteur.
     const active = this.scene.active

@@ -467,6 +467,30 @@ export class EditorState {
     this.emit()
   }
 
+  // ── plan de chantier procédural ─────────────────────────────────────────────
+  /**
+   * `true` = le plan de chantier PROCÉDURAL (clôtures, pistes, terre excavée) se
+   * superpose à la compo. Champ ABSENT du layout = comportement historique =
+   * conservé, d'où le `!== false` (et non un `=== true`).
+   */
+  get keepSitePlan(): boolean {
+    return this.layout.keepSitePlan !== false
+  }
+  /**
+   * N'écrit le champ QUE lorsqu'il vaut `false` : « absent » EST déjà le défaut
+   * `true`. L'écrire en clair ferait diverger l'export de toutes les compos
+   * existantes — y compris des 8 stages qui n'ont aucun plan procédural — pour
+   * zéro changement de comportement.
+   */
+  setKeepSitePlan(keep: boolean): void {
+    if (keep) {
+      delete this.layout.keepSitePlan
+    } else {
+      this.layout.keepSitePlan = false
+    }
+    this.emit()
+  }
+
   // ── macro-zones (outil de conception : marqueurs ÉDITEUR-only, jamais exportés) ─
   private static readonly ZONE_MIN = 200
   private static readonly ZONE_MAX = 20000
