@@ -1,11 +1,11 @@
 /**
- * Tests du `deathReport` figé dans `AppViewState`.
+ * Tests du `runReport` figé dans `AppViewState`.
  *
  * Stratégie :
  * - Partie déterministe (seed fixe) → `debugKillPlayer()` → avance 1 pas → game-over.
  * - Appels répétés à `getState()` → même rapport (figé, stable).
  * - `progressRatio` clampé [0,1], `progressPercent`/`remainingSeconds` cohérents.
- * - Après `restart()` : `deathReport` revient à null hors game-over.
+ * - Après `restart()` : `runReport` revient à null hors game-over.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -31,32 +31,32 @@ function reachGameOver(app: App): void {
   }
 }
 
-describe('deathReport — exposition dans AppViewState', () => {
+describe('runReport — exposition dans AppViewState', () => {
   it('vaut null hors game-over (écran game)', () => {
     const app = makeApp()
     expect(app.getState().screen).toBe('game')
-    expect(app.getState().deathReport).toBeNull()
+    expect(app.getState().runReport).toBeNull()
   })
 
   it('vaut null au titre (pas de partie)', () => {
     const app = new App({ seed: 42, mode: 'solo', autostart: false })
     expect(app.getState().screen).toBe('title')
-    expect(app.getState().deathReport).toBeNull()
+    expect(app.getState().runReport).toBeNull()
   })
 
   it('est non-null dès que screen === gameover', () => {
     const app = makeApp()
     reachGameOver(app)
     expect(app.getState().screen).toBe('gameover')
-    const report = app.getState().deathReport
+    const report = app.getState().runReport
     expect(report).not.toBeNull()
   })
 
   it('est figé : deux appels successifs à getState() retournent la même référence de rapport', () => {
     const app = makeApp()
     reachGameOver(app)
-    const r1 = app.getState().deathReport
-    const r2 = app.getState().deathReport
+    const r1 = app.getState().runReport
+    const r2 = app.getState().runReport
     expect(r1).not.toBeNull()
     // Même référence (objet identique)
     expect(r1).toBe(r2)
@@ -65,20 +65,20 @@ describe('deathReport — exposition dans AppViewState', () => {
   it('est figé : la quote est identique entre deux appels', () => {
     const app = makeApp()
     reachGameOver(app)
-    const q1 = app.getState().deathReport?.quote
-    const q2 = app.getState().deathReport?.quote
+    const q1 = app.getState().runReport?.quote
+    const q2 = app.getState().runReport?.quote
     expect(q1).toBeDefined()
     expect(q1).toBe(q2)
   })
 })
 
-describe('deathReport — cohérence des champs', () => {
+describe('runReport — cohérence des champs', () => {
   it("elapsedMs correspond a l'etat sim au moment de la mort", () => {
     const app = makeApp()
     // Avance 2 secondes avant de tuer.
     app.advanceTime(2000)
     reachGameOver(app)
-    const report = app.getState().deathReport
+    const report = app.getState().runReport
     expect(report).not.toBeNull()
     if (report === null) {
       return
@@ -90,7 +90,7 @@ describe('deathReport — cohérence des champs', () => {
   it('progressRatio clampé dans [0, 1]', () => {
     const app = makeApp()
     reachGameOver(app)
-    const report = app.getState().deathReport
+    const report = app.getState().runReport
     expect(report).not.toBeNull()
     if (report === null) {
       return
@@ -102,7 +102,7 @@ describe('deathReport — cohérence des champs', () => {
   it('progressPercent = floor(progressRatio × 100)', () => {
     const app = makeApp()
     reachGameOver(app)
-    const report = app.getState().deathReport
+    const report = app.getState().runReport
     expect(report).not.toBeNull()
     if (report === null) {
       return
@@ -113,7 +113,7 @@ describe('deathReport — cohérence des champs', () => {
   it('remainingSeconds cohérent avec elapsedMs et stageDurationMs', () => {
     const app = makeApp()
     reachGameOver(app)
-    const report = app.getState().deathReport
+    const report = app.getState().runReport
     expect(report).not.toBeNull()
     if (report === null) {
       return
@@ -125,7 +125,7 @@ describe('deathReport — cohérence des champs', () => {
   it('stageDurationMs = FINAL_BOSS.atMs', () => {
     const app = makeApp()
     reachGameOver(app)
-    const report = app.getState().deathReport
+    const report = app.getState().runReport
     expect(report).not.toBeNull()
     if (report === null) {
       return
@@ -136,7 +136,7 @@ describe('deathReport — cohérence des champs', () => {
   it('kills ≥ 0', () => {
     const app = makeApp()
     reachGameOver(app)
-    const report = app.getState().deathReport
+    const report = app.getState().runReport
     expect(report).not.toBeNull()
     if (report === null) {
       return
@@ -147,7 +147,7 @@ describe('deathReport — cohérence des champs', () => {
   it('quote est une chaîne non vide', () => {
     const app = makeApp()
     reachGameOver(app)
-    const report = app.getState().deathReport
+    const report = app.getState().runReport
     expect(report).not.toBeNull()
     if (report === null) {
       return
@@ -157,36 +157,36 @@ describe('deathReport — cohérence des champs', () => {
   })
 })
 
-describe('deathReport — reset lifecycle', () => {
+describe('runReport — reset lifecycle', () => {
   it('redevient null après restart() (hors game-over)', () => {
     const app = makeApp()
     reachGameOver(app)
-    expect(app.getState().deathReport).not.toBeNull()
+    expect(app.getState().runReport).not.toBeNull()
     app.restart()
     // Après restart, on est de nouveau en jeu — pas encore en game-over.
     expect(app.getState().screen).toBe('game')
-    expect(app.getState().deathReport).toBeNull()
+    expect(app.getState().runReport).toBeNull()
   })
 
   it('redevient null après start() (hors game-over)', () => {
     const app = makeApp()
     reachGameOver(app)
-    expect(app.getState().deathReport).not.toBeNull()
+    expect(app.getState().runReport).not.toBeNull()
     app.start('solo')
     expect(app.getState().screen).toBe('game')
-    expect(app.getState().deathReport).toBeNull()
+    expect(app.getState().runReport).toBeNull()
   })
 
   it('est recalculé à la prochaine mort après restart()', () => {
     const app = makeApp()
     reachGameOver(app)
-    const quote1 = app.getState().deathReport?.quote
+    const quote1 = app.getState().runReport?.quote
 
     app.restart()
     app.advanceTime(16)
     reachGameOver(app)
 
-    const report2 = app.getState().deathReport
+    const report2 = app.getState().runReport
     expect(report2).not.toBeNull()
     // Le nouveau rapport a une quote (peut être la même ou différente selon Math.random).
     expect(typeof report2?.quote).toBe('string')

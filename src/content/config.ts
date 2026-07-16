@@ -279,10 +279,19 @@ export const RESCUE = {
  * possible → no-op naturel (jamais relevé, game-over identique à aujourd'hui).
  */
 export const REVIVE = {
-  /** Rayon de proximité (px) entre le releveur et le joueur à terre. */
-  radius: 80,
-  /** Temps (s) de maintien continu pour relever complètement. */
-  fillSeconds: 3,
+  /**
+   * Rayon de proximité (px) entre le releveur et le joueur à terre.
+   * 130 (et pas 80) : un perso fait ~99 px de haut à l'écran — à 80 px il fallait
+   * littéralement se superposer au coéquipier, et rien n'expliquait pourquoi ça ne
+   * partait pas. 130 ≈ « je suis collé à lui », lisible à l'œil.
+   */
+  radius: 130,
+  /**
+   * Temps (s) de maintien continu pour relever complètement.
+   * 2 (et pas 3) : rester immobile au milieu d'une horde est déjà le vrai coût ;
+   * à 3 s le releveur mourait avec le relevé.
+   */
+  fillSeconds: 2,
   /** Temps (s) pour que le progrès retombe à 0 une fois le maintien interrompu. */
   decaySeconds: 2,
   /** Fraction des PV max restaurés à la relève complète. */

@@ -8,7 +8,7 @@ import type { ViewportState } from './viewport'
 import { approach } from './anim'
 import { cardEnterStyle } from './cardEnter'
 import { readHiScore } from './hiscore'
-import { CHARACTER_IDS, characterDef } from '@content/characters'
+import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { WEAPONS } from '@content/weapons'
 import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView } from '@/app/appState'
 
@@ -28,6 +28,15 @@ const PUNCHLINES: Readonly<Record<string, string>> = {
   grutier: 'Étale du goudron brûlant sur leur passage.',
   plombier: 'Sa clé revient toujours, comme un boomerang.',
   samoyede: 'La mascotte. Mousse tout le monde à l\'extincteur.'
+}
+
+/**
+ * La clé de feuille 'player' (ouvrier) mappe le fichier de référence `player_j1.png`
+ * (cf. GameScene.SHARED_SHEETS) : aucun `player.png` n'existe. Résolu ici pour les <img> DOM
+ * (portrait du sélecteur de perso, portrait du bloc HUD co-op).
+ */
+function sheetFile(sheet: string): string {
+  return sheet === 'player' ? 'player_j1' : sheet
 }
 
 /**
@@ -126,6 +135,12 @@ export class Overlay {
   /** Invite « tourne l'appareil » (tactile + portrait) — P6 mobile paysage. */
   private readonly rotateHint: HTMLElement
 
+  /**
+   * Couche des blocs HUD par joueur (co-op ≥ 2 joueurs) : un bloc par coin d'écran.
+   * Vide en solo — le HUD solo historique reste strictement inchangé.
+   */
+  private readonly coopLayer: HTMLElement
+
   constructor(
     root: HTMLElement,
     onSelect?: (index: number) => void,
@@ -142,6 +157,7 @@ export class Overlay {
     this.bossLayer = h('div')
     this.inventoryLayer = h('div')
     this.padLayer = h('div', { className: 'pads' })
+    this.coopLayer = h('div', { className: 'phud-layer' })
     this.jackpotLayer = h('div')
     this.minimap = new Minimap()
     this.minimap.setVisible(false)
@@ -155,6 +171,7 @@ export class Overlay {
       this.bossLayer,
       this.inventoryLayer,
       this.padLayer,
+      this.coopLayer,
       this.jackpotLayer,
       this.minimap.el
     )
@@ -283,7 +300,11 @@ export class Overlay {
    * pendant l'intro. Reconstruit seulement quand l'état des manettes change.
    */
   private syncGamepads(state: AppViewState): void {
-    const show = !state.introActive
+    // En co-op, chaque joueur a son bloc de coin (couleur + portrait) : le HUD
+    // « Manettes » ferait doublon ET chevaucherait le bloc de J2 (haut-droite).
+    // Gardé ICI et pas en CSS : `display` est posé en style inline plus bas, qui
+    // l'emporterait sur toute règle de la feuille.
+    const show = !state.introActive && state.players.length <= 1
     const raw =
       typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function'
         ? Array.from(navigator.getGamepads())
@@ -322,38 +343,17 @@ export class Overlay {
       this.xpDisplayed.clear()
       this.lastLevel.clear()
       this.xpFlashUntil.clear()
+      clear(this.coopLayer)
+      this.root.classList.remove('coop')
       return
     }
-    const p = state.players[0]
-    const hp = p?.hp ?? 0
-    const maxHp = p?.maxHp ?? 1
-    const xp = p?.xp ?? 0
-    const threshold = p?.nextThreshold ?? 1
-    const level = p?.level ?? 1
-    const playerId = p?.id ?? 1
-
-    // --- Barre XP lissée (lerp via approach) ---
-    const xpTarget = threshold > 0 ? xp / threshold : 0
-    const prevDisplayed = this.xpDisplayed.get(playerId) ?? xpTarget
-    const displayed = approach(prevDisplayed, xpTarget, dtMs)
-    this.xpDisplayed.set(playerId, displayed)
-
-    // --- Flash de level-up (piloté par état : le HUD est reconstruit chaque frame) ---
-    const prevLevel = this.lastLevel.get(playerId)
-    if (prevLevel !== undefined && level > prevLevel) {
-      // Level-up : la barre repart de 0 (reset propre) et flashe pendant ~220 ms.
-      this.xpDisplayed.set(playerId, 0)
-      this.xpFlashUntil.set(playerId, now + 220)
-    }
-    this.lastLevel.set(playerId, level)
-    // La classe de flash est ré-appliquée à chaque frame tant que l'échéance n'est pas
-    // passée — sinon, le HUD étant recréé chaque frame, le flash serait invisible.
-    const flashing = now < (this.xpFlashUntil.get(playerId) ?? 0)
-    const xpBarModifier = flashing ? 'hud__bar--xp hud__bar--xp-flash' : 'hud__bar--xp'
+    // Co-op (≥2 joueurs) : CHAQUE joueur a son bloc à son coin (portrait, PV, XP, armes)
+    // et le HUD central ne garde que l'info de run. Solo (1 joueur) : HUD historique
+    // strictement inchangé (rangée PV/XP incluse).
+    const coop = state.players.length > 1
+    this.root.classList.toggle('coop', coop)
 
     clear(this.hud)
-    const xpBar = this.bar(displayed, xpBarModifier)
-
     this.hud.append(
       h(
         'div',
@@ -367,47 +367,103 @@ export class Overlay {
         { className: 'hud__row' },
         h('span', { className: 'hud__time', text: formatTime(state.elapsedMs) }),
         h('span', { className: 'hud__sep', text: '·' }),
-        h('span', { text: `Niv. ${level}` }),
-        h('span', { className: 'hud__sep', text: '·' }),
+        // En co-op le niveau est propre à chaque joueur → il vit dans son bloc, pas ici.
+        ...(coop
+          ? []
+          : [
+              h('span', { text: `Niv. ${state.players[0]?.level ?? 1}` }),
+              h('span', { className: 'hud__sep', text: '·' })
+            ]),
         h('span', { text: `Score ${state.score}` }),
         h('span', { className: 'hud__sep', text: '·' }),
         h('span', { className: 'hud__coins', text: `Or ${state.coins}` })
-      ),
-      h(
-        'div',
-        { className: 'hud__row' },
-        h('span', { className: 'hud__hp', text: `PV ${Math.ceil(hp)}/${Math.round(maxHp)}` }),
-        this.bar(hp / maxHp, 'hud__bar--hp'),
-        h('span', { className: 'hud__xp', text: `XP ${Math.floor(xp)}/${threshold}` }),
-        xpBar
       )
     )
-    // Co-op (>1 joueur) : bandeau de mini-HUD par joueur (pastille couleur + PV + niveau).
-    // Solo (1 joueur) : rien de plus — le HUD ci-dessus reste visuellement inchangé.
-    if (state.players.length > 1) {
+
+    if (!coop) {
+      const p = state.players[0]
+      const hp = p?.hp ?? 0
+      const maxHp = p?.maxHp ?? 1
+      const xp = p?.xp ?? 0
+      const threshold = p?.nextThreshold ?? 1
       this.hud.append(
         h(
           'div',
-          { className: 'hud__players' },
-          ...state.players.map((player) => this.playerCard(player))
+          { className: 'hud__row' },
+          h('span', { className: 'hud__hp', text: `PV ${Math.ceil(hp)}/${Math.round(maxHp)}` }),
+          this.bar(hp / maxHp, 'hud__bar--hp'),
+          h('span', { className: 'hud__xp', text: `XP ${Math.floor(xp)}/${threshold}` }),
+          this.xpBar(p, dtMs, now)
         )
       )
+      clear(this.coopLayer)
+      return
+    }
+
+    clear(this.coopLayer)
+    for (const player of state.players) {
+      this.coopLayer.append(this.playerBlock(player, dtMs, now))
     }
   }
 
-  /** Mini-HUD d'un joueur (co-op) : pastille couleur + id + PV + niveau, atténué si mort. */
-  private playerCard(player: AppPlayerState): HTMLElement {
+  /**
+   * Barre d'XP lissée d'un joueur (lerp `approach` + flash de level-up ~220 ms).
+   * L'état animé est mémorisé PAR `playerId` → marche identiquement en solo et en co-op.
+   * La classe de flash est ré-appliquée tant que l'échéance court : le HUD étant
+   * reconstruit chaque frame, sans ça le flash serait invisible.
+   */
+  private xpBar(player: AppPlayerState | undefined, dtMs: number, now: number): HTMLElement {
+    const xp = player?.xp ?? 0
+    const threshold = player?.nextThreshold ?? 1
+    const level = player?.level ?? 1
+    const playerId = player?.id ?? 1
+    const xpTarget = threshold > 0 ? xp / threshold : 0
+    const prevDisplayed = this.xpDisplayed.get(playerId) ?? xpTarget
+    const displayed = approach(prevDisplayed, xpTarget, dtMs)
+    this.xpDisplayed.set(playerId, displayed)
+    const prevLevel = this.lastLevel.get(playerId)
+    if (prevLevel !== undefined && level > prevLevel) {
+      // Level-up : la barre repart de 0 (reset propre) et flashe.
+      this.xpDisplayed.set(playerId, 0)
+      this.xpFlashUntil.set(playerId, now + 220)
+    }
+    this.lastLevel.set(playerId, level)
+    const flashing = now < (this.xpFlashUntil.get(playerId) ?? 0)
+    return this.bar(displayed, flashing ? 'hud__bar--xp hud__bar--xp-flash' : 'hud__bar--xp')
+  }
+
+  /**
+   * Bloc HUD d'un joueur (co-op) : portrait de SON perso, label `J{n}` à sa couleur,
+   * barre de PV, barre d'XP + niveau, et SES armes/passifs. Placé à son coin d'écran
+   * via `phud--p{id}` (J1 haut-gauche → J4 bas-droite). Atténué s'il est à terre.
+   */
+  private playerBlock(player: AppPlayerState, dtMs: number, now: number): HTMLElement {
     const color = playerColor(player.id)
-    const swatch = h('div', { className: 'hud__pswatch' })
-    swatch.style.backgroundColor = color.hex
+    const base = import.meta.env.BASE_URL
+    const def = characterDef(player.characterId ?? DEFAULT_CHARACTER_ID)
+    const portrait = h('div', { className: 'phud__portrait' },
+      h('img', { className: 'phud__portrait-img', attrs: { src: `${base}${sheetFile(def.sheet)}.png`, alt: '' } })
+    )
+    portrait.style.borderColor = color.hex
+    const id = h('span', { className: 'phud__id', text: `J${player.id}` })
+    id.style.color = color.hex
+    const tiles = [
+      ...player.inventory.weapons.map((e) => this.invTile(e, true)),
+      ...player.inventory.passives.map((e) => this.invTile(e, true))
+    ]
     return h(
       'div',
-      { className: player.alive ? 'hud__pcard' : 'hud__pcard hud__pcard--dead' },
-      swatch,
-      h('div', { className: 'hud__pinfo' },
-        h('span', { className: 'hud__pid', text: `J${player.id}` }),
-        h('span', { className: 'hud__php', text: `PV ${Math.ceil(player.hp)}/${Math.round(player.maxHp)}` }),
-        h('span', { className: 'hud__plvl', text: `Nv ${player.level}` })
+      { className: player.alive ? `phud phud--p${player.id}` : `phud phud--p${player.id} phud--dead` },
+      portrait,
+      h('div', { className: 'phud__col' },
+        h('div', { className: 'phud__top' },
+          id,
+          h('span', { className: 'phud__lvl', text: `Nv ${player.level}` }),
+          h('span', { className: 'phud__hp', text: `${Math.ceil(player.hp)}/${Math.round(player.maxHp)}` })
+        ),
+        this.bar(player.maxHp > 0 ? player.hp / player.maxHp : 0, 'hud__bar--hp'),
+        this.xpBar(player, dtMs, now),
+        h('div', { className: 'phud__inv' }, ...tiles)
       )
     )
   }
@@ -444,11 +500,10 @@ export class Overlay {
         case 'paused':
           this.screenLayer.append(this.menuPanel('Pause', null, state))
           break
+        // Défaite et victoire partagent le même « Rapport de chantier » (variante par outcome).
         case 'gameover':
-          this.screenLayer.append(this.gameOverPanel(state))
-          break
         case 'victory':
-          this.screenLayer.append(this.victoryPanel(state))
+          this.screenLayer.append(this.reportPanel(state))
           break
         case 'upgrade':
           this.screenLayer.append(this.upgradePanel(state))
@@ -538,9 +593,6 @@ export class Overlay {
     const def = characterDef(activeId)
     const weapon = WEAPONS[def.startingWeapon]
     const punch = PUNCHLINES[def.id] ?? ''
-    // La clé de feuille 'player' (ouvrier) mappe le fichier de référence `player_j1.png`
-    // (cf. GameScene.SHARED_SHEETS) : aucun `player.png` n'existe. Résolu ici pour l'<img> DOM.
-    const sheetFile = (sheet: string): string => (sheet === 'player' ? 'player_j1' : sheet)
 
     // En-tête « SELECT YOUR CREW » + joueur courant (couleur du joueur).
     const header = h('h1', { className: 'panel__title charsel__heading', text: 'SELECT YOUR CREW' })
@@ -858,10 +910,15 @@ export class Overlay {
    * coin dédié pour ne pas couvrir PV/XP/barre de boss. Visible en run (jeu/pause/
    * upgrade), masqué pendant l'intro. Reconstruit seulement quand la signature
    * (ids+niveaux) change (l'inventaire évolue rarement).
+   *
+   * En CO-OP ce panneau est inerte : chaque joueur (J1 inclus) a ses armes dans SON
+   * bloc de coin (`playerBlock`) — sinon l'inventaire de J1 serait affiché deux fois.
    */
   private syncInventory(state: AppViewState): void {
     const inRun =
-      (state.screen === 'game' || state.screen === 'paused' || state.screen === 'upgrade') && !state.introActive
+      (state.screen === 'game' || state.screen === 'paused' || state.screen === 'upgrade') &&
+      !state.introActive &&
+      state.players.length <= 1
     if (!inRun) {
       if (this.inventorySignature !== '') {
         clear(this.inventoryLayer)
@@ -946,41 +1003,44 @@ export class Overlay {
     return h('div', { className: 'screen' }, panel)
   }
 
-  private gameOverPanel(state: AppViewState): HTMLElement {
-    const report = state.deathReport
+  /**
+   * « Rapport de chantier » — écran de fin UNIQUE pour les deux issues.
+   * Même structure (titre / phrase / barre / stats / récap joueurs), la variante
+   * `report--victory` porte le ton festif (or + vert, rayons, drapeau atteint) et
+   * `report--defeat` le ton sombre. Historiquement la victoire avait un panneau
+   * générique séparé, sans phrase, ni barre, ni kills, ni or.
+   */
+  private reportPanel(state: AppViewState): HTMLElement {
+    const report = state.runReport
     // Garde-fou : si le rapport est absent, panneau minimal sans crash.
     if (report === null) {
       return h(
         'div',
         { className: 'screen' },
-        h(
-          'div',
-          { className: 'panel' },
-          h('h1', { className: 'panel__title', text: 'CHANTIER INTERROMPU' }),
-          this.menuList(state)
-        )
+        h('div', { className: 'panel' }, h('h1', { className: 'panel__title', text: 'RAPPORT DE CHANTIER' }), this.menuList(state))
       )
     }
+    const victory = report.outcome === 'victory'
+    const hasNext = (state.menu?.items ?? []).some((it) => it.id === 'stage_suivant')
 
-    // 1. Titre.
-    const title = h('h1', { className: 'report__title', text: 'CHANTIER INTERROMPU' })
+    const title = h('h1', {
+      className: 'report__title',
+      text: victory ? (hasNext ? 'CHANTIER LIVRÉ !' : 'TOUS LES CHANTIERS LIVRÉS !') : 'CHANTIER INTERROMPU'
+    })
 
-    // 2. Phrase culte ou moquerie (emphase si progressRatio > 0.8).
-    const isCult = report.progressRatio > 0.8
+    // Défaite : emphase « culte » si mort après 80 % du chantier. Victoire : ton festif.
+    const isCult = !victory && report.progressRatio > 0.8
     const quoteEl = h(
       'p',
       { className: isCult ? 'report__quote report__quote--cult' : 'report__quote' },
       `« ${report.quote} »`
     )
 
-    // 3. Barre Cuphead — marqueur clampé dans [3, 94] pour ne jamais sortir du rail.
+    // Barre : marqueur clampé dans [3, 94] pour rester sur le rail. En victoire il
+    // atteint le drapeau (100 % → 94) — le chantier est livré.
     const markerPct = Math.max(3, Math.min(report.progressPercent, 94))
-    const markerImg = h('img', {
-      className: 'report__marker',
-      attrs: { src: 'ui_death_marker.png', alt: '' }
-    })
+    const markerImg = h('img', { className: 'report__marker', attrs: { src: 'ui_death_marker.png', alt: '' } })
     markerImg.style.left = `${markerPct}%`
-
     const bar = h(
       'div',
       { className: 'report__bar' },
@@ -989,50 +1049,43 @@ export class Overlay {
       h('img', { className: 'report__end', attrs: { src: 'ui_death_flag.png', alt: '' } })
     )
 
-    // 4. Stats.
+    // Stats — MÊMES libellés des deux côtés (avant : « Ennemis tués » vs « Score »
+    // pour la même donnée, et ni or ni % côté victoire).
     const stats = h(
       'div',
       { className: 'report__stats' },
+      h('span', { text: `Chantier : ${report.stageTitle}` }),
       h('span', { text: `${report.progressPercent} % terminé` }),
-      h('span', { text: `Temps tenu : ${formatTime(report.elapsedMs)} / ${formatTime(report.stageDurationMs)}` }),
+      h('span', { text: `Temps : ${formatTime(report.elapsedMs)} / ${formatTime(report.stageDurationMs)}` }),
       h('span', { text: `Ennemis tués : ${formatNumber(report.kills)}` }),
-      h('span', { text: `Plus que ${formatTime(report.remainingSeconds * 1000)} avant validation.` })
+      h('span', { text: `Or ramassé : ${formatNumber(report.coins)}` }),
+      h('span', { text: `Niveau atteint : ${report.level}` })
     )
+    // Seule info propre à la défaite : ce qu'il restait à tenir.
+    if (!victory) {
+      stats.append(h('span', { text: `Plus que ${formatTime(report.remainingSeconds * 1000)} avant validation.` }))
+    }
 
-    // 5. Boutons via menuList (inchangé).
-    return h(
-      'div',
-      { className: 'screen' },
-      h('div', { className: 'panel' }, title, quoteEl, bar, stats, this.menuList(state))
-    )
-  }
-
-  private victoryPanel(state: AppViewState): HTMLElement {
-    const p = state.players[0]
-    const hasNext = (state.menu?.items ?? []).some((it) => it.id === 'stage_suivant')
-    const stats = h(
-      'div',
-      { className: 'stats' },
-      h('span', { text: `Chantier : ${state.stageTitle}` }),
-      h('span', { text: `Temps : ${formatTime(state.elapsedMs)}` }),
-      h('span', { text: `Niveau atteint : ${p?.level ?? 1}` }),
-      h('span', { text: `Score : ${state.score}` })
-    )
-    return h(
-      'div',
-      { className: 'screen' },
-      h(
-        'div',
-        { className: 'panel' },
-        h('h1', { className: 'panel__title', text: hasNext ? 'Chantier livré !' : 'Chantier terminé !' }),
-        h('p', {
-          className: 'panel__subtitle',
-          text: hasNext ? 'Direction le chantier suivant' : 'Bravo — tous les chantiers sont livrés'
-        }),
-        stats,
-        this.menuList(state)
-      )
-    )
+    const panel = h('div', { className: victory ? 'panel report report--victory' : 'panel report report--defeat' })
+    if (victory) {
+      // Décor festif (rayons tournants) — derrière le contenu, purement cosmétique.
+      panel.append(h('div', { className: 'report__rays', attrs: { 'aria-hidden': 'true' } }))
+    }
+    panel.append(title, quoteEl, bar, stats)
+    // Co-op : récap par joueur (avant, le détail par joueur n'existait sur AUCUN écran).
+    if (report.perPlayer.length > 1) {
+      const rows = h('div', { className: 'report__players' })
+      for (const p of report.perPlayer) {
+        const row = h('div', { className: p.alive ? 'report__prow' : 'report__prow report__prow--dead' })
+        const tag = h('span', { className: 'report__pid', text: `J${p.id}` })
+        tag.style.color = playerColor(p.id).hex
+        row.append(tag, h('span', { text: `${formatNumber(p.kills)} tués` }), h('span', { text: `Nv ${p.level}` }))
+        rows.append(row)
+      }
+      panel.append(rows)
+    }
+    panel.append(this.menuList(state))
+    return h('div', { className: 'screen' }, panel)
   }
 
   private upgradePanel(state: AppViewState): HTMLElement {

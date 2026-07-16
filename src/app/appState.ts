@@ -1,24 +1,50 @@
 import type { GameState, PlayerState } from '@core/types'
 import type { CardKind } from '@core/systems/cards'
 
-/**
- * Rapport figé généré UNE SEULE FOIS à l'entrée du game-over.
- * Jamais recalculé entre deux appels à `getState()` : la phrase est stable.
- */
-export interface DeathReport {
-  /** Temps écoulé au moment de la mort (ms). */
-  elapsedMs: number
-  /** Nombre d'ennemis tués (= score). */
+/** Issue d'une run terminée : chantier interrompu (mort) ou livré (boss final tué). */
+export type RunOutcome = 'defeat' | 'victory'
+
+/** Ligne de récap d'un joueur dans le rapport (co-op : une par joueur). */
+export interface RunReportPlayer {
+  id: number
+  /** Ennemis tués par CE joueur (attribution au dernier frappeur). */
   kills: number
-  /** Progression [0, 1] dans le stage. */
+  level: number
+  alive: boolean
+}
+
+/**
+ * Rapport de fin de run, figé UNE SEULE FOIS à l'entrée de l'écran de fin
+ * (game-over OU victoire). Jamais recalculé entre deux appels à `getState()` :
+ * phrase et stats sont stables.
+ *
+ * Les DEUX issues partagent la même structure — l'écran est le même « Rapport de
+ * chantier », seule la présentation diffère (`outcome`). Avant, la victoire lisait
+ * l'état VIVANT et n'avait ni phrase, ni barre, ni kills, ni or.
+ */
+export interface RunReport {
+  outcome: RunOutcome
+  /** Libellé de la phase jouée (ex. « Terrain vierge »). */
+  stageTitle: string
+  /** Temps écoulé à la fin de la run (ms). */
+  elapsedMs: number
+  /** Durée totale du stage (ms). */
+  stageDurationMs: number
+  /** Progression [0, 1] dans le stage (toujours 1 en victoire : chantier livré). */
   progressRatio: number
   /** Progression arrondie en % entier. */
   progressPercent: number
-  /** Secondes restantes avant la fin du stage (≥ 0). */
+  /** Secondes restantes avant la fin du stage (≥ 0 ; 0 en victoire). */
   remainingSeconds: number
-  /** Durée totale du stage (ms). */
-  stageDurationMs: number
-  /** Phrase de mort sélectionnée une seule fois. */
+  /** Total d'ennemis tués (= score). */
+  kills: number
+  /** Or ramassé sur la run. */
+  coins: number
+  /** Niveau atteint (joueur 1 — le détail par joueur est dans `perPlayer`). */
+  level: number
+  /** Récap par joueur (1 entrée en solo, N en co-op). */
+  perPlayer: RunReportPlayer[]
+  /** Phrase sélectionnée une seule fois (moquerie en défaite, félicitation en victoire). */
   quote: string
 }
 
@@ -130,9 +156,9 @@ export interface AppViewState extends Omit<GameState, 'players'> {
    */
   chestOpen: ChestOpenView | null
   /**
-   * Rapport de mort figé — calculé UNE SEULE FOIS quand `screen === 'gameover'`,
-   * stable entre les appels à `getState()`. `null` tant que le game-over n'est pas
-   * atteint ; redevient `null` après `restart()` / `start()`.
+   * Rapport de fin de run figé — calculé UNE SEULE FOIS à l'entrée de l'écran de
+   * fin (`gameover` OU `victory`), stable entre les appels à `getState()`. `null`
+   * tant que la run n'est pas finie ; redevient `null` après `restart()` / `start()`.
    */
-  deathReport: DeathReport | null
+  runReport: RunReport | null
 }

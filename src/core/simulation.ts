@@ -502,8 +502,16 @@ export class Simulation {
    * secondaire hors du composant `health`. Réservé aux tests e2e et au seam
    * de debug — jamais appelé en jeu normal.
    */
-  debugKillPlayer(): void {
-    for (const e of this.playerEntities.values()) {
+  /**
+   * Met des joueurs à terre (PV = 0). Sans argument : TOUS (→ game-over, usage
+   * historique). Avec `playerId` : ce joueur SEUL — indispensable pour tester la
+   * relève co-op, qui exige un coéquipier encore vivant.
+   */
+  debugKillPlayer(playerId?: number): void {
+    for (const [id, e] of this.playerEntities) {
+      if (playerId !== undefined && id !== playerId) {
+        continue
+      }
       const health = this.world.get(e, 'health')
       if (health !== undefined) {
         health.hp = 0

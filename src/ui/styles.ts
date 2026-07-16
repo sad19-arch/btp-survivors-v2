@@ -601,6 +601,33 @@ const CSS = `
 #ui-root .report__start, #ui-root .report__end { width: 64px; height: 64px; image-rendering: pixelated; flex-shrink: 0; position: relative; z-index: 2; }
 #ui-root .report__marker { position: absolute; width: 64px; height: 64px; image-rendering: pixelated; transform: translateX(-50%); z-index: 3; top: 2px; }
 #ui-root .report__stats { display: flex; flex-direction: column; gap: 6px; font-family: 'Pixelify Sans'; font-size: 28px; color: ${PALETTE.blanc}; text-align: center; }
+/* Récap par joueur (co-op) — une ligne par joueur, à sa couleur, atténuée s'il est tombé. */
+#ui-root .report__players { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+#ui-root .report__prow {
+  display: flex; gap: 14px; align-items: baseline; justify-content: center;
+  font-family: 'Pixelify Sans'; font-size: 22px; color: ${PALETTE.solSable};
+}
+#ui-root .report__prow--dead { opacity: 0.5; }
+#ui-root .report__pid { font-weight: 700; min-width: 34px; text-shadow: 2px 2px 0 ${PALETTE.contour}; }
+/* ── Variante VICTOIRE : même rapport, ton festif (or + vert) ──────────────── */
+#ui-root .report { position: relative; overflow: hidden; }
+#ui-root .report > * { position: relative; z-index: 2; }
+#ui-root .report--victory { border-color: ${PALETTE.jauneSecurite}; }
+#ui-root .report--victory .report__title {
+  color: ${PALETTE.jauneSecurite};
+  text-shadow: -2px -2px 0 #FFF4CC, 3px 0 0 ${PALETTE.contour}, -3px 0 0 ${PALETTE.contour},
+    0 3px 0 ${PALETTE.contour}, 0 -3px 0 ${PALETTE.contour}, 5px 5px 0 #C85A12, 9px 9px 0 ${PALETTE.contour};
+}
+#ui-root .report--victory .report__quote { color: ${PALETTE.vertBonus}; border-color: ${PALETTE.jauneSecurite}; }
+/* Rayons dorés tournants derrière le rapport — festif, sans nouvel asset. */
+#ui-root .report__rays {
+  position: absolute; top: 50%; left: 50%; width: 220%; height: 220%; z-index: 0; pointer-events: none;
+  transform: translate(-50%, -50%);
+  background: repeating-conic-gradient(from 0deg, ${PALETTE.jauneSecurite} 0deg 10deg, transparent 10deg 20deg);
+  opacity: 0.10; animation: report-rays-spin 14s linear infinite;
+}
+@keyframes report-rays-spin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #ui-root .report__rays { animation: none; } }
 
 /* ── Bordure d'écran optionnelle (cadre métal ouvragé) ────────────────── */
 /* Ajoute <div class="frame"></div> comme 1er enfant de #ui-root pour encadrer
@@ -774,6 +801,46 @@ const CSS = `
 #ui-root .charsel-cell--active { filter: none; border-color: var(--arc-jaune); box-shadow: 0 0 0 3px var(--arc-orange2), 0 0 14px rgba(255,210,74,.6); }
 #ui-root .charsel-cell__img { position: absolute; left: 0; top: 0; width: 400%; height: 400%; image-rendering: pixelated; }
 /* --- Invite « tourne l'appareil » (P6 : tactile + portrait) --------------- */
+/* --- HUD par joueur (co-op ≥2) : un bloc à chaque coin, façon borne ---------
+   Solo : la couche reste vide et AUCUNE de ces règles ne s'applique (pas de .coop). */
+#ui-root .phud-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+#ui-root .phud {
+  position: absolute; display: flex; gap: 8px; align-items: flex-start;
+  padding: 8px; background: var(--tex); background-size: 60px 100%;
+  border: 4px solid ${PALETTE.contour};
+  box-shadow: 5px 5px 0 rgba(0,0,0,0.55), inset 2px 2px 0 rgba(255,255,255,0.12), inset -3px -3px 0 rgba(0,0,0,0.5);
+}
+#ui-root .phud--dead { opacity: 0.45; filter: saturate(0.3); }
+/* Les 4 coins : J1 haut-gauche · J2 haut-droite · J3 bas-gauche · J4 bas-droite. */
+#ui-root .phud--p1 { top: 14px; left: 14px; }
+#ui-root .phud--p2 { top: 14px; right: 14px; }
+#ui-root .phud--p3 { bottom: 14px; left: 14px; }
+#ui-root .phud--p4 { bottom: 14px; right: 14px; }
+#ui-root .phud__portrait {
+  position: relative; width: 56px; height: 56px; overflow: hidden; flex-shrink: 0;
+  background: ${PALETTE.brunSombre}; border: 3px solid ${PALETTE.contour}; box-sizing: border-box;
+}
+#ui-root .phud__portrait-img { position: absolute; left: 0; top: 0; width: 400%; height: 400%; image-rendering: pixelated; }
+#ui-root .phud__col { display: flex; flex-direction: column; gap: 4px; }
+#ui-root .phud__top { display: flex; align-items: baseline; gap: 8px; font-size: 15px; line-height: 1; text-shadow: 2px 2px 0 ${PALETTE.contour}; }
+#ui-root .phud__id { font-weight: 700; }
+#ui-root .phud__lvl { color: ${PALETTE.jauneSecurite}; }
+#ui-root .phud__hp { color: ${PALETTE.vertBonus}; }
+/* Barres compactes : on surcharge .hud__bar DANS le bloc (spécificité supérieure). */
+#ui-root .phud .hud__bar { width: 148px; height: 12px; border-width: 3px; }
+#ui-root .phud__inv { display: flex; flex-direction: row; flex-wrap: wrap; gap: 4px; max-width: 148px; }
+/* Tuiles d'inventaire miniatures dans le bloc joueur. */
+#ui-root .phud .inv__tile, #ui-root .phud .inv__tile--sm { width: 34px; height: 34px; }
+#ui-root .phud .inv__icon, #ui-root .phud .inv__img, #ui-root .phud .inv__mono { width: 34px; height: 34px; }
+#ui-root .phud .inv__mono { font-size: 16px; }
+#ui-root .phud .inv__lvl { font-size: 11px; padding: 0 2px; }
+/* Co-op : le HUD central ne garde que l'info de run → il passe en haut-centre pour
+   libérer les coins ; la barre de boss descend sous lui ; la mini-carte va en bas-centre.
+   (Le HUD « Manettes » est masqué côté JS : son display est inline, cf. syncPads.) */
+#ui-root.coop .hud { left: 50%; transform: translateX(-50%); margin: 14px 0; }
+#ui-root.coop .bossbar { top: 104px; }
+#ui-root.coop .minimap { left: 50%; transform: translateX(-50%); bottom: 14px; }
+
 #ui-root .rotate-hint { display: none; position: fixed; inset: 0; z-index: 90; background: var(--arc-brun3, #17120E);
   flex-direction: column; align-items: center; justify-content: center; gap: 22px; text-align: center; padding: 24px; }
 #ui-root .rotate-hint--show { display: flex; }

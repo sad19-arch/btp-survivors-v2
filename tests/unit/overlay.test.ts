@@ -320,7 +320,7 @@ describe('Overlay — bandeau d’évolution', () => {
 })
 
 describe('Overlay — HUD multi-joueur (co-op)', () => {
-  it('3 joueurs → 3 mini-HUD, PV/niveau par joueur, couleurs distinctes', () => {
+  it('3 joueurs → 3 blocs HUD dédiés (PV + XP + armes), couleurs distinctes', () => {
     const app = new App({ seed: 1, mode: 'coop3', autostart: true })
     const { root, overlay } = mount()
     overlay.sync(app.getState())
@@ -328,20 +328,21 @@ describe('Overlay — HUD multi-joueur (co-op)', () => {
     const state = app.getState()
     expect(state.players.length).toBe(3)
 
-    const cards = root.querySelectorAll<HTMLElement>('.hud__pcard')
-    expect(cards.length).toBe(3)
+    const blocks = root.querySelectorAll<HTMLElement>('.phud')
+    expect(blocks.length).toBe(3)
 
-    cards.forEach((card, i) => {
+    blocks.forEach((block, i) => {
       const p = state.players[i]
       expect(p).toBeDefined()
-      expect(card.textContent).toContain(`J${p?.id}`)
-      expect(card.textContent).toContain(`PV ${Math.ceil(p?.hp ?? 0)}`)
-      expect(card.textContent).toContain(`Nv ${p?.level ?? 1}`)
+      expect(block.textContent).toContain(`J${p?.id}`)
+      expect(block.textContent).toContain(`Nv ${p?.level ?? 1}`)
+      // Régression : chaque joueur (pas seulement J1) a SES barres et SES armes.
+      expect(block.querySelectorAll('.hud__bar--hp').length).toBe(1)
+      expect(block.querySelectorAll('.hud__bar--xp').length).toBe(1)
+      expect(block.querySelectorAll('.inv__tile').length).toBeGreaterThan(0)
     })
 
-    const colors = Array.from(cards).map(
-      (card) => card.querySelector<HTMLElement>('.hud__pswatch')?.style.backgroundColor
-    )
+    const colors = Array.from(blocks).map((b) => b.querySelector<HTMLElement>('.phud__id')?.style.color)
     expect(new Set(colors).size).toBe(colors.length) // toutes distinctes
   })
 
@@ -432,10 +433,15 @@ describe('Overlay — machine à sous (coffre)', () => {
 
 // ── Helpers pour les tests du Rapport de chantier ────────────────────────────
 
-function makeDeathReport(overrides: Partial<import('@/app/appState').DeathReport> = {}): import('@/app/appState').DeathReport {
+function makeDeathReport(overrides: Partial<import('@/app/appState').RunReport> = {}): import('@/app/appState').RunReport {
   return {
+    outcome: 'defeat',
+    stageTitle: 'Terrain vierge',
     elapsedMs: 300_000,   // 5:00
     kills: 1248,
+    coins: 37,
+    level: 6,
+    perPlayer: [{ id: 1, kills: 1248, level: 6, alive: false }],
     progressRatio: 0.25,
     progressPercent: 25,
     remainingSeconds: 900,
@@ -446,20 +452,23 @@ function makeDeathReport(overrides: Partial<import('@/app/appState').DeathReport
 }
 
 function makeGameoverState(
-  report: import('@/app/appState').DeathReport | null
+  report: import('@/app/appState').RunReport | null
 ): import('@/app/appState').AppViewState {
   const app = new App({ seed: 42, mode: 'solo', autostart: false })
   const base = app.getState()
+  const victory = report?.outcome === 'victory'
   return {
     ...base,
-    screen: 'gameover',
-    deathReport: report,
+    screen: victory ? 'victory' : 'gameover',
+    runReport: report,
     menu: {
-      screen: 'gameover',
-      items: [
-        { id: 'recommencer', label: 'Recommencer', hint: null },
-        { id: 'titre', label: 'Menu titre', hint: null }
-      ],
+      screen: victory ? 'victory' : 'gameover',
+      items: victory
+        ? [{ id: 'titre', label: 'Menu titre', hint: null }]
+        : [
+            { id: 'recommencer', label: 'Recommencer', hint: null },
+            { id: 'titre', label: 'Menu titre', hint: null }
+          ],
       index: 0
     }
   }
@@ -539,11 +548,62 @@ describe('Overlay — Rapport de chantier (game-over)', () => {
     expect(quoteEl?.classList.contains('report__quote--cult')).toBe(false)
   })
 
-  it('garde-fou : deathReport null → panneau minimal avec titre, sans crash', () => {
+  it('garde-fou : runReport null → panneau minimal avec titre, sans crash', () => {
     const state = makeGameoverState(null)
     const { root, overlay } = mount()
     expect(() => overlay.sync(state)).not.toThrow()
-    expect(root.querySelector('.panel__title')?.textContent).toBe('CHANTIER INTERROMPU')
+    expect(root.querySelector('.panel__title')?.textContent).toBe('RAPPORT DE CHANTIER')
     expect(root.querySelector('.report__bar')).toBeNull()
+  })
+})
+
+describe('Overlay — Rapport de chantier (victoire)', () => {
+  it('victoire : même structure que la défaite (phrase, barre, stats) + variante festive', () => {
+    const state = makeGameoverState(
+      makeDeathReport({
+        outcome: 'victory',
+        progressRatio: 1,
+        progressPercent: 100,
+        remainingSeconds: 0,
+        quote: 'Chantier livré, dans les règles de l’art.'
+      })
+    )
+    const { root, overlay } = mount()
+    overlay.sync(state)
+
+    // Même ossature que la défaite — c'était tout le point de la normalisation.
+    expect(root.querySelector('.report__title')?.textContent).toContain('LIVRÉ')
+    expect(root.querySelector('.report__quote')).not.toBeNull()
+    expect(root.querySelector('.report__bar')).not.toBeNull()
+    // Variante festive + infos qui manquaient totalement à la victoire.
+    expect(root.querySelector('.report--victory')).not.toBeNull()
+    expect(root.querySelector('.report__rays')).not.toBeNull()
+    const stats = root.querySelector('.report__stats')?.textContent ?? ''
+    expect(stats).toContain('100 % terminé')
+    expect(stats).toContain('Ennemis tués')
+    expect(stats).toContain('Or ramassé')
+    // Pas de « avant validation » en victoire : le chantier EST validé.
+    expect(stats).not.toContain('avant validation')
+  })
+
+  it('co-op : le rapport liste un récap par joueur (kills + niveau)', () => {
+    const state = makeGameoverState(
+      makeDeathReport({
+        outcome: 'victory',
+        perPlayer: [
+          { id: 1, kills: 800, level: 7, alive: true },
+          { id: 2, kills: 448, level: 5, alive: false }
+        ]
+      })
+    )
+    const { root, overlay } = mount()
+    overlay.sync(state)
+
+    const rows = root.querySelectorAll('.report__prow')
+    expect(rows.length).toBe(2)
+    expect(rows[0]?.textContent).toContain('J1')
+    expect(rows[0]?.textContent).toContain('Nv 7')
+    expect(rows[1]?.textContent).toContain('J2')
+    expect(rows[1]?.classList.contains('report__prow--dead')).toBe(true)
   })
 })

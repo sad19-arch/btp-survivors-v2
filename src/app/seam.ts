@@ -47,8 +47,12 @@ export interface GameSeam {
    * joueur (à l'écran, à portée d'arme) au lieu de l'anneau lointain hors-écran.
    */
   debugSpawnEnemies(n: number, radius?: number): void
-  /** [Debug] Met les PV de tous les joueurs à 0 → game-over au prochain pas. */
-  debugKillPlayer(): void
+  /**
+   * [Debug] Met des joueurs à terre (PV = 0). Sans argument : TOUS → game-over.
+   * Avec `playerId` : ce joueur SEUL (permet de tester la relève co-op, qui exige
+   * un coéquipier vivant).
+   */
+  debugKillPlayer(playerId?: number): void
   /** [Debug] Audition d'un SFX d'arme (procédural) par ID d'arme. */
   debugPlayWeaponSfx(id: string): void
   /**
@@ -175,8 +179,8 @@ export function createSeam(app: App): GameSeam {
     debugSpawnEnemies: (n: number, radius?: number) => {
       app.debugSpawnEnemies(n, radius)
     },
-    debugKillPlayer: () => {
-      app.debugKillPlayer()
+    debugKillPlayer: (playerId?: number) => {
+      app.debugKillPlayer(playerId)
     },
     debugPlayWeaponSfx: (id: string) => {
       app.debugPlayWeaponSfx(id)

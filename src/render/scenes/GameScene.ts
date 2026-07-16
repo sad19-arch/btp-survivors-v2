@@ -388,6 +388,9 @@ export class GameScene extends Phaser.Scene {
     this.load.image('vfx_flame_lance', 'stage01/vfx/vfx_flame_lance.png')
     // B3 : icône de carte brouette réutilisée comme sprite de projectile (plus lisible).
     this.load.image('icon_brouette', 'stage01/ui/icon_brouette_64.png')
+    // Glyphes d'invite de relève co-op (manette A / touche E) — cf. playerRenderer.
+    this.load.image('ui_btn_a', 'ui_btn_a.png')
+    this.load.image('ui_key_e', 'ui_key_e.png')
     this.load.image('vfx_goudron', 'stage01/vfx/vfx_goudron.png')
     this.load.image('pickup_xp', 'stage01/pickups/xp.png')
     this.load.image('pickup_health', 'stage01/pickups/health.png')

@@ -23,8 +23,9 @@ import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/char
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
 import { evolutionStatuses } from '@core/systems/evolution'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
-import type { AppViewState, DeathReport, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
+import type { AppViewState, RunReport, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
 import { selectDeathQuote } from '@content/deathQuotes'
+import { selectVictoryQuote } from '@content/victoryQuotes'
 
 export interface AppOptions {
   seed: number
@@ -123,11 +124,12 @@ export class App {
    */
   minimapVisible = true
   /**
-   * Rapport de mort figé — calculé une seule fois à la première entrée en game-over,
-   * remis à `null` à chaque `start()` / `restart()`. Le roll (phrase) est tiré ici
-   * (composition root — `Math.random` AUTORISÉ hors `src/core`).
+   * Rapport de fin de run figé — calculé une seule fois à la première entrée sur un
+   * écran de fin (game-over OU victoire), remis à `null` à chaque `start()` /
+   * `restart()`. Le roll (phrase) est tiré ici (composition root — `Math.random`
+   * AUTORISÉ hors `src/core`).
    */
-  private _deathReport: DeathReport | null = null
+  private _runReport: RunReport | null = null
   /** Garde one-shot : pièces du run déjà versées au total méta (fin de run). */
   private _coinsBanked = false
 
@@ -151,7 +153,7 @@ export class App {
    */
   start(mode: GameMode = this.mode, characters: readonly string[] = this.selectedCharacters): void {
     this.bumpState()
-    this._deathReport = null
+    this._runReport = null
     this._coinsBanked = false
     const wasStarted = this.started // RE-démarrage ? (partie déjà en cours)
     this.mode = mode
@@ -448,9 +450,9 @@ export class App {
    * Permet d'atteindre l'écran de mort de façon déterministe dans les tests e2e.
    * Réservé aux tests et au seam de debug — jamais appelé en jeu normal.
    */
-  debugKillPlayer(): void {
+  debugKillPlayer(playerId?: number): void {
     this.bumpState()
-    this.sim?.debugKillPlayer()
+    this.sim?.debugKillPlayer(playerId)
   }
 
   // --- état exposé ----------------------------------------------------------
@@ -486,22 +488,40 @@ export class App {
       addMetaCoins(base.coins)
       this._coinsBanked = true
     }
-    // Calcul figé du rapport de mort : une seule fois à l'entrée du game-over.
-    if (screen === 'gameover' && this._deathReport === null) {
+    const phase = ORDERED_PHASES.find((p) => (p.id as string) === base.stageId)
+    // Rapport de fin figé : UNE SEULE FOIS à l'entrée de l'écran de fin, pour les
+    // DEUX issues. La victoire est un chantier LIVRÉ → progression 100 %, 0 s restante.
+    if ((screen === 'gameover' || screen === 'victory') && this._runReport === null) {
+      const victory = screen === 'victory'
       const stageDurationMs = FINAL_BOSS.atMs
       const elapsedMs = base.elapsedMs
-      const kills = base.score
-      const progressRatio = Math.max(0, Math.min(elapsedMs / stageDurationMs, 1))
-      const progressPercent = Math.floor(progressRatio * 100)
-      const remainingSeconds = Math.max(0, Math.floor(stageDurationMs / 1000) - Math.floor(elapsedMs / 1000))
-      const quote = selectDeathQuote({
-        elapsedSeconds: Math.floor(elapsedMs / 1000),
-        stageDurationSeconds: stageDurationMs / 1000,
-        roll: Math.random()
-      })
-      this._deathReport = { elapsedMs, kills, progressRatio, progressPercent, remainingSeconds, stageDurationMs, quote }
+      const progressRatio = victory ? 1 : Math.max(0, Math.min(elapsedMs / stageDurationMs, 1))
+      const flawless = base.players.every((p) => p.alive)
+      this._runReport = {
+        outcome: victory ? 'victory' : 'defeat',
+        stageTitle: phase?.title ?? '—',
+        elapsedMs,
+        stageDurationMs,
+        progressRatio,
+        progressPercent: Math.floor(progressRatio * 100),
+        remainingSeconds: victory
+          ? 0
+          : Math.max(0, Math.floor(stageDurationMs / 1000) - Math.floor(elapsedMs / 1000)),
+        kills: base.score,
+        coins: base.coins,
+        level: base.players[0]?.level ?? 1,
+        perPlayer: base.players.map((p) => ({ id: p.id, kills: p.kills, level: p.level, alive: p.alive })),
+        // `Math.random` AUTORISÉ ici (composition root, hors src/core) — le roll est figé
+        // avec le rapport, donc la phrase ne change pas d'une frame à l'autre.
+        quote: victory
+          ? selectVictoryQuote({ roll: Math.random(), flawless })
+          : selectDeathQuote({
+              elapsedSeconds: Math.floor(elapsedMs / 1000),
+              stageDurationSeconds: stageDurationMs / 1000,
+              roll: Math.random()
+            })
+      }
     }
-    const phase = ORDERED_PHASES.find((p) => (p.id as string) === base.stageId)
     return {
       ...base,
       scene: base.scene,
@@ -534,7 +554,7 @@ export class App {
               isSuper: base.chestOpened.isSuper
             }
           : null,
-      deathReport: screen === 'gameover' ? this._deathReport : null
+      runReport: screen === 'gameover' || screen === 'victory' ? this._runReport : null
     }
   }
 
