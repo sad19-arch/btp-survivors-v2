@@ -2,13 +2,42 @@ import { describe, it, expect } from 'vitest'
 import { musicForState, MUSIC, SFX, VOICE, voiceStage, SFX_FILES, MUSIC_FILES_SHARED, VOICE_FILES } from '@/audio/manifest'
 import { clamp01, musicGain, sfxGain, duckedGain, type AudioLevels } from '@/audio/settings'
 import { Simulation } from '@core/simulation'
+import type { Screen } from '@/app/appState'
 import { WEAPONS } from '@content/weapons'
 import { AudioDirector } from '@/audio/audioDirector'
 import { EvolvedEvent, BossSpawnedEvent } from '@core/events'
 
 describe('audio — musique par état (pure)', () => {
-  const g = (screen: string, stageId: string, bossPresent = false): string | null =>
+  const g = (screen: Screen, stageId: string, bossPresent = false): string | null =>
     musicForState({ screen, stageId, bossPresent })
+
+  /**
+   * LA faille de classe : `musicForState` retombait sur `default` pour tout écran
+   * qu'il ne nommait pas — et `default` rend la musique DU STAGE. Résultat : ouvrir
+   * les Options ou la sélection de perso depuis le titre lançait la musique de
+   * chantier par-dessus un menu, et l'écran des succès la relançait sur une run finie.
+   *
+   * On énumère ici TOUS les écrans hors-jeu. La liste est dérivée du type `Screen` :
+   * `SCREENS_HORS_JEU` + `SCREENS_DE_JEU` doivent couvrir l'union — si un écran est
+   * ajouté sans être classé, le `switch` exhaustif de `musicForState` casse le BUILD.
+   */
+  const SCREENS_HORS_JEU: readonly Screen[] = [
+    'characterSelect',
+    'options',
+    'achievements',
+    'nameEntry',
+    'hiscores',
+    'paused'
+  ]
+
+  it('AUCUN écran hors-jeu ne joue la musique du stage', () => {
+    for (const screen of SCREENS_HORS_JEU) {
+      // Le stage est renseigné (comme en vrai : le flag survit à la run) et un boss
+      // est présent : les deux chemins qui menaient à une musique de jeu.
+      expect(g(screen, 'finitions', true), `écran ${screen}`).toBe(MUSIC.menu)
+      expect(g(screen, 'finitions', false), `écran ${screen}`).toBe(MUSIC.menu)
+    }
+  })
 
   it('titre → titre ; pause → menu ; victoire/gameover → leur thème', () => {
     expect(g('title', 'terrain_vierge')).toBe(MUSIC.title)

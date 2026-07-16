@@ -16,9 +16,11 @@ import {
   type LayoutNpc,
   type LayoutPath,
   type NpcKind,
+  type PathType,
   type StageLayout,
   type Vec2
 } from './StageLayoutSchema'
+import { PATH_LIMITS } from '@content/stageLayout'
 import { editorAsset, paletteEntry, type AssetRole } from './PrefabCatalog'
 import type { RenderLayer } from '@content/stageLayout'
 import { resolveSolidity, type Solidity } from '@content/assetSolidity'
@@ -345,12 +347,15 @@ export class EditorState {
   nudge(dx: number, dy: number): void {
     this.moveSelectionBy(dx, dy)
   }
-  /** Supprime TOUTE la sélection (instances + npcs). */
+  /** Supprime TOUTE la sélection (instances + npcs + chemins). */
   deleteSelected(): void {
     if (this.selectedIds.size === 0) {return}
     const ids = this.selectedIds
     this.layout.instances = this.layout.instances.filter((i) => !ids.has(i.id))
     this.layout.npcs = this.layout.npcs.filter((n) => !ids.has(n.id))
+    // Les chemins étaient absents de ce filtre : un tracé raté était impossible
+    // à retirer autrement qu'en repartant d'une compo vierge.
+    this.layout.paths = this.layout.paths.filter((p) => !ids.has(p.id))
     this.selectOnly(null)
     this.emit()
   }
@@ -572,8 +577,63 @@ export class EditorState {
   }
 
   // ── chemins ─────────────────────────────────────────────────────────────────
-  addPath(type: 'truck_path' | 'worker_path', points: Vec2[]): void {
-    this.layout.paths.push({ id: newId(type), type, points })
+  /**
+   * Ajoute un chemin ET le sélectionne : il s'ouvre aussitôt sur ses réglages.
+   * Sans la sélection, il faudrait re-cliquer le tracé pour le régler — un 2e
+   * obstacle après celui d'`Entrée`, qui est déjà la cause du problème rapporté.
+   */
+  addPath(type: PathType, points: Vec2[]): LayoutPath {
+    const p: LayoutPath = { id: newId(type), type, points }
+    this.layout.paths.push(p)
+    this.selectOnly(p.id)
+    this.emit()
+    return p
+  }
+
+  /** Chemin actuellement sélectionné (l'inspecteur s'y branche), ou null. */
+  selectedPath(): LayoutPath | null {
+    return this.layout.paths.find((p) => p.id === this.primaryId) ?? null
+  }
+
+  /**
+   * Modifie les RÉGLAGES d'un chemin (jamais ses points). Les valeurs sont
+   * CLAMPÉES ici aussi, et pas seulement au parse : l'inspecteur ne doit pas
+   * pouvoir produire une vitesse nulle (division par zéro dans `tTrajet`), ni un
+   * NaN — un `<input type="number">` vidé donne `Number('') = NaN`, ce qui ferait
+   * disparaître le marcheur.
+   */
+  updatePath(id: string, patch: Partial<Omit<LayoutPath, 'id' | 'points'>>): void {
+    const p = this.layout.paths.find((x) => x.id === id)
+    if (p === undefined) {return}
+    const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v))
+    if (patch.name !== undefined) {
+      // Nom vidé = pas de nom : on retombe sur le libellé de famille.
+      if (patch.name === '') {delete p.name} else {p.name = patch.name}
+    }
+    if (patch.skin !== undefined) {
+      // « (défaut) » = chaîne vide → EFFACER, pas figer : un skin '' ferait
+      // chercher une texture nommée '' et le marcheur disparaîtrait.
+      if (patch.skin === '') {delete p.skin} else {p.skin = patch.skin}
+    }
+    if (patch.oneWay !== undefined) {p.oneWay = patch.oneWay}
+    if (patch.count !== undefined && Number.isFinite(patch.count)) {
+      p.count = Math.round(clamp(patch.count, PATH_LIMITS.count.min, PATH_LIMITS.count.max))
+    }
+    if (patch.speed !== undefined && Number.isFinite(patch.speed)) {
+      p.speed = clamp(patch.speed, PATH_LIMITS.speed.min, PATH_LIMITS.speed.max)
+    }
+    if (patch.pauseMs !== undefined && Number.isFinite(patch.pauseMs)) {
+      p.pauseMs = clamp(patch.pauseMs, PATH_LIMITS.pauseMs.min, PATH_LIMITS.pauseMs.max)
+    }
+    this.emit()
+  }
+
+  /** Supprime un chemin par id. */
+  deletePath(id: string): void {
+    const before = this.layout.paths.length
+    this.layout.paths = this.layout.paths.filter((p) => p.id !== id)
+    if (this.layout.paths.length === before) {return}
+    if (this.primaryId === id) {this.selectOnly(null)}
     this.emit()
   }
 

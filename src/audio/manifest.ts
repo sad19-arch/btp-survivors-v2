@@ -1,3 +1,5 @@
+import type { Screen } from '@/app/appState'
+
 /**
  * Manifeste audio (data-driven, PUR — aucun Phaser/DOM ici, testable en Vitest).
  *
@@ -275,31 +277,54 @@ const STAGE_MUSIC: Readonly<Record<string, MusicKey>> = {
 }
 
 export interface MusicContext {
-  screen: string
+  /** Typé `Screen`, pas `string` : c'est ce qui rend le `switch` ci-dessous vérifiable. */
+  screen: Screen
   stageId: string
   bossPresent: boolean
 }
 
-/** Musique désirée pour un état (null = silence). PURE → testable. */
+/**
+ * Musique désirée pour un état (null = silence). PURE → testable.
+ *
+ * ⚠️ Le `switch` est EXHAUSTIF, et c'est le cœur du correctif. Il y avait avant un
+ * `default` qui rendait la musique du STAGE : tout écran non nommé — donc tout écran
+ * AJOUTÉ PLUS TARD — se mettait silencieusement à jouer la musique de chantier
+ * par-dessus un menu ou une run finie. La faille s'était déjà déclenchée trois fois
+ * (`characterSelect`, `options`, `achievements` ; `characterSelect` allait jusqu'à
+ * jouer la musique de BOSS si un boss était vivant à l'écran d'avant).
+ *
+ * Le `never` final transforme cette classe de bug en ERREUR DE COMPILATION : ajouter
+ * un écran à `Screen` sans le classer ici casse le build, au lieu de partir en
+ * silence jusqu'à ce qu'un joueur l'entende.
+ */
 export function musicForState(ctx: MusicContext): MusicKey | null {
   switch (ctx.screen) {
     case 'title':
       return MUSIC.title
-    case 'paused':
-      return MUSIC.menu
     case 'victory':
       return MUSIC.victory
     case 'gameover':
       return MUSIC.gameover
-    // Saisie du prénom / tableau des scores : la run est FINIE. Sans ces cas, le
-    // `default` relancerait la musique du stage par-dessus l'écran de fin.
+    // Tous les écrans HORS JEU : la run est finie, ou pas commencée. Aucun ne doit
+    // laisser passer la musique du stage (ni celle du boss).
+    case 'paused':
+    case 'characterSelect':
+    case 'options':
     case 'nameEntry':
     case 'hiscores':
+    case 'achievements':
       return MUSIC.menu
-    default: // game / upgrade : la musique de jeu continue (boss prioritaire)
+    // Les seuls écrans de JEU : la musique de chantier tourne (boss prioritaire).
+    case 'game':
+    case 'upgrade':
       if (ctx.bossPresent) {
         return MUSIC.boss
       }
       return STAGE_MUSIC[ctx.stageId] ?? MUSIC.stage_01
+    default: {
+      // Écran non classé → le build casse ICI, à la compilation.
+      const jamais: never = ctx.screen
+      return jamais
+    }
   }
 }
