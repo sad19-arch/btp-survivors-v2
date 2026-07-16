@@ -857,6 +857,12 @@ export class GameScene extends Phaser.Scene {
       }
       // Sonde perf (test/overlay only) : snapshot du profileur de temps de frame.
       this.seam.debugPerfProfile = (): PerfSnapshot => this.perfSnapshot()
+      // Sonde Carnage (test-only) : état RÉEL du renderer — `active` (que le toggle
+      // ne propage qu'au prochain update()), `alive` et le plafond de la plateforme.
+      this.seam.debugCarnageInfo = (): { active: boolean; alive: number; cap: number } | null =>
+        this.carnage === null
+          ? null
+          : { active: this.carnage.isActive, alive: this.carnage.aliveCount, cap: this.carnage.cap }
     }
   }
 

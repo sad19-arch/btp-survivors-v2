@@ -122,6 +122,26 @@ export interface GameSeam {
    * montée. Test/overlay only — n'affecte jamais la simulation.
    */
   debugPerfProfile?(): PerfSnapshot | null
+  /**
+   * [Debug/Carnage] Sonde DIRECTE du `CarnageRenderer` (posée par la GameScene).
+   *
+   * Elle existe parce que sans elle un test ne peut que DEVINER — et devinait faux
+   * sur les trois points à la fois :
+   *
+   * - `active` : `debugCarnage(on)` n'écrit que l'état de l'App ; le renderer ne
+   *   l'apprend qu'au prochain `update()` (rAF). Un test qui enchaîne le toggle et
+   *   un massacre SYNCHRONE (un `page.evaluate` ne laisse jamais passer de frame)
+   *   joue à pile ou face avec le tick rAF — d'où un test intermittent.
+   *   `active` rend l'attente OBSERVABLE au lieu d'espérée.
+   * - `alive` : le compteur perf `bloodPools` n'est publié qu'en fin d'`update()`,
+   *   il a donc toujours une frame de retard. Ici, c'est la valeur réelle.
+   * - `cap` : dépend de la plateforme (140 tactile / 320 desktop). Un test qui code
+   *   le chiffre en dur teste le mauvais plafond sur l'autre plateforme.
+   *
+   * `null` si la scène n'est pas montée ou en mode allégé (`lite` : pas d'assets
+   * de sang chargés, donc aucune flaque possible).
+   */
+  debugCarnageInfo?(): { active: boolean; alive: number; cap: number } | null
 }
 
 declare global {
