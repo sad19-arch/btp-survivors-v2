@@ -43,9 +43,21 @@ replié). Avec `repeat: -1`, Phaser saute de la dernière frame à la première 
 à-coup visible. **Packer en ALLER-RETOUR** (0-1-2-3-4-5-6-5-4-3-2-1 = 12 frames à
 partir de 7) → boucle continue, coût nul. Vérifié sur la pelleteuse.
 
-Ne s'applique PAS aux animations cycliques par nature (cuve qui tourne, chenilles
-qui défilent) : leur dernière frame raccorde déjà à la première. À vérifier
-frame par frame avant de packer.
+**MAIS ce n'est PAS universel — c'est la MESURE qui décide, animation par
+animation.** Vérifié : sur 4 animations produites, **3 sont naturellement
+cycliques** (benne 22,1 %/frame, roues 13,1 %, cuve 15,5 % — raccord 1,3-1,6× la
+moyenne = une transition normale). **Seule** la pelleteuse `_move` sortait à
+2,3× — et pas parce que les chenilles ne bouclent pas, mais parce que **le bras
+dérivait** (la dérive hors-brief acceptée par l'user). C'est la dérive qui
+cassait le cycle, pas le mécanisme.
+
+**Critère chiffré** : `raccord(dernière→première) > 2,2 × moyenne(frame→frame)`
+⇒ sens unique ⇒ packer en aller-retour. Sinon ⇒ **boucle directe**, 7 frames.
+Packer en aller-retour « au cas où » double la feuille (12 frames au lieu de 7)
+et la VRAM **pour rien**.
+
+⚠️ **Le script de packing doit décider PAR ANIMATION**, pas appliquer
+l'aller-retour en dur (erreur commise : `pack.mjs` avait `ORDER` codé en dur).
 
 ## Cible de proportions — À TENIR EXACTEMENT
 
@@ -59,7 +71,7 @@ ci-dessous. **La taille du fichier source n'a alors aucune importance.**
 | `struct_stage04_excavator` | stage04/props/mini_excavator.png | 192×192 | 1.1 | **211** | 2.13× | bras qui creuse |
 | `struct_stage06_nacelle` | stage06/props/boom_lift.png | 160×192 | 1.1 | **211** | 2.13× | nacelle monte/descend |
 | `struct_stage05_crane` | stage05/props/tower_crane.png | 256×256 | 1.2 | **307** | 3.10× | flèche qui pivote |
-| `struct_stage05_mixer` | stage05/props/mobile_crane.png | 224×192 | 1.05 | **202** | 2.04× | flèche qui pivote |
+| `struct_stage05_mixer` | stage05/props/mobile_crane.png ⚠️ | 224×192 | 1.05 | **202** | 2.04× | **cuve qui tourne** (2e TOUPIE) |
 | `struct_stage03_mixer` | stage03/props/mixer_truck.png | 384×256 ⚠️ | 0.72 | **184** | 1.86× | toupie qui tourne |
 | `struct_stage07_crane` | stage07/props/crane_truck.png | 269×158 ⚠️ | 1.15 | **182** | 1.84× | flèche |
 | `prop_s2_truck` | stage02/props/dump_truck.png | 192×160 | 1.05 | **168** | 1.70× | roule / benne bascule |
@@ -67,7 +79,41 @@ ci-dessous. **La taille du fichier source n'a alors aucune importance.**
 | `prop_stage03_concrete_mixer` | stage03/props/concrete_mixer.png | 128×128 | 0.65 | **83** | 0.84× | cuve qui tourne |
 | `prop_stage05_crane_hook` | stage05/props/crane_hook.png | 96×96 | 0.8 | **77** | 0.78× | crochet qui balance |
 
-⚠️ = dépasse le plafond **256×256** du mode v3 de `animate_object` → régénérer plus petit.
+⚠️ (colonne px) = dépasse le plafond **256×256** du mode v3 de `animate_object` → régénérer plus petit.
+
+## ⚠️ LE NOM DU FICHIER MENT — vérifier l'IMAGE, pas la clé ni le chemin
+
+`stage05/props/mobile_crane.png` **n'est PAS une grue mobile** : c'est une
+**toupie à béton**. Vérifié en ouvrant le PNG, et confirmé par le commentaire du
+code lui-même (`stages.ts:703` : « 1 = mobile_crane (SE, ~315°) — *toupie
+livrant le béton* côté SE »). La CLÉ dit vrai (`struct_stage05_mixer`), le
+FICHIER porte un nom faux.
+
+**Conséquences** :
+- Le jeu a **DEUX toupies** (`struct_stage03_mixer` + `struct_stage05_mixer`) et
+  **AUCUNE grue mobile**. Une grue mobile générée serait un asset orphelin.
+- La cible de `struct_stage05_mixer` est **cuve qui tourne**, pas « flèche ».
+- **Il reste donc 10 engins, pas 11.**
+
+Erreur commise et rattrapée en regardant l'image. **Règle : ouvrir le PNG avant
+de prescrire une animation.** Un nom de fichier n'est pas une source de vérité.
+
+## ⚠️ DÉRIVE PIXELLAB : vue de côté sur les objets HAUTS
+
+Confirmé sur la grue à tour ET la grue mobile : malgré `NOT a side view, NOT a
+profile view` dans le prompt, PixelLab rend une **élévation plate** (flèche
+horizontale, mât vertical, zéro ombre, zéro profondeur). L'interdiction ne
+marche pas.
+
+**Parade** : décrire ce qui FAIT la 3/4 au lieu d'interdire la vue de côté —
+« la flèche court en DIAGONALE de haut-gauche à bas-droite en perspective
+fuyante », « on voit le DESSUS de la cabine », « une ombre portée sombre au sol
+sur le côté », « fort sentiment de regarder d'en haut ».
+
+**Étalon de comparaison = l'asset EXISTANT du jeu** (`stage05/props/tower_crane.png`
+a une vraie 3/4 : flèche diagonale, ombre portée, base en volume). L'utilisateur
+a été formel : « ceux qu'on a sont pas mal ». Une génération moins bonne que
+l'existant est une RÉGRESSION — la jeter, pas la livrer.
 
 ## Contraintes techniques mesurées
 
