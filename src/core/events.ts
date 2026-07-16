@@ -60,6 +60,33 @@ export class EnemyKilledEvent extends Event {
   }
 }
 
+/**
+ * UN ennemi précis est mort, avec le contexte de sa mort (Mode Carnage).
+ *
+ * `EnemyKilledEvent` ne porte qu'un compteur : impossible d'y accrocher une
+ * flaque, on ne sait pas OÙ. Cet événement transporte donc le lieu et le gabarit.
+ * Comme tous les événements de ce bloc : observation pure, dispatché en fin de
+ * pas, aucun effet sur l'état de la simulation.
+ *
+ * `dirX`/`dirY` = direction du dernier coup (déjà connue du système de recul),
+ * `weapon` = arme du dernier coup. Les deux sont optionnels : un ennemi peut
+ * mourir sans avoir jamais été frappé par une arme (goudron, contact).
+ */
+export class EnemyDiedEvent extends Event {
+  constructor(
+    readonly x: number,
+    readonly y: number,
+    readonly enemyType: string,
+    readonly isElite: boolean,
+    readonly bossRole: 'mid' | 'final' | undefined,
+    readonly weapon: string | undefined,
+    readonly dirX: number | undefined,
+    readonly dirY: number | undefined
+  ) {
+    super('enemyDied')
+  }
+}
+
 /** Un joueur a perdu des PV ce pas (pour un SFX de dégât). */
 export class PlayerHurtEvent extends Event {
   constructor() {

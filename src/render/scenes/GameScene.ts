@@ -7,6 +7,8 @@ import { routeInput, type FrameInput } from '@input/intents'
 import { buildPlayerInputs } from '@input/players'
 import { TouchInput } from '@input/touch'
 import { isTouchPrimary } from '@ui/responsive'
+import { CarnageRenderer, CARNAGE_REF_SCALE } from '@render/scenes/carnageRenderer'
+import { POOL_KEYS, SPLATTER_KEYS, DROP_CLUSTER_KEYS, type CarnageSize } from '@content/carnage'
 import { DESKTOP_ZOOM, type ViewportBus } from '@ui/viewport'
 import { WORLD } from '@content/config'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
@@ -29,7 +31,7 @@ import { SiteRenderer } from '@render/scenes/siteRenderer'
 import { SiteStructures, hasStructurePlan } from '@render/scenes/siteStructures'
 import { SiteWorkers } from '@render/scenes/siteWorkers'
 import { buildSiteLayout } from '@core/siteLayout'
-import { AuraPulseEvent, PrisonerFreedEvent, DestructibleBrokenEvent } from '@core/events'
+import { AuraPulseEvent, PrisonerFreedEvent, DestructibleBrokenEvent, EnemyDiedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
 import { DestructibleRenderer } from '@render/scenes/destructibleRenderer'
 import { destructibleDef, destructiblesForStage, COIN_PICKUP } from '@content/destructibles'
@@ -81,6 +83,8 @@ export class GameScene extends Phaser.Scene {
   private readonly camera = new CameraController(this)
   /** Effets visuels transitoires (extraits de GameScene) — observer-only, sans état de sim. */
   private readonly vfx = new VfxManager(this)
+  /** Rendu du Mode Carnage (null tant que la scène n'est pas créée). */
+  private carnage: CarnageRenderer | null = null
   /** Profileur de temps de frame render-side (perf mobile) — test/overlay only. */
   private readonly perf = new PerfProbe()
   /** Rendu du joueur/prisonniers/intro extrait de GameScene (détient les Maps/état joueur). */
@@ -241,6 +245,48 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * MODE CARNAGE : une mort → projection + flaque. Simple délégation ; toute la
+   * logique (plafonds, FIFO, variantes) vit dans `CarnageRenderer`.
+   *
+   * Seule décision prise ici : le GABARIT. La simulation n'a aucune notion de
+   * taille d'ennemi (`HITBOX.enemy` est une constante globale) — la seule échelle
+   * du projet est celle du SKIN, qui est une donnée de rendu. C'est donc au rendu,
+   * et à lui seul, de trancher.
+   */
+  private readonly onEnemyDied = (e: Event): void => {
+    if (this.carnage === null) {
+      return
+    }
+    const ev = e as EnemyDiedEvent
+    this.carnage.spawn({
+      x: ev.x,
+      y: ev.y,
+      size: this.sizeOf(ev),
+      weapon: ev.weapon,
+      dirX: ev.dirX,
+      dirY: ev.dirY
+    })
+  }
+
+  /** Gabarit d'un ennemi mort : rôle de boss > élite > échelle du skin. */
+  private sizeOf(ev: EnemyDiedEvent): CarnageSize {
+    if (ev.bossRole === 'final') {
+      return 'boss'
+    }
+    if (ev.bossRole === 'mid') {
+      return 'large'
+    }
+    if (ev.isElite) {
+      return 'large'
+    }
+    // La seule échelle du projet est celle du skin (`this.stage`, déjà résolu pour
+    // le hordeRenderer). Au-dessus de la référence → gabarit standard ; en dessous
+    // ou sans skin → petit.
+    const skinScale = this.stage.enemies[ev.enemyType]?.scale
+    return skinScale !== undefined && skinScale >= CARNAGE_REF_SCALE ? 'medium' : 'small'
+  }
+
+  /**
    * Zoom caméra de BASE courant, tiré de la source de vérité responsive
    * (ViewportBus, câblé par main.ts). Desktop : DESKTOP_ZOOM constant (parité
    * PC) ; tactile : adaptatif à l'écran. Repli DESKTOP_ZOOM sans bus (harness).
@@ -305,6 +351,25 @@ export class GameScene extends Phaser.Scene {
       this.load.image(d.assetKey, d.file)
       this.load.image(d.debrisKey, d.debrisFile)
       this.load.image(d.fragmentKey, d.fragmentFile) // fragments qui giclent à la casse (JUICE)
+    }
+    // Mode Carnage : flaques, projections et gouttes. Chargés inconditionnellement
+    // (le mode se déclenche au titre, la scène ne sait pas encore s'il est actif ;
+    // et les charger à chaud au moment du toggle ferait rater les premières morts).
+    // ~17 petits PNG — négligeable à côté des feuilles de personnages.
+    if (!this.lite) {
+      for (const keys of Object.values(POOL_KEYS)) {
+        for (const k of keys) {
+          this.load.image(k, `carnage/${k}.png`)
+        }
+      }
+      for (const keys of Object.values(SPLATTER_KEYS)) {
+        for (const k of keys) {
+          this.load.image(k, `carnage/${k}.png`)
+        }
+      }
+      for (const k of DROP_CLUSTER_KEYS) {
+        this.load.image(k, `carnage/${k}.png`)
+      }
     }
     // Landmark de bâtiment (image décor) — chargé comme les autres décors.
     if (this.stage.landmark !== undefined) {
@@ -457,6 +522,7 @@ export class GameScene extends Phaser.Scene {
     this.horde = new HordeRenderer(this, this.pool, this.vfx, this.damageNumbers)
     // Rendu du joueur/prisonniers/intro : instance fraîche par scène (détient les Maps/état joueur).
     this.players = new PlayerRenderer(this, this.vfx, this.camera, this.lite)
+    this.carnage = new CarnageRenderer(this, isTouchPrimary())
     // Rendu du télégraphe des formations (Task 10) : instance fraîche par scène.
     this.telegraph = new TelegraphRenderer(this)
     // Rendu des clusters de terrain (T5) : instance fraîche par scène.
@@ -709,11 +775,13 @@ export class GameScene extends Phaser.Scene {
     this.app.events.addEventListener('prisonerFreed', this.onPrisonerFreed)
     this.app.events.addEventListener('evolved', this.onEvolved)
     this.app.events.addEventListener('destructibleBroken', this.onDestructibleBroken)
+    this.app.events.addEventListener('enemyDied', this.onEnemyDied)
     this.events.once('shutdown', () => {
       this.app.events.removeEventListener('auraPulse', this.onAuraPulse)
       this.app.events.removeEventListener('prisonerFreed', this.onPrisonerFreed)
       this.app.events.removeEventListener('evolved', this.onEvolved)
       this.app.events.removeEventListener('destructibleBroken', this.onDestructibleBroken)
+      this.app.events.removeEventListener('enemyDied', this.onEnemyDied)
       this.telegraph.dispose()
       this.siteRenderer.dispose()
       this.siteStructures.dispose()
@@ -807,6 +875,17 @@ export class GameScene extends Phaser.Scene {
         this.decorStreamer.update(this.cameras.main)
       }
       this.siteStructures.update(this.cameras.main)
+    }
+    // Mode Carnage : le rendu suit l'état (le toggle se fait au titre, mais le
+    // flag survit à la partie). Les stats remontent à l'App CHAQUE frame — le
+    // rapport de fin est figé une fois, ce qui n'est pas remonté avant est perdu.
+    if (this.carnage !== null) {
+      this.carnage.setActive(st.carnage)
+      if (st.carnage) {
+        const s = this.carnage.getStats()
+        this.app.reportCarnage({ pools: s.pools, criticals: s.criticals, surfaceM2: s.surfaceM2 })
+      }
+      this.perf.count('bloodPools', this.carnage.aliveCount)
     }
     // Sonde perf (test/overlay only) : compteurs instantanés publiés en fin de frame.
     this.perf.count('enemies', st.enemies.length)

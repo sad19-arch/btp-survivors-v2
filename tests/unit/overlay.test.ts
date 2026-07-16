@@ -452,6 +452,7 @@ function makeDeathReport(overrides: Partial<import('@/app/appState').RunReport> 
     rescued: 0,
     rescueTotal: 5,
     podium: null,
+    carnage: null,
     ...overrides
   }
 }

@@ -15,6 +15,24 @@ export interface ReapResult {
 }
 
 /**
+ * Contexte de la mort d'UN ennemi, collecté pour la couche rendu (Mode Carnage).
+ *
+ * Rempli dans un out-param plutôt que renvoyé : même patron que
+ * `reapDestructibles`, et surtout **facultatif** — sans tableau fourni (headless,
+ * `npm run sim`), rien n'est collecté et le coût est nul.
+ */
+export interface DiedEnemy {
+  x: number
+  y: number
+  type: string
+  isElite: boolean
+  bossRole: 'mid' | 'final' | undefined
+  weapon: string | undefined
+  dirX: number | undefined
+  dirY: number | undefined
+}
+
+/**
  * Récolte les ennemis morts, quelle que soit la source de dégâts (projectile,
  * onde de marteau, lame de scie…). Centralise la mort en un seul endroit :
  * lâche une gemme d'XP (+ parfois un bonus), supprime l'entité et compte le kill.
@@ -24,7 +42,7 @@ export interface ReapResult {
  * Retourne un `ReapResult` : total kills + map kills par joueur (attribution par
  * dernier frappeur — `lastHitBy` posé aux sites de dégât).
  */
-export function reapDeadEnemies(world: World, lootRng?: Rng): ReapResult {
+export function reapDeadEnemies(world: World, lootRng?: Rng, died?: DiedEnemy[]): ReapResult {
   const dead: number[] = []
   for (const en of world.query('enemy', 'health')) {
     const health = world.get(en, 'health')
@@ -49,6 +67,20 @@ export function reapDeadEnemies(world: World, lootRng?: Rng): ReapResult {
       // Attribution du kill au dernier joueur ayant infligé des dégâts.
       if (ecomp.lastHitBy !== undefined) {
         killsByPlayer.set(ecomp.lastHitBy, (killsByPlayer.get(ecomp.lastHitBy) ?? 0) + 1)
+      }
+      // Contexte de mort pour le rendu (Mode Carnage). Collecté seulement si un
+      // tableau est fourni : en headless personne ne le demande, coût nul.
+      if (died !== undefined) {
+        died.push({
+          x: epos.x,
+          y: epos.y,
+          type: ecomp.type,
+          isElite: ecomp.isElite,
+          bossRole: ecomp.bossRole,
+          weapon: ecomp.lastHitWeapon,
+          dirX: ecomp.lastHitDir?.x,
+          dirY: ecomp.lastHitDir?.y
+        })
       }
     }
     world.despawn(en)

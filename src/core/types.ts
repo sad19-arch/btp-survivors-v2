@@ -121,6 +121,18 @@ export interface EnemyComp {
    * n'est pas attribué à un joueur individuel.
    */
   lastHitBy?: number
+  /**
+   * Id de l'arme du dernier coup reçu. DONNÉE MORTE pour la simulation : aucun
+   * système ne la lit, elle n'entre dans aucun calcul. Elle n'existe que pour être
+   * relue à la mort par la couche rendu (Mode Carnage : la scie gicle en long, le
+   * marteau en radial). Absente si l'ennemi n'a jamais été touché par une arme.
+   */
+  lastHitWeapon?: string
+  /**
+   * Direction du dernier coup reçu (déjà calculée par le recul). Même statut que
+   * `lastHitWeapon` : purement descriptif, jamais relu par la simulation.
+   */
+  lastHitDir?: Vec2
 }
 
 /** Types de pickups ramassables. */

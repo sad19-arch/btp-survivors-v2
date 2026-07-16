@@ -60,6 +60,21 @@ export interface RunReport {
    * distinguer, et surtout personne à charrier.
    */
   podium: RunReportPodium | null
+  /** Bilan du Mode Carnage ; `null` si le mode n'a pas été activé de la run. */
+  carnage: RunReportCarnage | null
+}
+
+/**
+ * Bilan du Mode Carnage (brief §12). `null` si le mode n'a pas été activé — le
+ * rapport n'en dit alors pas un mot, comme si le secret n'existait pas.
+ */
+export interface RunReportCarnage {
+  /** Flaques posées sur la run (cumul, pas le nombre encore visible). */
+  pools: number
+  /** Morts « critiques » (les rares, ~4 %). */
+  criticals: number
+  /** Surface repeinte, en m² — estimation volontairement fantaisiste. */
+  surfaceM2: number
 }
 
 /** Podium de fin de run (co-op uniquement) : qui a porté l'équipe, qui a tenu la lampe. */
@@ -161,8 +176,11 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   players: AppPlayerState[]
   screen: Screen
   menu: MenuView | null
-  /** Skin doré débloqué (code Konami au titre) — cosmétique, session. */
+  /** Skin doré débloqué — cosmétique, session. Son déclencheur est en attente
+   *  (le Konami active désormais le Mode Carnage). */
   goldSkin: boolean
+  /** Mode Carnage actif (secret, Konami au titre) — cosmétique, hors simulation. */
+  carnage: boolean
   /** Identifiant de run (incrémenté à chaque partie/restart) — le rendu s'en sert pour repartir propre. */
   runId: number
   /** Intro de run en cours (sim gelée, micro-animation d'entrée). */

@@ -35,6 +35,10 @@ export interface GameSeam {
     opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] },
     playerId?: number
   ): void
+  /** [Debug] Bascule le Mode Carnage (secret Konami) sans rejouer la séquence. */
+  debugCarnage(on: boolean): void
+  /** [Debug] Débloque le casque doré (son déclencheur de jeu est en attente). */
+  debugUnlockGold(): void
   /** [Debug] Ajoute de l'XP à un joueur (1 par défaut) — force un level-up déterministe. */
   debugAddXp(amount: number, playerId?: number): void
   /**
@@ -172,6 +176,12 @@ export function createSeam(app: App): GameSeam {
     // --- helpers de debug (test-only) ---
     debugGrant: (opts, playerId = 1) => {
       app.debugGrant(opts, playerId)
+    },
+    debugCarnage: (on: boolean) => {
+      app.debugCarnage(on)
+    },
+    debugUnlockGold: () => {
+      app.debugUnlockGold()
     },
     debugAddXp: (amount: number, playerId = 1) => {
       app.debugAddXp(amount, playerId)

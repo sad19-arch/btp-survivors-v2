@@ -3,6 +3,7 @@ import {
   AuraPulseEvent,
   PrisonerFreedEvent,
   EnemyKilledEvent,
+  EnemyDiedEvent,
   PlayerHurtEvent,
   LevelUpEvent,
   WeaponFiredEvent,
@@ -89,8 +90,22 @@ export class App {
   private started = false
   private readonly focus = new FocusModel()
   private focusKey = ''
-  /** Skin doré débloqué via le code Konami (cosmétique, mémoire de session). */
+  /**
+   * Skin doré (cosmétique, mémoire de session).
+   *
+   * Le code Konami active désormais le MODE CARNAGE ; le casque doré attend un
+   * nouveau déclencheur. Toute sa machinerie est intacte (feuilles `player_gold`,
+   * `walkTextureKey`/`idleTextureKey` côté rendu) : seul le déclencheur manque.
+   * `debugUnlockGold()` (seam) permet de l'exercer en test en attendant.
+   */
   private goldSkin = false
+  /**
+   * Mode Carnage actif (secret, code Konami au titre). Cosmétique et hors sim :
+   * `src/core` ignore ce flag, comme il ignore `goldSkin`.
+   */
+  private carnage = false
+  /** Compteurs du Mode Carnage sur la run, alimentés par le rendu (pour le rapport). */
+  private carnageStats: { pools: number; criticals: number; surfaceM2: number } | null = null
   /** Historique des dernières actions au titre, pour détecter le code Konami. */
   private comboBuffer: ComboAction[] = []
   /** Intro activée (vrai joueur) ; désactivée en test/e2e/capture. */
@@ -177,6 +192,12 @@ export class App {
     // Relais des événements sémantiques audio (sim → App → AudioDirector).
     this.sim.events.addEventListener('enemyKilled', (e) => {
       this.events.dispatchEvent(new EnemyKilledEvent((e as EnemyKilledEvent).count))
+    })
+    this.sim.events.addEventListener('enemyDied', (e) => {
+      const d = e as EnemyDiedEvent
+      this.events.dispatchEvent(
+        new EnemyDiedEvent(d.x, d.y, d.enemyType, d.isElite, d.bossRole, d.weapon, d.dirX, d.dirY)
+      )
     })
     this.sim.events.addEventListener('playerHurt', () => { this.events.dispatchEvent(new PlayerHurtEvent()) })
     this.sim.events.addEventListener('levelUp', () => { this.events.dispatchEvent(new LevelUpEvent()) })
@@ -446,6 +467,33 @@ export class App {
   }
 
   /**
+   * Le rendu publie ici son bilan Carnage (il seul sait combien de flaques il a
+   * posées). Appelé chaque frame pendant la run : le rapport de fin est figé une
+   * fois, donc ce qui n'est pas remonté AVANT la mort est perdu.
+   */
+  reportCarnage(stats: { pools: number; criticals: number; surfaceM2: number }): void {
+    this.carnageStats = stats
+  }
+
+  /** [Debug/seam] Bascule le Mode Carnage sans rejouer le Konami. */
+  debugCarnage(on: boolean): void {
+    this.bumpState()
+    this.carnage = on
+  }
+
+  /**
+   * [Debug/seam] Débloque le casque doré.
+   *
+   * Le Konami donne maintenant le Carnage : sans ce helper, toute la chaîne de
+   * rendu du skin doré (`player_gold`, `walkTextureKey`…) deviendrait du code
+   * mort intestable en attendant son nouveau déclencheur.
+   */
+  debugUnlockGold(): void {
+    this.bumpState()
+    this.goldSkin = true
+  }
+
+  /**
    * [Debug/seam] Simule « le joueur N presse VALIDER ».
    *
    * `confirm()` du seam est un appel système, jamais filtré — il ne peut donc pas
@@ -502,8 +550,20 @@ export class App {
    * la séquence vient d'être complétée à cet appel (le débloquage doit consommer
    * la touche pour ne pas déclencher aussi l'item de menu focalisé).
    */
+  /**
+   * Alimente le code Konami. Renvoie vrai si le code vient d'être complété — auquel
+   * cas `confirm()` consomme la touche (sinon le « A » final lancerait la partie).
+   *
+   * Le code BASCULE le Mode Carnage : le rejouer le désactive (brief §3.3). D'où
+   * la disparition de la garde « une seule fois » qui existait pour le casque doré.
+   *
+   * ⚠️ Limite assumée : la saisie n'est possible qu'AU TITRE. Le buffer est
+   * alimenté par les intents de menu (`nav`/`back`/`confirm`), qui n'existent pas
+   * en jeu ; et sur l'écran de pause, le « B » de la séquence reprendrait la
+   * partie. On active/désactive donc avant de lancer, pas en cours de run.
+   */
   private recordCombo(action: ComboAction): boolean {
-    if (this.screen !== 'title' || this.goldSkin) {
+    if (this.screen !== 'title') {
       return false
     }
     this.comboBuffer.push(action)
@@ -511,7 +571,7 @@ export class App {
       this.comboBuffer.shift()
     }
     if (this.comboBuffer.length === KONAMI.length && KONAMI.every((a, i) => this.comboBuffer[i] === a)) {
-      this.goldSkin = true
+      this.carnage = !this.carnage
       this.comboBuffer = []
       return true
     }
@@ -584,7 +644,10 @@ export class App {
                 ...podiumPick,
                 praise: selectPraiseQuote({ roll: Math.random() }),
                 mock: selectMockQuote({ roll: Math.random() })
-              }
+              },
+        // Bilan Carnage : `null` si le mode n'a jamais été activé — le rapport
+        // n'en souffle alors pas un mot, le secret reste un secret.
+        carnage: this.carnageStats
       }
     }
     return {
@@ -594,6 +657,7 @@ export class App {
       screen,
       menu: this.menu(screen),
       goldSkin: this.goldSkin,
+      carnage: this.carnage,
       runId: this.runId,
       introActive: this.introMsLeft > 0,
       stageTitle: phase?.title ?? '—',
