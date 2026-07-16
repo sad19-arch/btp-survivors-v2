@@ -455,7 +455,19 @@ export class SiteWorkers {
 
     // Un chemin porte N marcheurs ÉTALÉS : le calcul (pur) vit dans
     // `planPathWalkers` ; ici on ne fait que créer un sprite par plan.
+    //
+    // DEUX décalages se composent, et ils ne font pas le même travail :
+    //  - `plan.phaseMs` étale les marcheurs D'UN MÊME chemin (cycle/count) ;
+    //  - `pathBase` désynchronise les chemins ENTRE EUX — sans lui, tous les
+    //    chemins à 1 marcheur démarreraient à la phase 0 et deux pistes
+    //    parallèles avanceraient au pas cadencé (l'ancien `jobIdx * PHASE_OFFSET_MS`
+    //    le faisait déjà ; le perdre serait une régression de variété).
+    const pathBases = new Map<string, number>()
     for (const plan of planPathWalkers(composed, worldW, worldH)) {
+      if (!pathBases.has(plan.pathId)) {
+        pathBases.set(plan.pathId, pathBases.size * PHASE_OFFSET_MS)
+      }
+      const pathBase = pathBases.get(plan.pathId) ?? 0
       const isTruck = plan.type === 'truck_path'
       // Skin explicite > défaut de la famille. Un skin absent des textures
       // chargées retombe sur le défaut : jamais d'écran vide, jamais de crash.
@@ -474,9 +486,7 @@ export class SiteWorkers {
         ax: first.x, ay: first.y, bx: first.x, by: first.y,
         speed: plan.speed,
         midX: mid.x, midY: mid.y,
-        // Étalement des marcheurs d'un MÊME chemin : la phase vient du plan
-        // (cycle/count), pas du compteur global de jobs.
-        phaseOffsetMs: plan.phaseMs,
+        phaseOffsetMs: pathBase + plan.phaseMs,
         points: plan.points,
         pauseMs: plan.pauseMs,
         oneWay: plan.oneWay
