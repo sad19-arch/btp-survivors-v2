@@ -734,7 +734,14 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private buildChildren(
-    elements: ReadonlyArray<{ assetKey: string; dx: number; dy: number; scale: number; flipX?: boolean }>,
+    elements: ReadonlyArray<{
+      assetKey: string
+      dx: number
+      dy: number
+      scale: number
+      flipX?: boolean
+      tile?: { w: number; h: number }
+    }>,
     flipX: boolean
   ): Phaser.GameObjects.GameObject[] {
     const children: Phaser.GameObjects.GameObject[] = []
@@ -748,6 +755,12 @@ export class EditorScene extends Phaser.Scene {
         continue
       }
       const flip = flipX !== (el.flipX === true)
+      // Plaque de sol : texture répétée (comme en jeu), et non étirée — l'éditeur
+      // doit montrer ce que le jeu rendra, sinon la compo ment.
+      if (el.tile !== undefined) {
+        children.push(this.add.tileSprite(dx, el.dy, el.tile.w * el.scale, el.tile.h * el.scale, el.assetKey))
+        continue
+      }
       if (asset?.sheet === true) {
         const spr = this.add.sprite(dx, el.dy, el.assetKey, 0).setScale(el.scale).setFlipX(flip)
         children.push(spr)

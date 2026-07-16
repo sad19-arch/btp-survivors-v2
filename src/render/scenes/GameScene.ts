@@ -12,7 +12,7 @@ import { POOL_KEYS, SPLATTER_KEYS, DROP_CLUSTER_KEYS, type CarnageSize } from '@
 import { DESKTOP_ZOOM, type ViewportBus } from '@ui/viewport'
 import { WORLD } from '@content/config'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
-import { createGround } from '@render/ground'
+import { createGround, groundTilesForLayout } from '@render/ground'
 import { createLandmark, createStructures, phaseSalt, resolvePlacement, type ExclusionCircle } from '@render/props'
 import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { resolveComposedLayout } from '@content/runtimeLayouts'
@@ -339,6 +339,12 @@ export class GameScene extends Phaser.Scene {
     for (const t of this.stage.ground) {
       this.load.image(t.key, t.file)
     }
+    // Sols d'AUTRES stages référencés par la compo (fond global `groundKey` ou
+    // plaques posées) : sans ce préchargement, la texture n'existe pas au moment
+    // du rendu et le sol choisi retomberait silencieusement sur celui du stage.
+    for (const t of groundTilesForLayout(resolveComposedLayout(this.loadedStageId))) {
+      this.load.image(t.key, t.file)
+    }
     for (const d of this.stage.decals) {
       this.load.image(d.key, d.file)
     }
@@ -537,11 +543,16 @@ export class GameScene extends Phaser.Scene {
     // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
     const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
     // Base du sol (TileSprite seul — décalques gérés par le DecorStreamer).
-    const groundAssets: { tileKeys: string[]; baseTileIndex?: number } = {
+    const groundAssets: { tileKeys: string[]; baseTileIndex?: number; overrideKey?: string } = {
       tileKeys: this.stage.ground.map((g) => g.key)
     }
     if (this.stage.baseTileIndex !== undefined) {
       groundAssets.baseTileIndex = this.stage.baseTileIndex
+    }
+    // Sol de fond choisi par la compo (éventuellement la tuile d'un AUTRE stage).
+    const composedGround = resolveComposedLayout(this.loadedStageId)?.groundKey
+    if (composedGround !== undefined) {
+      groundAssets.overrideKey = composedGround
     }
     createGround(this, WORLD.width, WORLD.height, groundAssets)
     // Streamer de décor : décalques + props streamés autour de la caméra par chunks de

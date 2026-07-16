@@ -5,7 +5,7 @@
  * Aucun Phaser, aucun DOM, aucun Math.random, aucune logique de placement.
  * Le placement (T2) et le rendu (T3) lisent ces données ; elles n'en dépendent pas.
  */
-import type { RenderLayer } from './stageLayout'
+import type { RenderLayer, TilePatch } from './stageLayout'
 
 /** Qui peut être bloqué par un élément. */
 export type CollideKind = 'both' | 'enemies' | 'none'
@@ -23,6 +23,8 @@ export interface ClusterElement {
   flipX?: boolean
   /** Couche d'affichage (rendu seul). Absent = déduite par le rendu. */
   layer?: RenderLayer
+  /** Si présent : texture RÉPÉTÉE sur w×h px (plaque de sol), et non étirée. */
+  tile?: TilePatch
   rotation?: number
   collide: CollideKind
   shape?: ObstacleShape // requis si collide !== 'none' ; interdit si 'none'

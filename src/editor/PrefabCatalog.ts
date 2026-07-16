@@ -14,6 +14,7 @@
 
 import { STAGE_RENDER, SHARED_WORKER_NPCS, CITY_BUILDINGS, type StageRender, type StageAmbientNpc } from '@render/stages'
 import { CLUSTERS } from '@content/clusters'
+import type { TilePatch } from '@content/stageLayout'
 import { destructiblesForStage } from '@content/destructibles'
 import { ZONE_DEFS } from './zones'
 
@@ -26,6 +27,8 @@ export interface PrefabElement {
   dy: number
   scale: number
   flipX?: boolean
+  /** Plaque de sol : texture RÉPÉTÉE sur w×h px (et non étirée). */
+  tile?: TilePatch
 }
 
 export type MarkerTool = 'spawn' | 'signature_zone' | 'worker_path' | 'truck_path' | 'zone_main_work' | 'zone_logistics' | 'zone_atmosphere'
@@ -88,6 +91,7 @@ export const STAGE_LIST: ReadonlyArray<{ id: string; label: string }> = [
 
 export const CATEGORIES: Category[] = [
   { id: 'scenes', label: 'Scènes principales' },
+  { id: 'sol', label: 'Sol (textures)' },
   { id: 'npc_metier', label: 'PNJ métier (fixe)' },
   { id: 'npc_ouvrier', label: 'PNJ ouvrier (mobile)' },
   { id: 'destructibles', label: 'Destructibles (cassables)' },
@@ -233,6 +237,33 @@ const MARKERS: PaletteEntry[] = [
   { id: 'marker_worker_path', label: 'Chemin ouvrier', category: 'workers', kind: 'marqueur', size: 'petite', marker: 'worker_path' }
 ]
 
+/**
+ * Côté d'une plaque de sol posée, en px monde (~4×4 tuiles de 64).
+ * L'utilisateur la redimensionne ensuite (échelle uniforme de l'instance).
+ */
+const GROUND_PATCH_SIZE = 256
+
+/**
+ * TOUTES les tuiles de sol de TOUS les stages, en assets PARTAGÉS.
+ *
+ * Le jeu en déclare 6 par stage (60 au total) et les charge toutes, mais
+ * `ground.ts` n'en rend qu'UNE — la tuile de base du stage courant. **50 étaient
+ * donc chargées puis jamais affichées.** On les rend posables, et cross-stage :
+ * c'est ce qui permet de mettre le sol du 05 sur le 01, sans une seule génération.
+ */
+const GROUND_TILE_ASSETS: EditorAsset[] = STAGE_LIST.flatMap(({ id, label }) => {
+  const sr = STAGE_RENDER[id]
+  if (sr === undefined) { return [] }
+  return sr.ground.map((g, i) => ({
+    key: g.key,
+    file: g.file,
+    // « Sol — 03 · Fondations (v2) » : le stage d'origine doit être lisible, sinon
+    // 60 entrées nommées « Sol » sont indiscernables.
+    label: `Sol — ${label}${i > 0 ? ` (v${i + 1})` : ''}`,
+    role: 'ground' as const
+  }))
+})
+
 /** Assets d'un stage, dérivés du manifeste de rendu du jeu. */
 function buildStageAssets(stageId: string): { assets: EditorAsset[]; groundKey: string | null } {
   const sr = STAGE_RENDER[stageId] ?? STAGE_RENDER.terrain_vierge
@@ -251,8 +282,10 @@ function buildStageAssets(stageId: string): { assets: EditorAsset[]; groundKey: 
 
   const groundTile = sr.ground[sr.baseTileIndex ?? 0] ?? sr.ground[0]
   const groundKey = groundTile?.key ?? null
-  if (groundTile !== undefined) {
-    add({ key: groundTile.key, file: groundTile.file, label: 'Sol', role: 'ground' })
+  // Les 60 tuiles (tous stages) : posables partout, et non plus la seule tuile
+  // de base du stage courant. `add` déduplique, donc celle du stage y est déjà.
+  for (const g of GROUND_TILE_ASSETS) {
+    add(g)
   }
   if (sr.landmark !== undefined) {
     add({ key: sr.landmark.key, file: sr.landmark.file, label: humanize(sr.landmark.file), role: 'landmark' })
@@ -306,6 +339,23 @@ function objectEntries(assets: EditorAsset[]): PaletteEntry[] {
   const out: PaletteEntry[] = []
   for (const a of assets) {
     if (a.role === 'ground') {
+      // Les sols étaient exclus de la palette (`continue` sec) : le stock existait
+      // mais restait impossible à poser. Ils deviennent des PLAQUES — texture
+      // répétée sur `tile`, non bloquante, sous les décalques.
+      out.push({
+        id: 'obj_' + a.key,
+        label: a.label,
+        category: 'sol',
+        kind: 'decor',
+        size: 'grande',
+        elements: [{
+          assetKey: a.key,
+          dx: 0,
+          dy: 0,
+          scale: 1.0,
+          tile: { w: GROUND_PATCH_SIZE, h: GROUND_PATCH_SIZE }
+        }]
+      })
       continue
     }
     const meta = assetMeta(a.key)

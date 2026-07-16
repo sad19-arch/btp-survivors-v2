@@ -42,7 +42,19 @@ export type EmbeddedShape =
  * mal préfixé (les tuiles `route_*` du kit de routes, par exemple) aurait hérité
  * du même bug silencieux. La couche est donc portée par la donnée, pas devinée.
  */
-export type RenderLayer = 'decal' | 'prop' | 'struct'
+export type RenderLayer = 'ground' | 'decal' | 'prop' | 'struct'
+
+/**
+ * Plaque de texture RÉPÉTÉE (TileSprite), en pixels monde.
+ *
+ * Sans ça, une tuile de sol 64×64 posée « en grand » serait une image ÉTIRÉE :
+ * 8× plus grosse et floue. Une plaque répète le motif — c'est ce qui distingue
+ * un sol d'un décor.
+ */
+export interface TilePatch {
+  w: number
+  h: number
+}
 
 export interface EmbeddedElement {
   assetKey: string
@@ -52,6 +64,8 @@ export interface EmbeddedElement {
   flipX?: boolean
   /** Couche d'affichage. Absent = déduite par le rendu (contenu hérité). */
   layer?: RenderLayer
+  /** Si présent : texture RÉPÉTÉE sur w×h px (plaque de sol), et non étirée. */
+  tile?: TilePatch
   /** Défaut : 'none' (décor). */
   collide?: 'none' | 'both' | 'enemies'
   /** Forme collidable (requise si collide ≠ 'none' ; sinon un cercle par défaut est déduit). */
@@ -127,6 +141,13 @@ export interface StageLayout {
   markers: LayoutMarker[]
   paths: LayoutPath[]
   npcs: LayoutNpc[]
+  /**
+   * Tuile du SOL DE FOND de la composition (clé d'asset, ex. `ground_stage05_2`).
+   *
+   * Permet de jouer le stage 01 sur le sol du 05. Absent = tuile de base du stage
+   * (comportement historique). C'est une donnée de RENDU : la sim ne la lit pas.
+   */
+  groundKey?: string
 }
 
 /** Layout vide par défaut (spawn au centre = origine composition). */

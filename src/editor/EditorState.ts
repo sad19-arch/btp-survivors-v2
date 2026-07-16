@@ -31,6 +31,7 @@ import type { RenderLayer } from '@content/stageLayout'
  */
 function layerForRole(role: AssetRole | undefined): RenderLayer | undefined {
   switch (role) {
+    case 'ground': return 'ground'
     case 'decal': return 'decal'
     case 'landmark':
     case 'structure':
@@ -599,6 +600,9 @@ export class EditorState {
         if (layer !== undefined) {
           e.layer = layer
         }
+        if (el.tile !== undefined) {
+          e.tile = { w: el.tile.w, h: el.tile.h }
+        }
         if (block) {
           e.shape = { kind: 'circle', r: Math.max(16, el.scale * 40) }
         }
@@ -618,6 +622,12 @@ export class EditorState {
         const scaled: EmbeddedElement = { ...e, scale: e.scale * s }
         if (scaled.shape?.kind === 'circle') {
           scaled.shape = { kind: 'circle', r: scaled.shape.r * s }
+        }
+        // Plaque de sol : agrandir couvre PLUS DE SURFACE, ça ne grossit pas le
+        // motif. L'échelle se cuit donc dans w/h, pas dans `scale` (que le rendu
+        // TileSprite ignore) — sinon redimensionner une plaque ne ferait rien.
+        if (scaled.tile !== undefined) {
+          scaled.tile = { w: scaled.tile.w * s, h: scaled.tile.h * s }
         }
         return scaled
       })

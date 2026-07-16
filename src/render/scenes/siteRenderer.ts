@@ -31,6 +31,13 @@ import type { ClusterElement } from '@content/clusters'
 // Constantes de profondeur DA 16-bit
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Plaques de sol posées à l'éditeur — ENTRE le sol de base (-10, TileSprite
+ * global) et les décalques (-9) : une plaque recouvre le sol du stage, mais
+ * les traces et marquages restent visibles par-dessus.
+ */
+const DEPTH_GROUND_PATCH = -9.5
+
 /** Décalques au sol (route, traces) — sous les props. */
 const DEPTH_DECAL = -9
 
@@ -63,6 +70,7 @@ function roadStyleFor(stageId: string): RoadStyle {
  */
 function depthFor(elem: ClusterElement): number {
   switch (elem.layer) {
+    case 'ground': return DEPTH_GROUND_PATCH
     case 'decal': return DEPTH_DECAL
     case 'struct': return DEPTH_STRUCT
     case 'prop': return DEPTH_PROP
@@ -89,7 +97,11 @@ function depthFor(elem: ClusterElement): number {
  */
 export class SiteRenderer {
   /** Sprites des clusters posés — détruits et recréés à chaque `reset()`. */
-  private sprites: Array<Phaser.GameObjects.Image | Phaser.GameObjects.Sprite> = []
+  // TileSprite : plaques de sol (texture répétée). Tous partagent `destroy()`,
+  // seul usage qu'en fait `reset()`.
+  private sprites: Array<
+    Phaser.GameObjects.Image | Phaser.GameObjects.Sprite | Phaser.GameObjects.TileSprite
+  > = []
 
   /** Objets du plan masse (clôtures/pistes/terre excavée) — même cycle de vie. */
   private planObjects: Phaser.GameObjects.GameObject[] = []
@@ -164,6 +176,18 @@ export class SiteRenderer {
         const ay = placed.y + ty(elem.dx, elem.dy)
 
         const shape = elem.shape
+
+        // Plaque de sol : texture RÉPÉTÉE sur w×h (TileSprite), pas étirée.
+        // Une tuile 64×64 « agrandie » en image serait floue et unique ; répétée,
+        // elle refait un vrai sol.
+        if (elem.tile !== undefined) {
+          const sp = this.scene.add
+            .tileSprite(ax, ay, elem.tile.w, elem.tile.h, elem.assetKey)
+            .setDepth(depthFor(elem))
+            .setRotation(rot + (elem.rotation ?? 0))
+          this.sprites.push(sp)
+          continue
+        }
 
         // Segments (clôtures) : positionner au milieu et orienter selon le segment.
         if (shape !== undefined && shape.kind === 'segment') {

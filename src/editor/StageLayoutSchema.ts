@@ -50,7 +50,13 @@ function parseElements(v: unknown): EmbeddedElement[] | undefined {
     // Couche de rendu : préserver, sinon un aller-retour sauvegarde/chargement
     // la perd et les routes/décals remontent à hauteur de prop (même classe de
     // bug que `destructible` juste en dessous).
-    if (o.layer === 'decal' || o.layer === 'prop' || o.layer === 'struct') {e.layer = o.layer}
+    if (o.layer === 'ground' || o.layer === 'decal' || o.layer === 'prop' || o.layer === 'struct') {e.layer = o.layer}
+    // Plaque de sol : sans ça, une plaque rechargée redeviendrait une image
+    // ÉTIRÉE de 64 px — le sol posé disparaîtrait à la première sauvegarde.
+    if (typeof o.tile === 'object' && o.tile !== null) {
+      const t = o.tile as Record<string, unknown>
+      if (typeof t.w === 'number' && typeof t.h === 'number') {e.tile = { w: t.w, h: t.h }}
+    }
     const shape = parseShape(o.shape)
     if (shape !== undefined) {e.shape = shape}
     // Objet DESTRUCTIBLE : préserver le routage vers les entités cassables (sim).
@@ -91,6 +97,11 @@ export function parseLayout(raw: string, fallbackStage: string): ParseResult {
 
   const cp = (d.cameraPreview ?? {}) as Record<string, unknown>
   base.cameraPreview = { width: num(cp.width, 1280), height: num(cp.height, 720) }
+
+  // Sol de fond choisi pour la compo (tuile d'un AUTRE stage possible).
+  if (typeof d.groundKey === 'string' && d.groundKey !== '') {
+    base.groundKey = d.groundKey
+  }
 
   if (Array.isArray(d.instances)) {
     base.instances = d.instances
