@@ -716,9 +716,21 @@ export class Simulation {
     this.rebuildEnemyGrid()
     weaponSystem(this.world, dtMs, pulses, fired, this.rng, this.enemyGrid)
     slowSystem(this.world, dtMs)
-    // Champ de flux : construit UNIQUEMENT si obstacles présents.
-    // Gate déterminisme : terrain_vierge (obstacles=[]) → flowField reste null
-    // → enemyAiSystem reçoit null → chemin de code actuel INCHANGÉ → sim:check diff 0.
+    // Champ de flux : construit UNIQUEMENT si des obstacles existent (sinon il n'y a
+    // rien à contourner et `enemyAiSystem` reçoit null = ligne droite vers le joueur).
+    //
+    // ⚠️ N'ALLEZ PAS CHERCHER ICI UNE GARDE DE DÉTERMINISME. Le commentaire qui vivait
+    // là l'affirmait — « terrain_vierge (obstacles=[]) → flowField reste null →
+    // sim:check diff 0 » — et c'était FAUX : terrain_vierge a reçu des clusters, et
+    // en porte aujourd'hui 36 (mesuré via `buildSiteLayout`, cf. STAGE_CLUSTERS dans
+    // `content/clusters.ts`). `sim:check` tourne sur le stage 01, voit donc collision
+    // ET champ de flux ; la baseline a été re-dérivée en conséquence. Raisonner sur
+    // l'ancienne affirmation menait droit à une fausse conclusion sur le déterminisme.
+    //
+    // Ce qui garantit RÉELLEMENT le déterminisme : `buildFlowField` est une fonction
+    // pure de (position, obstacles) — aucun RNG consommé, aucune horloge lue. Les
+    // obstacles viennent de `buildSiteLayout`, lui-même à seed. Même seed ⇒ mêmes
+    // obstacles ⇒ même champ ⇒ même partie. Le RNG des clusters est isolé (seed^0x51e0).
     if (this.obstacles.length > 0) {
       const leaderPos = this.getLeaderPosition()
       if (leaderPos !== null) {
