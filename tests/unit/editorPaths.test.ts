@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { EditorState } from '@/editor/EditorState'
 import { walkerSkinsFor, getStageCatalog } from '@/editor/PrefabCatalog'
+import { parseLayout } from '@/editor/StageLayoutSchema'
+import { planPathWalkers } from '@render/workerBehavior'
 import { PATH_LIMITS } from '@content/stageLayout'
 
 /**
@@ -96,6 +98,31 @@ describe('EditorState — réglages de chemin', () => {
     expect(got?.speed).toBe(200)
     expect(got?.pauseMs).toBe(3000)
     expect(got?.oneWay).toBe(true)
+  })
+
+  /**
+   * Le VRAI chemin de l'utilisateur : « Sauver (jouable) » sérialise via
+   * `exportGameJson` (et non `exportJson`) — c'est CE JSON que le jeu recharge
+   * (`applyUserLayouts` → `parseLayout` → `resolveComposedLayout` → siteWorkers).
+   * Ce test relie l'inspecteur aux marcheurs réellement créés : un maillon qui
+   * perdrait les réglages les rendrait inopérants sans la moindre erreur.
+   */
+  it('bout en bout : régler dans l’inspecteur → marcheurs réellement planifiés', () => {
+    const p = st.addPath('worker_path', [{ x: -100, y: 0 }, { x: 100, y: 0 }])
+    st.updatePath(p.id, { count: 3, speed: 100, pauseMs: 1000, skin: 'npc_ouvrier_erling' })
+
+    const res = parseLayout(st.exportGameJson(), 'terrain_vierge')
+    expect(res.ok).toBe(true)
+    const layout = res.layout
+    if (layout === undefined) {throw new Error('layout perdu')}
+
+    const plans = planPathWalkers(layout, 10240, 7680)
+    expect(plans.length).toBe(3)
+    expect(plans[0]?.skin).toBe('npc_ouvrier_erling')
+    expect(plans[0]?.speed).toBe(100)
+    expect(plans[0]?.pauseMs).toBe(1000)
+    // Étalés : 200px @100px/s = 2s ; cycle = 2*2 + 2*1 = 6s → 2000 ms d'écart.
+    expect(Math.round(plans[1]?.phaseMs ?? 0)).toBe(2000)
   })
 })
 
