@@ -14,7 +14,7 @@
 
 import { STAGE_RENDER, SHARED_WORKER_NPCS, CITY_BUILDINGS, type StageRender, type StageAmbientNpc } from '@render/stages'
 import { CLUSTERS } from '@content/clusters'
-import type { TilePatch } from '@content/stageLayout'
+import type { PathType, TilePatch } from '@content/stageLayout'
 import { destructiblesForStage } from '@content/destructibles'
 import { ZONE_DEFS } from './zones'
 
@@ -101,7 +101,7 @@ export const CATEGORIES: Category[] = [
   { id: 'baselife', label: 'Base vie légère' },
   { id: 'stocks', label: 'Stocks & logistique' },
   { id: 'routes', label: 'Routes & accès' },
-  { id: 'workers', label: 'Ouvriers & chemins' },
+  { id: 'workers', label: 'Chemins (trajets)' },
   { id: 'safety', label: 'Sécurité / barrières' },
   { id: 'decor', label: 'Décor secondaire' },
   { id: 'objects', label: 'Objets isolés avancés' },
@@ -239,7 +239,10 @@ const MARKERS: PaletteEntry[] = [
   ...ZONE_DEFS.map((z): PaletteEntry => ({
     id: 'marker_' + z.type, label: z.label, category: 'markers', kind: 'marqueur', size: 'grande', marker: z.type
   })),
-  { id: 'marker_truck_path', label: 'Chemin camion', category: 'markers', kind: 'marqueur', size: 'petite', marker: 'truck_path' },
+  // Les 2 outils de chemin vivent dans la MÊME section : « Chemin camion » était
+  // rangé dans « Marqueurs » et « Chemin ouvrier » dans « Ouvriers & chemins » —
+  // rien ne disait qu'ils allaient ensemble, ni même que le second existait.
+  { id: 'marker_truck_path', label: 'Chemin camion', category: 'workers', kind: 'marqueur', size: 'petite', marker: 'truck_path' },
   { id: 'marker_worker_path', label: 'Chemin ouvrier', category: 'workers', kind: 'marqueur', size: 'petite', marker: 'worker_path' }
 ]
 
@@ -612,4 +615,51 @@ export function editorAsset(key: string): EditorAsset | undefined {
 }
 export function paletteEntry(id: string): PaletteEntry | undefined {
   return active.entries.find((e) => e.id === id)
+}
+
+/**
+ * Sprites de véhicule utilisables comme marcheurs d'un chemin camion.
+ *
+ * Un seul aujourd'hui, et il n'est déclaré que par le stage 02 (`terrassement`) :
+ * c'est précisément la source de l'échec silencieux — sur les 9 autres stages, un
+ * chemin camion était ignoré sans un mot. `walkerSkinsFor` rend donc une liste
+ * VIDE là-bas, ce qui permet à l'inspecteur de le DIRE.
+ */
+const VEHICLE_SKINS: ReadonlyArray<{ key: string; label: string }> = [
+  { key: 'prop_s2_truck', label: 'Camion benne' }
+]
+
+/**
+ * Skins proposés pour les marcheurs d'un chemin, FILTRÉS par la famille.
+ *
+ * Le filtre n'est pas cosmétique : `type` décide de l'animation de marche et de
+ * l'orientation (`isCamion` dans siteWorkers). Un skin de camion sur un chemin
+ * d'ouvrier produirait un camion qui MARCHE.
+ */
+export function walkerSkinsFor(
+  stageId: string,
+  type: PathType
+): Array<{ key: string; label: string }> {
+  const sr = STAGE_RENDER[stageId]
+  if (type === 'truck_path') {
+    // Un véhicule n'est proposé que si le stage le charge VRAIMENT — et il faut
+    // balayer les 3 familles : `prop_s2_truck` est déclaré en `structures` (engin
+    // -héros posé une fois), pas en `props`. Ne regarder que `props` rendrait la
+    // liste vide PARTOUT, y compris sur le seul stage qui a un camion.
+    const loaded = new Set<string>()
+    for (const s of sr?.structures ?? []) {loaded.add(s.key)}
+    for (const p of sr?.props ?? []) {loaded.add(p.key)}
+    for (const e of sr?.editorExtras ?? []) {loaded.add(e.key)}
+    return VEHICLE_SKINS.filter((v) => loaded.has(v.key))
+  }
+  const out: Array<{ key: string; label: string }> = []
+  const seen = new Set<string>()
+  const push = (npc: StageAmbientNpc): void => {
+    if (seen.has(npc.key)) {return}
+    seen.add(npc.key)
+    out.push({ key: npc.key, label: assetMeta(npc.key)?.label ?? humanize(npc.file) })
+  }
+  for (const npc of sr?.ambient ?? []) {push(npc)}
+  for (const npc of SHARED_WORKER_NPCS) {push(npc)}
+  return out
 }
