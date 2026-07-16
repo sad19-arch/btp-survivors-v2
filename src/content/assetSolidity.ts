@@ -102,7 +102,45 @@ export const ASSET_SOLIDITY: Readonly<Record<string, Solidity>> = {
   // Stage 08 — second œuvre
   struct_stage08_van: { collide: 'both', shape: { kind: 'circle', r: 46 } }, // fourgon artisan
   // Stage 10 — livraison / audit
-  struct_stage10_van: { collide: 'both', shape: { kind: 'circle', r: 46 } } // fourgon d'inspection
+  struct_stage10_van: { collide: 'both', shape: { kind: 'circle', r: 46 } }, // fourgon d'inspection
+
+  // ── PACK « PALETTE » (décor partagé, `public/palette/*`) ───────────────────
+  // Règle appliquée, la même que ci-dessus : on DÉCLARE ce qui est un corps
+  // physique — véhicule, machine, volume habitable, barrière, masse de béton —
+  // et on laisse traversable tout ce qu'un ouvrier enjambe ou écrase (herbe,
+  // feuilles, sacs, marquages au sol).
+  //
+  // ⚠️ Le silence est une DÉCISION, pas un oubli : les arbres du jeu
+  // (`prop_stage01_tree_a/b`) ne sont PAS déclarés, donc traversables. Rendre les
+  // arbres du pack solides créerait deux arbres au comportement opposé dans la
+  // même palette. On garde la cohérence ; si la décision produit doit changer,
+  // elle doit changer pour TOUS les arbres, ici, en un seul endroit.
+
+  // Engins & machines — corps lourds, ils arrêtent joueur ET ennemis.
+  pal_van: { collide: 'both', shape: { kind: 'circle', r: 50 } }, // camionnette
+  pal_site_dumper: { collide: 'both', shape: { kind: 'circle', r: 46 } }, // dumper
+  pal_forklift: { collide: 'both', shape: { kind: 'circle', r: 42 } }, // chariot élévateur
+  pal_plant_trailer: { collide: 'both', shape: { kind: 'circle', r: 44 } }, // remorque
+  pal_generator: { collide: 'both', shape: { kind: 'circle', r: 32 } }, // groupe électrogène
+  pal_air_compressor: { collide: 'both', shape: { kind: 'circle', r: 34 } }, // compresseur
+  pal_water_tank: { collide: 'both', shape: { kind: 'circle', r: 40 } }, // citerne
+
+  // Volumes habitables — un bungalow n'est pas un décor qu'on traverse.
+  pal_site_office: { collide: 'both', shape: { kind: 'circle', r: 58 } },
+  pal_site_canteen: { collide: 'both', shape: { kind: 'circle', r: 58 } },
+  pal_site_changing_room: { collide: 'both', shape: { kind: 'circle', r: 56 } },
+  pal_scaffold_bay: { collide: 'both', shape: { kind: 'circle', r: 40 } },
+  pal_bus_shelter: { collide: 'both', shape: { kind: 'circle', r: 46 } },
+
+  // Barrières — des MURS : un segment orienté, jamais un disque (cf. `fence_panel`).
+  pal_jersey_barrier: { collide: 'both', shape: { kind: 'segment', x2: 120, y2: 0, thickness: 14 } }, // GBA
+  pal_farm_fence: { collide: 'both', shape: { kind: 'segment', x2: 150, y2: 0, thickness: 8 } }, // clôture agricole
+
+  // Masses de béton / mobilier scellé.
+  pal_culvert_pipes: { collide: 'both', shape: { kind: 'circle', r: 40 } }, // buses béton
+  pal_rubble_skip: { collide: 'both', shape: { kind: 'circle', r: 48 } }, // benne à gravats
+  pal_electrical_cabinet: { collide: 'both', shape: { kind: 'circle', r: 24 } }, // coffret élec.
+  pal_site_locker: { collide: 'both', shape: { kind: 'circle', r: 26 } } // armoire de chantier
 }
 
 /** Solidité DÉCLARÉE d'un asset, ou `undefined` s'il n'est pas déclaré. */
