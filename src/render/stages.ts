@@ -214,11 +214,34 @@ export const DEFAULT_STAGE = 'terrain_vierge'
  * Exposés dans l'éditeur sur chaque stage (section « PNJ ouvrier (mobile) ») et
  * préchargés par GameScene partout. Les 3 variantes = diversité (maghrébin/black/est).
  */
+/**
+ * Ouvriers génériques, partagés par les 10 stages. Ils portent des PRÉNOMS et
+ * non « A/B/C » : les trois sprites sont visuellement distincts (peau mate et
+ * moustache · peau noire · blond), mais leurs anciens noms ne le disaient pas —
+ * dans la palette, il fallait cliquer pour découvrir qui on posait.
+ */
 export const SHARED_WORKER_NPCS: StageAmbientNpc[] = [
-  { key: 'npc_ouvrier_a', file: 'stage01/npc/ouvrier_a_walk.png', frame: 192, scale: 0.62, framePeriodMs: 200, behavior: 'patrol', kind: 'worker' },
-  { key: 'npc_ouvrier_b', file: 'stage01/npc/ouvrier_b_walk.png', frame: 192, scale: 0.62, framePeriodMs: 200, behavior: 'patrol', kind: 'worker' },
-  { key: 'npc_ouvrier_c', file: 'stage01/npc/ouvrier_c_walk.png', frame: 192, scale: 0.62, framePeriodMs: 200, behavior: 'patrol', kind: 'worker' }
+  { key: 'npc_ouvrier_zinedine', file: 'stage01/npc/ouvrier_zinedine_walk.png', frame: 192, scale: 0.62, framePeriodMs: 200, behavior: 'patrol', kind: 'worker' },
+  { key: 'npc_ouvrier_marius', file: 'stage01/npc/ouvrier_marius_walk.png', frame: 192, scale: 0.62, framePeriodMs: 200, behavior: 'patrol', kind: 'worker' },
+  { key: 'npc_ouvrier_erling', file: 'stage01/npc/ouvrier_erling_walk.png', frame: 192, scale: 0.62, framePeriodMs: 200, behavior: 'patrol', kind: 'worker' }
 ]
+
+/**
+ * Anciennes clés → nouvelles. **Ne pas supprimer** : des compositions déjà
+ * sauvegardées posent des PNJ sous `npc_ouvrier_a/b/c`. Sans cette table, elles
+ * ne résolvent plus et les PNJ disparaissent SANS la moindre erreur — le rendu
+ * teste `textures.exists(skin)` puis `continue` en silence.
+ */
+export const WORKER_SKIN_ALIASES: Record<string, string> = {
+  npc_ouvrier_a: 'npc_ouvrier_zinedine',
+  npc_ouvrier_b: 'npc_ouvrier_marius',
+  npc_ouvrier_c: 'npc_ouvrier_erling'
+}
+
+/** Résout un skin d'ouvrier via les alias. Clé inconnue → rendue telle quelle. */
+export function resolveWorkerSkin(key: string): string {
+  return WORKER_SKIN_ALIASES[key] ?? key
+}
 
 /** Boss stage 01 (ground_keeper), réutilisé tant qu'un stage n'a pas son skin propre. */
 const GROUND_KEEPER: StageEnemySprite = {

@@ -189,7 +189,13 @@ const ASSET_META: Record<string, { label: string; category: string }> = {
   building_lyon_canut: { label: 'Immeuble canut', category: 'buildings' },
   building_lyon_bouchon: { label: 'Bouchon lyonnais', category: 'buildings' },
   building_lyon_fourviere: { label: 'Basilique de Fourvière', category: 'buildings' },
-  building_lyon_hotel_dieu: { label: 'Grand Hôtel-Dieu', category: 'buildings' }
+  building_lyon_hotel_dieu: { label: 'Grand Hôtel-Dieu', category: 'buildings' },
+
+  // Ouvriers génériques : les 3 sprites sont distincts, leurs anciens noms
+  // « A/B/C » ne le disaient pas. Le prénom se lit dans la palette sans cliquer.
+  npc_ouvrier_zinedine: { label: 'Ouvrier — Zinedine', category: 'npc_ouvrier' },
+  npc_ouvrier_marius: { label: 'Ouvrier — Marius', category: 'npc_ouvrier' },
+  npc_ouvrier_erling: { label: 'Ouvrier — Erling', category: 'npc_ouvrier' }
 }
 
 /** Méta (label FR + catégorie) d'un asset, ou null si non répertorié. */
@@ -391,7 +397,9 @@ function npcEntries(sr: StageRender | undefined): PaletteEntry[] {
     const kind: 'trade' | 'worker' = npc.kind === 'worker' ? 'worker' : 'trade'
     out.push({
       id: 'npc_' + npc.key,
-      label: humanize(npc.file),
+      // `assetMeta` d'abord : le nom de fichier humanisé donnerait « Ouvrier
+      // Zinedine Walk ». Le prénom ne sert à rien s'il arrive noyé dans du bruit.
+      label: assetMeta(npc.key)?.label ?? humanize(npc.file),
       category: kind === 'worker' ? 'npc_ouvrier' : 'npc_metier',
       kind: 'objet',
       size: 'moyenne',

@@ -14,6 +14,7 @@ import { activeAssets, activeGroundKey, editorAsset, paletteEntry, setActiveStag
 import { EditorState } from './EditorState'
 import type { Vec2, MarkerType } from './StageLayoutSchema'
 import { ZONE_DEFS, isZoneType } from './zones'
+import { resolveWorkerSkin } from '@render/stages'
 
 /** Zoom de jeu réel (identique à CameraController.SOLO_ZOOM). */
 const GAME_ZOOM = 1.2
@@ -820,10 +821,14 @@ export class EditorScene extends Phaser.Scene {
       seen.add(npc.id)
       const wx = OFFSET_X + npc.x
       const wy = OFFSET_Y + npc.y
+      // Alias : un brouillon d'avant le renommage pose `npc_ouvrier_a/b/c`.
+      // Sans résolution, `textures.exists` échoue et l'éditeur afficherait un
+      // placeholder à la place des 19 ouvriers déjà posés.
+      const skin = resolveWorkerSkin(npc.skin)
       let view = this.npcViews.get(npc.id)
-      if (view === undefined || view.skin !== npc.skin) {
+      if (view === undefined || view.skin !== skin) {
         view?.container.destroy()
-        view = { container: this.buildNpcView(npc.skin, npc.kind), skin: npc.skin }
+        view = { container: this.buildNpcView(skin, npc.kind), skin }
         this.npcViews.set(npc.id, view)
       }
       view.container.setPosition(wx, wy)

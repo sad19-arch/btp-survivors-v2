@@ -6,6 +6,7 @@
  */
 
 import { PATH_DEFAULT_SPEED, PATH_LIMITS, type PathType, type StageLayout } from '@content/stageLayout'
+import { resolveWorkerSkin } from '@render/stages'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes exportées (testables)
@@ -436,7 +437,8 @@ export function planPathWalkers(
         // `skin: ''` (l'inspecteur remet « (défaut) » en chaîne vide) doit valoir
         // « aucun skin » : sinon le rendu chercherait une texture nommée '' et
         // le marcheur disparaîtrait au lieu de retomber sur le défaut.
-        skin: p.skin !== undefined && p.skin !== '' ? p.skin : null,
+        // Alias : une compo d'avant le renommage peut porter `npc_ouvrier_a/b/c`.
+        skin: p.skin !== undefined && p.skin !== '' ? resolveWorkerSkin(p.skin) : null,
         points,
         speed,
         pauseMs,
@@ -464,6 +466,8 @@ export function planNpcJobs(
     role: n.kind === 'worker' ? 'npc_worker' : 'npc_trade',
     x: offX + n.x,
     y: offY + n.y,
-    skin: n.skin
+    // Alias : une compo sauvegardée avant le renommage pose encore
+    // `npc_ouvrier_a/b/c`. Sans cette résolution, ses PNJ disparaissent.
+    skin: resolveWorkerSkin(n.skin)
   }))
 }
