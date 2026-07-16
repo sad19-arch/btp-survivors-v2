@@ -10,6 +10,7 @@ import { cardEnterStyle } from './cardEnter'
 import { readHiScore } from './hiscore'
 import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { WEAPONS } from '@content/weapons'
+import { STAR_SLOTS } from '@content/stars'
 import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView } from '@/app/appState'
 
 /**
@@ -1041,9 +1042,14 @@ export class Overlay {
     const markerPct = Math.max(3, Math.min(report.progressPercent, 94))
     const markerImg = h('img', { className: 'report__marker', attrs: { src: 'ui_death_marker.png', alt: '' } })
     markerImg.style.left = `${markerPct}%`
+    // La jauge, elle, n'est PAS clampée : 0 % et 100 % doivent être exacts, sinon
+    // « chantier livré » afficherait une barre incomplète.
+    const fill = h('div', { className: 'report__fill', attrs: { 'aria-hidden': 'true' } })
+    fill.style.width = `${report.progressPercent}%`
     const bar = h(
       'div',
       { className: 'report__bar' },
+      fill,
       h('img', { className: 'report__start', attrs: { src: 'ui_death_start.png', alt: '' } }),
       markerImg,
       h('img', { className: 'report__end', attrs: { src: 'ui_death_flag.png', alt: '' } })
@@ -1071,21 +1077,55 @@ export class Overlay {
       // Décor festif (rayons tournants) — derrière le contenu, purement cosmétique.
       panel.append(h('div', { className: 'report__rays', attrs: { 'aria-hidden': 'true' } }))
     }
-    panel.append(title, quoteEl, bar, stats)
+    panel.append(title, this.starRow(report.stars), quoteEl, bar, stats)
     // Co-op : récap par joueur (avant, le détail par joueur n'existait sur AUCUN écran).
     if (report.perPlayer.length > 1) {
       const rows = h('div', { className: 'report__players' })
+      const podium = report.podium
       for (const p of report.perPlayer) {
         const row = h('div', { className: p.alive ? 'report__prow' : 'report__prow report__prow--dead' })
         const tag = h('span', { className: 'report__pid', text: `J${p.id}` })
         tag.style.color = playerColor(p.id).hex
         row.append(tag, h('span', { text: `${formatNumber(p.kills)} tués` }), h('span', { text: `Nv ${p.level}` }))
+        // Podium : trophée au meilleur tueur, croix au dernier — jamais les deux
+        // sur la même ligne (`selectPodium` renvoie null si tout le monde est à
+        // égalité, et n'existe pas en solo).
+        if (podium !== null && p.id === podium.bestId) {
+          row.append(
+            h('img', { className: 'report__trophy', attrs: { src: 'ui_trophy.png', alt: 'Meilleur tueur' } }),
+            h('span', { className: 'report__verdict report__verdict--praise', text: podium.praise })
+          )
+        } else if (podium !== null && p.id === podium.worstId) {
+          row.append(
+            h('img', { className: 'report__cross', attrs: { src: 'ui_cross_red.png', alt: 'Dernier' } }),
+            h('span', { className: 'report__verdict report__verdict--mock', text: podium.mock })
+          )
+        }
         rows.append(row)
       }
       panel.append(rows)
     }
     panel.append(this.menuList(state))
     return h('div', { className: 'screen' }, panel)
+  }
+
+  /**
+   * Rangée d'étoiles de fin de stage : toujours 3 emplacements, les non gagnées
+   * restant visibles en gris — le joueur doit VOIR ce qu'il a raté, sinon la note
+   * n'incite à rien.
+   */
+  private starRow(stars: number): HTMLElement {
+    const row = h('div', { className: 'report__stars', attrs: { 'aria-label': `${stars} étoile(s) sur ${STAR_SLOTS}` } })
+    for (let i = 0; i < STAR_SLOTS; i++) {
+      const earned = i < stars
+      row.append(
+        h('img', {
+          className: earned ? 'report__star report__star--on' : 'report__star',
+          attrs: { src: earned ? 'ui_star_on.png' : 'ui_star_off.png', alt: '' }
+        })
+      )
+    }
+    return row
   }
 
   private upgradePanel(state: AppViewState): HTMLElement {
@@ -1095,18 +1135,34 @@ export class Overlay {
     items.forEach((item, i) => {
       cards.append(this.card(item, i === index, i))
     })
-    return h(
-      'div',
-      { className: 'screen' },
-      h(
-        'div',
-        { className: 'panel' },
-        h('h1', { className: 'panel__title', text: 'Niveau supérieur' }),
-        h('p', { className: 'panel__subtitle', text: 'Choisis une amélioration' }),
-        cards,
-        h('p', { className: 'hint-line', text: 'Gauche/Droite pour choisir · Valider: A / Entrée' })
-      )
+
+    // Co-op : la carte appartient à UN joueur — on le dit, et sa couleur habille
+    // le panneau. En solo il n'y a pas d'ambiguïté : écran inchangé.
+    const owner = state.players.length > 1 ? state.menu?.playerId : undefined
+    const panel = h('div', { className: 'panel' })
+    if (owner !== undefined) {
+      const color = playerColor(owner)
+      panel.classList.add('panel--owned')
+      // Couleur en inline, comme le HUD (`playerBlock`) : les classes CSS ne
+      // portent que la structure, jamais l'identité joueur.
+      panel.style.borderColor = color.hex
+      const who = h('p', { className: 'upgrade__who', text: `J${owner} CHOISIT` })
+      who.style.color = color.hex
+      panel.append(who)
+    }
+    panel.append(
+      h('h1', { className: 'panel__title', text: 'Niveau supérieur' }),
+      h('p', { className: 'panel__subtitle', text: 'Choisis une amélioration' }),
+      cards,
+      h('p', {
+        className: 'hint-line',
+        text:
+          owner === undefined
+            ? 'Gauche/Droite pour choisir · Valider: A / Entrée'
+            : `Gauche/Droite pour choisir · Valider: A / Entrée · manette de J${owner} uniquement`
+      })
     )
+    return h('div', { className: 'screen' }, panel)
   }
 
   private levelPips(current: number, max: number): HTMLElement {

@@ -46,6 +46,30 @@ export interface RunReport {
   perPlayer: RunReportPlayer[]
   /** Phrase sélectionnée une seule fois (moquerie en défaite, félicitation en victoire). */
   quote: string
+  /** Note de fin de stage, 0 à 3 étoiles (cumulatives strictes — cf. `computeStars`). */
+  stars: number
+  /** Au moins une arme évoluée pendant la run (n'importe quel joueur en co-op). */
+  evolvedAny: boolean
+  /** Prisonniers libérés (compteur d'ÉQUIPE : les étoiles sont une note collective). */
+  rescued: number
+  /** Prisonniers à libérer sur le stage (= RESCUE.count). */
+  rescueTotal: number
+  /**
+   * Podium co-op : meilleur / pire tueur, et leurs répliques. `null` en solo et
+   * en cas d'égalité parfaite (cf. `selectPodium`) — il n'y a alors personne à
+   * distinguer, et surtout personne à charrier.
+   */
+  podium: RunReportPodium | null
+}
+
+/** Podium de fin de run (co-op uniquement) : qui a porté l'équipe, qui a tenu la lampe. */
+export interface RunReportPodium {
+  bestId: number
+  worstId: number
+  /** Félicitation adressée au meilleur tueur. */
+  praise: string
+  /** Pique adressée au dernier. */
+  mock: string
 }
 
 /**
@@ -120,6 +144,16 @@ export interface MenuView {
   items: MenuItemView[]
   /** Index focalisé (-1 si pas d'items). */
   index: number
+  /**
+   * Joueur à qui appartient ce menu (écran d'upgrade uniquement ; `undefined`
+   * partout ailleurs — titre, pause, options… sont des écrans d'équipe).
+   *
+   * L'identité vient de `PendingLevelUp.playerId` : le core la connaît depuis
+   * toujours et applique bien la carte au bon joueur, mais l'UI ne l'affichait
+   * nulle part — en co-op, l'écran était identique quel que soit le joueur qui
+   * montait de niveau.
+   */
+  playerId?: number
 }
 
 /** Vue complète exposée par l'App (état du jeu + couche écrans/menus). */

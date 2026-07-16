@@ -447,6 +447,11 @@ function makeDeathReport(overrides: Partial<import('@/app/appState').RunReport> 
     remainingSeconds: 900,
     stageDurationMs: 1_200_000, // 20:00
     quote: 'Meme les cachalots ne survivent pas ici.',
+    stars: 0,
+    evolvedAny: false,
+    rescued: 0,
+    rescueTotal: 5,
+    podium: null,
     ...overrides
   }
 }
@@ -605,5 +610,101 @@ describe('Overlay — Rapport de chantier (victoire)', () => {
     expect(rows[0]?.textContent).toContain('Nv 7')
     expect(rows[1]?.textContent).toContain('J2')
     expect(rows[1]?.classList.contains('report__prow--dead')).toBe(true)
+  })
+
+  // ── Jauge de progression ───────────────────────────────────────────────────
+  it('la jauge se remplit à la hauteur exacte de la progression', () => {
+    const state = makeGameoverState(makeDeathReport({ progressPercent: 84, progressRatio: 0.84 }))
+    const { root, overlay } = mount()
+    overlay.sync(state)
+
+    const fill = root.querySelector<HTMLElement>('.report__fill')
+    expect(fill).not.toBeNull()
+    expect(fill?.style.width).toBe('84%')
+  })
+
+  it('la jauge n’est PAS clampée comme le marqueur : 0 % et 100 % sont exacts', () => {
+    // Le marqueur est clampé dans [3, 94] pour rester sur le rail ; la jauge, elle,
+    // doit dire la vérité — sinon « chantier livré » afficherait une barre incomplète.
+    const { root, overlay } = mount()
+
+    overlay.sync(makeGameoverState(makeDeathReport({ progressPercent: 0, progressRatio: 0 })))
+    expect(root.querySelector<HTMLElement>('.report__fill')?.style.width).toBe('0%')
+    expect(root.querySelector<HTMLElement>('.report__marker')?.style.left).toBe('3%')
+
+    overlay.sync(makeGameoverState(makeDeathReport({ outcome: 'victory', progressPercent: 100, progressRatio: 1 })))
+    expect(root.querySelector<HTMLElement>('.report__fill')?.style.width).toBe('100%')
+    expect(root.querySelector<HTMLElement>('.report__marker')?.style.left).toBe('94%')
+  })
+
+  // ── Étoiles ────────────────────────────────────────────────────────────────
+  it('affiche toujours 3 emplacements d’étoiles, dont N gagnées', () => {
+    const state = makeGameoverState(makeDeathReport({ outcome: 'victory', stars: 2 }))
+    const { root, overlay } = mount()
+    overlay.sync(state)
+
+    const stars = root.querySelectorAll('.report__star')
+    expect(stars.length).toBe(3)
+    expect(root.querySelectorAll('.report__star--on').length).toBe(2)
+    // Les non gagnées restent visibles (en gris) : le joueur doit voir ce qu'il a raté.
+    expect(stars[2]?.getAttribute('src')).toBe('ui_star_off.png')
+    expect(stars[0]?.getAttribute('src')).toBe('ui_star_on.png')
+  })
+
+  it('0 étoile en défaite : 3 emplacements, aucun allumé', () => {
+    const { root, overlay } = mount()
+    overlay.sync(makeGameoverState(makeDeathReport({ stars: 0 })))
+    expect(root.querySelectorAll('.report__star').length).toBe(3)
+    expect(root.querySelectorAll('.report__star--on').length).toBe(0)
+  })
+
+  // ── Podium ─────────────────────────────────────────────────────────────────
+  it('co-op : trophée au meilleur tueur, croix rouge au dernier, avec leurs répliques', () => {
+    const state = makeGameoverState(
+      makeDeathReport({
+        outcome: 'victory',
+        perPlayer: [
+          { id: 1, kills: 800, level: 7, alive: true },
+          { id: 2, kills: 12, level: 3, alive: true }
+        ],
+        podium: { bestId: 1, worstId: 2, praise: 'Machine à démolir.', mock: 'A tenu la lampe.' }
+      })
+    )
+    const { root, overlay } = mount()
+    overlay.sync(state)
+
+    const rows = root.querySelectorAll('.report__prow')
+    // J1 : trophée + félicitation, PAS de croix.
+    expect(rows[0]?.querySelector('.report__trophy')).not.toBeNull()
+    expect(rows[0]?.querySelector('.report__cross')).toBeNull()
+    expect(rows[0]?.textContent).toContain('Machine à démolir.')
+    // J2 : croix + pique, PAS de trophée.
+    expect(rows[1]?.querySelector('.report__cross')).not.toBeNull()
+    expect(rows[1]?.querySelector('.report__trophy')).toBeNull()
+    expect(rows[1]?.textContent).toContain('A tenu la lampe.')
+  })
+
+  it('solo : aucun trophée ni croix (le joueur serait le meilleur ET le pire)', () => {
+    const { root, overlay } = mount()
+    overlay.sync(makeGameoverState(makeDeathReport({ podium: null })))
+    expect(root.querySelector('.report__trophy')).toBeNull()
+    expect(root.querySelector('.report__cross')).toBeNull()
+  })
+
+  it('co-op à égalité parfaite : le podium est absent (personne à moquer)', () => {
+    const state = makeGameoverState(
+      makeDeathReport({
+        perPlayer: [
+          { id: 1, kills: 50, level: 4, alive: true },
+          { id: 2, kills: 50, level: 4, alive: true }
+        ],
+        podium: null
+      })
+    )
+    const { root, overlay } = mount()
+    overlay.sync(state)
+    expect(root.querySelectorAll('.report__prow').length).toBe(2)
+    expect(root.querySelector('.report__trophy')).toBeNull()
+    expect(root.querySelector('.report__cross')).toBeNull()
   })
 })

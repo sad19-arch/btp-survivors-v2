@@ -35,8 +35,14 @@ export interface GameSeam {
     opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] },
     playerId?: number
   ): void
-  /** [Debug] Ajoute de l'XP au joueur 1 (force un level-up déterministe). */
-  debugAddXp(amount: number): void
+  /** [Debug] Ajoute de l'XP à un joueur (1 par défaut) — force un level-up déterministe. */
+  debugAddXp(amount: number, playerId?: number): void
+  /**
+   * [Debug] Simule « le joueur N presse VALIDER », via le même chemin que le
+   * routeur d'input. `confirm()` est un appel système jamais filtré : lui seul ne
+   * permet donc pas de tester le verrou de propriété des cartes de level-up.
+   */
+  debugConfirmAs(playerId: number): void
   /** [Debug] Fait apparaître un coffre d'évolution sur la position d'un joueur (1 par défaut). */
   debugSpawnChestOnPlayer(playerId?: number): void
   /** [Debug] Fait apparaître immédiatement le boss du rôle demandé (`mid`/`final`). */
@@ -167,8 +173,11 @@ export function createSeam(app: App): GameSeam {
     debugGrant: (opts, playerId = 1) => {
       app.debugGrant(opts, playerId)
     },
-    debugAddXp: (amount: number) => {
-      app.debugAddXp(amount)
+    debugAddXp: (amount: number, playerId = 1) => {
+      app.debugAddXp(amount, playerId)
+    },
+    debugConfirmAs: (playerId: number) => {
+      app.debugConfirmAs(playerId)
     },
     debugSpawnChestOnPlayer: (playerId = 1) => {
       app.debugSpawnChestOnPlayer(playerId)

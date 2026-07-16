@@ -26,6 +26,10 @@ import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
 import type { AppViewState, RunReport, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
 import { selectDeathQuote } from '@content/deathQuotes'
 import { selectVictoryQuote } from '@content/victoryQuotes'
+import { EVOLUTIONS } from '@content/evolutions'
+import { computeStars } from '@content/stars'
+import { selectPodium } from '@content/podium'
+import { selectPraiseQuote, selectMockQuote } from '@content/podiumQuotes'
 
 export interface AppOptions {
   seed: number
@@ -305,11 +309,24 @@ export class App {
     this.activate(this.screen, items[index].id)
   }
 
-  /** Valide l'item focalisé du menu actif. */
-  confirm(): void {
+  /**
+   * Valide l'item focalisé du menu actif.
+   *
+   * @param byPlayers - Joueurs ayant pressé « valider » cette frame (fourni par
+   * le routeur d'input). Sur l'écran d'upgrade, la carte appartient à UN joueur :
+   * seul lui peut la choisir. Partout ailleurs (titre, pause, options, fin), les
+   * écrans sont d'équipe et n'importe qui valide.
+   *
+   * Omis (`undefined`) = appel système : le seam de test et les clics souris ne
+   * sont jamais filtrés.
+   */
+  confirm(byPlayers?: ReadonlySet<number>): void {
     this.bumpState()
     // Au titre, la touche « valider » peut compléter le code Konami : on la consomme alors.
     if (this.recordCombo('confirm')) {
+      return
+    }
+    if (!this.mayConfirm(byPlayers)) {
       return
     }
     this.refreshFocus()
@@ -318,6 +335,17 @@ export class App {
       return
     }
     this.activate(this.screen, id)
+  }
+
+  /** Vrai si ce « valider » a le droit d'agir sur l'écran courant. */
+  private mayConfirm(byPlayers?: ReadonlySet<number>): boolean {
+    if (byPlayers === undefined || this.screen !== 'upgrade') {
+      return true
+    }
+    const owner = this.sim?.getState().pendingLevelUp?.playerId
+    // Propriétaire inconnu : on ne bloque pas (on ne rend pas l'écran injouable
+    // sur un état inattendu — le soft-lock serait pire que le partage).
+    return owner === undefined || byPlayers.has(owner)
   }
 
   /** Retour / annulation, selon l'écran. */
@@ -411,10 +439,22 @@ export class App {
   }
 
   /** [Debug/seam] Ajoute de l'XP au joueur 1 (force un level-up déterministe). */
-  debugAddXp(amount: number): void {
+  debugAddXp(amount: number, playerId = 1): void {
     this.bumpState()
-    this.sim?.debugAddXp(amount)
+    this.sim?.debugAddXp(amount, playerId)
     this.refreshFocus()
+  }
+
+  /**
+   * [Debug/seam] Simule « le joueur N presse VALIDER ».
+   *
+   * `confirm()` du seam est un appel système, jamais filtré — il ne peut donc pas
+   * tester le verrou de propriété des cartes de level-up. Ce helper passe par le
+   * même chemin que le routeur d'input (un ensemble d'ids), ce qui rend le verrou
+   * vérifiable en e2e.
+   */
+  debugConfirmAs(playerId: number): void {
+    this.confirm(new Set([playerId]))
   }
 
   /** [Debug/seam] Audition d'un SFX d'arme (procédural) : rejoue weaponFired(id) → zzfx. */
@@ -497,6 +537,14 @@ export class App {
       const elapsedMs = base.elapsedMs
       const progressRatio = victory ? 1 : Math.max(0, Math.min(elapsedMs / stageDurationMs, 1))
       const flawless = base.players.every((p) => p.alive)
+      // Une arme évoluée remplace son id in-place et DÉFINITIVEMENT pour la run
+      // (cf. tryEvolve) : l'id évolué présent dans le loadout est donc la preuve
+      // durable de l'évolution. `justEvolved` ne conviendrait pas — il est
+      // one-shot et remis à null au pas suivant.
+      const evolvedAny = base.players.some((p) =>
+        p.weapons.some((id) => EVOLUTIONS.some((e) => e.evolved === id))
+      )
+      const podiumPick = selectPodium(base.players.map((p) => ({ id: p.id, kills: p.kills })))
       this._runReport = {
         outcome: victory ? 'victory' : 'defeat',
         stageTitle: phase?.title ?? '—',
@@ -519,7 +567,24 @@ export class App {
               elapsedSeconds: Math.floor(elapsedMs / 1000),
               stageDurationSeconds: stageDurationMs / 1000,
               roll: Math.random()
-            })
+            }),
+        stars: computeStars({
+          victory,
+          evolvedAny,
+          // Note COLLECTIVE : les prisonniers sont un compteur d'équipe.
+          rescuedAll: base.rescue.rescued >= base.rescue.total
+        }),
+        evolvedAny,
+        rescued: base.rescue.rescued,
+        rescueTotal: base.rescue.total,
+        podium:
+          podiumPick === null
+            ? null
+            : {
+                ...podiumPick,
+                praise: selectPraiseQuote({ roll: Math.random() }),
+                mock: selectMockQuote({ roll: Math.random() })
+              }
       }
     }
     return {
@@ -763,7 +828,9 @@ export class App {
     if (items.length === 0) {
       return null
     }
-    return { screen, items, index: this.focus.index }
+    // Seul l'écran d'upgrade appartient à UN joueur ; les autres sont d'équipe.
+    const playerId = screen === 'upgrade' ? this.sim?.getState().pendingLevelUp?.playerId : undefined
+    return { screen, items, index: this.focus.index, ...(playerId === undefined ? {} : { playerId }) }
   }
 
   /** Recale le modèle de focus quand l'identité du menu change. */

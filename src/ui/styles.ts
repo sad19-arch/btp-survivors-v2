@@ -224,6 +224,14 @@ const CSS = `
 #ui-root .cone::after { content:''; position:absolute; left:-1px; bottom:2px; width:42px; height:10px; background:${PALETTE.brunSombre}; border:2px solid ${PALETTE.contour}; box-sizing:border-box; }
 
 /* ── Cartes d'amélioration (level-up) ─────────────────────────────────── */
+/* Co-op : le panneau prend la couleur du joueur qui choisit (posée en inline
+   par l'overlay — ici on ne fait que renforcer le cadre). En solo, aucune de ces
+   deux classes n'est appliquée : l'écran reste celui d'avant. */
+#ui-root .panel--owned { border-width: 8px; }
+#ui-root .upgrade__who {
+  font-family: 'Pixelify Sans'; font-size: 30px; font-weight: 700; letter-spacing: 2px;
+  text-shadow: 2px 2px 0 ${PALETTE.contour}; margin: 0;
+}
 #ui-root .cards { display: flex; gap: 36px; }
 #ui-root .card {
   position: relative;
@@ -600,7 +608,45 @@ const CSS = `
 }
 #ui-root .report__start, #ui-root .report__end { width: 64px; height: 64px; image-rendering: pixelated; flex-shrink: 0; position: relative; z-index: 2; }
 #ui-root .report__marker { position: absolute; width: 64px; height: 64px; image-rendering: pixelated; transform: translateX(-50%); z-index: 3; top: 2px; }
+/* Jauge de progression : remplit le rail en jaune sécurité jusqu'au point atteint.
+   z-index 1 = SOUS le plot/casque/drapeau (z 2-3), sinon elle les recouvrirait. */
+#ui-root .report__fill {
+  position: absolute; left: 0; top: 0; bottom: 0; z-index: 1;
+  background: ${PALETTE.jauneSecurite};
+  border-right: 3px solid ${PALETTE.contour};
+  box-shadow: inset 0 -6px 0 rgba(0,0,0,0.22);
+}
+/* Étoiles 0-3 : les 3 emplacements sont TOUJOURS affichés (les vides en gris),
+   pour que le joueur voie ce qu'il n'a pas décroché. */
+#ui-root .report__stars { display: flex; gap: 10px; justify-content: center; }
+#ui-root .report__star { width: 56px; height: 56px; image-rendering: pixelated; }
+#ui-root .report__star--on { filter: drop-shadow(0 0 6px ${PALETTE.jauneSecurite}); }
+/* Podium (co-op) : trophée / croix + verdict, sur la ligne du joueur concerné. */
+#ui-root .report__trophy, #ui-root .report__cross { width: 28px; height: 28px; image-rendering: pixelated; align-self: center; }
+#ui-root .report__verdict { font-family: 'Pixelify Sans'; font-size: 18px; }
+#ui-root .report__verdict--praise { color: ${PALETTE.jauneSecurite}; }
+#ui-root .report__verdict--mock { color: ${PALETTE.orangeDanger}; }
 #ui-root .report__stats { display: flex; flex-direction: column; gap: 6px; font-family: 'Pixelify Sans'; font-size: 28px; color: ${PALETTE.blanc}; text-align: center; }
+/* ── Compacité du rapport ───────────────────────────────────────────────────
+   Le panneau est en overflow:hidden (pour les rayons) : tout ce qui dépasse est
+   CLIPPÉ, pas scrollable — et le jeu doit rester 100 % manette, donc on ne peut
+   pas compter sur un scroll pour atteindre le menu. Avec le récap par joueur
+   (co-op) le menu « Recommencer » tombait 265 px sous l'écran en 1280×720 :
+   inatteignable. Tout est donc resserré pour tenir jusqu'à 4 joueurs. */
+#ui-root .report { padding: 16px 44px; gap: 8px; }
+#ui-root .report .report__stats {
+  display: grid; grid-template-columns: repeat(2, auto); gap: 2px 28px;
+  font-size: 22px; text-align: left;
+}
+#ui-root .report .report__title { font-size: 44px; }
+#ui-root .report .report__quote { font-size: 20px; padding: 4px 12px; }
+#ui-root .report .report__quote--cult { font-size: 22px; }
+#ui-root .report .report__bar { height: 52px; }
+#ui-root .report .report__start, #ui-root .report .report__end,
+#ui-root .report .report__marker { width: 48px; height: 48px; }
+#ui-root .report .report__star { width: 44px; height: 44px; }
+#ui-root .report .report__prow { font-size: 18px; gap: 10px; }
+#ui-root .report .menu__item { font-size: 22px; }
 /* Récap par joueur (co-op) — une ligne par joueur, à sa couleur, atténuée s'il est tombé. */
 #ui-root .report__players { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
 #ui-root .report__prow {

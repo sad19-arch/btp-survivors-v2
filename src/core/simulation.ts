@@ -415,8 +415,8 @@ export class Simulation {
    * passer par un pickup. Permet de forcer un level-up de façon déterministe
    * (tests, seam de debug) — jamais utilisé en jeu normal.
    */
-  debugAddXp(amount: number): void {
-    const e = this.playerEntities.get(1)
+  debugAddXp(amount: number, playerId = 1): void {
+    const e = this.playerEntities.get(playerId)
     if (e === undefined) {
       return
     }
