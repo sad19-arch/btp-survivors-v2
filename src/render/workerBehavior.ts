@@ -5,7 +5,7 @@
  * Tout le temps est passé en argument → testable en Vitest sans environnement.
  */
 
-import type { StageLayout } from '@content/stageLayout'
+import { PATH_DEFAULT_SPEED, PATH_LIMITS, type PathType, type StageLayout } from '@content/stageLayout'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes exportées (testables)
@@ -361,6 +361,91 @@ export function fleeVelocity(
     }
   }
   return { vx: nx * speed, vy: ny * speed }
+}
+
+/** Un marcheur planifié sur un chemin. `phaseMs` étale les marcheurs sur le cycle. */
+export interface PathWalkerPlan {
+  pathId: string
+  type: PathType
+  /** null = le rendu choisit le défaut de la famille (porteur / camion). */
+  skin: string | null
+  /** Polyligne en coordonnées MONDE. */
+  points: PathPoint[]
+  speed: number
+  pauseMs: number
+  oneWay: boolean
+  /** Décalage temporel de CE marcheur (étalement sur le cycle). */
+  phaseMs: number
+}
+
+/** Borne une valeur dans [min, max]. */
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, v))
+}
+
+/**
+ * Un chemin → N plans de marcheurs ÉTALÉS sur le cycle.
+ *
+ * PUR : aucune dépendance à Phaser. `siteWorkers` se contente de créer un sprite
+ * par plan — d'où la testabilité de l'étalement sans navigateur.
+ *
+ * L'étalement décale chaque marcheur de `cycle / count` : ils se répartissent
+ * d'eux-mêmes et se croisent, sans aucun réglage.
+ *
+ * Les bornes sont RÉAPPLIQUÉES ici, et pas seulement dans `parseLayout` : les
+ * compos du registre committé (`composedLayouts.ts`) arrivent en objets typés
+ * sans repasser par le parse. Sans ce reborne, une vitesse à 0 dans une compo
+ * générée produirait un cycle infini ; un `count` à 999, 999 sprites.
+ */
+export function planPathWalkers(
+  layout: StageLayout,
+  worldW: number,
+  worldH: number
+): PathWalkerPlan[] {
+  const offX = worldW / 2
+  const offY = worldH / 2
+  const out: PathWalkerPlan[] = []
+
+  for (const p of layout.paths) {
+    if (p.points.length < 2) {
+      continue
+    }
+    const count = Math.round(clamp(p.count ?? 1, PATH_LIMITS.count.min, PATH_LIMITS.count.max))
+    if (count <= 0) {
+      continue
+    }
+
+    const points = p.points.map((pt) => ({ x: offX + pt.x, y: offY + pt.y }))
+    const speed = clamp(p.speed ?? PATH_DEFAULT_SPEED[p.type], PATH_LIMITS.speed.min, PATH_LIMITS.speed.max)
+    const pauseMs = clamp(p.pauseMs ?? 0, PATH_LIMITS.pauseMs.min, PATH_LIMITS.pauseMs.max)
+    const oneWay = p.oneWay === true
+
+    let total = 0
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i] as PathPoint
+      const b = points[i + 1] as PathPoint
+      total += Math.hypot(b.x - a.x, b.y - a.y)
+    }
+    const travelMs = (total / speed) * 1000
+    const cycleMs = oneWay ? travelMs + pauseMs : 2 * travelMs + 2 * pauseMs
+
+    for (let i = 0; i < count; i++) {
+      out.push({
+        pathId: p.id,
+        type: p.type,
+        // `skin: ''` (l'inspecteur remet « (défaut) » en chaîne vide) doit valoir
+        // « aucun skin » : sinon le rendu chercherait une texture nommée '' et
+        // le marcheur disparaîtrait au lieu de retomber sur le défaut.
+        skin: p.skin !== undefined && p.skin !== '' ? p.skin : null,
+        points,
+        speed,
+        pauseMs,
+        oneWay,
+        phaseMs: count > 1 ? (cycleMs / count) * i : 0
+      })
+    }
+  }
+  return out
 }
 
 /**

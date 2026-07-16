@@ -26,7 +26,7 @@ import Phaser from 'phaser'
 import { buildSiteLayout, type PlacedCluster } from '@core/siteLayout'
 import { buildSitePlan } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
-import { commutePos, loadVisible, panicDecision, pathFollow, fleeVelocity, planNpcJobs, PANIC_R } from '@render/workerBehavior'
+import { commutePos, loadVisible, panicDecision, pathFollow, fleeVelocity, planNpcJobs, planPathWalkers, PANIC_R } from '@render/workerBehavior'
 import { resolveComposedLayout } from '@content/runtimeLayouts'
 import type { StageLayout } from '@content/stageLayout'
 import { dirRow, idleFrame, walkFrame } from '@render/sprites'
@@ -123,6 +123,10 @@ interface WorkerJob {
   phaseOffsetMs: number
   /** Polyligne à suivre (rôles 'path'/'path_camion'), en coordonnées MONDE. */
   points?: Array<{ x: number; y: number }>
+  /** Pause aux extrémités (rôles 'path'/'path_camion'). */
+  pauseMs?: number
+  /** Sens unique (rôles 'path'/'path_camion'). */
+  oneWay?: boolean
 }
 
 interface ActiveWorker {
@@ -449,26 +453,33 @@ export class SiteWorkers {
       jobIdx++
     }
 
-    for (const p of composed.paths) {
-      if (p.points.length < 2) {
+    // Un chemin porte N marcheurs ÉTALÉS : le calcul (pur) vit dans
+    // `planPathWalkers` ; ici on ne fait que créer un sprite par plan.
+    for (const plan of planPathWalkers(composed, worldW, worldH)) {
+      const isTruck = plan.type === 'truck_path'
+      // Skin explicite > défaut de la famille. Un skin absent des textures
+      // chargées retombe sur le défaut : jamais d'écran vide, jamais de crash.
+      const wanted = plan.skin !== null && this.scene.textures.exists(plan.skin)
+        ? plan.skin
+        : (isTruck ? 'prop_s2_truck' : this._resolveKey('porteur', npcKeys))
+      if (wanted === null || !this.scene.textures.exists(wanted)) {
+        // Rien à afficher (stage sans sprite camion). L'inspecteur de l'éditeur
+        // AVERTIT en amont — ici on ne peut que ne rien créer.
         continue
       }
-      const pts = p.points.map((pt) => ({ x: offX + pt.x, y: offY + pt.y }))
-      const first = pts[0] ?? { x: offX, y: offY }
-      const mid = pts[Math.floor(pts.length / 2)] ?? first
-      const isTruck = p.type === 'truck_path'
-      if (isTruck && !this.scene.textures.exists('prop_s2_truck')) {
-        continue
-      }
-      const key = isTruck ? 'prop_s2_truck' : this._resolveKey('porteur', npcKeys)
-      if (key === null) {
-        continue
-      }
+      const first = plan.points[0] ?? { x: offX, y: offY }
+      const mid = plan.points[Math.floor(plan.points.length / 2)] ?? first
       this.jobs.push({
-        textureKey: key, role: isTruck ? 'path_camion' : 'path',
+        textureKey: wanted, role: isTruck ? 'path_camion' : 'path',
         ax: first.x, ay: first.y, bx: first.x, by: first.y,
-        speed: isTruck ? CAMION_SPEED : NAVETTEUR_SPEED,
-        midX: mid.x, midY: mid.y, phaseOffsetMs: jobIdx * PHASE_OFFSET_MS, points: pts
+        speed: plan.speed,
+        midX: mid.x, midY: mid.y,
+        // Étalement des marcheurs d'un MÊME chemin : la phase vient du plan
+        // (cycle/count), pas du compteur global de jobs.
+        phaseOffsetMs: plan.phaseMs,
+        points: plan.points,
+        pauseMs: plan.pauseMs,
+        oneWay: plan.oneWay
       })
       jobIdx++
     }
@@ -524,7 +535,16 @@ export class SiteWorkers {
       // Suivi de CHEMIN composé (éditeur) : polyligne A→B→C, sans panique
       // (route assignée). Camion = bob + flip ; ouvrier = anim de marche.
       if (job.role === 'path' || job.role === 'path_camion') {
-        const pf = pathFollow(job.points ?? [], tMs, job.speed)
+        const pf = pathFollow(job.points ?? [], tMs, job.speed, {
+          pauseMs: job.pauseMs ?? 0,
+          oneWay: job.oneWay === true
+        })
+        // Sens unique : le marcheur est SORTI — on le cache au lieu de le
+        // téléporter à vue du bout au départ.
+        aw.sprite.setVisible(pf.visible)
+        if (!pf.visible) {
+          continue
+        }
         if (job.role === 'path_camion') {
           const bob = Math.sin(tMs / 150) * CAMION_BOB_PX
           aw.sprite.setPosition(pf.x, pf.y + bob)
