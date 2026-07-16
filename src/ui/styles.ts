@@ -335,6 +335,69 @@ const CSS = `
   text-shadow: none; animation: none;
 }
 
+/* ── Trophée de succès (toast) ────────────────────────────────────────────
+   Plaque commémorative qui glisse depuis le bord droit, façon trophée de
+   console — mais 16-bit : coins carrés, bordure noire, ombre portée à blur 0,
+   biseaux inset, glissement en steps() (jamais d'easing continu).
+   Placé SOUS le HUD manettes (.pads, top:26px) pour ne pas le recouvrir.
+   z-index 5 : au-dessus du HUD, sous le cadre (15) et le jackpot (20). */
+#ui-root .trophy-layer { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+/* Ce nœud POSITIONNE et ne porte AUCUN transform de base : c'est ce qui laisse
+   .ui-mobile y poser son scale sans entrer en collision avec l'animation de
+   glissement, qui vit sur .trophy__panel. La propriété transform n'est PAS
+   cumulative : un seul transform par nœud (cf. le décentrage de .bossbar). */
+#ui-root .trophy { position: absolute; top: 108px; right: 28px; }
+#ui-root .trophy__panel {
+  display: flex; align-items: center; gap: 14px;
+  max-width: 520px; padding: 12px 16px;
+  background: var(--tex); background-size: 60px 100%;
+  border: 5px solid ${PALETTE.contour};
+  box-shadow: 8px 8px 0 rgba(0,0,0,0.55),
+    inset 3px 3px 0 rgba(255,255,255,0.12), inset -4px -4px 0 rgba(0,0,0,0.5);
+  /* Liseré doré : la marque « c'est une récompense », sans glow. */
+  border-left: 8px solid ${PALETTE.jauneSecurite};
+  animation: trophy-life 3000ms steps(7, end) both;
+}
+/* Glissement depuis le bord droit, maintien, puis retrait. La DURÉE est posée en
+   inline par l'overlay (TROPHY_VISIBLE_MS) : une seule source pour le JS et le CSS. */
+@keyframes trophy-life {
+  0%   { transform: translateX(115%); }
+  12%  { transform: translateX(0); }
+  88%  { transform: translateX(0); }
+  100% { transform: translateX(115%); }
+}
+/* Socle tramé de l'icône (ui_dither_dark.png). */
+#ui-root .trophy__plinth {
+  width: 64px; height: 64px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: ${METAL_DARK} url('${import.meta.env.BASE_URL}ui_dither_dark.png');
+  border: 4px solid ${PALETTE.contour};
+  box-shadow: inset 2px 2px 0 rgba(255,255,255,0.10), inset -2px -2px 0 rgba(0,0,0,0.6);
+}
+#ui-root .trophy__img { width: 52px; height: 52px; image-rendering: pixelated; }
+#ui-root .trophy__mono {
+  font-family: 'Jersey 25', monospace; font-size: 30px;
+  color: ${PALETTE.jauneSecurite}; text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+#ui-root .trophy__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#ui-root .trophy__label {
+  font-family: 'Jersey 25', monospace; font-size: 20px; letter-spacing: 2px;
+  color: ${PALETTE.jauneSecurite}; text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+#ui-root .trophy__name {
+  font-family: 'Jersey 25', monospace; font-size: 34px; letter-spacing: 1px;
+  color: ${PALETTE.blanc}; text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+#ui-root .trophy__desc {
+  font-family: 'Pixelify Sans', monospace; font-size: 20px;
+  color: ${PALETTE.solSable}; text-shadow: 1px 1px 0 ${PALETTE.contour};
+}
+#ui-root .trophy__seal { width: 40px; height: 40px; flex-shrink: 0; image-rendering: pixelated; }
+/* Mouvement réduit : le trophée apparaît/disparaît sans glisser (il reste LU). */
+@media (prefers-reduced-motion: reduce) {
+  #ui-root .trophy__panel { animation: none; }
+}
+
 /* ── Barre de PV de boss ──────────────────────────────────────────────── */
 #ui-root .bossbar {
   position: absolute;
@@ -748,6 +811,13 @@ const CSS = `
 #ui-root.ui-mobile .banner { transform: scale(var(--ui-scale, 1)); transform-origin: top right; }
 #ui-root.ui-mobile .bossbar { transform: translateX(-50%) scale(var(--ui-scale, 1)); transform-origin: top center; }
 #ui-root.ui-mobile .banner--boss, #ui-root.ui-mobile .banner--boss-final, #ui-root.ui-mobile .banner--evolution { transform: translateX(-50%) scale(var(--ui-scale, 1)); transform-origin: top center; }
+/* Trophée : le scale se pose sur .trophy, qui n'a AUCUN transform de base — donc
+   rien à répéter ici (contrairement à .bossbar, dont le translateX doit être
+   redit sous peine de décentrage). Le glissement vit sur .trophy__panel, un
+   AUTRE nœud : les deux transforms ne se marchent jamais dessus. */
+#ui-root.ui-mobile .trophy { transform: scale(var(--ui-scale, 1)); transform-origin: top right; }
+/* Écran étroit : la plaque ne doit pas déborder ni écraser le HUD. */
+#ui-root.ui-mobile .trophy__panel { max-width: 380px; }
 #ui-root.ui-mobile .stagecard { transform: translateX(-50%) scale(var(--ui-scale, 1)); transform-origin: top center; }
 #ui-root.ui-mobile .panel { transform: scale(var(--ui-scale, 1)); transform-origin: center; min-width: 0; max-width: 96vw; }
 #ui-root.ui-mobile .jackpot { min-width: 0; max-width: 96vw; }
@@ -968,6 +1038,9 @@ const CSS = `
    (Le HUD « Manettes » est masqué côté JS : son display est inline, cf. syncPads.) */
 #ui-root.coop .hud { left: 50%; transform: translateX(-50%); margin: 14px 0; }
 #ui-root.coop .bossbar { top: 104px; }
+/* Co-op : le bloc J2 occupe le coin haut-droit et la barre de boss descend à
+   104px — le trophée passe SOUS les deux (sinon il les chevauche). */
+#ui-root.coop .trophy { top: 200px; }
 #ui-root.coop .minimap { left: 50%; transform: translateX(-50%); bottom: 14px; }
 
 #ui-root .rotate-hint { display: none; position: fixed; inset: 0; z-index: 90; background: var(--arc-brun3, #17120E);

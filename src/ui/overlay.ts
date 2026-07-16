@@ -13,6 +13,21 @@ import { WEAPONS } from '@content/weapons'
 import { STAR_SLOTS } from '@content/stars'
 import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView } from '@/app/appState'
 
+/** Durée d'affichage d'un trophée (ms). */
+export const TROPHY_VISIBLE_MS = 3000
+/** Battement entre deux trophées (ms) — sinon ils se lisent comme un seul. */
+export const TROPHY_GAP_MS = 200
+/** Plafond de la file d'attente (hors trophée affiché). */
+export const MAX_ACHIEVEMENT_QUEUE = 4
+
+/** Vue d'un succès pour le toast (sous-ensemble d'`AchievementDef`, sans le prédicat). */
+export interface AchievementToast {
+  readonly id: string
+  readonly label: string
+  readonly description: string
+  readonly icon?: string
+}
+
 /**
  * Punchlines arcade par personnage (couche UI, purement cosmétique). Une phrase
  * d'accroche « select screen » façon borne, affichée sous le portrait dans le
@@ -65,6 +80,21 @@ export class Overlay {
   private bossBarFill: HTMLElement | null = null
   /** Couche du panneau jackpot (coffre d'évolution ramassé) — B5. */
   private readonly jackpotLayer: HTMLElement
+  /** Couche DÉDIÉE des trophées de succès — canal distinct des bandeaux boss/évolution. */
+  private readonly achievementLayer: HTMLElement
+  /**
+   * File FIFO des trophées EN ATTENTE (le trophée affiché n'y est plus).
+   * Une vraie file, pas un scalaire : plusieurs succès tombent dans la même frame.
+   */
+  private readonly achievementQueue: AchievementToast[] = []
+  /** Trophée actuellement à l'écran (null = voie libre). */
+  private achievementShowing: AchievementToast | null = null
+  /** Timer du trophée courant (affichage puis battement). */
+  private achievementTimer: number | null = null
+  /** Canal suspendu tant que l'écran de level-up (modal) est ouvert. */
+  private achievementSuspended = false
+  /** Ids déjà passés à l'écran — un succès ne se rejoue pas (double `commitRun`). */
+  private readonly achievementSeen = new Set<string>()
   /** Timers en cours pour l'animation jackpot (anticipation + flash + fermeture). */
   private jackpotTimers: number[] = []
   /** Handle rAF du défilement de la roulette jackpot (pour annulation au re-trigger). */
@@ -160,6 +190,7 @@ export class Overlay {
     this.padLayer = h('div', { className: 'pads' })
     this.coopLayer = h('div', { className: 'phud-layer' })
     this.jackpotLayer = h('div')
+    this.achievementLayer = h('div', { className: 'trophy-layer' })
     this.minimap = new Minimap()
     this.minimap.setVisible(false)
     // Cadre métal ouvragé (au fond) + couches UI + scanlines CRT (au-dessus). Décoratif.
@@ -174,6 +205,7 @@ export class Overlay {
       this.padLayer,
       this.coopLayer,
       this.jackpotLayer,
+      this.achievementLayer,
       this.minimap.el
     )
     root.append(h('div', { className: 'frame__scan' }))
@@ -247,6 +279,8 @@ export class Overlay {
     this.syncHud(state, dtMs, now)
     this.syncScreen(state, now)
     this.syncBanner(state)
+    // Canal SÉPARÉ des bandeaux : un trophée ne doit ni tuer ni subir un bandeau boss.
+    this.syncAchievements(state)
     this.syncIntroCard(state)
     this.syncBossBar(state)
     this.syncInventory(state)
@@ -861,6 +895,155 @@ export class Overlay {
     }, totalMs))
   }
 
+  /**
+   * Met un succès en FILE d'affichage (toast « trophée », coin haut-droit).
+   *
+   * ⚠️ POURQUOI UNE FILE, et pas le mécanisme `showBanner` : ce dernier est
+   * MONO-SLOT (il `clear()` sa couche avant d'insérer, et sa mémoire de
+   * suspension est un SCALAIRE). Deux succès tombant dans la MÊME frame —
+   * « 100 kills » + « premier boss », un cas NATUREL — n'en laisseraient qu'un
+   * seul visible. Ici les trophées se déroulent l'un APRÈS l'autre, sur une
+   * couche DÉDIÉE : un trophée ne tue pas un bandeau boss, ni l'inverse.
+   *
+   * Bornée à `MAX_ACHIEVEMENT_QUEUE` en attente (+1 affiché) : un déluge ne
+   * monopolise pas l'écran. Au-delà, le toast est écarté — mais TRACÉ (`warn`),
+   * jamais en silence, et le succès reste acquis dans le profil (il est
+   * consultable sur l'écran des succès).
+   *
+   * Idempotent par `id` : un succès déjà passé ne se rejoue pas (protège d'un
+   * double `commitRun`).
+   */
+  showAchievement(def: AchievementToast): void {
+    if (this.achievementSeen.has(def.id)) {
+      return
+    }
+    if (this.achievementQueue.length >= MAX_ACHIEVEMENT_QUEUE) {
+      // Troncature d'AFFICHAGE seulement : le succès reste débloqué côté profil.
+      console.warn(
+        `[succès] file d'affichage pleine (${MAX_ACHIEVEMENT_QUEUE} en attente) — ` +
+          `toast écarté pour « ${def.label} » (${def.id}). Le succès reste acquis.`
+      )
+      return
+    }
+    this.achievementSeen.add(def.id)
+    this.achievementQueue.push(def)
+    this.pumpAchievements()
+  }
+
+  /**
+   * Défile la file : affiche le trophée suivant si la voie est libre. Ne fait
+   * RIEN si un trophée est déjà à l'écran (il finira son temps) ou si le canal
+   * est suspendu (modale ouverte) — dans les deux cas, c'est l'expiration ou la
+   * levée de suspension qui relancera la pompe. Aucune perte possible.
+   */
+  private pumpAchievements(): void {
+    if (this.achievementSuspended || this.achievementShowing !== null) {
+      return
+    }
+    const next = this.achievementQueue.shift()
+    if (next === undefined) {
+      return
+    }
+    this.achievementShowing = next
+    clear(this.achievementLayer)
+    this.achievementLayer.append(this.trophyNode(next))
+    this.achievementTimer = window.setTimeout(() => {
+      clear(this.achievementLayer)
+      this.achievementShowing = null
+      // Battement inter-trophée : deux trophées collés se liraient comme un seul.
+      this.achievementTimer = window.setTimeout(() => {
+        this.achievementTimer = null
+        this.pumpAchievements()
+      }, TROPHY_GAP_MS)
+    }, TROPHY_VISIBLE_MS)
+  }
+
+  /**
+   * Suspend/reprend le canal des trophées — MIROIR de `syncBanner`, mais sur son
+   * PROPRE état : les deux canaux sont indépendants par construction.
+   *
+   * L'écran de level-up est modal et vit dans une couche INFÉRIEURE ; un toast
+   * par-dessus couvrirait les cartes (bug de z-index déjà survenu ici). Le
+   * trophée en cours est REMIS EN TÊTE de file et rejoué ENTIER à la fermeture —
+   * pas de trophée mangé à moitié.
+   *
+   * Volontairement limité à `upgrade` (comme `bannerSuspended`) : l'écran de fin
+   * de run doit, lui, pouvoir afficher les succès de la run qui vient de finir.
+   */
+  private syncAchievements(state: AppViewState): void {
+    const suspend = state.screen === 'upgrade'
+    if (suspend && !this.achievementSuspended) {
+      this.achievementSuspended = true
+      if (this.achievementShowing !== null) {
+        this.achievementQueue.unshift(this.achievementShowing)
+        this.achievementShowing = null
+      }
+      this.clearAchievementTimer()
+      clear(this.achievementLayer)
+    } else if (!suspend && this.achievementSuspended) {
+      this.achievementSuspended = false
+      this.pumpAchievements()
+    }
+  }
+
+  private clearAchievementTimer(): void {
+    if (this.achievementTimer !== null) {
+      window.clearTimeout(this.achievementTimer)
+      this.achievementTimer = null
+    }
+  }
+
+  /**
+   * Le trophée, façon plaque commémorative 16-bit : socle tramé + icône, plaque
+   * gravée « SUCCÈS DÉBLOQUÉ », nom, condition, et le trophée en sceau.
+   *
+   * Deux niveaux (`.trophy` positionne, `.trophy__panel` glisse) et ce n'est PAS
+   * cosmétique : `transform` n'est pas cumulatif. Le glissement est une
+   * animation `transform` ; si l'échelle mobile vivait sur le MÊME nœud,
+   * l'animation l'écraserait et le panneau se décentrerait (précédent `.bossbar`).
+   * Un nœud par transform = zéro collision.
+   */
+  private trophyNode(def: AchievementToast): HTMLElement {
+    const panel = h('div', { className: 'trophy__panel' })
+    panel.append(
+      this.trophyIcon(def),
+      h('div', { className: 'trophy__text' },
+        h('div', { className: 'trophy__label', text: 'SUCCÈS DÉBLOQUÉ' }),
+        h('div', { className: 'trophy__name', text: def.label }),
+        h('div', { className: 'trophy__desc', text: def.description })
+      ),
+      h('img', {
+        className: 'trophy__seal',
+        attrs: { src: `${import.meta.env.BASE_URL}ui_trophy.png`, alt: '' }
+      })
+    )
+    // La durée de vie CSS suit la constante JS : une seule source pour les deux.
+    panel.style.animationDuration = `${TROPHY_VISIBLE_MS}ms`
+    return h('div', { className: 'trophy' }, panel)
+  }
+
+  /**
+   * Icône du succès. `AchievementDef.icon` porte un chemin COMPLET relatif à
+   * `public/` (deux familles cohabitent : `ui_*.png` à la racine et
+   * `stage01/ui/icon_*_64.png`) — d'où `iconFromSrc` et non `icon()`, qui, lui,
+   * fabrique un chemin `stage01/ui/icon_<id>_64.png` et ne conviendrait qu'à une
+   * des deux familles. Pas d'icône déclarée = monogramme (aucun fichier inventé).
+   */
+  private trophyIcon(def: AchievementToast): HTMLElement {
+    if (def.icon === undefined) {
+      return h('div', { className: 'trophy__plinth' },
+        h('div', { className: 'trophy__mono', text: monogram(def.label) })
+      )
+    }
+    return iconFromSrc(
+      `${import.meta.env.BASE_URL}${def.icon}`,
+      def.label,
+      'trophy__plinth',
+      'trophy__img',
+      'trophy__mono'
+    )
+  }
+
   private showBanner(text: string, className: string): void {
     // Level-up ouvert → on met en file (rejoué à la fermeture) au lieu de couvrir les cartes.
     if (this.bannerSuspended) {
@@ -1392,11 +1575,23 @@ const SLOT_FILLER_ICONS = [
  * (inventaire HUD) — mêmes règles, classes CSS différentes selon le contexte.
  */
 function icon(id: string, label: string, boxClass: string, imgClass: string, monoClass: string): HTMLElement {
+  return iconFromSrc(
+    `${import.meta.env.BASE_URL}stage01/ui/icon_${id}_64.png`,
+    label, boxClass, imgClass, monoClass
+  )
+}
+
+/**
+ * Même repli que `icon()` (monogramme si le fichier manque) mais à partir d'un
+ * chemin COMPLET. Nécessaire aux succès, dont l'icône peut vivre à la racine
+ * (`ui_trophy.png`) comme dans `stage01/ui/` : `icon()` ne sait fabriquer que la
+ * seconde forme. La logique de repli reste ici, en un seul endroit.
+ */
+function iconFromSrc(
+  src: string, label: string, boxClass: string, imgClass: string, monoClass: string
+): HTMLElement {
   const box = h('div', { className: boxClass })
-  const img = h('img', {
-    className: imgClass,
-    attrs: { src: `${import.meta.env.BASE_URL}stage01/ui/icon_${id}_64.png`, alt: '' }
-  })
+  const img = h('img', { className: imgClass, attrs: { src, alt: '' } })
   img.addEventListener('error', () => {
     img.remove()
     box.append(h('div', { className: monoClass, text: monogram(label) }))
