@@ -74,10 +74,21 @@ export const ASSET_SOLIDITY: Readonly<Record<string, Solidity>> = {
   prop_s2_truck: { collide: 'both', shape: { kind: 'circle', r: 48 } }, // camion benne
   prop_s2_dozer: { collide: 'both', shape: { kind: 'circle', r: 48 } }, // bulldozer
   prop_s2_roller: { collide: 'both', shape: { kind: 'circle', r: 46 } }, // rouleau compresseur
+  // Variantes ANIMÉES (machines vivantes) : MÊME engin, même encombrement que la
+  // clé statique ci-dessus — une pelleteuse ne devient pas traversable parce que
+  // son bras bouge. Valeurs volontairement identiques aux statiques.
+  prop_s2_excavator_work: { collide: 'both', shape: { kind: 'circle', r: 56 } },
+  prop_s2_excavator_move: { collide: 'both', shape: { kind: 'circle', r: 56 } },
+  prop_s2_truck_work: { collide: 'both', shape: { kind: 'circle', r: 48 } },
+  prop_s2_truck_move: { collide: 'both', shape: { kind: 'circle', r: 48 } },
+  prop_s2_dozer_work: { collide: 'both', shape: { kind: 'circle', r: 48 } },
+  prop_s2_dozer_move: { collide: 'both', shape: { kind: 'circle', r: 48 } },
   // Stage 03 — fondations
   struct_stage03_mixer: { collide: 'both', shape: { kind: 'circle', r: 52 } }, // toupie
+  struct_stage03_mixer_work: { collide: 'both', shape: { kind: 'circle', r: 52 } },
   struct_stage03_pump: { collide: 'both', shape: { kind: 'circle', r: 46 } }, // pompe à béton
   prop_stage03_concrete_mixer: { collide: 'both', shape: { kind: 'circle', r: 38 } }, // bétonnière
+  prop_stage03_concrete_mixer_work: { collide: 'both', shape: { kind: 'circle', r: 38 } },
   // Stage 04 — réseaux enterrés
   struct_stage04_excavator: { collide: 'both', shape: { kind: 'circle', r: 50 } }, // mini-pelle
   prop_stage04_trencher: { collide: 'both', shape: { kind: 'circle', r: 40 } }, // trancheuse

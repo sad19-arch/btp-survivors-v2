@@ -371,21 +371,29 @@ const RAW_CLUSTERS: Record<string, ClusterDef> = {
         collide: 'both',
         shape: { kind: 'segment', x2: 0, y2: 80, thickness: 10 }
       },
-      // Pelleteuse côté NE (décoration, pas de collision)
+      // Pelleteuse côté NE (décoration, pas de collision) — VIVANTE : le bras
+      // creuse. `scale` 1.2 → 1.11 : la feuille animée est sur un canvas 192
+      // (figure 137 px) là où la statique est en 176 (figure 127 px) ; à scale
+      // égale l'engin GRANDIRAIT de 8 %. 1.11 rend la MÊME hauteur écran
+      // (152 px) que l'engin statique qu'elle remplace — swap invisible.
       {
-        assetKey: 'prop_s2_excavator',
+        assetKey: 'prop_s2_excavator_work',
         dx: 105,
         dy: -90,
-        scale: 1.2,
-        collide: 'none'
+        scale: 1.11,
+        collide: 'none',
+        animation: { frameRate: 8 }
       },
-      // Benne côté E près de l'ouverture (décoration)
+      // Benne côté E près de l'ouverture (décoration) — VIVANTE : la benne
+      // bascule. 1.05 → 1.02 pour la même raison (figure 142 vs 138 → 145 px).
+      // frameRate 6 : une benne qui bascule en 1,2 s, pas en 0,9 s.
       {
-        assetKey: 'prop_s2_truck',
+        assetKey: 'prop_s2_truck_work',
         dx: 100,
         dy: 50,
-        scale: 1.05,
-        collide: 'none'
+        scale: 1.02,
+        collide: 'none',
+        animation: { frameRate: 6 }
       },
       // Anneau de déblais autour de la fosse (R-E : un trou = ses déblais).
       { assetKey: 'prop_s2_dirt', dx: -95, dy: -70, scale: 0.85, collide: 'none' },
@@ -443,7 +451,11 @@ const RAW_CLUSTERS: Record<string, ClusterDef> = {
     gates: [],
     elements: [
       { assetKey: 'prop_s2_roller', dx: -55, dy: 0, scale: 1.0, collide: 'none' },
-      { assetKey: 'prop_s2_dozer', dx: 55, dy: 0, scale: 1.0, collide: 'none' }
+      // Bulldozer VIVANT : la lame pousse un tas de terre. scale 1.0 → 0.70 —
+      // la feuille animée cadre l'engin bien plus large (figure 151 px contre
+      // 105 px pour la statique) ; à scale égale le bulldozer GRANDIRAIT de 44 %.
+      // 0.70 rend exactement les 105 px de l'engin statique qu'elle remplace.
+      { assetKey: 'prop_s2_dozer_work', dx: 55, dy: 0, scale: 0.7, collide: 'none', animation: { frameRate: 7 } }
     ]
   },
 
