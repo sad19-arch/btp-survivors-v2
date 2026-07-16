@@ -1071,7 +1071,9 @@ export class Overlay {
       rows.append(row)
     })
     if (entries.length === 0) {
-      rows.append(h('div', { className: 'hiscore-row hiscore-row--empty', text: 'Aucun score enregistré' }))
+      // Consultable depuis le titre AVANT toute run : sur un profil neuf, aucun
+      // stage n'a de score. Un panneau vide passerait pour un bug — on le dit.
+      rows.append(h('div', { className: 'hiscore-row hiscore-row--empty', text: 'Aucun score pour ce chantier' }))
     }
     const panel = h(
       'div',

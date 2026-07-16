@@ -13,6 +13,39 @@ import { test, expect } from '@playwright/test'
 const STAGE = 'terrain_vierge'
 const NAME = 'CHANTIER' // 8 lettres = les 8 cases
 
+test('« Scores » au titre : tableau consultable SANS finir de run, 100 % manette', async ({ page }) => {
+  // Contexte Playwright neuf par test → localStorage vierge : c'est exactement le
+  // cas à couvrir (un joueur qui n'a jamais qualifié doit pouvoir consulter).
+  await page.goto('/?seed=1&test=1&lite=1')
+  await page.waitForFunction(() => window.__GAME__?.ready === true)
+
+  // Atteint « Scores » UNIQUEMENT par nav()/confirm() : aucun clic, aucun pixel
+  // interprété — la preuve exécutable de la règle 8 sur ce chemin.
+  await page.evaluate(() => {
+    window.__GAME__?.nav('down')
+    window.__GAME__?.nav('down')
+    window.__GAME__?.nav('down')
+  })
+  await expect(page.locator('.menu__item--focus')).toHaveText('Scores')
+
+  await page.evaluate(() => window.__GAME__?.confirm())
+  await expect
+    .poll(() => page.evaluate(() => window.__GAME__?.getState().screen), { timeout: 5000 })
+    .toBe('hiscores')
+
+  // Le panneau nomme le stage sans ambiguïté (les classements sont par stage)…
+  await expect(page.locator('.panel--hiscores .panel__subtitle')).toHaveText('Terrain vierge')
+  // …et un tableau vide se DIT, plutôt que de ressembler à un panneau cassé.
+  await expect(page.locator('.hiscore-row--empty')).toHaveText('Aucun score pour ce chantier')
+
+  // « B » rend la main au titre (pas de cul-de-sac).
+  await page.evaluate(() => window.__GAME__?.back())
+  await expect
+    .poll(() => page.evaluate(() => window.__GAME__?.getState().screen), { timeout: 5000 })
+    .toBe('title')
+  await expect(page.locator('.menu__item')).toHaveCount(6)
+})
+
 /** Mène une run solo déterministe jusqu'au rapport de fin. */
 async function reachReport(page: import('@playwright/test').Page): Promise<void> {
   await page.goto('/?autostart=solo&seed=42&test=1&lite=1')

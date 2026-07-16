@@ -931,16 +931,40 @@ export class App {
     return items
   }
 
-  /** Items du titre : Jouer, sélecteur de joueurs (◄/►), sélecteur de niveau (◄/►), Options. */
+  /** Items du titre : Jouer, sélecteur de joueurs (◄/►), sélecteur de niveau (◄/►), Scores, Options. */
   private titleItems(): MenuItemView[] {
     const phase = ORDERED_PHASES.find((p) => p.id === this.selectedPhase)
     return [
       { id: 'jouer', label: 'Jouer', hint: null },
       { id: 'players', label: `◄ Joueurs : ${this.selectedPlayers} ►`, hint: 'Gauche/Droite pour changer' },
       { id: 'stage', label: `◄ Niveau ${phase?.order ?? 1}/10 : ${phase?.title ?? '—'} ►`, hint: 'Gauche/Droite pour changer' },
+      // Placé JUSTE SOUS le sélecteur de niveau : le tableau affiché est celui du
+      // niveau sélectionné ci-dessus (les classements sont par stage). L'adjacence
+      // porte le lien — c'est ce qui dispense l'écran `hiscores` d'un 2e sélecteur.
+      { id: 'scores', label: 'Scores', hint: 'Tableau du niveau sélectionné' },
       { id: 'options', label: 'Options', hint: null },
       { id: 'editeur', label: 'Éditeur de niveaux', hint: 'Créer / modifier un stage' }
     ]
+  }
+
+  /**
+   * Ouvre le tableau des scores du niveau SÉLECTIONNÉ au titre, en consultation.
+   *
+   * Réutilise tel quel l'écran `hiscores` du flux de fin de run : `screen` le
+   * dérive déjà de `hiScoreView`, et `back()`/« Retour » le remettent à `null` →
+   * on retombe sur le titre (`started === false`) sans câblage supplémentaire.
+   *
+   * `rank: -1` = aucune ligne en surbrillance : on consulte, on ne vient pas de
+   * s'inscrire. Le tableau peut être vide (profil neuf) — le panneau le dit.
+   */
+  private openHiScores(): void {
+    const phase = ORDERED_PHASES.find((p) => p.id === this.selectedPhase)
+    this.hiScoreView = {
+      stageId: this.selectedPhase,
+      stageTitle: phase?.title ?? '—',
+      entries: readHiScores(this.selectedPhase),
+      rank: -1
+    }
   }
 
   /** Liste des ids du roster de personnages, dans l'ordre stable déclaré. */
@@ -1135,6 +1159,8 @@ export class App {
         this.cyclePlayers(1)
       } else if (id === 'stage') {
         this.cycleStage()
+      } else if (id === 'scores') {
+        this.openHiScores()
       } else if (id === 'options') {
         this.optionsOpen = true
       } else if (id === 'editeur') {

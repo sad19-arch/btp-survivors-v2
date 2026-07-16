@@ -18,7 +18,7 @@ describe('Overlay (DOM)', () => {
     expect(root.querySelector('.logo__btp')?.textContent).toBe('BTP')
     expect(root.querySelector('.logo__carnage')?.textContent).toBe('CARNAGE')
     const items = root.querySelectorAll('.menu__item')
-    expect(items.length).toBe(5) // Jouer, Joueurs (sélecteur), Niveau (sélecteur), Options, Éditeur
+    expect(items.length).toBe(6) // Jouer, Joueurs (sélecteur), Niveau (sélecteur), Scores, Options, Éditeur
     expect(root.querySelectorAll('.menu__item--focus').length).toBe(1)
     expect(items[0]?.classList.contains('menu__item--focus')).toBe(true)
   })
