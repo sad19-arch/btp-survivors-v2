@@ -155,6 +155,21 @@ export interface PathOpts {
   oneWay?: boolean
 }
 
+/**
+ * `atEnd` = PROXIMITÉ d'une extrémité de la polyligne (0 ou `total`), à partir
+ * de la distance parcourue depuis le début.
+ *
+ * Sémantique historique (commutePos, et l'ancien pathFollow avant 06415cf) :
+ * vrai si on est à moins de AT_END_THRESHOLD px de A OU de B, que ce soit à
+ * l'aller, au retour, ou à l'arrêt. Ce n'est PAS une phase de cycle (pause vs
+ * marche) — un marcheur en pause à une extrémité y est, un marcheur à 10 px du
+ * bout aussi. Piège corrigé : mettre `atEnd` en dur selon la branche (pause ou
+ * non) désynchronise le champ de la position réelle dès que pauseMs=0.
+ */
+function atEndFromDist(dist: number, total: number): boolean {
+  return dist < AT_END_THRESHOLD || total - dist < AT_END_THRESHOLD
+}
+
 /** Position à `dist` px du début de la polyligne (0..total). */
 function pointAtDistance(
   points: ReadonlyArray<PathPoint>,
@@ -239,33 +254,37 @@ export function pathFollow(
     const cycle = tTravel + pause
     const u = cycle <= 0 ? 0 : t % cycle
     if (u >= tTravel) {
-      // Sorti : caché jusqu'à la réapparition en A.
+      // Sorti : caché jusqu'à la réapparition en A. Physiquement en B (dist=total)
+      // → atEnd vrai par proximité, pas parce qu'on est « dans la fenêtre de pause ».
       const p = pointAtDistance(points, segLen, total)
-      return { ...p, atEnd: true, visible: false }
+      return { ...p, atEnd: atEndFromDist(total, total), visible: false }
     }
-    const p = pointAtDistance(points, segLen, u * speedPxPerSec)
-    return { ...p, atEnd: false, visible: true }
+    const dist = u * speedPxPerSec
+    const p = pointAtDistance(points, segLen, dist)
+    return { ...p, atEnd: atEndFromDist(dist, total), visible: true }
   }
 
   const cycle = 2 * tTravel + 2 * pause
   const u = cycle <= 0 ? 0 : t % cycle
   if (u < tTravel) {
-    const p = pointAtDistance(points, segLen, u * speedPxPerSec)
-    return { ...p, atEnd: false, visible: true }
+    const dist = u * speedPxPerSec
+    const p = pointAtDistance(points, segLen, dist)
+    return { ...p, atEnd: atEndFromDist(dist, total), visible: true }
   }
   if (u < tTravel + pause) {
-    // Arrêt visible en B, face au sens d'arrivée.
+    // Arrêt visible en B, face au sens d'arrivée. dist=total → atEnd vrai par proximité.
     const p = pointAtDistance(points, segLen, total)
-    return { ...p, atEnd: true, visible: true }
+    return { ...p, atEnd: atEndFromDist(total, total), visible: true }
   }
   if (u < 2 * tTravel + pause) {
     const back = u - (tTravel + pause)
-    const p = pointAtDistance(points, segLen, total - back * speedPxPerSec)
-    return { ...p, dirX: -p.dirX, dirY: -p.dirY, atEnd: false, visible: true }
+    const dist = total - back * speedPxPerSec
+    const p = pointAtDistance(points, segLen, dist)
+    return { ...p, dirX: -p.dirX, dirY: -p.dirY, atEnd: atEndFromDist(dist, total), visible: true }
   }
-  // Arrêt visible en A, face au sens d'arrivée (le retour).
+  // Arrêt visible en A, face au sens d'arrivée (le retour). dist=0 → atEnd vrai par proximité.
   const p = pointAtDistance(points, segLen, 0)
-  return { ...p, dirX: -p.dirX, dirY: -p.dirY, atEnd: true, visible: true }
+  return { ...p, dirX: -p.dirX, dirY: -p.dirY, atEnd: atEndFromDist(0, total), visible: true }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

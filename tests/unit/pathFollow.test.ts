@@ -32,6 +32,76 @@ describe('pathFollow — non-régression (sans opts)', () => {
     expect(pathFollow(LINE, 2000, 10).dirX).toBeCloseTo(1)
     expect(pathFollow(LINE, 12000, 10).dirX).toBeCloseTo(-1)
   })
+
+  // Non-régression `atEnd` : commit 06415cf a réécrit la sémantique en « vrai
+  // seulement dans la fenêtre de pause ». Sans opts, pauseMs=0 ⇒ fenêtre de
+  // largeur nulle ⇒ atEnd JAMAIS vrai. L'ancienne sémantique (commit 296f6db,
+  // `commutePos`) est une PROXIMITÉ : vrai à moins de AT_END_THRESHOLD (24px)
+  // d'une extrémité, à l'aller comme au retour. Ce test doit échouer avant fix.
+  it('atEnd (sans opts) : proximité d\'une extrémité, à l\'aller ET au retour', () => {
+    // t=0 : départ en A → atEnd vrai (dist=0).
+    expect(pathFollow(LINE, 0, 10).atEnd).toBe(true)
+    // t=9s : aller, dist=90, à 10px de B (<24) → atEnd vrai.
+    expect(pathFollow(LINE, 9000, 10).atEnd).toBe(true)
+    // t=9.9s : aller, dist=99, à 1px de B → atEnd vrai.
+    expect(pathFollow(LINE, 9900, 10).atEnd).toBe(true)
+    // t=5s : milieu de l'aller, dist=50 → atEnd faux.
+    expect(pathFollow(LINE, 5000, 10).atEnd).toBe(false)
+    // t=10s : pile en B (repli sur le retour, back=0, dist=100) → atEnd vrai.
+    expect(pathFollow(LINE, 10000, 10).atEnd).toBe(true)
+    // t=11s : retour, à 10px de B (dist=90) → atEnd vrai (le retour aussi !).
+    expect(pathFollow(LINE, 11000, 10).atEnd).toBe(true)
+    // t=15s : milieu du retour, dist=50 → atEnd faux.
+    expect(pathFollow(LINE, 15000, 10).atEnd).toBe(false)
+    // t=19s : retour, à 10px de A (dist=10) → atEnd vrai.
+    expect(pathFollow(LINE, 19000, 10).atEnd).toBe(true)
+    // t=19.9s : retour, à 1px de A (dist=1) → atEnd vrai.
+    expect(pathFollow(LINE, 19900, 10).atEnd).toBe(true)
+  })
+})
+
+describe('pathFollow — polyligne à 3 points (multi-segments)', () => {
+  // A(0,0) → B(100,0) → C(100,100). Segment 0 = 100px, segment 1 = 100px,
+  // total = 200px @ 10px/s = 20s de trajet. Couvre le repli `d -= l` et le
+  // dernier segment de `pointAtDistance`, non exercés par une ligne à 2 points.
+  const ELBOW = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }]
+
+  it('progresse le long du 1er segment (seg=0), puis du 2e (seg=1)', () => {
+    // t=5s : dist=50, encore sur A→B.
+    const midSeg0 = pathFollow(ELBOW, 5000, 10)
+    expect(midSeg0.seg).toBe(0)
+    expect(midSeg0.x).toBeCloseTo(50)
+    expect(midSeg0.y).toBeCloseTo(0)
+
+    // t=10s : dist=100, jonction B — encore rendu comme fin du segment 0.
+    const atB = pathFollow(ELBOW, 10000, 10)
+    expect(atB.x).toBeCloseTo(100)
+    expect(atB.y).toBeCloseTo(0)
+
+    // t=15s : dist=150, 50px dans le 2e segment B→C.
+    const midSeg1 = pathFollow(ELBOW, 15000, 10)
+    expect(midSeg1.seg).toBe(1)
+    expect(midSeg1.x).toBeCloseTo(100)
+    expect(midSeg1.y).toBeCloseTo(50)
+
+    // t=20s : dist=200, bout du parcours en C.
+    const atC = pathFollow(ELBOW, 20000, 10)
+    expect(atC.x).toBeCloseTo(100)
+    expect(atC.y).toBeCloseTo(100)
+  })
+
+  it('le retour parcourt aussi les deux segments, en sens inverse', () => {
+    // t=25s : repli, back=5s → dist=200-50=150 → milieu du 2e segment (retour).
+    const backSeg1 = pathFollow(ELBOW, 25000, 10)
+    expect(backSeg1.seg).toBe(1)
+    expect(backSeg1.y).toBeCloseTo(50)
+
+    // t=35s : back=15s → dist=200-150=50 → milieu du 1er segment (retour).
+    const backSeg0 = pathFollow(ELBOW, 35000, 10)
+    expect(backSeg0.seg).toBe(0)
+    expect(backSeg0.x).toBeCloseTo(50)
+    expect(backSeg0.y).toBeCloseTo(0)
+  })
 })
 
 describe('pathFollow — pause aux extrémités (aller-retour)', () => {
