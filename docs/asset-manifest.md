@@ -213,6 +213,63 @@ le terrain sur lequel elle est posée, **ce qu'aucune génération séparée ne 
 promettre**, et la tuile de sol est raccordable par construction (TileSprite).
 Avant de brûler du quota sur une matière générique, regarder ce qui existe.
 
+## 3quinquies. Lot « PNJ vie de chantier » (10 planches, 2026-07-17)
+
+### 🔴 La « recette verrouillée » à `size:180` NE PRODUIT PAS l'étalon
+
+Mesuré : **`create_character(size:180)` sort un canvas 256** (l'API agrandit
+~40 % pour loger l'animation). Or l'étalon `stage05/npc/macon_work.png` est un
+canvas **180 à 12 frames** — il ne PEUT donc pas venir de `size:180`. Il vient
+de **`size:128` → canvas 180**. Corollaire utile : **`size` = hauteur de la
+FIGURE, le canvas = ~1,4 × size**. On choisit donc `size` par la hauteur d'art
+voulue, pas par la cellule :
+
+| `size` | canvas | figure | affiché à `WORKER_SCALE 0.62` |
+|---:|---:|---:|---:|
+| 128 | 180 | ~130 | ~81 px |
+| 180 | 256 | ~165 | ~102 px (≈ joueur 99) |
+
+### 🔴 Coûts et quotas — trois mesures qui contredisent la doc de l'outil
+
+- **`animate_character` v3 coûte 1 génération PAR FRAME**, pas « 1/direction » :
+  `frame_count:6` ⇒ **6 générations**. Une planche = 5 (create) + 6 = **11**.
+- **Un job ÉCHOUÉ ne consomme RIEN** (vérifié au solde : 1113 → 1108 après un
+  create à 5 + un animate à 8 échoué). Re-tenter est gratuit — ne pas hésiter.
+- **1 `create_character` v3 = 2 jobs concurrents** ⇒ le plafond de 10 jobs est
+  atteint à **5 creates**, pas 10. Lancer par vagues de 5.
+
+### `animate_character` v3 ne TIENT PAS la couleur d'un objet entre les frames
+
+Le disque du signaleur, **rouge** dans la rotation, sort **blanc sur 2 frames
+sur 6** (rouge en 0/3/4/5, blanc en 1/2). Aucun paramètre ne l'empêche — même
+classe que « v3 aplatit la perspective » (§3quater). Ici c'est passable (ça se
+lit comme une palette qu'on RETOURNE), mais **ne jamais compter sur v3 pour
+tenir une couleur signalétique** : si la couleur porte le sens, la vérifier
+frame par frame.
+
+### Nier un MATÉRIAU / une COULEUR marche — nier une COMPOSITION non
+
+§3bis le disait des teintes ; c'est vrai des **matières**. « pale cream
+plasterboard » a rendu un **panneau de BOIS** ; le même prompt + « **NOT wood,
+NOT plywood, NOT brown, NOT timber** » a rendu le plâtre blanc **du premier
+coup**. La règle affinée : la négation marche sur ce qui est un **attribut**
+(couleur, matière, ajout : « NO letters ») et se retourne sur ce qui est une
+**composition/topologie** (« NOT a side view », « NOT a railway »).
+
+⚠️ Limite : « NO letters, NO writing » **n'empêche pas** les pseudo-glyphes sur
+les surfaces « à étiquette » (cartons du porteur S10). Illisible à 100 px donc
+toléré — mais ne pas promettre un asset sans marquage.
+
+### Le vrai piège de ce lot n'était pas PixelLab, c'était l'ÉCHELLE PERDUE
+
+`pack-npc.mjs` **imprime déjà** « scale pour ~95px = X », et ces X sont exactement
+les `scale: 1.4-1.67` de `stages.ts`. Le réglage §17.1 était juste — mais **trois
+chemins de rendu l'ignorent** (ambiance forcée vide, `WORKER_SCALE` unique,
+`NPC_SCALE` éditeur). D'où : **si le rendu impose une échelle unique, la
+calibration doit vivre DANS L'ART** (viser ~65 % de remplissage en hauteur), pas
+dans une donnée que personne ne lit. Vérifier le remplissage (bbox/cellule) est
+le contrôle qui attrape ça en une commande.
+
 ## 4. Methode Pixelabs recommandee
 
 | Etape | Methode |
