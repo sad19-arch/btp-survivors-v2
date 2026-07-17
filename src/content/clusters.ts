@@ -789,7 +789,13 @@ export const CLUSTERS: Record<string, ClusterDef> = Object.fromEntries(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Association stage → liste de (rôle de zone, clusterId à y placer).
-// Les stages non définis ici n'ont PAS de clusters (terrain_vierge = garde).
+// Les stages non définis ici n'ont PAS de clusters.
+// ⚠️ terrain_vierge N'EST PAS une garde diff-0 : il a des clusters (5 rôles,
+// ci-dessous), donc 36 obstacles mesurés (`buildSiteLayout(seed, 10240, 7680,
+// 'terrain_vierge')` — terrassement=53, fondations=14). sim:check tourne sur
+// le stage 01 et voit donc collision + champ de flux. Le déterminisme ne
+// vient PAS d'une absence d'obstacles mais du RNG isolé (seed^0x51e0, cf.
+// commentaire sur STAGE_CLUSTERS.terrain_vierge ci-dessous).
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Association stage → liste de (rôle de zone, clusterId à y placer). */
