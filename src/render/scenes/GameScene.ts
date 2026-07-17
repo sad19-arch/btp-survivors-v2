@@ -13,11 +13,9 @@ import { DESKTOP_ZOOM, type ViewportBus } from '@ui/viewport'
 import { WORLD } from '@content/config'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
 import { createGround, groundTilesForLayout } from '@render/ground'
-import { createLandmark, createStructures, phaseSalt, resolvePlacement, type ExclusionCircle } from '@render/props'
+import { createLandmark, createStructures, phaseSalt, type ExclusionCircle } from '@render/props'
 import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { resolveComposedLayout } from '@content/runtimeLayouts'
-import { walkFrame } from '@render/sprites'
-import { ambientOffset } from '@render/ambientNpc'
 import { stageRender, type StageRender, FINAL_BOSS_SKIN, CONVOYEUR_SKIN, CAMION_SKIN, SHARED_WORKER_NPCS, CITY_BUILDINGS, CITY_PERIMETER } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { DamageNumberPool } from '@render/damageNumbers'
@@ -113,14 +111,6 @@ export class GameScene extends Phaser.Scene {
    * détruit une et en recrée une autre) — jamais un singleton de module.
    */
   private pool!: SpritePool
-  /** PNJ(s) d'ambiance non-hostiles du stage — tableau (B1+). */
-  private ambientSprites: Array<{
-    sprite: Phaser.GameObjects.Sprite
-    anchor: { x: number; y: number }
-    seed: number
-    behavior: 'work' | 'patrol'
-    framePeriodMs: number
-  }> = []
   /** Bulles râleuses des PNJ d'ambiance (état + cooldowns) — extraites de GameScene. */
   private readonly bubbles = new SpeechBubbleManager(this)
   /** Rendu du télégraphe des formations (marqueur au sol + flèche de bord) — Task 10. */
@@ -516,7 +506,6 @@ export class GameScene extends Phaser.Scene {
     // damageFlash, lastMove, prisonniers, introStartMs/introDone) est porté par une
     // instance FRAÎCHE de PlayerRenderer recréée dans create() — rien à nettoyer ici.
     this.camera.reset()
-    this.ambientSprites = []
     this.bubbles.reset()
     this.decorStreamerFrame = 0
     // Nettoie les chunks streamés (si le streamer est déjà initialisé — pas au 1er appel).
@@ -685,74 +674,18 @@ export class GameScene extends Phaser.Scene {
         this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId, npcKeys, tradeNpcs
       )
     }
-    // PNJ(s) d'ambiance non-hostiles (geste métier) — un sprite par entrée, placement seedé
-    // hors centre. Chaque PNJ reçoit un seed individuel dérivé de stageSeed + index, ce qui
-    // garantit un placement déterministe et hors-chevauchement même si le tableau grandit (B5+).
-    // T4 : geometry.ambientAngle cible le PREMIER PNJ (chef de file) ; les suivants tournent
-    // autour d'angles dérivés (+ 40° par PNJ) pour rester dans le même secteur.
-    const AMB_DIST_MIN = 420
-    const AMB_DIST_MAX = 520
-    // Les stages pilotés par le PLAN de chantier (sitePrograms) tirent leur vie
-    // des ouvriers navetteurs (SiteWorkers, purposeful) : on N'AJOUTE PAS en plus
-    // les PNJ errants Lissajous — c'était la double-population incohérente
-    // (tailles disparates + errance « dans tous les sens »). Les feuilles PNJ
-    // restent chargées (preload) car SiteWorkers les réutilise.
-    // NORMALISATION PNJ : le vieux système d'errance (ambientSprites Lissajous,
-    // tailles disparates) est DÉSACTIVÉ sur TOUS les stages — plus aucun « petit
-    // PNJ ». La vie du chantier vient exclusivement des SiteWorkers (échelle
-    // unique, déplacements utiles). Les feuilles `stage.ambient` restent
-    // préchargées (skins réutilisés par SiteWorkers). Liste forcée vide.
+    // PNJ d'ambiance : UN SEUL système par plan de chantier — les SiteWorkers.
     //
-    // ⚠️ NE PAS « rallumer » cette liste pour faire apparaître des PNJ métier :
-    // ce serait recréer la double-population incohérente. Les feuilles métier
-    // (`kind:'trade'`) sont rendues par SiteWorkers via `tradeNpcs` (ci-dessus),
-    // en postes fixes animés à l'échelle unique — c'est le chemin à utiliser.
-    // Boucle conservée morte (liste vide) : à supprimer avec `ambientSprites`.
-    const ambientList = (this.stage.ambient ?? []).slice(0, 0)
-    for (const [npcIdx, amb] of ambientList.entries()) {
-      if (!this.textures.exists(amb.key)) { continue }
-      // Rayon forfaitaire du PNJ : demi-frame compact (64 px) × scale.
-      const ambRadius = Math.round(amb.scale * 64)
-      // Angle : le premier PNJ suit geometry.ambientAngle (ou formule seedée),
-      // les suivants sont décalés de 40° dans le même secteur.
-      const baseAngleDeg =
-        stageGeometry?.ambientAngle !== undefined
-          ? stageGeometry.ambientAngle
-          : (((stageSeed * 2654435761) >>> 0) % 1000) / 1000 * 360
-      const ambAngleDeg = (baseAngleDeg + npcIdx * 40) % 360
-      // Dart-throwing déterministe : sel unique par PNJ pour ne pas dépendre des
-      // autres placements (structures/landmark) ni des autres PNJs.
-      const npcSalt = (0xab7c1234 + npcIdx * 0x9e3779b9) >>> 0
-      const ambRng = (() => {
-        let t = ((stageSeed ^ npcSalt) >>> 0)
-        return () => {
-          t = (t + 0x6d2b79f5) >>> 0
-          let r = Math.imul(t ^ (t >>> 15), 1 | t)
-          r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) >>> 0
-          return ((r ^ (r >>> 14)) >>> 0) / 4294967296
-        }
-      })()
-      const pos = resolvePlacement(
-        ambAngleDeg,
-        AMB_DIST_MIN, AMB_DIST_MAX,
-        WORLD.width / 2, WORLD.height / 2,
-        WORLD.width, WORLD.height, 40,
-        exclusions, placed, ambRadius, ambRng
-      )
-      const sprite = this.add.sprite(pos.x, pos.y, amb.key).setScale(amb.scale).setDepth(1)
-      // Seed individuel dérivé de stageSeed + index → chaque PNJ a une errance et
-      // une réplique DISTINCTES même si le tableau contient plusieurs entrées (B3 fix).
-      const npcSeed = (stageSeed ^ (npcIdx * 0x9e3779b9)) >>> 0
-      this.ambientSprites.push({
-        sprite,
-        anchor: { x: pos.x, y: pos.y },
-        seed: npcSeed,
-        behavior: amb.behavior,
-        framePeriodMs: amb.framePeriodMs ?? 300
-      })
-      // Chaque PNJ devient une ancre (les props ne se poseront pas dessus).
-      placed.push({ x: pos.x, y: pos.y, r: ambRadius })
-    }
+    // Les feuilles `stage.ambient` sont préchargées puis rendues EXCLUSIVEMENT par
+    // SiteWorkers (ci-dessus) : navetteurs à l'échelle unique (WORKER_SCALE) pour
+    // les feuilles ouvrier, postes fixes animés pour les feuilles `kind:'trade'`.
+    //
+    // ⚠️ NE JAMAIS réintroduire ici un second système d'errance (ancien
+    // `ambientSprites` Lissajous) : faire coexister les deux recréait la
+    // double-population incohérente — tailles disparates (les `scale` de
+    // `stage.ambient` vont de 0.62 à 1.67, contre WORKER_SCALE=0.62 unique) et
+    // errance « dans tous les sens » par-dessus des ouvriers aux trajets utiles.
+    // Pour afficher une feuille de plus, la brancher sur SiteWorkers.
 
     // ── Streamer de décor (construit ici, ancres = tout ce qui a été posé) ───────
     // Les props streamés évitent désormais structures + landmark + PNJ (anti-chevauchement)
@@ -867,9 +800,7 @@ export class GameScene extends Phaser.Scene {
         loadedChunks: this.decorStreamer.loadedChunkCount,
         decorObjects: this.decorStreamer.decorObjectCount
       })
-      // B4 — Sondes PNJ d'ambiance (test-only) : positions actuelles et bulles actives.
-      this.seam.debugAmbientNpcs = (): { x: number; y: number }[] =>
-        this.ambientSprites.map((npc) => ({ x: npc.sprite.x, y: npc.sprite.y }))
+      // B4 — Sonde bulles d'ambiance (test-only).
       this.seam.debugActiveBubbles = (): number => this.bubbles.activeCount
       // T5 — Sonde clusters de terrain (test-only) : nombre de sprites actifs.
       this.seam.debugSiteInfo = (): { spriteCount: number } => ({
@@ -973,12 +904,6 @@ export class GameScene extends Phaser.Scene {
       this.siteWorkers.sync(state)
     }
 
-    // PNJ(s) d'ambiance : errance douce (B3) + animation de geste (boucle lente).
-    for (const npc of this.ambientSprites) {
-      const off = ambientOffset(npc.seed, this.time.now, npc.behavior)
-      npc.sprite.setPosition(npc.anchor.x + off.dx, npc.anchor.y + off.dy)
-      npc.sprite.setFrame(walkFrame(0, this.time.now, npc.framePeriodMs))
-    }
     // Bulles de dialogue (humour râleur rétro) sur les PNJ du chantier : métier
     // posé → 'job' (blasé, moqueur), ouvrier mobile → 'civilian' (panique). Un
     // ennemi à portée déclenche les répliques « monstre proche ». Priorité stage

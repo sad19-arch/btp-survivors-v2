@@ -289,18 +289,6 @@ export function pathFollow(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// loadVisible
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Charge visible : le worker porte quelque chose à l'aller (A→B), mains vides au retour.
- * Sémantique : aller = évacuer les déblais, retour = revenir chercher.
- */
-export function loadVisible(leg: 'ab' | 'ba'): boolean {
-  return leg === 'ab'
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // panicDecision
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -2,31 +2,33 @@
  * SiteWorkers — module de rendu des ouvriers navetteurs (T6).
  *
  * Des ouvriers d'ambiance font la navette entre deux zones du chantier (issues
- * des clusters), portent une charge visible à l'aller, et paniquent quand la
- * horde s'approche. Rendu pur/cosmétique : sim:check diff 0 garanti.
+ * des clusters) et paniquent quand la horde s'approche. Rendu pur/cosmétique :
+ * sim:check diff 0 garanti.
  *
  * CONTRAINTE ARCHITECTURE :
  *   Ce module ne contient QUE du rendu observateur.
  *   `GameScene` instancie et délègue via reset/sync/dispose (pattern uniforme).
- *   La logique de comportement (navette, charge, panique) vit dans
+ *   La logique de comportement (navette, panique) vit dans
  *   `src/render/workerBehavior.ts` (fonctions pures testées).
  *
  * Profondeurs DA :
  *   1   ouvriers navetteurs (même plan que les PNJ d'ambiance)
- *   2   charge portée (au-dessus de l'ouvrier)
  *   8   indicateur de panique (panneau « ! » — distinct des bulles prisonnier)
  *
  * Lisibilité :
  *   - Sprites PNJ existants (porteur/signaleur) → silhouette non-menaçante.
  *   - Indicateur de panique = panneau orange pixel « ! » (DA-safe, ≠ bulle « Merci »).
- *   - Charge = sprite prop_s2_dirt en miniature (scale 0.4), visible sur le worker.
+ *   - La CHARGE est DANS la feuille du porteur (brouette de terre, pile de
+ *     cartons, plaques…) : ne PAS rajouter un prop de charge par-dessus — le
+ *     prop `prop_s2_dirt` collé au rôle `porteur` doublait l'objet déjà dessiné
+ *     (tas de terre flottant sur une brouette déjà pleine).
  */
 
 import Phaser from 'phaser'
 import { buildSiteLayout, type PlacedCluster } from '@core/siteLayout'
 import { buildSitePlan } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
-import { commutePos, loadVisible, panicDecision, pathFollow, fleeVelocity, planAutoTradeNpcs, planNpcJobs, planPathWalkers, PANIC_R } from '@render/workerBehavior'
+import { commutePos, panicDecision, pathFollow, fleeVelocity, planAutoTradeNpcs, planNpcJobs, planPathWalkers, PANIC_R } from '@render/workerBehavior'
 import { resolveComposedLayout } from '@content/runtimeLayouts'
 import type { StageLayout } from '@content/stageLayout'
 import { dirRow, idleFrameOf, walkFrameOf } from '@render/sprites'
@@ -83,9 +85,6 @@ const RESELECT_THROTTLE = 30
 
 /** Depth des sprites d'ouvriers. */
 const DEPTH_WORKER = 1
-
-/** Depth de la charge portée. */
-const DEPTH_LOAD = 2
 
 /** Depth de l'indicateur de panique. */
 const DEPTH_PANIC = 8
@@ -169,7 +168,6 @@ export interface TradeNpcSpec {
 interface ActiveWorker {
   job: WorkerJob
   sprite: Phaser.GameObjects.Sprite
-  loadSprite: Phaser.GameObjects.Image | null
   panicIndicator: Phaser.GameObjects.Container | null
   /** Position de fuite accumulée (en panique, s'éloigne de l'ennemi). */
   fleeX: number
@@ -706,11 +704,6 @@ export class SiteWorkers {
           aw.sprite.setFrame(walkFrameOf(sheetFrames(aw.sprite), row, nowMs, 200))
         }
 
-        // Cache la charge.
-        if (aw.loadSprite !== null) {
-          aw.loadSprite.setVisible(false)
-        }
-
         // Indicateur de panique (panneau « ! » orange).
         this._showPanicIndicator(aw)
       } else {
@@ -726,19 +719,6 @@ export class SiteWorkers {
         if (aw.animatable) {
           const row = dirRow(dirX, dirY)
           aw.sprite.setFrame(walkFrameOf(sheetFrames(aw.sprite), row, nowMs, 250))
-        }
-
-        // Charge : visible à l'aller (A→B) seulement.
-        const carrying = loadVisible(pos.leg)
-        if (aw.loadSprite !== null) {
-          aw.loadSprite.setVisible(carrying)
-          if (carrying) {
-            // Positionne la charge légèrement au-dessus et devant l'ouvrier.
-            aw.loadSprite.setPosition(
-              aw.sprite.x + dirX * 0.15,
-              aw.sprite.y - 20
-            )
-          }
         }
 
         // Cache l'indicateur de panique.
@@ -850,23 +830,9 @@ export class SiteWorkers {
       sprite = g as unknown as Phaser.GameObjects.Sprite
     }
 
-    // Charge miniature — visible uniquement pour les porteurs.
-    let loadSprite: Phaser.GameObjects.Image | null = null
-    const loadKey = this.scene.textures.exists('prop_s2_dirt')
-      ? 'prop_s2_dirt'
-      : (this.scene.textures.exists('prop_stage03_rebar') ? 'prop_stage03_rebar' : null)
-    if (job.role === 'porteur' && loadKey !== null) {
-      loadSprite = this.scene.add
-        .image(x, y - 20, loadKey)
-        .setScale(loadKey === 'prop_stage03_rebar' ? 0.28 : 0.35)
-        .setDepth(DEPTH_LOAD)
-        .setVisible(false) // sera rendu visible au sync si loadVisible(leg)
-    }
-
     return {
       job,
       sprite,
-      loadSprite,
       panicIndicator: null,
       fleeX: x,
       fleeY: y,
@@ -932,9 +898,6 @@ export class SiteWorkers {
   /** Détruit un worker et ses objets graphiques associés. */
   private _destroyWorker(aw: ActiveWorker): void {
     aw.sprite.destroy()
-    if (aw.loadSprite !== null) {
-      aw.loadSprite.destroy()
-    }
     if (aw.panicIndicator !== null) {
       aw.panicIndicator.destroy()
     }

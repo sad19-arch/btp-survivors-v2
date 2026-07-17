@@ -87,11 +87,6 @@ export interface GameSeam {
    */
   debugDecorInfo?(): { loadedChunks: number; decorObjects: number }
   /**
-   * [Debug/B4] Positions actuelles (monde) de chaque PNJ d'ambiance du stage courant.
-   * Absente en mode allégé ou tant que la scène n'est pas montée.
-   */
-  debugAmbientNpcs?(): { x: number; y: number }[]
-  /**
    * [Debug/B4] Nombre de bulles de râlerie actuellement affichées (≤ MAX_AMBIENT_BUBBLES).
    * Absente en mode allégé ou tant que la scène n'est pas montée.
    */
