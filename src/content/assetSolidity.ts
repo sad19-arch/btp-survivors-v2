@@ -91,14 +91,25 @@ export const ASSET_SOLIDITY: Readonly<Record<string, Solidity>> = {
   prop_stage03_concrete_mixer_work: { collide: 'both', shape: { kind: 'circle', r: 38 } },
   // Stage 04 — réseaux enterrés
   struct_stage04_excavator: { collide: 'both', shape: { kind: 'circle', r: 50 } }, // mini-pelle
-  prop_stage04_trencher: { collide: 'both', shape: { kind: 'circle', r: 40 } }, // trancheuse
+  struct_stage04_excavator_work: { collide: 'both', shape: { kind: 'circle', r: 50 } },
+  struct_stage04_excavator_move: { collide: 'both', shape: { kind: 'circle', r: 50 } },
+  // ⚠️ LE NOM MENT : `trencher.png` n'est PAS une trancheuse, c'est un TOURET DE
+  // TUYAU rouge posé au sol (vérifié en ouvrant le PNG). Il était déclaré solide
+  // r40 — un flexible bloquait le joueur comme un mur. Faute commise dans le lot
+  // même qui posait la règle « déclare, ne déduis pas » : j'ai déduit du nom.
+  // Un tuyau au sol, on marche dessus.
+  prop_stage04_trencher: { collide: 'none' },
   // Stage 05 — gros œuvre
   struct_stage05_crane: { collide: 'both', shape: { kind: 'circle', r: 60 } }, // grue à tour
-  struct_stage05_mixer: { collide: 'both', shape: { kind: 'circle', r: 52 } }, // grue mobile
+  struct_stage05_crane_work: { collide: 'both', shape: { kind: 'circle', r: 60 } },
+  struct_stage05_mixer: { collide: 'both', shape: { kind: 'circle', r: 52 } }, // toupie (cf. stages.ts)
+  struct_stage05_mixer_work: { collide: 'both', shape: { kind: 'circle', r: 52 } },
   // Stage 06 — échafaudages
   struct_stage06_nacelle: { collide: 'both', shape: { kind: 'circle', r: 46 } }, // nacelle
+  struct_stage06_nacelle_work: { collide: 'both', shape: { kind: 'circle', r: 46 } },
   // Stage 07 — charpente
   struct_stage07_crane: { collide: 'both', shape: { kind: 'circle', r: 52 } }, // camion-grue
+  struct_stage07_crane_work: { collide: 'both', shape: { kind: 'circle', r: 52 } },
   // Stage 08 — second œuvre
   struct_stage08_van: { collide: 'both', shape: { kind: 'circle', r: 46 } }, // fourgon artisan
   // Stage 10 — livraison / audit
