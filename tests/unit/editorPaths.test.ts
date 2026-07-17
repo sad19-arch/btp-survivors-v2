@@ -148,11 +148,19 @@ describe('walkerSkinsFor — le choix est filtré par la famille', () => {
     expect(skins.some((s) => s.key === 'prop_s2_truck')).toBe(true)
   })
 
-  it('un stage SANS sprite de camion rend une liste VIDE — l’inspecteur peut le dire', () => {
-    // C'est la source de l'échec silencieux : seul `terrassement` déclare
-    // `prop_s2_truck`. Sur terrain_vierge (le stage de l'utilisateur), un chemin
-    // camion était ignoré par un `continue` MUET.
-    expect(walkerSkinsFor('terrain_vierge', 'truck_path')).toEqual([])
+  it('un stage sans camion PROPRE propose quand même le camion PARTAGÉ — plus d’échec silencieux', () => {
+    // Ce test assertait AVANT une liste VIDE : seul `terrassement` déclarait
+    // `prop_s2_truck`, donc sur les 9 autres stages un chemin camion tombait dans
+    // un `continue` MUET — et l'inspecteur ne pouvait que SIGNALER la panne.
+    // La cause est supprimée : `CAMION_SKIN` est chargé sur les 10 stages, donc la
+    // liste n'est jamais vide et le chemin est toujours rendu. On garde le stage de
+    // l'utilisateur (`terrain_vierge`, sans camion propre) comme cas témoin.
+    const skins = walkerSkinsFor('terrain_vierge', 'truck_path')
+    expect(skins.some((s) => s.key === 'camion_benne')).toBe(true)
+    // Le filtre par famille tient toujours : jamais de PNJ sur un chemin camion.
+    expect(skins.every((s) => !s.key.startsWith('npc_'))).toBe(true)
+    // Le camion propre au stage 02 ne fuite PAS sur les autres stages.
+    expect(skins.some((s) => s.key === 'prop_s2_truck')).toBe(false)
   })
 })
 

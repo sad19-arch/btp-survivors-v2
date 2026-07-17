@@ -12,7 +12,7 @@
  * y résolvent leurs clés.
  */
 
-import { STAGE_RENDER, SHARED_WORKER_NPCS, CITY_BUILDINGS, type StageRender, type StageAmbientNpc } from '@render/stages'
+import { STAGE_RENDER, SHARED_WORKER_NPCS, CITY_BUILDINGS, CAMION_SKIN, type StageRender, type StageAmbientNpc } from '@render/stages'
 import { CLUSTERS } from '@content/clusters'
 import type { PathType, TilePatch } from '@content/stageLayout'
 import { destructiblesForStage } from '@content/destructibles'
@@ -786,15 +786,25 @@ export function paletteEntry(id: string): PaletteEntry | undefined {
 }
 
 /**
- * Sprites de véhicule utilisables comme marcheurs d'un chemin camion.
+ * Sprites de véhicule utilisables comme marcheurs d'un chemin camion, PROPRES à un
+ * stage : proposés seulement là où `STAGE_RENDER` les charge vraiment.
  *
- * Un seul aujourd'hui, et il n'est déclaré que par le stage 02 (`terrassement`) :
- * c'est précisément la source de l'échec silencieux — sur les 9 autres stages, un
- * chemin camion était ignoré sans un mot. `walkerSkinsFor` rend donc une liste
- * VIDE là-bas, ce qui permet à l'inspecteur de le DIRE.
+ * `prop_s2_truck` n'est déclaré qu'au stage 02 (`terrassement`) et reste une image
+ * MONO-frame retournée par `flipX` — c'était la source de l'échec silencieux tant
+ * qu'il servait aussi de REPLI. Ce n'est plus le cas : le repli est désormais
+ * `CAMION_SKIN`, partagé par les 10 stages (cf. `SHARED_VEHICLE_SKINS`).
  */
 const VEHICLE_SKINS: ReadonlyArray<{ key: string; label: string }> = [
-  { key: 'prop_s2_truck', label: 'Camion benne' }
+  { key: 'prop_s2_truck', label: 'Camion benne (stage 02, 1 sens)' }
+]
+
+/**
+ * Véhicules PARTAGÉS : chargés par `GameScene.preload` sur les 10 stages, ils ne
+ * figurent dans aucun `STAGE_RENDER` — les filtrer par stage les rendrait donc
+ * invisibles PARTOUT. On les propose inconditionnellement.
+ */
+const SHARED_VEHICLE_SKINS: ReadonlyArray<{ key: string; label: string }> = [
+  { key: CAMION_SKIN.key, label: 'Camion benne (4 directions)' }
 ]
 
 /**
@@ -818,7 +828,8 @@ export function walkerSkinsFor(
     for (const s of sr?.structures ?? []) {loaded.add(s.key)}
     for (const p of sr?.props ?? []) {loaded.add(p.key)}
     for (const e of sr?.editorExtras ?? []) {loaded.add(e.key)}
-    return VEHICLE_SKINS.filter((v) => loaded.has(v.key))
+    // Les partagés d'abord : c'est le défaut sain (4 directions, tous stages).
+    return [...SHARED_VEHICLE_SKINS, ...VEHICLE_SKINS.filter((v) => loaded.has(v.key))]
   }
   const out: Array<{ key: string; label: string }> = []
   const seen = new Set<string>()

@@ -18,7 +18,7 @@ import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { resolveComposedLayout } from '@content/runtimeLayouts'
 import { walkFrame } from '@render/sprites'
 import { ambientOffset } from '@render/ambientNpc'
-import { stageRender, type StageRender, FINAL_BOSS_SKIN, CONVOYEUR_SKIN, SHARED_WORKER_NPCS, CITY_BUILDINGS, CITY_PERIMETER } from '@render/stages'
+import { stageRender, type StageRender, FINAL_BOSS_SKIN, CONVOYEUR_SKIN, CAMION_SKIN, SHARED_WORKER_NPCS, CITY_BUILDINGS, CITY_PERIMETER } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { DamageNumberPool } from '@render/damageNumbers'
 import { VfxManager } from '@render/scenes/vfxManager'
@@ -428,6 +428,13 @@ export class GameScene extends Phaser.Scene {
         frameWidth: CONVOYEUR_SKIN.frame,
         frameHeight: CONVOYEUR_SKIN.frame
       })
+      // Skin PARTAGÉ du camion benne des chemins camion, chargé une fois pour tous
+      // les stages : sans lui, un `truck_path` posé ailleurs qu'au stage 02 restait
+      // muet (le repli `prop_s2_truck` n'existe que là-bas).
+      this.load.spritesheet(CAMION_SKIN.key, CAMION_SKIN.file, {
+        frameWidth: CAMION_SKIN.frame,
+        frameHeight: CAMION_SKIN.frame
+      })
       // Feuilles dédiées des personnages (phase C) : NON préchargées ici. `preload`
       // s'exécute au boot (avant la sélection) puis seulement au changement de stage —
       // les joueurs (donc leurs persos) n'y sont pas encore connus. Et précharger tout
@@ -664,7 +671,19 @@ export class GameScene extends Phaser.Scene {
       // On passe les clés PNJ RÉELLEMENT chargées du stage (numérotées par stage) pour
       // que _resolveKey matche une texture existante partout, pas seulement au stage 02.
       const npcKeys = (this.stage.ambient ?? []).map((a) => a.key)
-      this.siteWorkers.reset(this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId, npcKeys)
+      // PNJ MÉTIER du stage (geste + objet) : on passe les feuilles `kind:'trade'`
+      // et le secteur d'ancrage ; SiteWorkers les rend comme postes fixes animés.
+      // Sans ça, ces feuilles n'étaient atteignables que via une compo sauvée —
+      // registre vide ⇒ zéro métier affiché sur les 10 stages.
+      const tradeNpcs = {
+        entries: (this.stage.ambient ?? [])
+          .filter((a) => a.kind === 'trade')
+          .map((a) => ({ key: a.key, scale: a.scale })),
+        baseAngleDeg: stageGeometry?.ambientAngle ?? 55
+      }
+      this.siteWorkers.reset(
+        this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId, npcKeys, tradeNpcs
+      )
     }
     // PNJ(s) d'ambiance non-hostiles (geste métier) — un sprite par entrée, placement seedé
     // hors centre. Chaque PNJ reçoit un seed individuel dérivé de stageSeed + index, ce qui
@@ -683,6 +702,12 @@ export class GameScene extends Phaser.Scene {
     // PNJ ». La vie du chantier vient exclusivement des SiteWorkers (échelle
     // unique, déplacements utiles). Les feuilles `stage.ambient` restent
     // préchargées (skins réutilisés par SiteWorkers). Liste forcée vide.
+    //
+    // ⚠️ NE PAS « rallumer » cette liste pour faire apparaître des PNJ métier :
+    // ce serait recréer la double-population incohérente. Les feuilles métier
+    // (`kind:'trade'`) sont rendues par SiteWorkers via `tradeNpcs` (ci-dessus),
+    // en postes fixes animés à l'échelle unique — c'est le chemin à utiliser.
+    // Boucle conservée morte (liste vide) : à supprimer avec `ambientSprites`.
     const ambientList = (this.stage.ambient ?? []).slice(0, 0)
     for (const [npcIdx, amb] of ambientList.entries()) {
       if (!this.textures.exists(amb.key)) { continue }

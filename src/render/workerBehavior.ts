@@ -471,3 +471,59 @@ export function planNpcJobs(
     skin: resolveWorkerSkin(n.skin)
   }))
 }
+
+/** Distance min/max des PNJ métier auto-placés par rapport au centre du monde (px). */
+export const AUTO_TRADE_DIST_MIN = 420
+export const AUTO_TRADE_DIST_MAX = 520
+
+/** Écart angulaire entre deux métiers auto-placés (degrés) — secteur commun, silhouettes distinctes. */
+export const AUTO_TRADE_ANGLE_STEP = 40
+
+/**
+ * PNJ MÉTIER auto-placés sur un stage SANS compo sauvée (pur, testable).
+ *
+ * Les feuilles `kind:'trade'` (geste métier avec l'objet) n'étaient rendues que
+ * par le chemin « compo posée » (`planNpcJobs`), inatteignable tant que le
+ * registre des compos est vide — c.-à-d. sur les 10 stages. Ce planner donne au
+ * chemin de repli génératif les mêmes ancres que celles historiquement utilisées
+ * par les PNJ d'ambiance (rayon 420..520 autour du centre, secteur `baseAngleDeg`,
+ * un métier tous les 40°) : hors zone de spawn joueur, dans le monde, sans
+ * chevauchement.
+ *
+ * Rôle `npc_trade` ⇒ poste FIXE animé, rendu par le MÊME système que les autres
+ * ouvriers (SiteWorkers). On ne réintroduit donc PAS la double-population
+ * (ambiance errante « Lissajous » + navetteurs) qui donnait des tailles et des
+ * déplacements incohérents.
+ *
+ * Déterministe : aucune source d'aléa hors `seed`.
+ */
+export function planAutoTradeNpcs(
+  tradeKeys: readonly string[],
+  worldW: number,
+  worldH: number,
+  seed: number,
+  baseAngleDeg: number
+): Array<{ role: 'npc_trade'; x: number; y: number; skin: string }> {
+  const cx = worldW / 2
+  const cy = worldH / 2
+  const out: Array<{ role: 'npc_trade'; x: number; y: number; skin: string }> = []
+  for (const [i, skin] of tradeKeys.entries()) {
+    // Sel unique par PNJ : le placement d'un métier ne dépend pas du nombre des autres.
+    const salt = (0xab7c1234 + i * 0x9e3779b9) >>> 0
+    const h = Math.imul((seed ^ salt) >>> 0, 2654435761) >>> 0
+    const t = (h % 1000) / 1000
+    const dist = AUTO_TRADE_DIST_MIN + t * (AUTO_TRADE_DIST_MAX - AUTO_TRADE_DIST_MIN)
+    const angleDeg = (baseAngleDeg + i * AUTO_TRADE_ANGLE_STEP) % 360
+    const a = (angleDeg * Math.PI) / 180
+    // Convention Phaser (+y vers le bas) : on soustrait le sinus.
+    const x = cx + Math.cos(a) * dist
+    const y = cy - Math.sin(a) * dist
+    out.push({
+      role: 'npc_trade',
+      x: Math.max(0, Math.min(worldW, Math.round(x))),
+      y: Math.max(0, Math.min(worldH, Math.round(y))),
+      skin
+    })
+  }
+  return out
+}

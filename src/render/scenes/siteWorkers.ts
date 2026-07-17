@@ -26,10 +26,11 @@ import Phaser from 'phaser'
 import { buildSiteLayout, type PlacedCluster } from '@core/siteLayout'
 import { buildSitePlan } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
-import { commutePos, loadVisible, panicDecision, pathFollow, fleeVelocity, planNpcJobs, planPathWalkers, PANIC_R } from '@render/workerBehavior'
+import { commutePos, loadVisible, panicDecision, pathFollow, fleeVelocity, planAutoTradeNpcs, planNpcJobs, planPathWalkers, PANIC_R } from '@render/workerBehavior'
 import { resolveComposedLayout } from '@content/runtimeLayouts'
 import type { StageLayout } from '@content/stageLayout'
-import { dirRow, idleFrame, walkFrame } from '@render/sprites'
+import { dirRow, idleFrameOf, walkFrameOf } from '@render/sprites'
+import { CAMION_SKIN } from '@render/stages'
 import type { AppViewState } from '@/app/appState'
 import { PALETTE_HEX } from '@ui/palette'
 
@@ -127,6 +128,42 @@ interface WorkerJob {
   pauseMs?: number
   /** Sens unique (rôles 'path'/'path_camion'). */
   oneWay?: boolean
+  /**
+   * Échelle de rendu CALIBRÉE, per-feuille (rôle 'npc_trade').
+   * Absente ⇒ échelle unique des navetteurs (`WORKER_SCALE`).
+   */
+  scale?: number
+}
+
+/**
+ * Nombre de frames RÉEL d'une feuille (Phaser compte la frame `__BASE` en plus).
+ * Sert à choisir la bonne formule d'animation : les feuilles PNJ sont mono-ligne
+ * (5..12 frames de GESTE), le joueur et le camion sont en 4×4 (16 frames).
+ */
+function sheetFrames(sprite: Phaser.GameObjects.Sprite): number {
+  return Math.max(1, sprite.texture.frameTotal - 1)
+}
+
+/**
+ * Feuilles MÉTIER du stage (`kind:'trade'`) + secteur où les ancrer.
+ * Fournies par la couche écran (GameScene lit le registre de rendu) ; le module
+ * ne va pas chercher le stage lui-même (il reste un observateur).
+ */
+export interface TradeNpcSpec {
+  /**
+   * Feuilles métier dans l'ordre déclaré, avec leur échelle CALIBRÉE.
+   *
+   * L'échelle est per-feuille (et non le `WORKER_SCALE` unique des navetteurs) :
+   * les métiers viennent de deux générations d'art aux gabarits différents
+   * (feuilles 180² à ~135 px de contenu, feuilles 256² à ~168 px). Une échelle
+   * unique les afficherait de 64 à 112 px — soit exactement les « tailles
+   * disparates » que la normalisation cherchait à éliminer. Les valeurs sont
+   * MESURÉES sur la boîte englobante réelle (cf. `scale` dans `stages.ts`) pour
+   * viser ~99 px, la taille du joueur.
+   */
+  entries: ReadonlyArray<{ key: string; scale: number }>
+  /** Angle (degrés) du secteur d'ancrage — `geometry.ambientAngle` du stage. */
+  baseAngleDeg: number
 }
 
 interface ActiveWorker {
@@ -192,7 +229,14 @@ export class SiteWorkers {
    * Reconstruit les jobs depuis le siteLayout du stage courant.
    * Doit être appelé depuis `GameScene.create()` après `siteRenderer.reset()`.
    */
-  reset(seed: number, worldW: number, worldH: number, stageId: string, npcKeys: readonly string[] = []): void {
+  reset(
+    seed: number,
+    worldW: number,
+    worldH: number,
+    stageId: string,
+    npcKeys: readonly string[] = [],
+    tradeNpcs: TradeNpcSpec = { entries: [], baseAngleDeg: 0 }
+  ): void {
     this._destroyAll()
     this.jobs = []
     this.worldW = worldW
@@ -239,6 +283,12 @@ export class SiteWorkers {
       this._addComposedNpcsAndPaths(composed, worldW, worldH, npcKeys)
       return
     }
+
+    // PNJ MÉTIER du stage (geste + objet du métier). Sans ce bloc, les feuilles
+    // `kind:'trade'` n'étaient rendues que par le chemin « compo posée » — mort
+    // tant que le registre des compos est vide, c.-à-d. sur les 10 stages : elles
+    // étaient déclarées, packées, QA-OK… et jamais affichées.
+    jobIdx = this._addAutoTradeNpcs(tradeNpcs, worldW, worldH, seed, jobIdx)
 
     if (stageId === 'fondations') {
       jobIdx = this._addFoundationTradeWorkers(layout.clusters, npcKeys, jobIdx)
@@ -471,9 +521,13 @@ export class SiteWorkers {
       const isTruck = plan.type === 'truck_path'
       // Skin explicite > défaut de la famille. Un skin absent des textures
       // chargées retombe sur le défaut : jamais d'écran vide, jamais de crash.
+      // Le repli camion est le skin PARTAGÉ (chargé sur les 10 stages), et non plus
+      // `prop_s2_truck` — déclaré au SEUL stage 02, il faisait tomber les 9 autres
+      // dans le `continue` ci-dessous : un chemin camion posé dans l'éditeur y
+      // disparaissait sans un mot.
       const wanted = plan.skin !== null && this.scene.textures.exists(plan.skin)
         ? plan.skin
-        : (isTruck ? 'prop_s2_truck' : this._resolveKey('porteur', npcKeys))
+        : (isTruck ? CAMION_SKIN.key : this._resolveKey('porteur', npcKeys))
       if (wanted === null || !this.scene.textures.exists(wanted)) {
         // Rien à afficher (stage sans sprite camion). L'inspecteur de l'éditeur
         // AVERTIT en amont — ici on ne peut que ne rien créer.
@@ -543,7 +597,8 @@ export class SiteWorkers {
       }
 
       // Suivi de CHEMIN composé (éditeur) : polyligne A→B→C, sans panique
-      // (route assignée). Camion = bob + flip ; ouvrier = anim de marche.
+      // (route assignée). Camion et ouvrier s'orientent de la MÊME façon (ligne de
+      // direction de la feuille) ; seul le tangage du camion les distingue.
       if (job.role === 'path' || job.role === 'path_camion') {
         const pf = pathFollow(job.points ?? [], tMs, job.speed, {
           pauseMs: job.pauseMs ?? 0,
@@ -555,15 +610,16 @@ export class SiteWorkers {
         if (!pf.visible) {
           continue
         }
-        if (job.role === 'path_camion') {
-          const bob = Math.sin(tMs / 150) * CAMION_BOB_PX
-          aw.sprite.setPosition(pf.x, pf.y + bob)
-          aw.sprite.setFlipX(pf.dirX < 0)
-        } else {
-          aw.sprite.setPosition(pf.x, pf.y)
-          if (aw.animatable) {
-            aw.sprite.setFrame(walkFrame(dirRow(pf.dirX, pf.dirY), nowMs, 250))
-          }
+        // Camion : léger tangage vertical. Sinon rien ne distingue plus les deux
+        // familles — le camion lit sa ligne de direction comme un ouvrier.
+        //
+        // Plus de `flipX` ici : la feuille porte 4 VRAIES orientations, et un camion
+        // vu de dessus n'est PAS son propre miroir (retourner la vue « est » sur un
+        // trajet vers le nord montrerait un camion couché en travers de sa route).
+        const bob = job.role === 'path_camion' ? Math.sin(tMs / 150) * CAMION_BOB_PX : 0
+        aw.sprite.setPosition(pf.x, pf.y + bob)
+        if (aw.animatable) {
+          aw.sprite.setFrame(walkFrameOf(sheetFrames(aw.sprite), dirRow(pf.dirX, pf.dirY), nowMs, 250))
         }
         continue
       }
@@ -602,7 +658,10 @@ export class SiteWorkers {
         }
         aw.sprite.setPosition(aw.fleeX, aw.fleeY)
         if (aw.animatable) {
-          aw.sprite.setFrame(dirX !== 0 || dirY !== 0 ? walkFrame(dirRow(dirX, dirY), nowMs, 200) : idleFrame(dirRow(0, 1)))
+          const n = sheetFrames(aw.sprite)
+          aw.sprite.setFrame(
+            dirX !== 0 || dirY !== 0 ? walkFrameOf(n, dirRow(dirX, dirY), nowMs, 200) : idleFrameOf(n, dirRow(0, 1))
+          )
         }
         continue
       }
@@ -644,7 +703,7 @@ export class SiteWorkers {
         // Direction de fuite pour l'animation (repli Graphics : pas de setFrame).
         if (aw.animatable) {
           const row = dirRow(pd.fx, pd.fy)
-          aw.sprite.setFrame(walkFrame(row, nowMs, 200))
+          aw.sprite.setFrame(walkFrameOf(sheetFrames(aw.sprite), row, nowMs, 200))
         }
 
         // Cache la charge.
@@ -666,7 +725,7 @@ export class SiteWorkers {
         const dirY = pos.leg === 'ab' ? dy : -dy
         if (aw.animatable) {
           const row = dirRow(dirX, dirY)
-          aw.sprite.setFrame(walkFrame(row, nowMs, 250))
+          aw.sprite.setFrame(walkFrameOf(sheetFrames(aw.sprite), row, nowMs, 250))
         }
 
         // Charge : visible à l'aller (A→B) seulement.
@@ -770,9 +829,11 @@ export class SiteWorkers {
     const isCamion = job.role === 'camion' || job.role === 'path_camion'
     let sprite: Phaser.GameObjects.Sprite
     if (hasTexture) {
+      // Échelle calibrée du job (PNJ métier : gabarits d'art hétérogènes) sinon
+      // échelle unique des navetteurs, qui partagent tous le même gabarit 256².
       sprite = this.scene.add
         .sprite(x, y, job.textureKey)
-        .setScale(isCamion ? 1.0 : WORKER_SCALE)
+        .setScale(job.scale ?? (isCamion ? 1.0 : WORKER_SCALE))
         .setDepth(DEPTH_WORKER)
     } else {
       // Repli : cercle vert clair (non-menaçant, distinct des ennemis rouges).
@@ -810,9 +871,20 @@ export class SiteWorkers {
       fleeX: x,
       fleeY: y,
       inPanic: false,
-      // Seul un vrai Sprite texturé de type feuille de marche accepte setFrame.
-      // Le camion (image mono-frame) et le repli Graphics ne sont PAS animables.
-      animatable: hasTexture && !isCamion
+      // Seul un vrai Sprite texturé de type feuille accepte setFrame.
+      //
+      // Le critère est la TEXTURE, pas le RÔLE : `!isCamion` interdisait à TOUT
+      // camion de s'animer, y compris au skin partagé 4×4 — aucun camion ne pouvait
+      // donc JAMAIS s'orienter. On regarde le nombre de frames RÉEL (Phaser compte
+      // la frame `__BASE` en plus → -1) : > 1 ⇒ vraie feuille.
+      //
+      // Le seuil dit exactement ce qu'il veut dire — « pas une image MONO-frame » —
+      // et rien de plus : `prop_s2_truck` (192×160, 1 frame) reste exclu, sinon un
+      // `setFrame(5)` le casserait. Ne PAS durcir à `>= SHEET_FRAMES` : ce flag sert
+      // aussi aux feuilles MONO-LIGNE des PNJ (5 à 8 frames, un GESTE et non des
+      // orientations), qu'un tel seuil figerait — c'est `walkFrameOf` qui adapte le
+      // défilé au gabarit réel de la feuille.
+      animatable: hasTexture && sheetFrames(sprite) > 1
     }
   }
 
@@ -874,6 +946,52 @@ export class SiteWorkers {
       this._destroyWorker(aw)
     }
     this.active = []
+  }
+
+  /**
+   * Ancre les PNJ MÉTIER du stage (repli génératif, sans compo sauvée).
+   *
+   * Rôle `npc_trade` = poste FIXE animé, rendu par CE système : on n'ajoute pas
+   * une seconde population errante par-dessus les navetteurs (l'ancienne
+   * double-population « ambiance Lissajous + SiteWorkers » donnait des tailles
+   * et des trajectoires incohérentes — un seul système par plan de chantier).
+   *
+   * Placement délégué au planner PUR `planAutoTradeNpcs` (testé sans Phaser).
+   * @returns le prochain `jobIdx` libre.
+   */
+  private _addAutoTradeNpcs(
+    spec: TradeNpcSpec,
+    worldW: number,
+    worldH: number,
+    seed: number,
+    startIdx: number
+  ): number {
+    let jobIdx = startIdx
+    const scaleOf = new Map(spec.entries.map((e) => [e.key, e.scale]))
+    for (const p of planAutoTradeNpcs(spec.entries.map((e) => e.key), worldW, worldH, seed, spec.baseAngleDeg)) {
+      // Texture absente (stage en cours d'habillage) → on n'affiche rien plutôt
+      // que de risquer un setFrame sur une texture fantôme.
+      if (!this.scene.textures.exists(p.skin)) {
+        continue
+      }
+      this.jobs.push({
+        textureKey: p.skin,
+        role: p.role,
+        ax: p.x,
+        ay: p.y,
+        bx: p.x,
+        by: p.y,
+        speed: 0,
+        midX: p.x,
+        midY: p.y,
+        phaseOffsetMs: jobIdx * PHASE_OFFSET_MS,
+        // La clé vient de `spec.entries` : l'échelle est toujours présente. Le
+        // repli ne sert qu'à rester total (jamais d'échelle 0 = PNJ invisible).
+        scale: scaleOf.get(p.skin) ?? WORKER_SCALE
+      })
+      jobIdx++
+    }
+    return jobIdx
   }
 
   private _addFoundationTradeWorkers(
