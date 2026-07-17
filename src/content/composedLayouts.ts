@@ -8,8 +8,11 @@
  */
 
 import type { StageLayout } from './stageLayout'
+import l0 from './layouts/terrain_vierge.json'
 
-const REGISTRY: Record<string, StageLayout> = {}
+const REGISTRY: Record<string, StageLayout> = {
+  'terrain_vierge': l0 as unknown as StageLayout
+}
 
 /** Compo committée d'un stage, ou null si aucune (le jeu reste génératif). */
 export function getComposedLayout(stageId: string): StageLayout | null {

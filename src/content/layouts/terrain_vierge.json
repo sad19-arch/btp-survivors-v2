@@ -1,0 +1,7596 @@
+{
+  "schemaVersion": 1,
+  "stage": "terrain_vierge",
+  "worldSize": {
+    "width": 10240,
+    "height": 7680
+  },
+  "spawn": {
+    "x": 0,
+    "y": 0
+  },
+  "cameraPreview": {
+    "width": 1280,
+    "height": 720
+  },
+  "instances": [
+    {
+      "id": "instance_mrku7o13_2",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1384,
+      "y": 888,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv3c0t_196",
+      "prefab": "obj_decal_stage01_layout_cross",
+      "x": -488.2462184956894,
+      "y": -169.5892850404539,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_stage01_layout_cross",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrku7v70_3",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1372.278487558604,
+      "y": 725.1568391252686,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkubstz_16",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1379.832622568426,
+      "y": 534.6046888435567,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuc7mp_17",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1380.369031506516,
+      "y": 347.22149273129344,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkucjk3_18",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1393.0517218776922,
+      "y": -885.7313889111902,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkud33q_19",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1384.2266921478076,
+      "y": 194.9987584229384,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkud6sf_20",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1392.3215850536135,
+      "y": 0.7213286836004045,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkud8g7_21",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1388.27413860071,
+      "y": -197.60354750864008,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkud98v_22",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1388.27413860071,
+      "y": -371.6437449834639,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkud9z3_23",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1380.1792456949042,
+      "y": -561.8737282698994,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkudam7_24",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1380.1792456949042,
+      "y": -735.9139257447223,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkudbhs_25",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1384.2266921478076,
+      "y": -914.0015696724486,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkudiup_26",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1392.3215745435637,
+      "y": -715.6766934802081,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkudkeh_27",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1392.3215745435637,
+      "y": -521.3992637408701,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkudlbd_28",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1380.1792351848553,
+      "y": -363.548852077658,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkudmfl_29",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1376.131788731952,
+      "y": -213.7933333202518,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkudngh_30",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1380.1792351848553,
+      "y": -72.13270746865146,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkudo7e_31",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1384.2266816377587,
+      "y": 57.38557902424054,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkudpuy_32",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1376.131788731952,
+      "y": 239.5206694048693,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkudrfm_33",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1388.2741280906603,
+      "y": 385.228741709373,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkudsb6_34",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1376.131788731952,
+      "y": 514.747028202265,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkudtiq_35",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1376.131788731952,
+      "y": 656.4076540538654,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkudub7_36",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1372.0843422790504,
+      "y": 830.4478515286892,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuer3l_52",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1327.5624418071675,
+      "y": -970.6658200130887,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuese8_53",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1137.332458520732,
+      "y": -974.7132664659921,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkueths_54",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -934.9601358755881,
+      "y": -974.7132664659921,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkueuaw_55",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -756.8724919478618,
+      "y": -966.6183735601862,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkueuzk_56",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -558.5476157556213,
+      "y": -962.5709271072838,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuevqp_57",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -384.50741828079754,
+      "y": -962.5709271072838,
+      "flipX": false,
+      "variant": 1,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuex95_58",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -210.46722080597465,
+      "y": -974.7132664659921,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkueyu9_59",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -89.04382721888851,
+      "y": -982.808159371798,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuezox_60",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 129.5182812378671,
+      "y": -958.5234806543804,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuf0o9_61",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 311.65337161849766,
+      "y": -970.6658200130887,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuf1ft_62",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 489.741015546223,
+      "y": -970.6658200130887,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuf25e_63",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 696.1607846442703,
+      "y": -970.6658200130887,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuf2ru_64",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 870.2009821190941,
+      "y": -978.7607129188946,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuf3oy_65",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1044.2411795939179,
+      "y": -986.8556058247004,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuf4de_66",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1206.1390377100315,
+      "y": -986.8556058247004,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuf54q_67",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1351.8471100145352,
+      "y": -974.7132664659921,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 180,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkui4l3_1",
+      "prefab": "obj_prop_soft",
+      "x": -178.12485139351065,
+      "y": 187.50003280118108,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_soft",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkui61r_2",
+      "prefab": "obj_prop_soft",
+      "x": 812.5001707486836,
+      "y": 75.00003028661013,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_soft",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkui79o_3",
+      "prefab": "obj_prop_soft",
+      "x": -809.3748655030477,
+      "y": -512.4999828450382,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_soft",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkui8es_4",
+      "prefab": "obj_prop_soft",
+      "x": -856.2498665507856,
+      "y": 606.250042160973,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_soft",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkui9ms_5",
+      "prefab": "obj_prop_soft",
+      "x": 837.5001713074771,
+      "y": 593.7500418815762,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_soft",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuiavg_6",
+      "prefab": "obj_prop_soft",
+      "x": 684.3751678848666,
+      "y": -590.624984591268,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_soft",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuidyf_7",
+      "prefab": "obj_prop_stage01_tree_b",
+      "x": -406.24985649250175,
+      "y": -574.999984242022,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_b",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuighf_8",
+      "prefab": "obj_prop_stage01_tree_b",
+      "x": -1209.3748744437444,
+      "y": -803.1249893410136,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_b",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuihv5_9",
+      "prefab": "obj_prop_stage01_tree_b",
+      "x": 809.3751706788344,
+      "y": -274.9999775364995,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_b",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuiil3_10",
+      "prefab": "obj_prop_stage01_tree_b",
+      "x": -1187.4998739548,
+      "y": 300.00003531575203,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_b",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuijc7_11",
+      "prefab": "obj_prop_stage01_tree_b",
+      "x": 390.6251613190425,
+      "y": 846.8750475393608,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_b",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuikal_12",
+      "prefab": "obj_prop_stage01_tree_b",
+      "x": 1218.7501798290796,
+      "y": -840.6249901792039,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_b",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkulpx4_22",
+      "prefab": "obj_building_apartment",
+      "x": -1815.6248879944878,
+      "y": -3542.6875495021236,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_apartment",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkulpx4_23",
+      "prefab": "obj_building_lyon_gare_saint_exupery",
+      "x": -1583.1248854799169,
+      "y": -3532.562549991068,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_gare_saint_exupery",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkulpx4_24",
+      "prefab": "obj_building_lyon_traboule_avocats",
+      "x": -1302.374877237712,
+      "y": -3538.4375504800128,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_avocats",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkulpx4_25",
+      "prefab": "obj_building_warehouse",
+      "x": -1083.9998719990226,
+      "y": -3523.5625494322744,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_warehouse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkulpx4_26",
+      "prefab": "obj_building_shops",
+      "x": -880.124868157317,
+      "y": -3535.3125504101636,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkulpx4_27",
+      "prefab": "obj_building_tower",
+      "x": -735.49986277893,
+      "y": -3572.812551248354,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_tower",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkumicg_28",
+      "prefab": "obj_building_lyon_vieux_lyon",
+      "x": -584.9998613819462,
+      "y": -3567.6875500609176,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_vieux_lyon",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkumtiy_29",
+      "prefab": "obj_building_rowhouses",
+      "x": -394.8748551653671,
+      "y": -3533.937550200616,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_rowhouses",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkun3h2_30",
+      "prefab": "obj_building_shops",
+      "x": -235.6248499965268,
+      "y": -3528.312550968957,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkunh5c_31",
+      "prefab": "obj_building_lyon_tchecoslovaques_76",
+      "x": 30.500153984877215,
+      "y": -3542.9375507594095,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tchecoslovaques_76",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkunplr_32",
+      "prefab": "obj_building_lyon_tower_incity",
+      "x": 287.1251593632651,
+      "y": -3636.1875503403144,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_incity",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuo173_33",
+      "prefab": "obj_building_office",
+      "x": 406.50016292557393,
+      "y": -3556.1875503403144,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_office",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuo9kv_34",
+      "prefab": "obj_building_parking",
+      "x": 541.2501655798433,
+      "y": -3557.937550200616,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_parking",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuojp2_35",
+      "prefab": "obj_building_lyon_traboule_tour_rose",
+      "x": 721.5001690723029,
+      "y": -3583.3125504101636,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_tour_rose",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuotaj_36",
+      "prefab": "obj_building_lyon_traboule_longue",
+      "x": 876.000172704461,
+      "y": -3576.312550968957,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_longue",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkup0vl_37",
+      "prefab": "obj_building_lyon_traboule_galleries",
+      "x": 1065.250176755715,
+      "y": -3585.6875511785047,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_galleries",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkup7tu_38",
+      "prefab": "obj_building_lyon_traboule_escalier",
+      "x": 1230.8751804577223,
+      "y": -3584.312550968957,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_escalier",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkupf1n_39",
+      "prefab": "obj_building_lyon_traboule_cour_voraces",
+      "x": 1407.2501845788247,
+      "y": -3587.4375510388063,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_cour_voraces",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkupoen_40",
+      "prefab": "obj_building_lyon_tower_silex2",
+      "x": 1534.6251881411335,
+      "y": -3593.062550270465,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_silex2",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuq36l_41",
+      "prefab": "obj_building_lyon_tower_edf",
+      "x": 1634.3751891190223,
+      "y": -3580.1875503403144,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_edf",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuq9a0_42",
+      "prefab": "obj_building_lyon_tower_part_dieu",
+      "x": 1741.0001911446489,
+      "y": -3636.1875503403144,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_part_dieu",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuqoue_43",
+      "prefab": "obj_building_lyon_tower_oxygene",
+      "x": 1830.5001942180133,
+      "y": -3604.1875503403144,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_oxygene",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkusuet_44",
+      "prefab": "obj_building_lyon_fourviere",
+      "x": 1957.0800522984173,
+      "y": -3588.4328635317,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_fourviere",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkusz63_45",
+      "prefab": "obj_building_lyon_opera",
+      "x": -2019.586717945625,
+      "y": -3543.1122731351024,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_opera",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkutb1m_46",
+      "prefab": "obj_building_lyon_mural_canuts",
+      "x": -2260.802179114154,
+      "y": -3546.447199335528,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_mural_canuts",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkutgma_47",
+      "prefab": "obj_building_lyon_tower_edf",
+      "x": -2440.7352786962924,
+      "y": -3535.1122731351024,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_edf",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkutm13_48",
+      "prefab": "obj_building_lyon_tower_swiss_life",
+      "x": -2554.7018284873616,
+      "y": -3538.447199335528,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_swiss_life",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuu2a6_49",
+      "prefab": "obj_building_lyon_block_quais",
+      "x": 2171.644297092309,
+      "y": -3567.7677897321255,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_block_quais",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuu9qb_50",
+      "prefab": "obj_building_lyon_block_vieux_lyon",
+      "x": 2481.5439464655155,
+      "y": -3589.76301113085,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_block_vieux_lyon",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuuj6g_51",
+      "prefab": "obj_building_factory",
+      "x": 2762.7594076340465,
+      "y": -3563.102715932551,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_factory",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuuwbo_52",
+      "prefab": "obj_building_apartment",
+      "x": 2958.036990619161,
+      "y": -3591.0931587299992,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_apartment",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuv362_53",
+      "prefab": "obj_building_lyon_hotel_dieu",
+      "x": 3153.295459199173,
+      "y": -3585.097937331275,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_hotel_dieu",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuv8oi_54",
+      "prefab": "obj_building_lyon_tower_duchere",
+      "x": 3311.25245178769,
+      "y": -3583.7677897321255,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_duchere",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuvd6p_55",
+      "prefab": "obj_building_lyon_traboule_avocats",
+      "x": 3487.1951085723795,
+      "y": -3583.0931587299992,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_avocats",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuvrjw_56",
+      "prefab": "obj_building_lyon_traboule_escalier",
+      "x": -2674.816568491981,
+      "y": -3559.1122731351024,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_escalier",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuvxba_57",
+      "prefab": "obj_building_shops",
+      "x": -2827.4147418736934,
+      "y": -3527.1122731351024,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuw2vb_58",
+      "prefab": "obj_building_parking",
+      "x": -3025.3526200571073,
+      "y": -3548.4328635317,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_parking",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuw5ag_59",
+      "prefab": "obj_building_office",
+      "x": -3179.3000554430732,
+      "y": -3558.437642132976,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_office",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwa3x_60",
+      "prefab": "obj_building_warehouse",
+      "x": -3367.2331550252115,
+      "y": -3549.107494533827,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_warehouse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_94",
+      "prefab": "obj_building_apartment",
+      "x": -1758.3138548004417,
+      "y": 3657.9137938016343,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_apartment",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_95",
+      "prefab": "obj_building_lyon_gare_saint_exupery",
+      "x": -1525.8138522858708,
+      "y": 3668.03879331269,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_gare_saint_exupery",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_96",
+      "prefab": "obj_building_lyon_traboule_avocats",
+      "x": -1245.063844043666,
+      "y": 3662.163792823745,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_avocats",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_97",
+      "prefab": "obj_building_warehouse",
+      "x": -1026.6888388049765,
+      "y": 3677.0387938714834,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_warehouse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_98",
+      "prefab": "obj_building_shops",
+      "x": -822.8138349632709,
+      "y": 3665.2887928935943,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_99",
+      "prefab": "obj_building_tower",
+      "x": -678.1888295848839,
+      "y": 3627.788792055404,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_tower",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_100",
+      "prefab": "obj_building_lyon_vieux_lyon",
+      "x": -527.6888281879001,
+      "y": 3632.9137932428403,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_vieux_lyon",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_101",
+      "prefab": "obj_building_rowhouses",
+      "x": -337.563821971321,
+      "y": 3666.663793103142,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_rowhouses",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_102",
+      "prefab": "obj_building_shops",
+      "x": -178.3138168024807,
+      "y": 3672.2887923348007,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_103",
+      "prefab": "obj_building_lyon_tchecoslovaques_76",
+      "x": 87.81118717892332,
+      "y": 3657.6637925443483,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tchecoslovaques_76",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_104",
+      "prefab": "obj_building_lyon_tower_incity",
+      "x": 344.4361925573112,
+      "y": 3564.4137929634435,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_incity",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_105",
+      "prefab": "obj_building_office",
+      "x": 463.81119611962004,
+      "y": 3644.4137929634435,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_office",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_106",
+      "prefab": "obj_building_parking",
+      "x": 598.5611987738894,
+      "y": 3642.663793103142,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_parking",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_107",
+      "prefab": "obj_building_lyon_traboule_tour_rose",
+      "x": 778.811202266349,
+      "y": 3617.2887928935943,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_tour_rose",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_108",
+      "prefab": "obj_building_lyon_traboule_longue",
+      "x": 933.3112058985071,
+      "y": 3624.2887923348007,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_longue",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_109",
+      "prefab": "obj_building_lyon_traboule_galleries",
+      "x": 1122.5612099497612,
+      "y": 3614.913792125253,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_galleries",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_110",
+      "prefab": "obj_building_lyon_traboule_escalier",
+      "x": 1288.1862136517684,
+      "y": 3616.2887923348007,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_escalier",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_111",
+      "prefab": "obj_building_lyon_traboule_cour_voraces",
+      "x": 1464.5612177728708,
+      "y": 3613.1637922649516,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_cour_voraces",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_112",
+      "prefab": "obj_building_lyon_tower_silex2",
+      "x": 1591.9362213351797,
+      "y": 3607.5387930332927,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_silex2",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_113",
+      "prefab": "obj_building_lyon_tower_edf",
+      "x": 1691.6862223130684,
+      "y": 3620.4137929634435,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_edf",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_114",
+      "prefab": "obj_building_lyon_tower_part_dieu",
+      "x": 1798.311224338695,
+      "y": 3564.4137929634435,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_part_dieu",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_115",
+      "prefab": "obj_building_lyon_tower_oxygene",
+      "x": 1887.8112274120595,
+      "y": 3596.4137929634435,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_oxygene",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_116",
+      "prefab": "obj_building_lyon_fourviere",
+      "x": 2014.3910854924634,
+      "y": 3612.1684797720577,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_fourviere",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_117",
+      "prefab": "obj_building_lyon_opera",
+      "x": -1962.2756847515789,
+      "y": 3657.4890701686554,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_opera",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_118",
+      "prefab": "obj_building_lyon_mural_canuts",
+      "x": -2203.491145920108,
+      "y": 3654.15414396823,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_mural_canuts",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_119",
+      "prefab": "obj_building_lyon_tower_edf",
+      "x": -2383.4242455022463,
+      "y": 3665.4890701686554,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_edf",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_120",
+      "prefab": "obj_building_lyon_tower_swiss_life",
+      "x": -2497.3907952933155,
+      "y": 3662.15414396823,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_swiss_life",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_121",
+      "prefab": "obj_building_lyon_block_quais",
+      "x": 2228.955330286355,
+      "y": 3632.8335535716324,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_block_quais",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_122",
+      "prefab": "obj_building_lyon_traboule_escalier",
+      "x": -2617.505535297935,
+      "y": 3641.4890701686554,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_escalier",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_123",
+      "prefab": "obj_building_shops",
+      "x": -2770.1037086796473,
+      "y": 3673.4890701686554,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_124",
+      "prefab": "obj_building_parking",
+      "x": -2968.041586863061,
+      "y": 3652.1684797720577,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_parking",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_125",
+      "prefab": "obj_building_office",
+      "x": -3121.989022249027,
+      "y": 3642.1637011707817,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_office",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_126",
+      "prefab": "obj_building_warehouse",
+      "x": -3309.9221218311654,
+      "y": 3651.493848769931,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_warehouse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuxxic_127",
+      "prefab": "obj_building_shops",
+      "x": 2470.1899058599884,
+      "y": 3639.7296047587643,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuyat7_128",
+      "prefab": "obj_building_warehouse",
+      "x": 2693.4579316425516,
+      "y": 3653.7248261574896,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_warehouse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuyf0v_129",
+      "prefab": "obj_building_lyon_traboule_longue",
+      "x": 2879.3862526234134,
+      "y": 3628.3946785583394,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_longue",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuymn4_130",
+      "prefab": "obj_building_lyon_tower_oxygene",
+      "x": 3019.993983207678,
+      "y": 3613.743940562592,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_oxygene",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuyslp_131",
+      "prefab": "obj_building_lyon_tower_fourviere_metal",
+      "x": 3121.970090201299,
+      "y": 3636.4137929634435,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_fourviere_metal",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuyxj8_132",
+      "prefab": "obj_building_lyon_traboule_avocats",
+      "x": 3265.276344794069,
+      "y": 3634.409014362167,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_avocats",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuz0yy_133",
+      "prefab": "obj_building_lyon_vieux_lyon",
+      "x": 3477.864960973231,
+      "y": 3646.399457159616,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_vieux_lyon",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuz3xh_134",
+      "prefab": "obj_building_parking",
+      "x": 3669.1329867557943,
+      "y": 3647.7487191638684,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_parking",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuzare_135",
+      "prefab": "obj_building_lyon_tower_swiss_life",
+      "x": 3833.7216029349547,
+      "y": 3635.739161961317,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_swiss_life",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuzgg5_136",
+      "prefab": "obj_building_shops",
+      "x": 3965.673816922197,
+      "y": 3655.7296047587643,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuzucl_138",
+      "prefab": "obj_building_lyon_block_croix_rousse",
+      "x": 4196.3054405128405,
+      "y": 3655.7296047587643,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_block_croix_rousse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuzyxs_139",
+      "prefab": "obj_building_lyon_palais_bourse",
+      "x": 4466.860606483071,
+      "y": 3655.7296047587643,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_palais_bourse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv00x4_140",
+      "prefab": "obj_building_lyon_opera",
+      "x": 4730.784148862658,
+      "y": 3625.7343833600407,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_opera",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv0cd4_141",
+      "prefab": "obj_building_lyon_mural_canuts",
+      "x": 4956.693355438418,
+      "y": 3623.074088161742,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_mural_canuts",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv2vst_185",
+      "prefab": "obj_prop_stage01_stake1",
+      "x": -394.25099709696406,
+      "y": -198.90987543705114,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_stake1",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv2yab_186",
+      "prefab": "obj_prop_stage01_stake1",
+      "x": -244.96863551057322,
+      "y": -194.24480163747694,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_stake1",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv2z23_187",
+      "prefab": "obj_prop_stage01_stake1",
+      "x": -91.02120012460728,
+      "y": -212.90509683577557,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_stake1",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv302d_188",
+      "prefab": "obj_prop_stage01_stake1",
+      "x": 48.931013862633336,
+      "y": -203.57494923662625,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_stake1",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv30ml_189",
+      "prefab": "obj_prop_stage01_stake1",
+      "x": 170.22293265157714,
+      "y": -198.90987543705114,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_stake1",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv3197_190",
+      "prefab": "obj_prop_stage01_stake1",
+      "x": 300.84499903966935,
+      "y": -208.24002303620136,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_stake1",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv31tl_191",
+      "prefab": "obj_prop_stage01_stake1",
+      "x": 403.4766226303127,
+      "y": -203.57494923662625,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_stake1",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv32b5_192",
+      "prefab": "obj_prop_stage01_stake1",
+      "x": 510.7733200205312,
+      "y": -203.57494923662625,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_stake1",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv32wa_193",
+      "prefab": "obj_prop_stage01_stake1",
+      "x": 678.7159768052206,
+      "y": -208.24002303620136,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_stake1",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv35k0_194",
+      "prefab": "obj_prop_stage01_stake1",
+      "x": 860.6538549886354,
+      "y": -208.24002303620136,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_stake1",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv362q_195",
+      "prefab": "obj_prop_stage01_stake1",
+      "x": 1065.9171021699221,
+      "y": -212.90509683577557,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_stake1",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv40v7_197",
+      "prefab": "obj_struct_stage01_cabin",
+      "x": 453.8020313048137,
+      "y": -52.77875650448641,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage01_cabin",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv4834_198",
+      "prefab": "obj_struct_stage01_plan_table",
+      "x": 318.4276150654041,
+      "y": -46.6253739481499,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage01_plan_table",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv4cwl_199",
+      "prefab": "obj_prop_stage01_stake_bundle",
+      "x": -542.435425980214,
+      "y": -165.3892733460234,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 90,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_stake_bundle",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv4v2e_200",
+      "prefab": "obj_prop_stage01_tree_a",
+      "x": 344.25755065918656,
+      "y": 151.95101111682516,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_a",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv51aj_201",
+      "prefab": "obj_prop_weeds",
+      "x": -406.523028200977,
+      "y": -84.93649977035193,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv52cj_202",
+      "prefab": "obj_prop_weeds",
+      "x": 50.058545202531604,
+      "y": 176.78599209693175,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5423_203",
+      "prefab": "obj_prop_weeds",
+      "x": 351.89908326845034,
+      "y": 537.848407884645,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv55ch_204",
+      "prefab": "obj_prop_weeds",
+      "x": -1048.4117673791325,
+      "y": -142.2479943398298,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv57c0_205",
+      "prefab": "obj_prop_weeds",
+      "x": -523.0564004922498,
+      "y": -812.7924808027228,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv588m_206",
+      "prefab": "obj_prop_weeds",
+      "x": 353.8094664207656,
+      "y": -839.5378449351456,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5b2w_207",
+      "prefab": "obj_prop_weeds",
+      "x": -712.1843325715272,
+      "y": 824.4058807320353,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5eqz_208",
+      "prefab": "obj_prop_weeds",
+      "x": 854.7435268335112,
+      "y": 839.6889459505628,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5fbn_209",
+      "prefab": "obj_prop_weeds",
+      "x": 1255.923988819858,
+      "y": 388.8385220040018,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5gjl_210",
+      "prefab": "obj_prop_weeds",
+      "x": -310.5901960792107,
+      "y": 497.7303616860099,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5i6t_211",
+      "prefab": "obj_prop_weeds",
+      "x": 1211.9851763165916,
+      "y": -568.2634373062824,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5sl2_212",
+      "prefab": "obj_decal_crack",
+      "x": 167.55829120292674,
+      "y": -71.56381770413782,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5t6k_213",
+      "prefab": "obj_decal_crack",
+      "x": -302.3959642667942,
+      "y": -27.62500520087133,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5tmn_214",
+      "prefab": "obj_decal_crack",
+      "x": -466.68891536596493,
+      "y": 18.224190454711334,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5u2f_215",
+      "prefab": "obj_decal_crack",
+      "x": -495.34466265070387,
+      "y": -111.68186390277288,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5uim_216",
+      "prefab": "obj_decal_crack",
+      "x": -86.52266805509316,
+      "y": -115.50263020740522,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5v6l_217",
+      "prefab": "obj_decal_crack",
+      "x": 484.6818944873721,
+      "y": -436.44699979648294,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5vhv_218",
+      "prefab": "obj_decal_crack",
+      "x": 780.7912830963432,
+      "y": -421.1639345779554,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5vsi_219",
+      "prefab": "obj_decal_crack",
+      "x": 899.2350385399313,
+      "y": -516.6830921937521,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5z7m_220",
+      "prefab": "obj_decal_crack",
+      "x": -735.5680564013846,
+      "y": 171.05484263998596,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv5zjr_221",
+      "prefab": "obj_decal_crack",
+      "x": -1173.0457982817343,
+      "y": 14.40342415007899,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv606m_222",
+      "prefab": "obj_decal_crack",
+      "x": -1138.6589015400468,
+      "y": 388.8385220040036,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv60ly_223",
+      "prefab": "obj_decal_crack",
+      "x": -598.0204694346367,
+      "y": 342.98932634842095,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv6134_224",
+      "prefab": "obj_decal_crack",
+      "x": 234.9065849751123,
+      "y": 428.95656820263775,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv61g6_225",
+      "prefab": "obj_decal_crack",
+      "x": 808.0215306698938,
+      "y": 415.5838861364264,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv62bn_226",
+      "prefab": "obj_decal_crack",
+      "x": 651.3701121799868,
+      "y": 130.9367964413509,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv6345_227",
+      "prefab": "obj_decal_crack",
+      "x": -790.9691678185463,
+      "y": -44.818453571715054,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv63qh_228",
+      "prefab": "obj_decal_crack",
+      "x": -1132.9277520830992,
+      "y": -411.61201881637544,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv64hf_229",
+      "prefab": "obj_decal_crack",
+      "x": -1064.1539585997252,
+      "y": -778.4055840610358,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv64tm_230",
+      "prefab": "obj_decal_crack",
+      "x": -630.4969830240079,
+      "y": -789.8678829749315,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv656c_231",
+      "prefab": "obj_decal_crack",
+      "x": -65.02356993849025,
+      "y": -789.8678829749315,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv6hx9_232",
+      "prefab": "obj_decal_crack",
+      "x": -972.4555672885608,
+      "y": 1179.7371470628004,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_crack",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv7c5a_233",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1308.646655686156,
+      "y": 969.595000308047,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv7fj9_234",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 1130.9810225207739,
+      "y": 961.9534676987832,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv7gt9_235",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 957.1361556600241,
+      "y": 963.8638508510994,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv7hn1_236",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 792.8432045608533,
+      "y": 965.7742340034147,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv7ig5_237",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 609.4464219385227,
+      "y": 966.4911687848871,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv7mja_238",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": 418.7665740976654,
+      "y": 968.4015519372033,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv81go_242",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -160.7586333984782,
+      "y": 963.8638508510994,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv8275_243",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -340.3346497161765,
+      "y": 963.8638508510994,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv82xd_244",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -502.7172176630311,
+      "y": 960.0430845464671,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv83kp_245",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -680.3828508284141,
+      "y": 960.0430845464671,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv849d_246",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -903.8976796493789,
+      "y": 961.9534676987832,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv84zt_247",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1081.563312814761,
+      "y": 950.4911687848871,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv85q9_248",
+      "prefab": "obj_prop_stage01_rubalise",
+      "x": -1305.0781416357258,
+      "y": 942.8496361756233,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_rubalise",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvb4h4_249",
+      "prefab": "obj_struct_stage01_wc",
+      "x": -817.9304377951612,
+      "y": -354.300524246898,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage01_wc",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbhpq_250",
+      "prefab": "obj_landmark_stage01",
+      "x": 277.44037205817585,
+      "y": 989.7655764137508,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "landmark_stage01",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbrxo_251",
+      "prefab": "obj_decal_pebbles",
+      "x": -1180.9032367351892,
+      "y": 809.1228155135077,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbses_252",
+      "prefab": "obj_decal_pebbles",
+      "x": -1060.549098139286,
+      "y": 419.4046524410569,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbsxm_253",
+      "prefab": "obj_decal_pebbles",
+      "x": -644.0855709344105,
+      "y": 127.11603013671765,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbtiy_254",
+      "prefab": "obj_decal_pebbles",
+      "x": -1146.5163399935027,
+      "y": -19.98347259160937,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbubo_255",
+      "prefab": "obj_decal_pebbles",
+      "x": -1136.9644242319227,
+      "y": -497.57926067059316,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbv20_256",
+      "prefab": "obj_decal_pebbles",
+      "x": 152.54420358133575,
+      "y": -434.5366166441672,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbvfs_257",
+      "prefab": "obj_decal_pebbles",
+      "x": 685.5411030774821,
+      "y": -445.9989155580629,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbw2c_258",
+      "prefab": "obj_decal_pebbles",
+      "x": 272.8983421772391,
+      "y": 46.87993773944936,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbwl6_259",
+      "prefab": "obj_decal_pebbles",
+      "x": 758.1356628654876,
+      "y": 379.28660624242275,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbxes_260",
+      "prefab": "obj_decal_pebbles",
+      "x": -842.7654187752687,
+      "y": 415.58388613642546,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbxug_261",
+      "prefab": "obj_decal_pebbles",
+      "x": 76.12887748869798,
+      "y": 652.4713970236016,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbybf_262",
+      "prefab": "obj_decal_pebbles",
+      "x": 712.2864672099049,
+      "y": 621.9052665865465,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbz2h_263",
+      "prefab": "obj_decal_pebbles",
+      "x": -256.27779101427586,
+      "y": 390.74890515631887,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvbzzf_264",
+      "prefab": "obj_decal_pebbles",
+      "x": -155.0274839415306,
+      "y": -488.02734490901366,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvc0fv_265",
+      "prefab": "obj_decal_pebbles",
+      "x": -728.142429636312,
+      "y": -447.90929871037906,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvc2b9_266",
+      "prefab": "obj_decal_pebbles",
+      "x": -854.2277176891639,
+      "y": -822.3443965643019,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvc2ox_267",
+      "prefab": "obj_decal_pebbles",
+      "x": 156.36496988596718,
+      "y": -780.3159672133511,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvc32x_268",
+      "prefab": "obj_decal_pebbles",
+      "x": 683.630719925166,
+      "y": -841.4482280874613,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvc4sj_269",
+      "prefab": "obj_decal_pebbles",
+      "x": 1155.495358547203,
+      "y": 885.5381416061455,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvc560_270",
+      "prefab": "obj_decal_pebbles",
+      "x": 645.4230568788471,
+      "y": 847.3304785598266,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvc66i_271",
+      "prefab": "obj_decal_pebbles",
+      "x": -141.6548018753192,
+      "y": 837.7785627982475,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvc6ti_272",
+      "prefab": "obj_decal_pebbles",
+      "x": -510.35875027229486,
+      "y": 535.9380247323288,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvc8du_273",
+      "prefab": "obj_decal_pebbles",
+      "x": 674.078804163586,
+      "y": -33.35615465782075,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvcse5_275",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -232.27779101427586,
+      "y": 153.86139426914042,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvctsb_276",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -236.0985573189073,
+      "y": 239.82863612335814,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvcv20_277",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -126.37173665679165,
+      "y": 241.7390192756743,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvcvz4_278",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -136.28211980910783,
+      "y": 145.74334807050627,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvdjja_279",
+      "prefab": "obj_decal_puddle",
+      "x": -474.06147037829214,
+      "y": -48.63921987634831,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_puddle",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvdlxy_280",
+      "prefab": "obj_decal_puddle",
+      "x": 356.95520087914065,
+      "y": 6.761891540813394,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_puddle",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvdotq_281",
+      "prefab": "obj_decal_puddle",
+      "x": -101.53675567668415,
+      "y": 1034.5480274867887,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_puddle",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvdq9p_282",
+      "prefab": "obj_decal_puddle",
+      "x": -1194.2759188014015,
+      "y": 129.02641328903383,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_puddle",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvdsa1_283",
+      "prefab": "obj_decal_puddle",
+      "x": 565.1869644815779,
+      "y": -854.8209101536731,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_puddle",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvea2g_284",
+      "prefab": "obj_prop_stage01_theodolite",
+      "x": -542.0630348198001,
+      "y": 476.61974478606044,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_theodolite",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvf7d3_285",
+      "prefab": "obj_prop_stage01_tape_reel",
+      "x": -439.91714363929805,
+      "y": -168.15837749214597,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tape_reel",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvfz3y_286",
+      "prefab": "obj_struct_stage01_tape",
+      "x": -939.7866238812067,
+      "y": -272.15404869731265,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage01_tape",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvg39a_288",
+      "prefab": "obj_struct_stage01_tape",
+      "x": -944.2062787686764,
+      "y": -227.97481500194453,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage01_tape",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvg7p9_289",
+      "prefab": "obj_struct_stage01_tape",
+      "x": -943.607390185839,
+      "y": -184.99335847225166,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage01_tape",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvg8rf_290",
+      "prefab": "obj_struct_stage01_tape",
+      "x": -942.7724092057315,
+      "y": -137.7102932537241,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage01_tape",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvgbgp_291",
+      "prefab": "obj_struct_stage01_tape",
+      "x": -942.4139418149953,
+      "y": -97.11573346571868,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage01_tape",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvgd5w_292",
+      "prefab": "obj_struct_stage01_tape",
+      "x": -941.6970070335228,
+      "y": -54.37036933329591,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage01_tape",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvgfz4_293",
+      "prefab": "obj_site_gate",
+      "x": -807.9701863714072,
+      "y": -272.15404869731265,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "site_gate",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvgjqx_294",
+      "prefab": "obj_site_gate",
+      "x": -809.8805695237234,
+      "y": -244.0971899954111,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "site_gate",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvgobw_295",
+      "prefab": "obj_site_gate",
+      "x": -808.3286537621434,
+      "y": -205.17259216762022,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "site_gate",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvgshv_296",
+      "prefab": "obj_site_gate",
+      "x": -806.059803219091,
+      "y": -174.96492912130134,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "site_gate",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvgyjg_297",
+      "prefab": "obj_site_gate",
+      "x": -807.9701863714072,
+      "y": -124.93649977035102,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "site_gate",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvh21p_298",
+      "prefab": "obj_site_gate",
+      "x": -807.4936727820359,
+      "y": -95.56381770413873,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "site_gate",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvh6j1_299",
+      "prefab": "obj_site_gate",
+      "x": -811.6729064774045,
+      "y": -63.56381770413873,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "site_gate",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhfd0_300",
+      "prefab": "obj_fence_post",
+      "x": 55.52299847539689,
+      "y": -537.6973068692282,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhhe4_301",
+      "prefab": "obj_fence_post",
+      "x": 95.64104467403195,
+      "y": -531.9661574122802,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhhz0_302",
+      "prefab": "obj_fence_post",
+      "x": 141.4902403296146,
+      "y": -533.8765405645963,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhlqv_303",
+      "prefab": "obj_fence_post",
+      "x": 57.43338162771306,
+      "y": -484.2065786043818,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhmb4_304",
+      "prefab": "obj_fence_post",
+      "x": 91.8202783693996,
+      "y": -480.3858122997499,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhmin_305",
+      "prefab": "obj_fence_post",
+      "x": 91.8202783693996,
+      "y": -480.3858122997499,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhmo7_306",
+      "prefab": "obj_fence_post",
+      "x": 91.8202783693996,
+      "y": -480.3858122997499,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhnnc_307",
+      "prefab": "obj_fence_post",
+      "x": 133.84870772035083,
+      "y": -488.02734490901366,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhodk_308",
+      "prefab": "obj_fence_post",
+      "x": 49.791849018449284,
+      "y": -447.90929871037906,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhp5l_309",
+      "prefab": "obj_fence_post",
+      "x": 95.64104467403195,
+      "y": -445.9989155580629,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhpps_310",
+      "prefab": "obj_fence_post",
+      "x": 133.84870772035083,
+      "y": -447.90929871037906,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhqaw_311",
+      "prefab": "obj_fence_post",
+      "x": 45.97108271381694,
+      "y": -507.1311764321731,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhqz4_312",
+      "prefab": "obj_fence_post",
+      "x": 128.11755826340232,
+      "y": -509.0415595844888,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhrjk_313",
+      "prefab": "obj_fence_post",
+      "x": 130.0279414157185,
+      "y": -440.2677661011153,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhs1k_314",
+      "prefab": "obj_fence_post",
+      "x": 72.71644684624061,
+      "y": -451.73006501501095,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhsmw_315",
+      "prefab": "obj_fence_post",
+      "x": 30.688017495290296,
+      "y": -451.73006501501095,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvht4x_316",
+      "prefab": "obj_fence_post",
+      "x": 13.49456912444657,
+      "y": -537.6973068692282,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhtn5_317",
+      "prefab": "obj_fence_post",
+      "x": 143.40062348192987,
+      "y": -554.8907552400715,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhufd_318",
+      "prefab": "obj_fence_post",
+      "x": 137.66947402498226,
+      "y": -459.3715976242747,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvhuyh_319",
+      "prefab": "obj_fence_post",
+      "x": 11.584185972130399,
+      "y": -453.64044816732667,
+      "flipX": false,
+      "variant": 1,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "fence_post",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvi84x_320",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -1042.9473141062672,
+      "y": -277.88519815426025,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvibwk_321",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -1052.4992298678471,
+      "y": -222.4840867370981,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvid5g_322",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -1054.4096130201633,
+      "y": -159.44144271067262,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvidpo_323",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -1052.4992298678471,
+      "y": -105.95071444582618,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkviea4_324",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -1058.2303793247947,
+      "y": -58.191135637927346,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvieul_325",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -1062.051145629427,
+      "y": 1.0307420838666985,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvifx8_326",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -995.1877352983693,
+      "y": -2.7900242207656447,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvigik_327",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -935.9658575765752,
+      "y": -2.7900242207656447,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvih3p_328",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -867.1920640932012,
+      "y": -2.7900242207656447,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvihs4_329",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -804.1494200667748,
+      "y": -2.7900242207656447,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkviies_330",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -752.5690749542446,
+      "y": 1.0307420838666985,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvik0d_331",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -752.5690749542446,
+      "y": -79.2053503134025,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvikst_332",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -752.5690749542446,
+      "y": -140.33761118751272,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvilhh_333",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -754.4794581065607,
+      "y": -212.9321709755186,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvim2t_334",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -752.5690749542446,
+      "y": -272.15404869731265,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvirwm_335",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -9.43002870334476,
+      "y": -545.3388394784915,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvisjq_336",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -17.071561312608537,
+      "y": -516.6830921937526,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvit4m_337",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -17.071561312608537,
+      "y": -465.10274708122233,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvitoe_338",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -13.250795007977104,
+      "y": -415.4327851210078,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkviudz_339",
+      "prefab": "obj_prop_stage01_cones",
+      "x": 28.777634342974125,
+      "y": -403.9704862071121,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkviuvi_340",
+      "prefab": "obj_prop_stage01_cones",
+      "x": 84.17874576013583,
+      "y": -409.7016356640602,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvivhz_341",
+      "prefab": "obj_prop_stage01_cones",
+      "x": 137.66947402498226,
+      "y": -400.14971990248023,
+      "flipX": false,
+      "variant": 1,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvixwn_342",
+      "prefab": "obj_prop_stage01_cones",
+      "x": 166.3252213097212,
+      "y": -413.52240196869207,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkviyon_343",
+      "prefab": "obj_prop_stage01_cones",
+      "x": 166.3252213097212,
+      "y": -470.83389653816994,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvizgn_344",
+      "prefab": "obj_prop_stage01_cones",
+      "x": 164.41483815740594,
+      "y": -524.3246248030164,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvj0dz_345",
+      "prefab": "obj_prop_stage01_cones",
+      "x": 164.41483815740594,
+      "y": -573.9945867632309,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvj16o_346",
+      "prefab": "obj_prop_stage01_cones",
+      "x": 135.7590908726661,
+      "y": -589.2776519817585,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvj25k_347",
+      "prefab": "obj_prop_stage01_cones",
+      "x": 86.089128912452,
+      "y": -593.0984182863904,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvj2q8_348",
+      "prefab": "obj_prop_stage01_cones",
+      "x": 26.867251190657953,
+      "y": -587.3672688294423,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvj6qg_349",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -1035.3057814970034,
+      "y": -323.7343938098429,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvj7dd_350",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -970.3527543182618,
+      "y": -333.2863095714224,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvj7zd_351",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -920.6827923580477,
+      "y": -327.5551601144748,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvj8nt_352",
+      "prefab": "obj_prop_stage01_cones",
+      "x": -869.1024472455174,
+      "y": -318.0032443528953,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_cones",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvk3ux_353",
+      "prefab": "obj_prop_rocks",
+      "x": -181.3645124117793,
+      "y": -14.252323134661765,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_rocks",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvk6tu_354",
+      "prefab": "obj_prop_rocks",
+      "x": -460.2804526499067,
+      "y": 230.2767203617782,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_rocks",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvk7u4_355",
+      "prefab": "obj_prop_rocks",
+      "x": 416.58541426310967,
+      "y": 241.7390192756743,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_rocks",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvk9eg_356",
+      "prefab": "obj_prop_rocks",
+      "x": 334.4389387135243,
+      "y": 558.8626225601201,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_rocks",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvkacm_357",
+      "prefab": "obj_prop_rocks",
+      "x": -1719.2229500261092,
+      "y": 511.1030437522213,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_rocks",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvkamz_358",
+      "prefab": "obj_prop_rocks",
+      "x": -1807.100575032643,
+      "y": -312.27209489594816,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_rocks",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvkbzd_359",
+      "prefab": "obj_prop_rocks",
+      "x": -727.734093974138,
+      "y": 1047.920709553,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_rocks",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvkcw3_360",
+      "prefab": "obj_prop_rocks",
+      "x": 475.8072919849037,
+      "y": 1070.8453073807914,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_rocks",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvkjee_361",
+      "prefab": "obj_prop_weeds",
+      "x": -534.7853955902283,
+      "y": -411.61201881637635,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvklyy_362",
+      "prefab": "obj_prop_weeds",
+      "x": -1174.7637516160676,
+      "y": 778.5566850764526,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvkmjk_363",
+      "prefab": "obj_prop_weeds",
+      "x": -1279.8348249934434,
+      "y": 197.8002067724069,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvkn1k_364",
+      "prefab": "obj_prop_weeds",
+      "x": -1256.910227165653,
+      "y": -354.30052424689893,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvkt4c_365",
+      "prefab": "obj_prop_weeds",
+      "x": 1193.3253420284773,
+      "y": 730.7971062685547,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvktib_366",
+      "prefab": "obj_prop_weeds",
+      "x": 1227.7122387701638,
+      "y": 203.53135622935542,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_weeds",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvkzr2_367",
+      "prefab": "obj_prop_stage01_tree_a",
+      "x": 1229.62262192248,
+      "y": 637.1883318050732,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_a",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvl1tj_368",
+      "prefab": "obj_prop_stage01_tree_a",
+      "x": -142.03248144036388,
+      "y": -839.5378449351456,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_a",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvl69b_369",
+      "prefab": "obj_prop_stage01_tree_a",
+      "x": -1192.3365576431215,
+      "y": 564.5937720170677,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_a",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvl7a6_370",
+      "prefab": "obj_prop_stage01_tree_a",
+      "x": 647.3624180371271,
+      "y": 868.3446932353017,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_a",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvl9cq_371",
+      "prefab": "obj_prop_stage01_tree_a",
+      "x": -999.3878592592118,
+      "y": 1462.4738536055593,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_a",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvl9nw_372",
+      "prefab": "obj_prop_stage01_tree_a",
+      "x": 186.96007832898613,
+      "y": 1523.6061144796686,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_a",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvla4c_373",
+      "prefab": "obj_prop_stage01_tree_a",
+      "x": 916.7264425136746,
+      "y": 1663.0640845987327,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_a",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvlbng_374",
+      "prefab": "obj_prop_stage01_tree_a",
+      "x": -716.651152716453,
+      "y": 1685.988682426524,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tree_a",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvld6b_375",
+      "prefab": "obj_decal_pebbles",
+      "x": -382.3341010611639,
+      "y": 1324.9262666388113,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvldio_376",
+      "prefab": "obj_decal_pebbles",
+      "x": 144.9316489780358,
+      "y": 1609.5733563338863,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvle7x_377",
+      "prefab": "obj_decal_pebbles",
+      "x": 559.4847930305941,
+      "y": 1468.2050030625069,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvlfd1_378",
+      "prefab": "obj_decal_pebbles",
+      "x": -837.0052913123563,
+      "y": 1485.3984514333506,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_pebbles",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvm4u3_380",
+      "prefab": "obj_struct_stage01_sign",
+      "x": -191.29578582956947,
+      "y": 1617.21488894315,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage01_sign",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvml42_381",
+      "prefab": "des_d01_tas_gravats",
+      "x": -1217.1715386232281,
+      "y": -125.05454596898608,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tas_gravats",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.7,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_tas_gravats"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvmn22_382",
+      "prefab": "des_d01_tas_gravats",
+      "x": 511.7252142226953,
+      "y": 853.0616280167742,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tas_gravats",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.7,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_tas_gravats"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvmpw0_383",
+      "prefab": "des_d01_tas_gravats",
+      "x": 576.6782414014378,
+      "y": -467.01313023353805,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_tas_gravats",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.7,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_tas_gravats"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvn20y_384",
+      "prefab": "des_d01_palette_bois",
+      "x": 816.6267392588561,
+      "y": -52.45998618097883,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_palette_bois",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_palette_bois"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvn2py_385",
+      "prefab": "des_d01_palette_bois",
+      "x": 894.9524485038091,
+      "y": -50.54960302866266,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_palette_bois",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_palette_bois"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvn3ut_386",
+      "prefab": "des_d01_palette_bois",
+      "x": 799.4332908880124,
+      "y": -2.790024220764735,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_palette_bois",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_palette_bois"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvn4hf_387",
+      "prefab": "des_d01_palette_bois",
+      "x": 889.2212990468615,
+      "y": -0.8796410684485636,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_palette_bois",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_palette_bois"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvn5ep_388",
+      "prefab": "des_d01_palette_bois",
+      "x": 812.8059729542238,
+      "y": -134.6064617305642,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_palette_bois",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_palette_bois"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvn600_389",
+      "prefab": "des_d01_palette_bois",
+      "x": 889.2212990468615,
+      "y": -144.15837749214415,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_palette_bois",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_palette_bois"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvn74z_390",
+      "prefab": "des_d01_palette_bois",
+      "x": 801.3436740403286,
+      "y": 157.68216057377458,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_palette_bois",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_palette_bois"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvn7od_391",
+      "prefab": "des_d01_palette_bois",
+      "x": 898.7732148084415,
+      "y": 150.0406279645108,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_palette_bois",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_palette_bois"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvn86b_392",
+      "prefab": "des_d01_palette_bois",
+      "x": 885.4005327422292,
+      "y": 39.23840513018649,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_palette_bois",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_palette_bois"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvn9cy_393",
+      "prefab": "des_d01_palette_bois",
+      "x": 778.4190762125372,
+      "y": 213.08327199093628,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_palette_bois",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_palette_bois"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvn9wo_394",
+      "prefab": "des_d01_palette_bois",
+      "x": 893.042065351493,
+      "y": 211.17288883862102,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_palette_bois",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_palette_bois"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvnarq_395",
+      "prefab": "des_d01_palette_bois",
+      "x": 782.2398425171687,
+      "y": 291.4089812358907,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_palette_bois",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_palette_bois"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvnb4k_396",
+      "prefab": "des_d01_palette_bois",
+      "x": 872.0278506760178,
+      "y": 297.1401306928383,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_palette_bois",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_palette_bois"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvnpgo_397",
+      "prefab": "des_d01_caisse_outils",
+      "x": -353.08740149511596,
+      "y": 71.71491871955686,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_caisse_outils",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_caisse_outils"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvnv5t_398",
+      "prefab": "des_d01_caisse_outils",
+      "x": -716.0602004351449,
+      "y": -316.0928612005782,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_caisse_outils",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_caisse_outils"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvnyaz_399",
+      "prefab": "des_d01_caisse_outils",
+      "x": 565.2231280806,
+      "y": 4.851508388499042,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_caisse_outils",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.72,
+          "collide": "none",
+          "destructible": {
+            "typeId": "d01_caisse_outils"
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkvpsa6_408",
+      "prefab": "obj_prop_stage01_bush_a",
+      "x": -663.7270142195757,
+      "y": 503.46151114295753,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage01_bush_a",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    }
+  ],
+  "markers": [
+    {
+      "id": "zone_main_work",
+      "type": "zone_main_work",
+      "x": -1399.9998474121066,
+      "y": -999.9999713897705,
+      "w": 2800,
+      "h": 2000
+    },
+    {
+      "id": "zone_logistics",
+      "type": "zone_logistics",
+      "x": -996.8789315591657,
+      "y": -699.6223539626749,
+      "w": 2000,
+      "h": 1400
+    }
+  ],
+  "paths": [],
+  "npcs": [
+    {
+      "id": "npc_mrkv2m6r_184",
+      "skin": "npc_stage01",
+      "kind": "trade",
+      "x": -492.2175468880341,
+      "y": -198.90987543705114
+    },
+    {
+      "id": "npc_mrkvoo0o_400",
+      "skin": "npc_ouvrier_a",
+      "kind": "worker",
+      "x": 437.22745687543284,
+      "y": 29.686489368606544
+    },
+    {
+      "id": "npc_mrkvoqug_401",
+      "skin": "npc_ouvrier_b",
+      "kind": "worker",
+      "x": 383.7367286105864,
+      "y": 41.148788282501755
+    },
+    {
+      "id": "npc_mrkvot2c_402",
+      "skin": "npc_ouvrier_c",
+      "kind": "worker",
+      "x": 484.98703568333076,
+      "y": 46.87993773945027
+    },
+    {
+      "id": "npc_mrkvoxfl_403",
+      "skin": "npc_ouvrier_c",
+      "kind": "worker",
+      "x": -367.6176256106046,
+      "y": 134.75756274598325
+    },
+    {
+      "id": "npc_mrkvoy0j_404",
+      "skin": "npc_ouvrier_c",
+      "kind": "worker",
+      "x": -359.9760930013408,
+      "y": 207.35212253398868
+    },
+    {
+      "id": "npc_mrkvoytl_405",
+      "skin": "npc_ouvrier_c",
+      "kind": "worker",
+      "x": -289.29191636565156,
+      "y": 153.86139426914224
+    },
+    {
+      "id": "npc_mrkvp1cy_406",
+      "skin": "npc_ouvrier_c",
+      "kind": "worker",
+      "x": -891.4254055307401,
+      "y": -364.56937478994905
+    },
+    {
+      "id": "npc_mrkvpf2k_407",
+      "skin": "npc_ouvrier_c",
+      "kind": "worker",
+      "x": -619.7882017163092,
+      "y": 488.17844592443
+    },
+    {
+      "id": "npc_mrkvq6i6_409",
+      "skin": "npc_ouvrier_b",
+      "kind": "worker",
+      "x": -594.9532207362017,
+      "y": 534.0276415800126
+    },
+    {
+      "id": "npc_mrkvqdb1_411",
+      "skin": "npc_ouvrier_a",
+      "kind": "worker",
+      "x": -642.7127995441006,
+      "y": 560.7730057124363
+    },
+    {
+      "id": "npc_mrkvqezy_412",
+      "skin": "npc_ouvrier_b",
+      "kind": "worker",
+      "x": -717.2177424844222,
+      "y": 545.4899404939088
+    },
+    {
+      "id": "npc_mrkvqh0a_413",
+      "skin": "npc_ouvrier_c",
+      "kind": "worker",
+      "x": -617.8778185639931,
+      "y": 597.070285606439
+    },
+    {
+      "id": "npc_mrkvqho6_414",
+      "skin": "npc_ouvrier_c",
+      "kind": "worker",
+      "x": -549.1040250806191,
+      "y": 555.0418562554887
+    },
+    {
+      "id": "npc_mrkvqwqf_415",
+      "skin": "npc_ouvrier_c",
+      "kind": "worker",
+      "x": -935.4611034338777,
+      "y": -348.56937478994905
+    },
+    {
+      "id": "npc_mrkvqz0x_416",
+      "skin": "npc_ouvrier_b",
+      "kind": "worker",
+      "x": -939.2818697385092,
+      "y": -398.23933675016406
+    },
+    {
+      "id": "npc_mrkvr0qb_417",
+      "skin": "npc_ouvrier_a",
+      "kind": "worker",
+      "x": -966.0272338709319,
+      "y": -379.1355052270046
+    },
+    {
+      "id": "npc_mrkvr1lh_418",
+      "skin": "npc_ouvrier_a",
+      "kind": "worker",
+      "x": -748.2435545069156,
+      "y": -361.94205685616134
+    },
+    {
+      "id": "npc_mrkvr3gm_419",
+      "skin": "npc_ouvrier_b",
+      "kind": "worker",
+      "x": -708.1255083082806,
+      "y": -413.5224019686916
+    },
+    {
+      "id": "npc_mrkvr5cq_420",
+      "skin": "npc_ouvrier_c",
+      "kind": "worker",
+      "x": -872.4184594074513,
+      "y": -423.0743177302711
+    }
+  ]
+}
