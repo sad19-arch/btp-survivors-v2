@@ -99,6 +99,71 @@ convention **en vigueur** : **le dossier porte la catégorie**
 (`public/<catégorie>/<nom>.png`). C'est ce que `qa.ts` valide depuis sa réparation
 (613 warnings → 0).
 
+## 3ter. Ce qu'un GÉNÉRATEUR ne peut pas faire — mesuré sur le kit de routes
+
+Découvert en produisant le kit de routes 256 px (2026-07-17, 8 générations). §3bis
+dit comment obtenir un BON asset. Ceci dit quand **aucun prompt ne suffira**.
+
+### Un kit de tuiles ne se génère pas, il se COMPOSE
+
+Un kit n'a qu'une exigence dure : le **raccord**. Deux pièces voisines doivent
+présenter au bord partagé le même profil. Deux `create_map_object` 256×256 lancés
+avec le **même préfixe de prompt** :
+
+| | droite | « virage » demandé |
+|---|---|---|
+| chaussée | x48..208 (**~160 px**) | x82..172 (**~90 px**) |
+| enrobé | `rgb(95,96,110)` | `rgb(84,86,91)` |
+| accotement | gravier pâle `rgb(228,215,182)` | **HERBE VERTE** `rgb(122,158,67)` |
+
+**78 % d'écart de largeur** → raccord impossible. Pire : on demandait un virage 90°
+« entrant au nord, sortant à l'est », le modèle a rendu un **carrefour**. ⇒ **La
+TOPOLOGIE n'est pas pilotable par la prose** : le modèle rend l'ARCHÉTYPE de
+l'objet. Corollaire général : dès qu'un asset doit être **exact** (raccord, grille,
+mesure), on fait générer la **MATIÈRE** et on compose la **GÉOMÉTRIE** soi-même
+(`tools/assets/make-roads.mjs`). Ce n'est pas contourner PixelLab : tous les pixels
+en viennent.
+
+⚠️ **`create_topdown_tileset` n'est PAS un kit de routes** (le brief le croyait) :
+c'est un Wang set **à COINS** (16 tuiles ; **32 px max**, 64 en `mode:'pro'`). Il
+donne une *région* d'enrobé — et une topologie à coins **ne peut pas** porter de
+ligne axiale, qui dépend de la DIRECTION de la route. Il a rendu l'enrobé **bleu
+marine**.
+
+### Le violet, suite : ce n'est PAS une erreur de teinte, c'est une RAMPE D'OMBRE
+
+§3bis dit « nier explicitement ». **Mesuré : insuffisant sur les grandes surfaces
+plates.** Avec `NOT purple, NOT violet, NOT mauve, NOT lavender` **dans le prompt** :
+ornières **violettes**, puis piste **lavande**. Avec l'enrobé : `rgb(95,96,110)` —
+bleu-violet (110 de bleu pour 95 de rouge). Wang : **bleu marine**. **4/4.**
+
+**Mécanisme** : les tons SOMBRES partent vers le violet (rampe d'ombre de la
+palette). **Parade qui marche** : demander des tons **ENSOLEILLÉS / CLAIRS** — le
+violet disparaît d'un coup (vérifié). Puis, si un ton sombre est nécessaire,
+l'obtenir **en post en multipliant les 3 canaux du MÊME facteur** : la teinte est
+mathématiquement conservée (`scaleRgb`).
+
+### « piste / ornière / roue » ⇒ VOIE FERRÉE (3/3)
+
+Trois prompts de piste de chantier ont rendu une **voie ferrée** (traverses +
+rails), dont un avec `NOT a railway, NO rails, NO sleepers, NO planks` **écrit
+noir sur blanc** — même classe que le « NOT a side view » ignoré de §3bis :
+**nier une composition la RENFORCE**. Un prompt a même ajouté un petit
+personnage non demandé.
+
+**Parade** : retirer **tout** le vocabulaire de circulation et ne décrire que le
+POSITIF (« a flat expanse of bare dry earth… empty soil only ») → terre nue propre
+du premier coup.
+
+### Et parfois la bonne matière est DÉJÀ dans le dépôt
+
+Après 3 échecs sur la terre, la piste a été composée depuis
+`public/stage01/ground/tile_0.png` — **le sol du jeu**. Une piste de chantier *est*
+la terre du site, compactée : la prendre au sol garantit l'accord de palette avec
+le terrain sur lequel elle est posée, **ce qu'aucune génération séparée ne peut
+promettre**, et la tuile de sol est raccordable par construction (TileSprite).
+Avant de brûler du quota sur une matière générique, regarder ce qui existe.
+
 ## 4. Methode Pixelabs recommandee
 
 | Etape | Methode |
