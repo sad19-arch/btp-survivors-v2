@@ -666,6 +666,341 @@ const RAW_CLUSTERS: Record<string, ClusterDef> = {
     ],
   },
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SCÈNES « PLAN DE CHANTIER » DES STAGES 05 → 10 (SP-T7)
+  //
+  // Même doctrine que les scènes 02/03 au-dessus : on compose des SCÈNES
+  // CAUSALES (un engin + ce sur quoi il travaille + les matériaux qu'il
+  // consomme), jamais des assets isolés. Chaque stage a le même squelette —
+  // signature (ancrée au spawn) · travail · stock · parc — pour que le joueur
+  // relise la même grammaire de chantier d'une phase à l'autre, et que seul le
+  // MÉTIER change.
+  //
+  // ⚠️ CONTRAINTE DE CHARGEMENT : un stage ne charge QUE ses propres clés
+  // (`src/render/stages.ts`) + le kit partagé préchargé par `GameScene`
+  // (fence_panel/fence_post/site_gate/road_strip/piste_strip/bungalow_shared/
+  // piquets_shared). Les clés `prop_s2_*`/`struct_stage02_pit` sont DÉCLARÉES
+  // AU SEUL STAGE 02 : les réutiliser ici ne rendrait RIEN (texture absente).
+  // D'où des scènes 100 % bâties sur les assets du stage.
+  //
+  // ⚠️ POCHE DE SPAWN : dans une scène `*_signature` (ancrée à 270 px au NORD du
+  // spawn), tout élément COLLIDABLE reste à `dy <= -80` → ≥ 350 px du joueur au
+  // démarrage. Le côté joueur n'est que du décor traversable. Même contrat que
+  // `scene_dig_active_spawn` (R-F).
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ── Stage 05 — GROS ŒUVRE : la grue monte les murs ────────────────────────
+  scene_gros_oeuvre_signature: {
+    id: 'scene_gros_oeuvre_signature',
+    footprintRadius: 300,
+    gates: [{ dx: 0, dy: 250 }],
+    elements: [
+      // Le mur qui monte : LE tableau de la phase, face au joueur.
+      { assetKey: 'struct_stage05_wall', dx: 0, dy: -30, scale: 1.0, collide: 'none' },
+      // La grue à tour qui l'alimente (déclarée bloquante r60 — loin du spawn).
+      { assetKey: 'struct_stage05_crane', dx: -70, dy: -200, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 60 } },
+      // Le crochet pend au-dessus du mur : on lit le flux grue → mur.
+      { assetKey: 'prop_stage05_crane_hook', dx: 60, dy: -120, scale: 0.75, collide: 'none' },
+      // Les blocs qu'on maçonne, côté joueur = décor traversable.
+      { assetKey: 'prop_stage05_block_pallet', dx: 200, dy: 40, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage05_block_pallet', dx: -190, dy: 60, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage05_concrete_pole', dx: 120, dy: 120, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_gros_oeuvre_work: {
+    id: 'scene_gros_oeuvre_work',
+    footprintRadius: 250,
+    gates: [{ dx: 0, dy: 190 }],
+    elements: [
+      // La grue mobile décharge les poteaux (engin EN TRAVAIL, bloquant r52).
+      { assetKey: 'struct_stage05_mixer', dx: 0, dy: -40, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 52 } },
+      { assetKey: 'prop_stage05_crane_hook', dx: 70, dy: -150, scale: 0.7, collide: 'none' },
+      { assetKey: 'prop_stage05_concrete_pole', dx: -130, dy: 70, scale: 0.8, collide: 'none' },
+      { assetKey: 'struct_stage05_wall', dx: 150, dy: 80, scale: 0.7, collide: 'none' },
+    ],
+  },
+  scene_gros_oeuvre_stock: {
+    id: 'scene_gros_oeuvre_stock',
+    footprintRadius: 200,
+    gates: [{ dx: 0, dy: 150 }],
+    elements: [
+      { assetKey: 'prop_stage05_block_pallet', dx: -120, dy: 0, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage05_block_pallet', dx: 0, dy: 20, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage05_block_pallet', dx: 120, dy: 0, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage05_concrete_pole', dx: -40, dy: 110, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_gros_oeuvre_parc: {
+    id: 'scene_gros_oeuvre_parc',
+    footprintRadius: 280,
+    gates: [{ dx: 0, dy: 100 }],
+    elements: [
+      // Machines PARQUÉES au cordeau (exemption min-dist : c'est un parc).
+      { assetKey: 'struct_stage05_mixer', dx: -150, dy: 0, scale: 0.95, collide: 'both', shape: { kind: 'circle', r: 52 } },
+      { assetKey: 'prop_stage05_crane_hook', dx: 60, dy: -20, scale: 0.7, collide: 'none' },
+      { assetKey: 'fence_post', dx: -240, dy: -80, scale: 0.8, collide: 'none' },
+      { assetKey: 'fence_post', dx: 240, dy: -80, scale: 0.8, collide: 'none' },
+    ],
+  },
+
+  // ── Stage 06 — ÉCHAFAUDAGES : on monte la cage autour du bâtiment ─────────
+  scene_echafaudages_signature: {
+    id: 'scene_echafaudages_signature',
+    footprintRadius: 300,
+    gates: [{ dx: 0, dy: 250 }],
+    elements: [
+      // La travée d'échafaudage en cours de montage — le tableau de la phase.
+      { assetKey: 'struct_stage06_grid', dx: 0, dy: -40, scale: 1.0, collide: 'none' },
+      // La nacelle qui monte les monteurs (déclarée bloquante r46).
+      { assetKey: 'struct_stage06_nacelle', dx: -80, dy: -190, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 46 } },
+      // Les tubes qu'on assemble, côté joueur = décor.
+      { assetKey: 'prop_stage06_tubes', dx: 190, dy: 30, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage06_plancher', dx: -170, dy: 70, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage06_garde_corps', dx: 110, dy: 120, scale: 0.75, collide: 'none' },
+      { assetKey: 'prop_stage06_echelle', dx: -40, dy: 130, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_echafaudages_work: {
+    id: 'scene_echafaudages_work',
+    footprintRadius: 250,
+    gates: [{ dx: 0, dy: 190 }],
+    elements: [
+      { assetKey: 'struct_stage06_nacelle', dx: 0, dy: -40, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 46 } },
+      { assetKey: 'prop_stage06_scaffold', dx: 140, dy: 30, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage06_garde_corps', dx: -130, dy: 60, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage06_echelle', dx: 40, dy: 120, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_echafaudages_stock: {
+    id: 'scene_echafaudages_stock',
+    footprintRadius: 200,
+    gates: [{ dx: 0, dy: 150 }],
+    elements: [
+      { assetKey: 'prop_stage06_tubes', dx: -120, dy: 0, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage06_tubes', dx: 10, dy: 20, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage06_plancher', dx: 125, dy: 0, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage06_echelle', dx: -30, dy: 110, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_echafaudages_parc: {
+    id: 'scene_echafaudages_parc',
+    footprintRadius: 280,
+    gates: [{ dx: 0, dy: 100 }],
+    elements: [
+      { assetKey: 'struct_stage06_nacelle', dx: -150, dy: 0, scale: 0.95, collide: 'both', shape: { kind: 'circle', r: 46 } },
+      { assetKey: 'prop_stage06_scaffold', dx: 70, dy: -10, scale: 0.8, collide: 'none' },
+      { assetKey: 'fence_post', dx: -240, dy: -80, scale: 0.8, collide: 'none' },
+      { assetKey: 'fence_post', dx: 240, dy: -80, scale: 0.8, collide: 'none' },
+    ],
+  },
+
+  // ── Stage 07 — CHARPENTE / TOITURE : on lève les fermes ──────────────────
+  scene_charpente_signature: {
+    id: 'scene_charpente_signature',
+    footprintRadius: 300,
+    gates: [{ dx: 0, dy: 250 }],
+    elements: [
+      // Les fermes posées — le tableau de la phase.
+      { assetKey: 'struct_stage07_truss', dx: 0, dy: -40, scale: 1.0, collide: 'none' },
+      // Le camion-grue qui les lève (déclaré bloquant r52).
+      { assetKey: 'struct_stage07_crane', dx: -80, dy: -195, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 52 } },
+      // La charge suspendue entre les deux : on lit le levage.
+      { assetKey: 'struct_stage07_load', dx: 70, dy: -130, scale: 0.75, collide: 'none' },
+      // Les matériaux au sol, côté joueur = décor.
+      { assetKey: 'prop_stage07_beam', dx: 190, dy: 40, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage07_tile_pile', dx: -180, dy: 70, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage07_insul', dx: 100, dy: 125, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_charpente_work: {
+    id: 'scene_charpente_work',
+    footprintRadius: 250,
+    gates: [{ dx: 0, dy: 190 }],
+    elements: [
+      { assetKey: 'struct_stage07_crane', dx: 0, dy: -40, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 52 } },
+      { assetKey: 'struct_stage07_load', dx: 80, dy: -140, scale: 0.7, collide: 'none' },
+      { assetKey: 'prop_stage07_beam', dx: -130, dy: 60, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage07_gutter', dx: 130, dy: 90, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_charpente_stock: {
+    id: 'scene_charpente_stock',
+    footprintRadius: 200,
+    gates: [{ dx: 0, dy: 150 }],
+    elements: [
+      { assetKey: 'prop_stage07_tile_pile', dx: -120, dy: 0, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage07_tile_pile', dx: 0, dy: 20, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage07_beam', dx: 120, dy: 0, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage07_insul', dx: -40, dy: 110, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_charpente_parc: {
+    id: 'scene_charpente_parc',
+    footprintRadius: 280,
+    gates: [{ dx: 0, dy: 100 }],
+    elements: [
+      { assetKey: 'struct_stage07_crane', dx: -150, dy: 0, scale: 0.95, collide: 'both', shape: { kind: 'circle', r: 52 } },
+      { assetKey: 'prop_stage07_gutter', dx: 70, dy: -10, scale: 0.75, collide: 'none' },
+      { assetKey: 'fence_post', dx: -240, dy: -80, scale: 0.8, collide: 'none' },
+      { assetKey: 'fence_post', dx: 240, dy: -80, scale: 0.8, collide: 'none' },
+    ],
+  },
+
+  // ── Stage 08 — SECOND ŒUVRE : cloisons, gaines, électricité ──────────────
+  scene_second_oeuvre_signature: {
+    id: 'scene_second_oeuvre_signature',
+    footprintRadius: 300,
+    gates: [{ dx: 0, dy: 250 }],
+    elements: [
+      // La pièce cloisonnée en cours — le tableau de la phase.
+      { assetKey: 'struct_stage08_partition', dx: 0, dy: -40, scale: 1.0, collide: 'none' },
+      // Le fourgon de l'artisan garé au bord (déclaré bloquant r46).
+      { assetKey: 'struct_stage08_van', dx: -90, dy: -190, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 46 } },
+      // Ce qu'il décharge : plaques, gaines, câbles — côté joueur = décor.
+      { assetKey: 'prop_stage08_drywall', dx: 190, dy: 40, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage08_pvc', dx: -180, dy: 70, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage08_cables', dx: 110, dy: 125, scale: 0.75, collide: 'none' },
+      { assetKey: 'prop_stage08_elecpanel', dx: -50, dy: 130, scale: 0.7, collide: 'none' },
+    ],
+  },
+  scene_second_oeuvre_work: {
+    id: 'scene_second_oeuvre_work',
+    footprintRadius: 250,
+    gates: [{ dx: 0, dy: 190 }],
+    elements: [
+      { assetKey: 'struct_stage08_van', dx: 0, dy: -40, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 46 } },
+      { assetKey: 'prop_stage08_drywall', dx: -140, dy: 50, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage08_elecpanel', dx: 130, dy: 40, scale: 0.7, collide: 'none' },
+      { assetKey: 'prop_stage08_cables', dx: 20, dy: 120, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_second_oeuvre_stock: {
+    id: 'scene_second_oeuvre_stock',
+    footprintRadius: 200,
+    gates: [{ dx: 0, dy: 150 }],
+    elements: [
+      { assetKey: 'prop_stage08_drywall', dx: -120, dy: 0, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage08_pvc', dx: 0, dy: 20, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage08_cables', dx: 120, dy: 0, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage08_elecpanel', dx: -40, dy: 110, scale: 0.7, collide: 'none' },
+    ],
+  },
+  scene_second_oeuvre_parc: {
+    id: 'scene_second_oeuvre_parc',
+    footprintRadius: 280,
+    gates: [{ dx: 0, dy: 100 }],
+    elements: [
+      { assetKey: 'struct_stage08_van', dx: -150, dy: 0, scale: 0.95, collide: 'both', shape: { kind: 'circle', r: 46 } },
+      { assetKey: 'prop_stage08_pvc', dx: 70, dy: -10, scale: 0.8, collide: 'none' },
+      { assetKey: 'fence_post', dx: -240, dy: -80, scale: 0.8, collide: 'none' },
+      { assetKey: 'fence_post', dx: 240, dy: -80, scale: 0.8, collide: 'none' },
+    ],
+  },
+
+  // ── Stage 09 — FINITIONS : peinture, carrelage, la pièce se termine ──────
+  scene_finitions_signature: {
+    id: 'scene_finitions_signature',
+    footprintRadius: 300,
+    gates: [{ dx: 0, dy: 250 }],
+    elements: [
+      // La pièce finie — le tableau de la phase (on VOIT le résultat).
+      { assetKey: 'struct_stage09_room', dx: 0, dy: -40, scale: 1.0, collide: 'none' },
+      // Le poste de peinture qui l'alimente.
+      { assetKey: 'struct_stage09_station', dx: -90, dy: -180, scale: 0.9, collide: 'none' },
+      // Les outils du finisseur, côté joueur = décor.
+      { assetKey: 'prop_stage09_paint', dx: 180, dy: 40, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage09_tile_pallet', dx: -175, dy: 70, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage09_roller', dx: 100, dy: 125, scale: 0.75, collide: 'none' },
+      { assetKey: 'prop_stage09_tarp', dx: -40, dy: 130, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_finitions_work: {
+    id: 'scene_finitions_work',
+    footprintRadius: 250,
+    gates: [{ dx: 0, dy: 190 }],
+    elements: [
+      { assetKey: 'struct_stage09_station', dx: 0, dy: -40, scale: 0.9, collide: 'none' },
+      { assetKey: 'prop_stage09_tile_cutter', dx: 130, dy: 40, scale: 0.75, collide: 'none' },
+      { assetKey: 'prop_stage09_paint', dx: -130, dy: 50, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage09_roller', dx: 20, dy: 120, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_finitions_stock: {
+    id: 'scene_finitions_stock',
+    footprintRadius: 200,
+    gates: [{ dx: 0, dy: 150 }],
+    elements: [
+      { assetKey: 'prop_stage09_tile_pallet', dx: -120, dy: 0, scale: 0.85, collide: 'none' },
+      { assetKey: 'prop_stage09_paint', dx: 0, dy: 20, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage09_tarp', dx: 120, dy: 0, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage09_roller', dx: -40, dy: 110, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_finitions_parc: {
+    id: 'scene_finitions_parc',
+    footprintRadius: 280,
+    gates: [{ dx: 0, dy: 100 }],
+    elements: [
+      { assetKey: 'prop_stage09_tile_cutter', dx: -150, dy: 0, scale: 0.8, collide: 'none' },
+      { assetKey: 'struct_stage09_station', dx: 70, dy: -10, scale: 0.8, collide: 'none' },
+      { assetKey: 'fence_post', dx: -240, dy: -80, scale: 0.8, collide: 'none' },
+      { assetKey: 'fence_post', dx: 240, dy: -80, scale: 0.8, collide: 'none' },
+    ],
+  },
+
+  // ── Stage 10 — LIVRAISON / AUDIT : le bâtiment est fini, on inspecte ─────
+  scene_livraison_signature: {
+    id: 'scene_livraison_signature',
+    footprintRadius: 300,
+    gates: [{ dx: 0, dy: 250 }],
+    elements: [
+      // LE bâtiment livré — le tableau de la phase (la récompense du cycle).
+      { assetKey: 'struct_stage10_building', dx: 0, dy: -50, scale: 1.0, collide: 'none' },
+      // Le fourgon d'inspection garé devant (déclaré bloquant r46).
+      { assetKey: 'struct_stage10_van', dx: -95, dy: -185, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 46 } },
+      // Le panneau CONFORME : la phase se lit en 2 s.
+      { assetKey: 'prop_stage10_sign_ok', dx: 100, dy: -120, scale: 0.8, collide: 'none' },
+      // Le balisage de réception, côté joueur = décor traversable.
+      { assetKey: 'prop_stage10_cones', dx: 180, dy: 50, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage10_cones', dx: -170, dy: 75, scale: 0.75, collide: 'none' },
+      { assetKey: 'prop_stage10_projector', dx: 60, dy: 130, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_livraison_work: {
+    id: 'scene_livraison_work',
+    footprintRadius: 250,
+    gates: [{ dx: 0, dy: 190 }],
+    elements: [
+      { assetKey: 'struct_stage10_van', dx: 0, dy: -40, scale: 1.0, collide: 'both', shape: { kind: 'circle', r: 46 } },
+      { assetKey: 'prop_stage10_sign_ok', dx: 120, dy: 40, scale: 0.75, collide: 'none' },
+      { assetKey: 'prop_stage10_cones', dx: -130, dy: 60, scale: 0.75, collide: 'none' },
+      { assetKey: 'prop_stage10_projector', dx: 30, dy: 120, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_livraison_stock: {
+    id: 'scene_livraison_stock',
+    footprintRadius: 220,
+    gates: [{ dx: 0, dy: 150 }],
+    elements: [
+      // Le balisage qu'on REMBALLE : la barrière (déclarée segment bloquant).
+      { assetKey: 'prop_stage10_barrier', dx: -120, dy: -10, scale: 0.85, collide: 'both', shape: { kind: 'segment', x2: 70, y2: 0, thickness: 10 } },
+      { assetKey: 'prop_stage10_cones', dx: 40, dy: 20, scale: 0.8, collide: 'none' },
+      { assetKey: 'prop_stage10_cones', dx: 140, dy: 0, scale: 0.75, collide: 'none' },
+      { assetKey: 'prop_stage10_sign_ok', dx: -40, dy: 110, scale: 0.75, collide: 'none' },
+    ],
+  },
+  scene_livraison_parc: {
+    id: 'scene_livraison_parc',
+    footprintRadius: 280,
+    gates: [{ dx: 0, dy: 100 }],
+    elements: [
+      { assetKey: 'struct_stage10_van', dx: -150, dy: 0, scale: 0.95, collide: 'both', shape: { kind: 'circle', r: 46 } },
+      { assetKey: 'prop_stage10_projector', dx: 70, dy: -10, scale: 0.75, collide: 'none' },
+      { assetKey: 'fence_post', dx: -240, dy: -80, scale: 0.8, collide: 'none' },
+      { assetKey: 'fence_post', dx: 240, dy: -80, scale: 0.8, collide: 'none' },
+    ],
+  },
+
   // Stage 01 — Terrain vierge (INSTALLATION DE CHANTIER)
   // Sémantique : la parcelle vient d'être prise ; le chantier s'INSTALLE.
   // Pas encore d'engins lourds (ils arrivent au terrassement) → la « zone de

@@ -149,15 +149,39 @@ describe('éditeur — la case n\'existe que sur les stages à plan de chantier'
     document.body.innerHTML = ''
   })
 
-  it('stageHasSitePlan : vrai UNIQUEMENT pour terrassement et fondations', () => {
+  it('stageHasSitePlan : vrai pour les 8 stages à programme, faux pour les 2 abstentions', () => {
     const withPlan = STAGE_LIST.map((s) => s.id).filter((id) => stageHasSitePlan(id))
-    expect(withPlan.sort()).toEqual(['fondations', 'terrassement'])
+    expect(withPlan.sort()).toEqual([
+      'charpente_toiture',
+      'echafaudages',
+      'finitions',
+      'fondations',
+      'gros_oeuvre',
+      'livraison_audit',
+      'second_oeuvre',
+      'terrassement'
+    ])
+    // Ces deux-là n'ont PAS de programme, et c'est une DÉCISION documentée dans
+    // `SITE_PROGRAMS` (terrain_vierge = stage de sim:check + témoin du test
+    // keepSitePlan ; reseaux_enterres = déjà servi par siteStructures). Le test
+    // les épingle pour qu'un ajout distrait se voie.
+    expect(stageHasSitePlan('terrain_vierge')).toBe(false)
+    expect(stageHasSitePlan('reseaux_enterres')).toBe(false)
   })
 
-  it('terrassement / fondations : la case est montée dans la barre d\'outils', () => {
-    for (const stage of ['terrassement', 'fondations']) {
+  /**
+   * ⚠️ CONTRAT ANTI-RÉGRESSION (bug rapporté : « le niveau de base ne doit plus
+   * s'afficher quelles que soient les conditions »). Un stage à programme SANS sa
+   * case, c'est le plan procédural qui écrase la compo du joueur SANS AUCUN
+   * RECOURS dans l'éditeur. La boucle est DÉRIVÉE du registre — pas une liste
+   * recopiée — pour qu'un 9ᵉ programme soit couvert le jour où il arrive.
+   */
+  it('TOUT stage à programme monte la case (aucun plan sans interrupteur)', () => {
+    const withPlan = STAGE_LIST.map((s) => s.id).filter((id) => stageHasSitePlan(id))
+    expect(withPlan.length).toBeGreaterThanOrEqual(8)
+    for (const stage of withPlan) {
       const root = mountToolbar(stage, new EditorState(stage))
-      expect(checkboxLabels(root)).toContain(CHECK_LABEL)
+      expect(checkboxLabels(root), `stage "${stage}" : plan de chantier SANS case`).toContain(CHECK_LABEL)
     }
   })
 
