@@ -1,11 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import { musicForState, MUSIC, SFX, VOICE, voiceStage, SFX_FILES, MUSIC_FILES_SHARED, VOICE_FILES } from '@/audio/manifest'
+import {
+  musicForState, MUSIC, SFX, VOICE, voiceStage, SFX_FILES, MUSIC_FILES_SHARED, VOICE_FILES,
+  WEAPON_SFX_IDS, WEAPON_SFX_FILES_REJETES, WEAPON_FILE_TRIM, WEAPON_FILE_VOLUME,
+  WEAPON_FILE_BANDE_LUFS, weaponFileGain, CARNAGE_GORE_IDS, CARNAGE_GORE_ID_REJETE
+} from '@/audio/manifest'
+import { WEAPON_ZZFX } from '@/audio/weaponSfx'
 import { clamp01, musicGain, sfxGain, duckedGain, type AudioLevels } from '@/audio/settings'
 import { Simulation } from '@core/simulation'
 import type { Screen } from '@/app/appState'
 import { WEAPONS } from '@content/weapons'
 import { AudioDirector } from '@/audio/audioDirector'
-import { EvolvedEvent, BossSpawnedEvent } from '@core/events'
+import { EvolvedEvent, BossSpawnedEvent, EnemyDiedEvent } from '@core/events'
+import type { AppViewState } from '@/app/appState'
 
 describe('audio — musique par état (pure)', () => {
   const g = (screen: Screen, stageId: string, bossPresent = false): string | null =>
@@ -96,6 +102,81 @@ describe('audio — cohérence manifeste ↔ préchargement', () => {
     for (let order = 1; order <= 10; order++) {
       expect(loaded.has(voiceStage(order)), `stage ${order}`).toBe(true)
     }
+  })
+})
+
+/**
+ * Niveaux des SFX d'armes en fichier.
+ *
+ * Un mix se juge à l'oreille — mais un fichier livré 22 à 53 dB sous ses voisines
+ * ne relève pas du goût, il ne s'entend simplement JAMAIS. C'est ce que ces tests
+ * verrouillent : pas « le mix est bon », mais « aucun son n'est objectivement
+ * hors-jeu, et aucune correction n'est appliquée à l'aveugle ».
+ *
+ * Les mesures citées viennent de `npm run audio:qa` (EBU R128, max momentané).
+ */
+describe('audio — niveaux des SFX d\'armes (fichier)', () => {
+  it('une arme sans trim joue au gain commun de la famille', () => {
+    expect(weaponFileGain('cloueur')).toBe(WEAPON_FILE_VOLUME)
+    expect(weaponFileGain('extincteur')).toBe(WEAPON_FILE_VOLUME)
+    expect(weaponFileGain('arme_inconnue')).toBe(WEAPON_FILE_VOLUME) // repli, jamais 0
+  })
+
+  it('la brouette (fichier 22 dB sous sa famille) est remontée au-dessus du gain commun', () => {
+    // +17 dB → ×7.08. Sans ça elle jouait à ≈ −43 dBFS, 25 dB sous la musique.
+    expect(weaponFileGain('brouette')).toBeCloseTo(WEAPON_FILE_VOLUME * 7.079, 2)
+    expect(weaponFileGain('brouette')).toBeGreaterThan(weaponFileGain('cloueur'))
+  })
+
+  it('AUCUN trim ne fait clipper sa source (pic mesuré + gain ≤ −0.5 dBFS)', () => {
+    // LA garde de ce mécanisme : remonter un fichier est sûr tant que son pic
+    // reste sous 0 dBFS. C'est ce qui interdit de viser la médiane de la famille
+    // pour la brouette (+22 dB l'aurait posée à +4 dBFS).
+    for (const [id, trim] of Object.entries(WEAPON_FILE_TRIM)) {
+      expect(trim.picDbfs + trim.gainDb, `${id} clipperait`).toBeLessThanOrEqual(-0.5)
+    }
+  })
+
+  it('tout trim atterrit DANS la bande mesurée de la famille (il aligne, il ne mixe pas)', () => {
+    for (const [id, trim] of Object.entries(WEAPON_FILE_TRIM)) {
+      const apres = trim.mesureLufs + trim.gainDb
+      expect(apres, `${id} sous la famille`).toBeGreaterThanOrEqual(WEAPON_FILE_BANDE_LUFS.min)
+      expect(apres, `${id} au-dessus de la famille`).toBeLessThanOrEqual(WEAPON_FILE_BANDE_LUFS.max)
+    }
+  })
+
+  it('tout trim porte sur une arme réellement jouée en fichier (pas de trim mort)', () => {
+    for (const id of Object.keys(WEAPON_FILE_TRIM)) {
+      expect(WEAPON_SFX_IDS, `trim ${id} sans fichier déclaré`).toContain(id)
+    }
+  })
+
+  it('une arme au fichier rejeté n\'est PAS déclarée, et garde un zzfx pour la couvrir', () => {
+    // Le rejet n'a de sens que si le repli existe : sinon on remplace un son
+    // inaudible par du silence, ce qui est pire.
+    for (const id of WEAPON_SFX_FILES_REJETES) {
+      expect(WEAPON_SFX_IDS, `${id} encore déclaré en fichier`).not.toContain(id)
+      expect(WEAPON_ZZFX[id], `${id} sans repli zzfx`).toBeDefined()
+    }
+  })
+})
+
+describe('audio — pool de gore du Mode Carnage', () => {
+  it('la variante écartée n\'est pas dans le pool tiré au sort', () => {
+    // gore_2 est 20 dB sous ses pairs : tirée dans le même pool, sous le même
+    // volume, elle s'entendrait comme un trou (une mort sur cinq muette).
+    expect(CARNAGE_GORE_IDS).not.toContain(CARNAGE_GORE_ID_REJETE)
+  })
+
+  it('le pool garde plusieurs variantes (une seule saoulerait à une mort/seconde)', () => {
+    expect(CARNAGE_GORE_IDS.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('le cue carnageGore est throttlé bien plus haut que le cue de kill', () => {
+    // Son gras et sale à cadence de horde → bouillie s'il suit `enemyKilled`.
+    const gore = SFX['carnageGore']?.throttleMs ?? 0
+    const kill = SFX['enemyKilled']?.throttleMs ?? 0
+    expect(gore).toBeGreaterThan(kill * 3)
   })
 })
 
@@ -193,6 +274,73 @@ describe('audio — le boss final déclenche une réplique dédiée (distincte d
     events.dispatchEvent(new BossSpawnedEvent('mid'))
     expect(addedKeys.length).toBe(1)
     expect(VOICE.boss).toContain(addedKeys[0])
+  })
+})
+
+/**
+ * Le commit du Mode Carnage (6f1650a) annonce « chaque ennemi tué laisse une
+ * gerbe […] avec un bruit de chair broyée » : les 5 fichiers ont été livrés, le
+ * cue `carnageGore` entièrement spécifié… et jamais appelé. Le son n'existait
+ * que sur le papier. Ces tests verrouillent les deux sens du branchement.
+ */
+describe('audio — bruit de chair du Mode Carnage', () => {
+  /** Fake capturant les cues joués (`sound.play`), pas seulement les voix (`add`). */
+  function fakeSoundManager(): { manager: Phaser.Sound.BaseSoundManager; playedKeys: string[] } {
+    const playedKeys: string[] = []
+    const manager = {
+      locked: false,
+      play: (key: string) => { playedKeys.push(key); return true },
+      add: () => ({ play: () => true, stop: () => true, destroy: () => {}, once: () => {}, volume: 0, isPlaying: false }),
+      game: { cache: { audio: { exists: () => true } }, scene: { getScene: () => null } }
+    } as unknown as Phaser.Sound.BaseSoundManager
+    return { manager, playedKeys }
+  }
+
+  /** État minimal suffisant pour `observe()` — seul `carnage` nous intéresse ici. */
+  function fakeState(carnage: boolean): AppViewState {
+    return {
+      screen: 'game', stageId: 'terrain_vierge', stageOrder: 1,
+      enemies: [], players: [], carnage
+    } as unknown as AppViewState
+  }
+
+  function mort(): EnemyDiedEvent {
+    return new EnemyDiedEvent(10, 20, 'imp', false, undefined, 'cloueur', 1, 0)
+  }
+
+  const settings: AudioLevels = { master: 1, music: 1, sfx: 1, muted: false }
+
+  it('HORS Mode Carnage, une mort ne produit AUCUN bruit de chair', () => {
+    const events = new EventTarget()
+    const { manager, playedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, events, () => settings)
+    director.observe(fakeState(false))
+    playedKeys.length = 0 // ignore les cues d'entrée d'écran
+    events.dispatchEvent(mort())
+    expect(playedKeys.filter((k) => k.startsWith('sfx_gore_'))).toEqual([])
+  })
+
+  it('EN Mode Carnage, une mort produit une variante de gore du pool', () => {
+    const events = new EventTarget()
+    const { manager, playedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, events, () => settings)
+    director.observe(fakeState(true))
+    playedKeys.length = 0
+    events.dispatchEvent(mort())
+    const gores = playedKeys.filter((k) => k.startsWith('sfx_gore_'))
+    expect(gores.length).toBe(1)
+    expect(CARNAGE_GORE_IDS.map((n) => `sfx_gore_${n}`)).toContain(gores[0])
+  })
+
+  it('le Mode Carnage coupé en cours de run refait taire les morts', () => {
+    const events = new EventTarget()
+    const { manager, playedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, events, () => settings)
+    director.observe(fakeState(true))
+    director.observe(fakeState(false)) // le Konami rebascule → le son doit suivre
+    playedKeys.length = 0
+    events.dispatchEvent(mort())
+    expect(playedKeys.filter((k) => k.startsWith('sfx_gore_'))).toEqual([])
   })
 })
 
