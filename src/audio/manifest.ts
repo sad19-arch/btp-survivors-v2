@@ -289,6 +289,10 @@ export const SFX: Readonly<Record<string, SfxCue>> = {
   break_rubble: { keys: ['sfx_break_rubble'], volume: 0.5, rateJitter: 0.12, throttleMs: 80 },
   // Impact « chantier » synchro sur le slam-in du logo du titre (refonte arcade).
   titleSlam: { keys: ['sfx_title_slam'], volume: 0.9 },
+  // Cinématique d'intro (terrassement) : le « clonk » de la pelle qui heurte la
+  // fosse. RÉUTILISE un impact dur existant (aucun asset généré) — swap 1 ligne
+  // le jour où un vrai « clonk » dédié est produit.
+  clonk: { keys: ['sfx_harsh_destruction'], volume: 0.75 },
   /**
    * Mode Carnage : bruit de chair broyée à la mort d'un ennemi.
    *

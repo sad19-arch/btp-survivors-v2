@@ -368,6 +368,56 @@ describe('audio — bruit de chair du Mode Carnage', () => {
   })
 })
 
+/**
+ * Cinématique d'intro : la façade dispatche des cues cosmétiques (`clonk`, voix)
+ * que `main.ts` route vers l'AudioDirector via ces deux méthodes publiques. Ces
+ * cues étaient des NO-OPS dans la branche cinéma d'origine — on verrouille ici
+ * qu'ils produisent un vrai son (et pas un cue mort).
+ */
+describe('audio — cues de cinématique (playNamedCue / playNamedVoice)', () => {
+  function fakeSoundManager(): {
+    manager: Phaser.Sound.BaseSoundManager
+    playedKeys: string[]
+    addedKeys: string[]
+  } {
+    const playedKeys: string[] = []
+    const addedKeys: string[] = []
+    const manager = {
+      locked: false,
+      play: (key: string) => { playedKeys.push(key); return true },
+      add: (key: string) => { addedKeys.push(key); return { play: () => true, stop: () => true, destroy: () => {}, once: () => {}, volume: 0, isPlaying: false } },
+      game: { cache: { audio: { exists: () => true } }, scene: { getScene: () => null } }
+    } as unknown as Phaser.Sound.BaseSoundManager
+    return { manager, playedKeys, addedKeys }
+  }
+
+  const settings: AudioLevels = { master: 1, music: 1, sfx: 1, muted: false }
+
+  it("playNamedCue('clonk') joue le cue « clonk » (pas de cue mort)", () => {
+    // Le cue 'clonk' DOIT exister dans le manifeste, sinon playCue no-op silencieux.
+    expect(SFX['clonk']).toBeDefined()
+    const { manager, playedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, new EventTarget(), () => settings)
+    director.playNamedCue('clonk')
+    expect(playedKeys.length).toBe(1)
+    expect(SFX['clonk']?.keys).toContain(playedKeys[0])
+  })
+
+  it("playNamedVoice(key) lance la réplique via add()", () => {
+    const { manager, addedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, new EventTarget(), () => settings)
+    director.playNamedVoice('voice_go_go_go')
+    expect(addedKeys).toEqual(['voice_go_go_go'])
+  })
+
+  it("un cue inconnu ne joue rien (no-op sûr)", () => {
+    const { manager, playedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, new EventTarget(), () => settings)
+    director.playNamedCue('cue_qui_nexiste_pas')
+    expect(playedKeys).toEqual([])
+  })
+})
+
 describe('audio — la sim émet les événements sémantiques', () => {
   it('enemyKilled et weaponFired sont émis en jeu réel', () => {
     const sim = new Simulation({ seed: 1, mode: 'solo' })

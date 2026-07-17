@@ -261,6 +261,12 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   runId: number
   /** Intro de run en cours (sim gelée, micro-animation d'entrée). */
   introActive: boolean
+  /**
+   * Temps écoulé depuis le début de l'intro (ms).
+   * Progresse de 0 jusqu'à `totalIntroMs` ; reste 0 si introActive est faux.
+   * Utilisé par la cinématique render-only pour animer les séquences.
+   */
+  introElapsedMs: number
   /** Libellé humain de la phase courante (ex. « Réseaux enterrés »). */
   stageTitle: string
   /** Sous-titre de la phase (ex. « Tranchées et canalisations »). */

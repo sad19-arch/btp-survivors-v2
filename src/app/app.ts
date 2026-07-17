@@ -31,7 +31,8 @@ import {
   type NameEntryState
 } from './nameEntry'
 import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
-import { FINAL_BOSS, INTRO, MODE_PLAYER_COUNT, modeForCount } from '@content/config'
+import { FINAL_BOSS, MODE_PLAYER_COUNT, modeForCount } from '@content/config'
+import { introDurationFor } from '@content/introScripts'
 import { WEAPONS } from '@content/weapons'
 import { PASSIVES, aggregatePassives } from '@content/passives'
 import { describeWeaponLevelDelta } from '@content/weaponDelta'
@@ -138,6 +139,8 @@ export class App {
   private comboBuffer: ComboAction[] = []
   /** Intro activée (vrai joueur) ; désactivée en test/e2e/capture. */
   private readonly introEnabled: boolean
+  /** Durée totale de l'intro pour la run en cours (0 si intro désactivée). */
+  private totalIntroMs = 0
   /** Temps restant de gel pour l'intro de run, en ms (0 = pas d'intro en cours). */
   private introMsLeft = 0
   /** Écran Options ouvert (surcouche au-dessus du titre / pause). */
@@ -304,7 +307,12 @@ export class App {
       const ev = e as DestructibleBrokenEvent
       this.events.dispatchEvent(new DestructibleBrokenEvent(ev.x, ev.y, ev.typeId))
     })
-    this.introMsLeft = this.introEnabled ? INTRO.durationMs : 0
+    // Durée du gel d'intro : cinématique complète (6.5 s) si le stage a un script
+    // de montage, sinon micro-préambule héros (2 s) — cf. `introDurationFor`. En
+    // test/e2e l'intro est désactivée (introEnabled=false → 0). La sim est GELÉE
+    // pendant tout ce laps : la durée est cosmétique, sans effet sur le déterminisme.
+    this.totalIntroMs = this.introEnabled ? introDurationFor(this.selectedPhase) : 0
+    this.introMsLeft = this.totalIntroMs
     this.started = true
     // Bump SEULEMENT sur un RE-démarrage (game over→restart, stage suivant,
     // setSeed) : le rendu repart alors d'une scène propre (cf. `runId`, fuite
@@ -528,6 +536,14 @@ export class App {
     this.bumpState()
     this.sim?.resume()
     this.refreshFocus()
+  }
+
+  /** Saute l'intro (fin du gel) — câblée sur toute entrée pendant l'intro. */
+  skipIntro(): void {
+    if (this.introMsLeft <= 0) { return }
+    this.introMsLeft = 0
+    this.refreshFocus()
+    this.bumpState()
   }
 
   /** Bascule pause/reprise (touche dédiée). */
@@ -800,6 +816,7 @@ export class App {
       carnage: this.carnage,
       runId: this.runId,
       introActive: this.introMsLeft > 0,
+      introElapsedMs: Math.max(0, this.totalIntroMs - this.introMsLeft),
       stageTitle: phase?.title ?? '—',
       stageSubtitle: phase?.subtitle ?? '',
       stageOrder: phase?.order ?? 0,

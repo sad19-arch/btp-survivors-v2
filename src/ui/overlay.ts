@@ -736,6 +736,15 @@ export class Overlay {
   }
 
   /**
+   * Carton titre d'une cinématique d'intro (ex. « TERRASSEMENT »). Appelé depuis
+   * `main.ts` sur l'événement `cinemaBanner` émis par la façade cinématique. Réutilise
+   * le bandeau 16-bit existant — aucune nouvelle couche ni style.
+   */
+  showCinemaBanner(text: string): void {
+    this.showBanner(text, 'banner')
+  }
+
+  /**
    * B5 — Panneau « jackpot » (machine à sous arcade) déclenché à la prise d'un
    * coffre d'évolution. Affiche une roulette pixel qui défile (~1.1s) et s'arrête
    * sur le nom de l'arme évoluée, avec un flash final.

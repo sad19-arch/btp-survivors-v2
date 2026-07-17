@@ -11,6 +11,7 @@ import { phaseIdFromLevel } from '@content/phases'
 import { createSeam, installSeam } from './seam'
 import { PerfOverlay } from '@render/perf/perfOverlay'
 import { ViewportBus } from '@ui/viewport'
+import { CinemaBannerEvent, CinemaSfxEvent, CinemaVoiceEvent } from '@render/cinemaEvents'
 
 /**
  * Point d'entrée (couche rendu). Lit les options de boot, instancie l'App (qui
@@ -39,7 +40,8 @@ const app = new App({
   autostart: opts.autostart !== null,
   phaseId: phaseIdFromLevel(opts.level),
   // Intro cosmétique pour le vrai joueur ; jamais en test/e2e/capture (seam).
-  intro: !opts.test
+  // Exception : ?intro=1 force l'intro même en test (e2e de la plomberie cinéma).
+  intro: opts.intro || !opts.test
 })
 const seam = createSeam(app)
 
@@ -137,6 +139,19 @@ if (uiRoot !== null) {
   } else {
     window.setTimeout(dismissSplash, 3400)
   }
+  // Cinématique d'intro : la façade Phaser DISPATCHE ses cues cosmétiques sur
+  // `app.events` (elle ne connaît ni l'overlay ni l'audio) ; on les route ici.
+  // - bandeau → carton titre 16-bit de l'overlay ;
+  // - SFX/voix → AudioDirector (null en test → inerte, la sim reste intacte).
+  app.events.addEventListener('cinemaBanner', (e) => {
+    overlay.showCinemaBanner((e as CinemaBannerEvent).text)
+  })
+  app.events.addEventListener('cinemaSfx', (e) => {
+    audio?.playNamedCue((e as CinemaSfxEvent).cue)
+  })
+  app.events.addEventListener('cinemaVoice', (e) => {
+    audio?.playNamedVoice((e as CinemaVoiceEvent).key)
+  })
   // B5 — Jackpot coffre + bandeau d'évolution : câblés dans overlay.sync via
   // state.justEvolvedWeaponName (flag transitoire, one-shot). Plus d'event ad hoc ici.
   const tick = (): void => {

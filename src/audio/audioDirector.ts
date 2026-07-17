@@ -221,6 +221,24 @@ export class AudioDirector {
     on('menuBack', () => { this.playCue('menuBack') })
   }
 
+  /**
+   * Joue un cue SFX nommé du manifeste (API publique). Utilisé par la cinématique
+   * d'intro (routée depuis `app.events` par `main.ts`) : le cue « clonk » de la
+   * pelle. No-op silencieux si le cue est inconnu ou l'audio verrouillé/muet.
+   */
+  playNamedCue(name: string): void {
+    this.playCue(name)
+  }
+
+  /**
+   * Joue une réplique d'annonceur par CLÉ de voix (API publique) — cinématique
+   * d'intro routée par `main.ts`. Priorité basse (1) : une annonce d'écran en
+   * cours n'est pas coupée par un cue cosmétique. No-op si la clé est absente.
+   */
+  playNamedVoice(key: string): void {
+    this.playVoice([key], 1)
+  }
+
   /** `rateMul` : multiplicateur de hauteur additionnel (ex. varier une même cue par sorte d'arme). */
   private playCue(name: string, rateMul = 1): void {
     if (this.isLocked()) {

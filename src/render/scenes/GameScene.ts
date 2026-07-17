@@ -28,6 +28,9 @@ import { TelegraphRenderer } from '@render/scenes/telegraphRenderer'
 import { SiteRenderer } from '@render/scenes/siteRenderer'
 import { SiteStructures, hasStructurePlan } from '@render/scenes/siteStructures'
 import { SiteWorkers } from '@render/scenes/siteWorkers'
+import { IntroSequencer } from '@render/scenes/introSequencer'
+import { CinemaStageImpl } from '@render/scenes/cinemaStageImpl'
+import { createCinemaDeps } from '@render/scenes/cinemaDeps'
 import { buildSiteLayout } from '@core/siteLayout'
 import { AuraPulseEvent, PrisonerFreedEvent, DestructibleBrokenEvent, EnemyDiedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
@@ -35,6 +38,7 @@ import { DestructibleRenderer } from '@render/scenes/destructibleRenderer'
 import { destructibleDef, destructiblesForStage, COIN_PICKUP } from '@content/destructibles'
 import { PALETTE_HEX } from '@ui/palette'
 import { PerfProbe, type PerfSnapshot } from '@render/perf/perfProbe'
+import { INTRO_SCRIPTS } from '@content/introScripts'
 
 /** Feuille PARTAGÉE (tous stages) : le joueur. Ennemis ET boss sont PAR STAGE (voir stages.ts). */
 const SHARED_SHEETS: ReadonlyArray<readonly [string, string, number]> = [['player', 'player_j1.png', 192]]
@@ -122,6 +126,12 @@ export class GameScene extends Phaser.Scene {
   private siteStructures!: SiteStructures
   /** Ouvriers navetteurs (T6) — module dédié, GameScene délègue. */
   private siteWorkers!: SiteWorkers
+  /** Façade cinématique (T5) — implémentation Phaser des CinemaDeps, instance fraîche par scène. */
+  private cinemaStage!: CinemaStageImpl
+  /** Séquenceur d'intro (T5) — dispatche les IntroCommand vers cinemaStage. Instance fraîche par scène. */
+  private intro!: IntroSequencer
+  /** Suivi de la transition introActive (T6) — pour déclencher dispose() dès la fin de l'intro. */
+  private prevIntroActive = false
   /**
    * VFX des armes à impulsion (marteau/pied-de-biche/court-circuit), déclenché
    * par l'événement d'aura de la sim. Une forme dédiée par `kind` — pas de
@@ -538,6 +548,12 @@ export class GameScene extends Phaser.Scene {
     this.siteStructures = new SiteStructures(this)
     // Ouvriers navetteurs (T6) : instance fraîche par scène.
     this.siteWorkers = new SiteWorkers(this)
+    // Cinématique d'intro (T5) : façade Phaser + séquenceur. Instance fraîche par
+    // scène. La construction de la façade (câblage caméra/tweens + dispatch des
+    // cues bandeau/voix/SFX) vit dans `createCinemaDeps` — pas dans GameScene.
+    this.cinemaStage = new CinemaStageImpl(createCinemaDeps(this, this.camera, this.app.events))
+    this.intro = new IntroSequencer(this.cinemaStage)
+    this.intro.load(INTRO_SCRIPTS[this.loadedStageId] ?? [])
     // Sol : base tuilée (TileSprite, O(1)) + streamer de décalques/props par chunks.
     // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
     const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
@@ -760,6 +776,7 @@ export class GameScene extends Phaser.Scene {
       this.siteRenderer.dispose()
       this.siteStructures.dispose()
       this.siteWorkers.dispose()
+      this.intro.dispose()
       this.touchInput?.dispose()
       this.touchInput = null
     })
@@ -813,6 +830,13 @@ export class GameScene extends Phaser.Scene {
         count: number
         workers: { role: string; texture: string; x: number; y: number }[]
       } => this.siteWorkers.workerDebugInfo
+      // T5 — Sonde cinématique d'intro (test-only) : état actif + elapsed + actorCount + zoom.
+      this.seam.debugIntroInfo = (): { active: boolean; elapsedMs: number; actorCount: number; cameraZoom: number } => ({
+        active: this.app.getState().introActive,
+        elapsedMs: this.app.getState().introElapsedMs,
+        actorCount: this.cinemaStage.actorCount,
+        cameraZoom: this.cameras.main.zoom,
+      })
       this.seam.debugCameraOverview = (zoom: number, cx: number, cy: number): void => {
         this.camera.setOverview({ zoom, cx, cy })
       }
@@ -843,6 +867,26 @@ export class GameScene extends Phaser.Scene {
       routeInput(this.app, this.readPlayerInputs(st.players.length))
       this.perf.measure('sim', () => this.app.advanceTime(Math.min(delta, MAX_FRAME_MS)))
     }
+    // Skip intro sur n'importe quelle entrée (non-test uniquement : en test le seam pilote).
+    if (st.introActive && !this.testMode) {
+      const inputs = this.readPlayerInputs(1)
+      const p1 = inputs.get(1)
+      if ((p1 !== undefined && (p1.pressed.length > 0 || p1.action || p1.move.x !== 0 || p1.move.y !== 0))) {
+        this.app.skipIntro()
+      }
+    }
+    // Séquenceur d'intro : dispatche les commandes cinématiques à la façade Phaser.
+    // Sauté en mode lite (pas de textures ni de sprites chargés).
+    if (st.introActive && !this.lite) {
+      this.intro.update(st.introElapsedMs)
+    }
+    // Transition introActive true→false : nettoyage immédiat des acteurs cosmétiques.
+    // Sans ce dispose(), les sprites spawné par le script restent dans la scène
+    // après skipIntro() (jusqu'au prochain shutdown de scène).
+    if (this.prevIntroActive && !st.introActive) {
+      this.intro.dispose()
+    }
+    this.prevIntroActive = st.introActive
     this.syncSprites()
     this.camera.update(st, this.players.sprites, this.baseZoom())
     // Streamer de décor : throttlé toutes les 4 frames pour éviter un scan de Map
