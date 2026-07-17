@@ -648,6 +648,14 @@ const RESEAUX_ENTERRES_RENDER: StageRender = {
     { key: 'struct_stage04_excavator', file: 'stage04/props/mini_excavator.png',       scale: 1.1, count: 1, band: 'near' },
     { key: 'struct_stage04_trench',    file: 'stage04/structures/trench_junction.png',  scale: 0.85, count: 4, band: 'mid'  }
   ],
+  // MACHINES VIVANTES (cf. stage02) — mini-pelle : `_work` = le bras creuse
+  // (châssis fixe), `_move` = les chenilles défilent (bras en transport).
+  // `frame` ⇒ load.spritesheet : condition pour que `animation: { frameRate }`
+  // d'un élément de cluster joue.
+  editorExtras: [
+    { key: 'struct_stage04_excavator_work', file: 'stage04/props/mini_excavator_work.png', role: 'structure', frame: 192 },
+    { key: 'struct_stage04_excavator_move', file: 'stage04/props/mini_excavator_move.png', role: 'structure', frame: 192 }
+  ],
   ambient: [
     { key: 'npc_stage04', file: 'stage04/npc/poseur_work.png', frame: 180, scale: 1.0, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
     { key: 'npc_stage04_electricien_trade', file: 'stage04/npc/electricien_trade.png', frame: 256, scale: 1.0, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
@@ -734,10 +742,20 @@ const GROS_OEUVRE_RENDER: StageRender = {
   ],
   // MACHINES VIVANTES (cf. stage02) — grue à tour, flèche qui slew autour du mât.
   // NB : `struct_stage05_mixer` pointe sur `mobile_crane.png` qui contient en
-  // réalité une TOUPIE (le nom du fichier ment ; la clé dit vrai). Sa feuille
-  // animée « cuve qui tourne » reste à produire — aucun asset ici.
+  // réalité une TOUPIE (le nom du fichier ment ; la clé dit vrai) : sa feuille
+  // animée est donc « cuve qui tourne », pas « flèche ».
+  // Le crochet de grue, lui, TOURNE lentement sur son câble (le modèle a rendu
+  // une vrille, pas un balancier — d'où une boucle directe et non un aller-retour).
+  // ⚠️ RÉSERVE DA sur `struct_stage05_mixer_work` : ses frames sont plus PLATES
+  // (angle de caméra plus bas) que la statique, qui a une vraie 3/4. Cause
+  // isolée : c'est `animate_object` v3 qui aplatit, PAS la source — testé sur
+  // 2 vues source ('low'/'high top-down') × 3 formulations d'animation, dont un
+  // « camera locked » explicite. Aucun paramètre d'API ne pilote la vue de
+  // l'animation. La statique reste posée ; cette clé n'est branchée nulle part.
   editorExtras: [
-    { key: 'struct_stage05_crane_work', file: 'stage05/props/tower_crane_work.png', role: 'structure', frame: 224 }
+    { key: 'struct_stage05_crane_work', file: 'stage05/props/tower_crane_work.png', role: 'structure', frame: 224 },
+    { key: 'struct_stage05_mixer_work', file: 'stage05/props/mobile_crane_work.png', role: 'structure', frame: 224 },
+    { key: 'prop_stage05_crane_hook_work', file: 'stage05/props/crane_hook_work.png', role: 'prop', frame: 96 }
   ],
   ambient: [
     { key: 'npc_stage05', file: 'stage05/npc/macon_work.png', frame: 180, scale: 1.0, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
@@ -830,6 +848,15 @@ const ECHAFAUDAGES_RENDER: StageRender = {
   structures: [
     { key: 'struct_stage06_nacelle', file: 'stage06/props/boom_lift.png',          scale: 1.1,  count: 1, band: 'near' },
     { key: 'struct_stage06_grid',    file: 'stage06/structures/scaffold_grid.png', scale: 0.80, count: 5, band: 'mid'  }
+  ],
+  // MACHINES VIVANTES (cf. stage02) — nacelle ciseaux : la plateforme monte et
+  // redescend sur les bras en X, base et roues fixes. Pas de `_move` : une
+  // nacelle en poste ne parcourt pas le chantier.
+  // NB : `boom_lift.png` contient en réalité une nacelle CISEAUX (le nom du
+  // fichier ment ; un « boom lift » est une nacelle à bras articulé). La cible
+  // « monte/descend » du geste, elle, est juste pour des ciseaux.
+  editorExtras: [
+    { key: 'struct_stage06_nacelle_work', file: 'stage06/props/boom_lift_work.png', role: 'structure', frame: 176 }
   ],
   ambient: [
     { key: 'npc_stage06', file: 'stage06/npc/echafaudeur_work.png', frame: 180, scale: 1.0, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
@@ -924,6 +951,13 @@ const CHARPENTE_TOITURE_RENDER: StageRender = {
     // fini la « grue imaginée hors champ » — la scène signature est causale.
     { key: 'struct_stage07_crane', file: 'stage07/props/crane_truck.png',        scale: 1.15, count: 1, band: 'near' },
     { key: 'struct_stage07_truss', file: 'stage07/structures/roof_trusses.png',  scale: 0.85, count: 5, band: 'mid'  }
+  ],
+  // MACHINES VIVANTES (cf. stage02) — camion-grue : la flèche balaie un arc
+  // large, camion/cabine/charge fixes. Pas de `_move` (il est en poste, béquilles
+  // sorties). NB : la statique `crane_truck.png` est une ÉLÉVATION DE CÔTÉ ;
+  // cette feuille est en vraie 3/4, comme le reste des engins du jeu.
+  editorExtras: [
+    { key: 'struct_stage07_crane_work', file: 'stage07/props/crane_truck_work.png', role: 'structure', frame: 224 }
   ],
   ambient: [
     { key: 'npc_stage07', file: 'stage07/npc/couvreur_work.png', frame: 180, scale: 1.0, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
