@@ -1089,6 +1089,117 @@ const RAW_CLUSTERS: Record<string, ClusterDef> = {
   ].map((c) => [c.id, c]))
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MACHINES VIVANTES — engin statique → sa feuille animée
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Variante ANIMÉE d'un engin posé (« machines vivantes »).
+ *
+ * POURQUOI UN REGISTRE, et non un `animation:` tapé dans chaque cluster. Un même
+ * engin est posé à ~17 endroits (les scènes des `SITE_PROGRAM` + les fabriques) ;
+ * l'animer élément par élément, c'est la garantie d'en oublier — et c'est
+ * EXACTEMENT ce qui s'est produit : les 3 feuilles du stage 02 avaient bien été
+ * câblées à la main… dans `cluster_excavation` et `cluster_plant`, deux clusters
+ * que PLUS AUCUN stage ne place depuis que `terrassement` a un `SITE_PROGRAM`
+ * (mesuré : 0 instance sur les 10 stages ; le chemin `STAGE_CLUSTERS` est un
+ * repli legacy que seuls `terrain_vierge` et `reseaux_enterres` empruntent
+ * encore). Ces feuilles n'ont donc jamais tourné une seule frame. On déclare la
+ * variante UNE fois ; la passe l'applique partout où l'engin est réellement posé.
+ *
+ * `scaleRatio` = hauteur_figure_statique ÷ hauteur_figure_animée, MESURÉ sur les
+ * pixels opaques des deux feuilles. Il n'est pas cosmétique : les feuilles
+ * animées ne cadrent pas l'engin comme les statiques, donc un swap de clé SEUL
+ * change la taille à l'écran (le bulldozer grandissait de 44 %). Le ratio rend
+ * la hauteur écran de l'engin statique remplacé — le swap est invisible.
+ *
+ * ⚠️ `scale` est du RENDU PUR : la collision vient de `ASSET_SOLIDITY`
+ * (`extractObstacles` lit `shape.r`, jamais `scale`). Corriger l'échelle ne peut
+ * donc pas bouger la sim.
+ */
+interface LiveEngine {
+  /** Feuille animée. DOIT être déclarée en `editorExtras` avec un `frame` :
+   *  c'est ce qui la charge en SPRITESHEET, sans quoi `generateFrameNumbers`
+   *  ne trouve qu'une frame et rien ne tourne. (Vérifié par clusters.test.ts.) */
+  workKey: string
+  /** Correction d'échelle : garde la hauteur écran de la statique remplacée. */
+  scaleRatio: number
+  frameRate: number
+}
+
+/**
+ * ⚠️ RÉSERVE DA — `struct_stage05_mixer` (la TOUPIE du stage 05) est ABSENT de
+ * ce registre, VOLONTAIREMENT. Sa feuille `mobile_crane_work` est en vue de
+ * CÔTÉ là où la statique a une vraie 3/4 top-down cohérente avec la caméra :
+ * le rapport largeur/hauteur de la figure passe de 1,20 à 1,71 (+43 % d'écrasement),
+ * donc aucune échelle ne peut rendre la même silhouette — à hauteur égale l'engin
+ * est 43 % plus large et perd sa masse. Jugé sur planche en contexte (vrai sol,
+ * joueur 99 px) : c'est une RÉGRESSION, pas un gain. La statique reste posée.
+ * Cause connue et isolée : c'est `animate_object` v3 qui aplatit, pas la source
+ * (cf. la réserve détaillée dans `render/stages.ts`). La feuille reste déclarée
+ * en `editorExtras` (chargée, disponible à l'éditeur), simplement non branchée.
+ */
+const LIVE_ENGINES: Readonly<Record<string, LiveEngine>> = {
+  // Stage 02 — terrassement. Ratios et frameRates repris des valeurs déjà
+  // réglées à la main dans les clusters orphelins : mêmes engins, mêmes gestes.
+  // Le bras creuse ; la benne bascule (6 = 1,2 s, pas 0,9 s) ; la lame pousse.
+  prop_s2_excavator: { workKey: 'prop_s2_excavator_work', scaleRatio: 0.927, frameRate: 8 },
+  prop_s2_truck: { workKey: 'prop_s2_truck_work', scaleRatio: 0.972, frameRate: 6 },
+  prop_s2_dozer: { workKey: 'prop_s2_dozer_work', scaleRatio: 0.695, frameRate: 7 },
+  // Stage 03 — fondations : la toupie tourne, la bétonnière tourne.
+  struct_stage03_mixer: { workKey: 'struct_stage03_mixer_work', scaleRatio: 1.808, frameRate: 6 },
+  prop_stage03_concrete_mixer: {
+    workKey: 'prop_stage03_concrete_mixer_work',
+    scaleRatio: 1.0,
+    frameRate: 8
+  },
+  // Stage 04 — réseaux enterrés : le bras de la mini-pelle creuse la tranchée.
+  struct_stage04_excavator: {
+    workKey: 'struct_stage04_excavator_work',
+    scaleRatio: 1.302,
+    frameRate: 8
+  },
+  // Stage 05 — gros œuvre (la toupie est écartée, cf. RÉSERVE DA ci-dessus).
+  struct_stage05_crane: { workKey: 'struct_stage05_crane_work', scaleRatio: 1.126, frameRate: 6 },
+  // Le crochet TOURNE lentement sur son câble (le modèle a rendu une vrille,
+  // pas un balancier) → boucle directe et lente.
+  prop_stage05_crane_hook: {
+    workKey: 'prop_stage05_crane_hook_work',
+    scaleRatio: 0.882,
+    frameRate: 4
+  },
+  // Stage 06 — échafaudages : la nacelle CISEAUX monte et descend.
+  struct_stage06_nacelle: { workKey: 'struct_stage06_nacelle_work', scaleRatio: 1.217, frameRate: 6 },
+  // Stage 07 — charpente : le bras du camion-grue décharge la charpente.
+  struct_stage07_crane: { workKey: 'struct_stage07_crane_work', scaleRatio: 1.099, frameRate: 6 }
+}
+
+/** Les engins statiques déclarés dans `LIVE_ENGINES` (lecture seule, pour les tests). */
+export const LIVE_ENGINE_KEYS: readonly string[] = Object.keys(LIVE_ENGINES)
+
+/** La variante animée d'un engin statique, ou `undefined` s'il n'en a pas. */
+export function liveEngineFor(assetKey: string): LiveEngine | undefined {
+  return LIVE_ENGINES[assetKey]
+}
+
+/**
+ * Engin statique → sa variante ANIMÉE, partout où il est posé. Un asset absent
+ * de `LIVE_ENGINES` (y compris la toupie stage 05) ressort strictement inchangé.
+ */
+function withLiveEngine(el: ClusterElement): ClusterElement {
+  const live = LIVE_ENGINES[el.assetKey]
+  if (live === undefined) {
+    return el
+  }
+  return {
+    ...el,
+    assetKey: live.workKey,
+    // Arrondi au millième : lisible en test, écart d'affichage < 0,1 px.
+    scale: Math.round(el.scale * live.scaleRatio * 1000) / 1000,
+    animation: { frameRate: live.frameRate }
+  }
+}
+
 /**
  * Solidité écrite par l'auteur du cluster → solidité DÉCLARÉE (`assetSolidity`).
  * Un engin écrit `collide:'none'` dans un cluster et `'both'` dans le suivant
@@ -1112,13 +1223,23 @@ function withDeclaredSolidity(el: ClusterElement): ClusterElement {
 }
 
 /**
- * Registre global des prefabs par id — **solidité résolue**, donc cohérente avec
- * l'éditeur et avec les compos joueur (tous lisent `assetSolidity`).
+ * Registre global des prefabs par id — **engins vivants puis solidité résolue**,
+ * donc cohérent avec l'éditeur et avec les compos joueur (tous lisent
+ * `assetSolidity`).
+ *
+ * ORDRE : `withLiveEngine` AVANT `withDeclaredSolidity`. La solidité est ainsi
+ * résolue sur la clé RÉELLEMENT posée (`*_work`), et non sur la statique qu'on
+ * ne pose plus — `ASSET_SOLIDITY` reste la source unique de « ça bloque ou pas »
+ * pour l'asset effectivement en jeu. C'est aussi le piège du lot : une variante
+ * animée SANS entrée miroir dans `ASSET_SOLIDITY` retomberait sur ce que le
+ * cluster a écrit, et les engins que les fabriques écrivent `collide:'none'`
+ * (ils comptent sur la déclaration) deviendraient TRAVERSABLES. Les entrées
+ * miroir sont donc vérifiées une à une par `clusters.test.ts`.
  */
 export const CLUSTERS: Record<string, ClusterDef> = Object.fromEntries(
   Object.entries(RAW_CLUSTERS).map(([id, def]): [string, ClusterDef] => [
     id,
-    { ...def, elements: def.elements.map(withDeclaredSolidity) }
+    { ...def, elements: def.elements.map(withLiveEngine).map(withDeclaredSolidity) }
   ])
 )
 

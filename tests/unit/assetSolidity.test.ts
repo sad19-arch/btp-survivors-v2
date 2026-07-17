@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { ASSET_SOLIDITY, resolveSolidity, type Solidity } from '@content/assetSolidity'
-import { CLUSTERS } from '@content/clusters'
+import { CLUSTERS, liveEngineFor } from '@content/clusters'
 import { EditorState } from '@/editor/EditorState'
 import { setActiveStage } from '@/editor/PrefabCatalog'
 import { parseLayout } from '@/editor/StageLayoutSchema'
@@ -29,6 +29,21 @@ function occurrences(key: string): Array<{ clusterId: string; el: (typeof CLUSTE
     }
   }
   return out
+}
+
+/**
+ * La clé RÉELLEMENT posée en cluster pour un engin.
+ *
+ * Depuis les « machines vivantes », un engin déclaré dans `LIVE_ENGINES` est posé
+ * sous sa variante ANIMÉE (`*_work`) : c'est elle qu'il faut chercher dans les
+ * clusters. L'éditeur, lui, pose l'objet ISOLÉ tel quel (clé statique) — ces
+ * tests comparent donc bien DEUX chemins distincts, et exigent la même réponse.
+ * C'est précisément le piège du lot : si la variante animée n'avait pas d'entrée
+ * miroir dans `ASSET_SOLIDITY`, l'engin deviendrait traversable en jeu tout en
+ * restant bloquant dans l'éditeur.
+ */
+function posedKey(key: string): string {
+  return liveEngineFor(key)?.workKey ?? key
 }
 
 /** Solidité que l'ÉDITEUR produit pour une clé posée seule (objet isolé). */
@@ -64,8 +79,10 @@ describe('assetSolidity — la solidité est DÉCLARÉE, pas déduite', () => {
   // test ci-dessus passerait à vide.
   it('les engins/barrières historiquement contradictoires sont posés ET bloquants', () => {
     for (const key of ['prop_s2_excavator', 'prop_s2_truck', 'prop_s2_dozer', 'prop_s2_roller', 'fence_panel', 'fence_post']) {
-      const occ = occurrences(key)
-      expect(occ.length, `« ${key} » n'est posé dans aucun cluster`).toBeGreaterThan(0)
+      // L'engin peut être posé sous sa variante animée (cf. `posedKey`).
+      const posed = posedKey(key)
+      const occ = occurrences(posed)
+      expect(occ.length, `« ${posed} » n'est posé dans aucun cluster`).toBeGreaterThan(0)
       expect(occ.every((o) => o.el.collide !== 'none')).toBe(true)
     }
   })
@@ -101,12 +118,16 @@ describe('assetSolidity — la solidité est DÉCLARÉE, pas déduite', () => {
     for (const { stage, key } of cases) {
       const fromEditor = editorSolidityOf(stage, key)
       expect(fromEditor, `« ${key} » introuvable dans l'export éditeur (stage ${stage})`).toBeDefined()
-      const occ = occurrences(key)
-      expect(occ.length, `« ${key} » n'est posé dans aucun cluster`).toBeGreaterThan(0)
+      // Côté clusters, l'engin est posé sous sa variante animée le cas échéant :
+      // les deux chemins doivent malgré tout donner la MÊME solidité.
+      const posed = posedKey(key)
+      const occ = occurrences(posed)
+      expect(occ.length, `« ${posed} » n'est posé dans aucun cluster`).toBeGreaterThan(0)
       for (const { clusterId, el } of occ) {
         expect(
           fromEditor?.collide,
-          `divergence sur « ${key} » : éditeur="${String(fromEditor?.collide)}" vs ${clusterId}="${el.collide}"`
+          `divergence sur « ${key} » : éditeur="${String(fromEditor?.collide)}" vs ${clusterId} ` +
+            `(« ${posed} »)="${el.collide}"`
         ).toBe(el.collide)
       }
     }
