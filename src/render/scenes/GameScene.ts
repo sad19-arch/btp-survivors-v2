@@ -657,9 +657,11 @@ export class GameScene extends Phaser.Scene {
       // Réseau bâti (tranchées/tuyaux/regards) — streamé par chunks autour de la caméra.
       this.siteStructures.setPlan(WORLD.width, WORLD.height, this.loadedStageId)
       // Ouvriers navetteurs (T6) : construits depuis le même layout que le siteRenderer.
-      // On passe les clés PNJ RÉELLEMENT chargées du stage (numérotées par stage) pour
-      // que _resolveKey matche une texture existante partout, pas seulement au stage 02.
-      const npcKeys = (this.stage.ambient ?? []).map((a) => a.key)
+      // On passe les FEUILLES (clé + behavior + kind), pas seulement leurs clés :
+      // SiteWorkers en tire un pool par rôle de marche. Avec les seules clés, il
+      // fallait deviner le rôle au nom de fichier — d'où 19 feuilles que personne
+      // ne demandait. `StageAmbientNpc` est un sur-ensemble de `WalkerSheet`.
+      const npcSheets = this.stage.ambient ?? []
       // PNJ MÉTIER du stage (geste + objet) : on passe les feuilles `kind:'trade'`
       // et le secteur d'ancrage ; SiteWorkers les rend comme postes fixes animés.
       // Sans ça, ces feuilles n'étaient atteignables que via une compo sauvée —
@@ -671,7 +673,7 @@ export class GameScene extends Phaser.Scene {
         baseAngleDeg: stageGeometry?.ambientAngle ?? 55
       }
       this.siteWorkers.reset(
-        this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId, npcKeys, tradeNpcs
+        this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId, npcSheets, tradeNpcs
       )
     }
     // PNJ d'ambiance : UN SEUL système par plan de chantier — les SiteWorkers.

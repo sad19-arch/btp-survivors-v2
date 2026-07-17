@@ -53,25 +53,31 @@ const SEED = 42
 /**
  * Feuilles `ambient` déclarées mais qu'AUCUN chemin de rendu ne demande.
  *
- * - `terrain_vierge` a une compo committée (le niveau de l'éditeur) : elle est
- *   la vérité totale du stage, donc `reset()` ne fait PAS d'auto-placement des
- *   métiers. Seuls les PNJ POSÉS dans la compo sont rendus → les 2 feuilles
- *   `kind:'trade'` non posées sont orphelines par CONSTRUCTION.
- * - Ailleurs : `_resolveKey` ne retient qu'UNE feuille par rôle (porteur /
- *   signaleur) via indice de nom ; les autres feuilles ouvrier ne sont
- *   demandées par personne.
+ * Était 21 sur 50. Les 19 feuilles OUVRIER le sont devenues parce que les jobs
+ * de marche piochent désormais dans un POOL par rôle (`buildWalkerPools`) au
+ * lieu de l'unique feuille que `_resolveKey` retenait par indice de nom. Aucun
+ * job n'a été ajouté pour ça — c'est la distribution des jobs existants qui a
+ * changé, pas leur nombre (cf. le test « le nombre de jobs ne bouge pas »).
+ *
+ * Restent les 2 feuilles `kind:'trade'` du stage 01, et c'est un CHOIX D'AUTEUR,
+ * pas une lacune de code : `terrain_vierge` a une compo committée, qui est la
+ * vérité totale du stage (pas d'auto-placement par-dessus le niveau de
+ * l'utilisateur). Ces 2 feuilles sont posables depuis la palette de l'éditeur
+ * (section « PNJ métier (fixe) », cf. `editorNpcPalette.test.ts`) : elles
+ * sortiront de cette liste le jour où il les posera. Ne PAS « corriger » ça en
+ * rallumant un auto-placement sur un stage composé.
  */
 const EXPECTED_ORPHANS: Record<string, readonly string[]> = {
   terrain_vierge: ['npc_stage01_geometre_trade', 'npc_stage01_chef_trade'],
-  terrassement: ['npc_stage02_macon'],
-  fondations: ['npc_stage03_cimentier'],
-  reseaux_enterres: ['npc_stage04_plombier', 'npc_stage04_poseur_cable', 'npc_stage04_gainier'],
-  gros_oeuvre: ['npc_stage05_parpaingueur', 'npc_stage05_grutier'],
-  echafaudages: ['npc_stage06_monteur_tube', 'npc_stage06_porteur_echelle'],
-  charpente_toiture: ['npc_stage07_charpentier', 'npc_stage07_poseur_liteau'],
-  second_oeuvre: ['npc_stage08', 'npc_stage08_plombier', 'npc_stage08_elec'],
-  finitions: ['npc_stage09_carreleur', 'npc_stage09_poseur_sol'],
-  livraison_audit: ['npc_stage10', 'npc_stage10_agent_reception', 'npc_stage10_technicien']
+  terrassement: [],
+  fondations: [],
+  reseaux_enterres: [],
+  gros_oeuvre: [],
+  echafaudages: [],
+  charpente_toiture: [],
+  second_oeuvre: [],
+  finitions: [],
+  livraison_audit: []
 }
 
 /** Construit le monde d'un stage et renvoie les clés ambient réellement demandées. */
@@ -90,7 +96,7 @@ async function reachableKeys(stageId: string): Promise<{ reachable: Set<string>;
   } as unknown as Phaser.Scene
 
   const sw = new SiteWorkers(scene)
-  sw.reset(SEED, W, H, stageId, declared, {
+  sw.reset(SEED, W, H, stageId, ambient, {
     entries: ambient.filter((a) => a.kind === 'trade').map((a) => ({ key: a.key, scale: a.scale })),
     baseAngleDeg: 55
   })
@@ -122,6 +128,31 @@ describe('PNJ d’ambiance — atteignabilité réelle (mondes construits)', () 
       }
     }
   })
+
+  /**
+   * Nombre de jobs planifiés par stage, MESURÉ avant l'élargissement des rôles.
+   *
+   * C'est l'argument « le cull ne mange rien » rendu EXÉCUTABLE. `_reselect` ne
+   * garde que les `WORKER_COUNT` (10) jobs les plus proches du joueur : rendre
+   * des feuilles atteignables en AJOUTANT des jobs les mettrait en concurrence
+   * pour ces 10 places, et l'art resterait invisible. Le pool ne touche qu'à la
+   * TEXTURE de jobs qui existaient déjà — donc ces nombres ne doivent pas bouger.
+   *
+   * Si ce test rougit, l'élargissement a créé des jobs : la conclusion sur le
+   * cull tombe et il faut la refaire, pas mettre ces nombres à jour par réflexe.
+   */
+  const JOBS_BEFORE: Record<string, number> = {
+    terrain_vierge: 1, terrassement: 36, fondations: 33, reseaux_enterres: 34,
+    gros_oeuvre: 34, echafaudages: 34, charpente_toiture: 34, second_oeuvre: 33,
+    finitions: 34, livraison_audit: 34
+  }
+
+  for (const [stageId, expected] of Object.entries(JOBS_BEFORE)) {
+    it(`${stageId} : le nombre de jobs ne bouge pas (le pool ne crée aucun job)`, async () => {
+      const { jobCount } = await reachableKeys(stageId)
+      expect(jobCount).toBe(expected)
+    })
+  }
 
   it('le stage 01 (compo de l’éditeur) ne rend QUE les PNJ posés dans la compo', async () => {
     // Garde de non-régression du contrat « une compo sauvée est la vérité

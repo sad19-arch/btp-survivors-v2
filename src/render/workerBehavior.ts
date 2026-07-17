@@ -460,6 +460,92 @@ export function planNpcJobs(
   }))
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Pools de feuilles par rôle de marche
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Feuille PNJ candidate à un rôle de marche.
+ * Sous-ensemble STRUCTUREL de `StageAmbientNpc` : la couche écran passe les
+ * entrées du stage telles quelles, le module reste un observateur (il ne va pas
+ * lire `STAGE_RENDER` lui-même).
+ */
+export interface WalkerSheet {
+  key: string
+  behavior: 'work' | 'patrol'
+  kind?: 'trade' | 'worker'
+}
+
+/** Feuilles éligibles à chaque rôle de marche, dans l'ordre de DÉCLARATION. */
+export interface WalkerPools {
+  /** Rôles `porteur` / `navetteur` (marche franche, charge). */
+  porteur: string[]
+  /** Rôle `signaleur` (patrouille). */
+  signaleur: string[]
+}
+
+/**
+ * Feuilles ouvrier du stage → pools par rôle de marche.
+ *
+ * POURQUOI : `_resolveKey` ne retenait qu'UNE feuille par rôle (premier indice de
+ * nom, sinon repli sur la 1re/2e feuille chargée). Les 24 jobs `signaleur` d'un
+ * stage pointaient donc TOUS la même texture, et les autres feuilles ouvrier
+ * n'étaient demandées par personne : 19 des 21 feuilles orphelines le sont par
+ * ce seul mécanisme. Distribuer les jobs DÉJÀ existants sur un pool rend l'art
+ * atteignable sans créer un seul job — donc sans toucher au cull à
+ * `WORKER_COUNT`, qui sélectionne des jobs et non des textures.
+ *
+ * Les pools sont bâtis sur `behavior` (la donnée qui DIT le rôle), pas sur le
+ * nom : `npc_stage05_porteur_blocs` est déclaré `patrol` et doit patrouiller,
+ * quel que soit son nom. L'ordre de déclaration est conservé → la feuille
+ * historiquement choisie reste en tête du pool (index 0), donc le premier job de
+ * chaque rôle garde sa texture : pas de churn visuel gratuit.
+ *
+ * Les feuilles `kind:'trade'` sont EXCLUES, et la raison n'est PAS « ce sont des
+ * gestes » : les feuilles `_work` le sont tout autant (VÉRIFIÉ sur les planches —
+ * toutes mono-ligne, 4 à 8 frames ; `walkFrameOf` s'adapte au gabarit réel). Les
+ * vraies raisons :
+ *  - elles sont DÉJÀ atteignables par le chemin `npc_trade` (auto-placement) :
+ *    les mettre aussi dans un pool de marche ne gagnerait aucune feuille ;
+ *  - elles portent une échelle CALIBRÉE par feuille (0.62/0.78) qu'un rôle de
+ *    marche écraserait avec le `WORKER_SCALE` uniforme ;
+ *  - les exclure corrige un défaut réel : sur `gros_oeuvre`, le repli d'indice de
+ *    `_resolveKey` faisait afficher `npc_stage05_grutier_trade` aux 24 signaleurs.
+ *
+ * Replis (toujours TOTAL tant qu'une feuille existe) : un pool vide emprunte à
+ * l'autre (`echafaudages` n'a que des `patrol`) ; si aucune feuille ouvrier, on
+ * retombe sur les feuilles restantes plutôt que de ne rien afficher.
+ */
+export function buildWalkerPools(sheets: readonly WalkerSheet[]): WalkerPools {
+  const workers = sheets.filter((s) => s.kind !== 'trade')
+  const porteur = workers.filter((s) => s.behavior === 'work').map((s) => s.key)
+  const signaleur = workers.filter((s) => s.behavior === 'patrol').map((s) => s.key)
+
+  // Repli 1 : un rôle sans feuille dédiée emprunte à l'autre.
+  const anyWorker = workers.map((s) => s.key)
+  const porteurPool = porteur.length > 0 ? porteur : (signaleur.length > 0 ? signaleur : anyWorker)
+  const signaleurPool = signaleur.length > 0 ? signaleur : (porteur.length > 0 ? porteur : anyWorker)
+
+  // Repli 2 : stage sans AUCUNE feuille ouvrier → les feuilles restantes
+  // (métier). Préserve la totalité historique de `_resolveKey`.
+  const all = sheets.map((s) => s.key)
+  return {
+    porteur: porteurPool.length > 0 ? porteurPool : all,
+    signaleur: signaleurPool.length > 0 ? signaleurPool : all
+  }
+}
+
+/**
+ * Feuille d'un job à `index` dans son pool (cyclique, déterministe).
+ * Pool vide → `null` (aucun ouvrier créé : jamais de texture fantôme).
+ */
+export function pickWalkerSkin(pool: readonly string[], index: number): string | null {
+  if (pool.length === 0) {
+    return null
+  }
+  return pool[((index % pool.length) + pool.length) % pool.length] ?? null
+}
+
 /** Distance min/max des PNJ métier auto-placés par rapport au centre du monde (px). */
 export const AUTO_TRADE_DIST_MIN = 420
 export const AUTO_TRADE_DIST_MAX = 520

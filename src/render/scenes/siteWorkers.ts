@@ -28,7 +28,7 @@ import Phaser from 'phaser'
 import { buildSiteLayout, type PlacedCluster } from '@core/siteLayout'
 import { buildSitePlan } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
-import { commutePos, panicDecision, pathFollow, fleeVelocity, planAutoTradeNpcs, planNpcJobs, planPathWalkers, PANIC_R } from '@render/workerBehavior'
+import { commutePos, panicDecision, pathFollow, fleeVelocity, planAutoTradeNpcs, planNpcJobs, planPathWalkers, buildWalkerPools, pickWalkerSkin, PANIC_R, type WalkerSheet, type WalkerPools } from '@render/workerBehavior'
 import { resolveComposedLayout } from '@content/runtimeLayouts'
 import type { StageLayout } from '@content/stageLayout'
 import { dirRow, idleFrameOf, walkFrameOf } from '@render/sprites'
@@ -199,6 +199,12 @@ export class SiteWorkers {
   /** Monde courant (pour le clamp de fuite). */
   private worldW = 0
   private worldH = 0
+  /**
+   * Feuilles éligibles par rôle de marche, bâties une fois par `reset` sur les
+   * seules feuilles RÉELLEMENT chargées. Les jobs y piochent par index → les 24
+   * signaleurs d'un stage ne partagent plus une texture unique.
+   */
+  private pools: WalkerPools = { porteur: [], signaleur: [] }
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -232,7 +238,7 @@ export class SiteWorkers {
     worldW: number,
     worldH: number,
     stageId: string,
-    npcKeys: readonly string[] = [],
+    npcSheets: readonly WalkerSheet[] = [],
     tradeNpcs: TradeNpcSpec = { entries: [], baseAngleDeg: 0 }
   ): void {
     this._destroyAll()
@@ -240,6 +246,13 @@ export class SiteWorkers {
     this.worldW = worldW
     this.worldH = worldH
     this.reselectFrame = 0
+
+    // Pools bâtis sur les feuilles RÉELLEMENT chargées : une feuille déclarée mais
+    // absente des textures ne doit jamais entrer dans un pool (sinon repli
+    // Graphics non animable → `setFrame` casse `create()`).
+    const loadedSheets = npcSheets.filter((s) => this.scene.textures.exists(s.key))
+    this.pools = buildWalkerPools(loadedSheets)
+    const npcKeys = loadedSheets.map((s) => s.key)
 
     const layout = buildSiteLayout(seed, worldW, worldH, stageId)
     if (layout.clusters.length === 0) {
@@ -278,7 +291,7 @@ export class SiteWorkers {
     // chemins tracés sont rendus. Sans compo → auto-peuplement (fallback).
     const composed = resolveComposedLayout(stageId)
     if (composed !== null) {
-      this._addComposedNpcsAndPaths(composed, worldW, worldH, npcKeys)
+      this._addComposedNpcsAndPaths(composed, worldW, worldH, tradeNpcs)
       return
     }
 
@@ -307,7 +320,11 @@ export class SiteWorkers {
       if (nearestSpoil === undefined) {
         continue
       }
-      const key = this._resolveKey('porteur', npcKeys)
+      // `jobIdx` (compteur GLOBAL, pas l'index de boucle) fait tourner le pool :
+      // porteurs et navetteurs se suivent dans le cycle et ne tombent donc pas sur
+      // la même feuille aux mêmes fouilles (ils y sont voisins à 120 px — deux
+      // jumeaux côte à côte se verraient).
+      const key = pickWalkerSkin(this.pools.porteur, jobIdx)
       if (key === null) {
         continue
       }
@@ -357,7 +374,7 @@ export class SiteWorkers {
       if (to === undefined) {
         continue
       }
-      const key = this._resolveKey('porteur', npcKeys)
+      const key = pickWalkerSkin(this.pools.porteur, jobIdx)
       if (key === null) {
         break
       }
@@ -424,7 +441,7 @@ export class SiteWorkers {
       if (ra === undefined || rb === undefined) {
         continue
       }
-      const key = this._resolveKey('signaleur', npcKeys)
+      const key = pickWalkerSkin(this.pools.signaleur, jobIdx)
       if (key === null) {
         continue
       }
@@ -458,7 +475,7 @@ export class SiteWorkers {
         if (from === undefined || to === undefined || from === to) {
           continue
         }
-        const key = this._resolveKey('porteur', npcKeys)
+        const key = pickWalkerSkin(this.pools.porteur, jobIdx)
         if (key === null) {
           break
         }
@@ -484,20 +501,34 @@ export class SiteWorkers {
    * Stage COMPOSÉ : ajoute les PNJ posés (métier fixe / ouvrier mobile) puis les
    * suiveurs de chemin (worker_path / truck_path). AUCUN auto-peuplement.
    */
-  private _addComposedNpcsAndPaths(composed: StageLayout, worldW: number, worldH: number, npcKeys: readonly string[]): void {
+  private _addComposedNpcsAndPaths(composed: StageLayout, worldW: number, worldH: number, tradeNpcs: TradeNpcSpec): void {
     let jobIdx = 0
     const offX = worldW / 2
     const offY = worldH / 2
+
+    // Échelle CALIBRÉE des feuilles métier (`stage.ambient`). Un métier POSÉ dans
+    // l'éditeur doit s'afficher à la même taille qu'un métier auto-placé : sans
+    // cette table, il retombait sur `WORKER_SCALE` (0.62) et une feuille calibrée
+    // à 0.78 (ex. `npc_stage01`, le géomètre posé au stage 01) s'affichait 20 %
+    // trop petite — l'éditeur mentait sur le résultat en jeu.
+    const tradeScale = new Map(tradeNpcs.entries.map((e) => [e.key, e.scale]))
 
     for (const nj of planNpcJobs(composed, worldW, worldH)) {
       if (!this.scene.textures.exists(nj.skin)) {
         continue
       }
-      this.jobs.push({
+      const job: WorkerJob = {
         textureKey: nj.skin, role: nj.role,
         ax: nj.x, ay: nj.y, bx: nj.x, by: nj.y, speed: 0,
         midX: nj.x, midY: nj.y, phaseOffsetMs: jobIdx * PHASE_OFFSET_MS
-      })
+      }
+      // Les ouvriers PARTAGÉS (`npc_ouvrier_*`) ne sont pas dans `stage.ambient` :
+      // absents de la table, ils gardent l'échelle unique des navetteurs.
+      const scale = tradeScale.get(nj.skin)
+      if (scale !== undefined) {
+        job.scale = scale
+      }
+      this.jobs.push(job)
       jobIdx++
     }
 
@@ -525,7 +556,7 @@ export class SiteWorkers {
       // disparaissait sans un mot.
       const wanted = plan.skin !== null && this.scene.textures.exists(plan.skin)
         ? plan.skin
-        : (isTruck ? CAMION_SKIN.key : this._resolveKey('porteur', npcKeys))
+        : (isTruck ? CAMION_SKIN.key : pickWalkerSkin(this.pools.porteur, jobIdx))
       if (wanted === null || !this.scene.textures.exists(wanted)) {
         // Rien à afficher (stage sans sprite camion). L'inspecteur de l'éditeur
         // AVERTIT en amont — ici on ne peut que ne rien créer.
@@ -1005,35 +1036,4 @@ export class SiteWorkers {
     return null
   }
 
-  /**
-   * Résout la clé de texture PNJ à utiliser selon le rôle, parmi les feuilles
-   * d'ambiance RÉELLEMENT chargées du stage courant (`npcKeys`, fournies par
-   * `GameScene` depuis `stage.ambient`). Les clés PNJ sont NUMÉROTÉES par stage
-   * (`npc_stage03_*`, `npc_stage04_*`…), pas nommées par phase — d'où l'ancien
-   * bug : on cherchait `npc_<phase>_porteur` + un repli `npc_stage02_*` codé en
-   * dur, qui ne matchait QUE le stage 02. Ici on matche par indice de rôle dans
-   * la clé, avec repli déterministe sur une feuille chargée quelconque.
-   *
-   * Retourne `null` si AUCUNE feuille chargée (stage sans PNJ / mode lite) →
-   * aucun ouvrier créé (jamais de texture manquante → jamais de repli Graphics
-   * non animable → jamais de crash `setFrame`).
-   */
-  private _resolveKey(role: 'porteur' | 'signaleur', npcKeys: readonly string[]): string | null {
-    const loaded = npcKeys.filter((k) => this.scene.textures.exists(k))
-    if (loaded.length === 0) {
-      return null
-    }
-    // Préfère une feuille dont le nom porte le rôle (le stage 02 nomme
-    // explicitement `npc_stage02_porteur`/`_signaleur` ; d'autres nomment
-    // `porteur_blocs`, `poseur_cable`…). `patrol` = équivalent signaleur.
-    const hints = role === 'porteur' ? ['porteur'] : ['signaleur', 'patrol']
-    const match = loaded.find((k) => hints.some((h) => k.includes(h)))
-    if (match !== undefined) {
-      return match
-    }
-    // Repli déterministe : porteur → 1re feuille, signaleur → 2e (variété
-    // visuelle) — toutes garanties chargées, donc de vrais Sprite animables.
-    const idx = role === 'porteur' ? 0 : Math.min(1, loaded.length - 1)
-    return loaded[idx] ?? loaded[0] ?? null
-  }
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { getStageCatalog, STAGE_LIST, CATEGORIES } from '@/editor/PrefabCatalog'
-import { CITY_BUILDINGS, SHARED_WORKER_NPCS } from '@render/stages'
+import { CITY_BUILDINGS, SHARED_WORKER_NPCS, STAGE_RENDER } from '@render/stages'
 import { destructiblesForStage } from '@content/destructibles'
 
 /**
@@ -53,6 +53,21 @@ describe('PrefabCatalog — complétude par stage', () => {
         expect(ouvriers.length).toBeGreaterThanOrEqual(SHARED_WORKER_NPCS.length)
         for (const npc of SHARED_WORKER_NPCS) {
           expect(cat.entries.some((e) => e.npcSkin === npc.key && e.npcKind === 'worker')).toBe(true)
+        }
+      })
+
+      it('expose TOUTE feuille métier du stage (npc_metier) — l’art posable à la main', () => {
+        // Sur un stage COMPOSÉ, la compo est la vérité totale : aucun métier n'est
+        // auto-placé. La seule façon d'y faire entrer une feuille `kind:'trade'`
+        // est donc de la POSER dans l'éditeur — ce qui exige qu'elle soit dans la
+        // palette. Une feuille déclarée, packée, mais absente d'ici serait de l'art
+        // que personne ne peut faire apparaître.
+        for (const npc of STAGE_RENDER[stage]?.ambient ?? []) {
+          if (npc.kind === 'worker') { continue }
+          const entry = cat.entries.find((e) => e.npcSkin === npc.key)
+          expect(entry, `${npc.key} absent de la palette de ${stage}`).toBeDefined()
+          expect(entry?.category, `${npc.key} mal rangé dans ${stage}`).toBe('npc_metier')
+          expect(entry?.npcKind).toBe('trade')
         }
       })
 
