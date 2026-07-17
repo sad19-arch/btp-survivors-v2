@@ -288,8 +288,11 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * Zoom caméra de BASE courant, tiré de la source de vérité responsive
-   * (ViewportBus, câblé par main.ts). Desktop : DESKTOP_ZOOM constant (parité
-   * PC) ; tactile : adaptatif à l'écran. Repli DESKTOP_ZOOM sans bus (harness).
+   * (ViewportBus, câblé par main.ts) — adaptatif à la TAILLE du viewport, pas
+   * au type d'entrée : un écran ≥ 1920×1080 retombe sur DESKTOP_ZOOM (1.2,
+   * parité PC historique) que ce soit tactile ou pointeur ; un petit écran
+   * (PC ou tactile) dé-zoome pour voir autant de terrain. Repli DESKTOP_ZOOM
+   * sans bus (harness).
    */
   private baseZoom(): number {
     return this.sceneData.viewport?.current().cameraZoom ?? DESKTOP_ZOOM

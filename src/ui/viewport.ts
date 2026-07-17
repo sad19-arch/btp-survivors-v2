@@ -34,14 +34,16 @@ import { MOBILE_BREAKPOINT } from './responsive'
  */
 export const REF_HALF_DIAG = Math.hypot(REFERENCE_VIEW.halfW, REFERENCE_VIEW.halfH)
 
-/** Zoom desktop actuel (inchangé — parité PC stricte). */
+/** Zoom desktop de RÉFÉRENCE (écran ≥ 1920×1080 : la formule adaptative y retombe exactement dessus). */
 export const DESKTOP_ZOOM = 1.2
 /**
- * Plancher de zoom tactile : lisibilité (héros ~99 px monde ⇒ ≥ ~45 px écran)
- * + garde-fou écrans atypiques. Plafond = jamais plus zoomé que le desktop.
+ * Plancher de zoom adaptatif : lisibilité (héros ~99 px monde ⇒ ≥ ~45 px écran)
+ * + garde-fou écrans atypiques. Plafond = jamais plus zoomé que la référence desktop.
+ * S'applique à TOUT petit écran, tactile ou pointeur (MOB-LATER résolu) : le
+ * désavantage n'était pas le type d'entrée mais la taille du viewport.
  */
-export const TOUCH_ZOOM_MIN = 0.45
-export const TOUCH_ZOOM_MAX = DESKTOP_ZOOM
+export const ADAPTIVE_ZOOM_MIN = 0.45
+export const ADAPTIVE_ZOOM_MAX = DESKTOP_ZOOM
 
 /**
  * Fraction gauche de l'écran réservée au stick tactile (zone dynamique).
@@ -115,10 +117,11 @@ export interface ViewportState {
   /** HUD en présentation mobile (narrow OU tactile) — pilote .ui-mobile. */
   uiMobile: boolean
   /**
-   * Cible de zoom caméra. Tactile : diagonale visible = diagonale de référence
-   * PC (clampée [TOUCH_ZOOM_MIN, TOUCH_ZOOM_MAX]). Pointer : DESKTOP_ZOOM
-   * constant (parité PC). TODO(user) : étendre la formule adaptative aux
-   * petits écrans PC (pointer) — cf. tâche MOB-LATER.
+   * Cible de zoom caméra, adaptative à la TAILLE du viewport (pas au type
+   * d'entrée — MOB-LATER résolu) : diagonale visible = diagonale de référence
+   * PC 1920×1080 (clampée [ADAPTIVE_ZOOM_MIN, ADAPTIVE_ZOOM_MAX]). Un écran à
+   * la référence ou plus grand retombe exactement sur DESKTOP_ZOOM (1.2),
+   * inchangé qu'il soit tactile ou pointeur.
    */
   cameraZoom: number
   /** Échelle globale du HUD (var CSS --ui-scale), snappée à 0.05. */
@@ -158,11 +161,17 @@ export function computeViewport(raw: RawViewportInputs): ViewportState {
 
   // Zoom caméra : le canvas couvre TOUTE la fenêtre (viewport-fit=cover), la
   // caméra travaille donc sur avail* (pas usable*).
+  //
+  // Adaptatif à la TAILLE du viewport, PAS au type d'entrée (tactile ou pointeur
+  // suivent la même formule — MOB-LATER résolu : un petit écran PC souris/clavier
+  // avait le même désavantage qu'un petit écran tactile, ce n'était pas un choix).
+  // Un écran à la référence (1920×1080) ou plus grand retombe exactement sur
+  // DESKTOP_ZOOM=1.2 (algébrique : REF_HALF_DIAG = hypot(1920,1080)/(2·1.2)), donc
+  // grand écran PC = comportement historique STRICTEMENT inchangé.
   const halfDiag = Math.hypot(availW, availH) / 2
-  const cameraZoom =
-    inputType === 'touch'
-      ? round2(Math.min(TOUCH_ZOOM_MAX, Math.max(TOUCH_ZOOM_MIN, halfDiag / REF_HALF_DIAG)))
-      : DESKTOP_ZOOM
+  const cameraZoom = round2(
+    Math.min(ADAPTIVE_ZOOM_MAX, Math.max(ADAPTIVE_ZOOM_MIN, halfDiag / REF_HALF_DIAG))
+  )
 
   // Échelle HUD : fait rentrer le HUD dans la zone UTILE (safe areas déduites) en
   // LARGEUR **et** en HAUTEUR — on prend le plus contraignant des deux (en paysage

@@ -3,8 +3,8 @@ import {
   computeViewport,
   viewportStatesEqual,
   DESKTOP_ZOOM,
-  TOUCH_ZOOM_MIN,
-  TOUCH_ZOOM_MAX,
+  ADAPTIVE_ZOOM_MIN,
+  ADAPTIVE_ZOOM_MAX,
   REF_HALF_DIAG,
   type RawViewportInputs
 } from '@ui/viewport'
@@ -25,46 +25,66 @@ function raw(over: Partial<RawViewportInputs> = {}): RawViewportInputs {
 }
 
 describe('computeViewport — zoom caméra', () => {
-  it('desktop 1920×1080 (pointer) → zoom = DESKTOP_ZOOM (1.2), parité PC stricte', () => {
+  it('desktop 1920×1080 (pointer) → zoom = DESKTOP_ZOOM (1.2), parité PC stricte — INCHANGÉ', () => {
     const v = computeViewport(raw())
     expect(v.inputType).toBe('pointer')
     expect(v.cameraZoom).toBe(DESKTOP_ZOOM)
   })
 
-  it('desktop PETIT écran (pointer) → zoom RESTE 1.2 (adaptatif pointer = tâche ultérieure)', () => {
-    const v = computeViewport(raw({ innerW: 1024, innerH: 640 }))
+  it('desktop PLUS GRAND que la référence (pointer, 2560×1440) → reste clampé à DESKTOP_ZOOM — INCHANGÉ', () => {
+    const v = computeViewport(raw({ innerW: 2560, innerH: 1440 }))
     expect(v.cameraZoom).toBe(DESKTOP_ZOOM)
   })
 
-  it('tactile Pixel-7 (412×839) → zoom ≈ demiDiag/RÉF ≈ 0.51 (dans [min,max])', () => {
+  it('desktop PETIT écran (pointer, 1024×640) → zoom ADAPTÉ (MOB-LATER résolu, plus figé à 1.2)', () => {
+    const v = computeViewport(raw({ innerW: 1024, innerH: 640 }))
+    const expected = Math.hypot(1024, 640) / 2 / REF_HALF_DIAG
+    expect(v.cameraZoom).toBeCloseTo(expected, 2)
+    expect(v.cameraZoom).toBeLessThan(DESKTOP_ZOOM)
+  })
+
+  it('desktop minuscule (pointer, 320×480) → clampé au même plancher que le tactile', () => {
+    const v = computeViewport(raw({ innerW: 320, innerH: 480 }))
+    expect(v.cameraZoom).toBe(ADAPTIVE_ZOOM_MIN)
+  })
+
+  it('tactile Pixel-7 (412×839) → zoom ≈ demiDiag/RÉF ≈ 0.51 (dans [min,max]) — INCHANGÉ', () => {
     const v = computeViewport(raw({ innerW: 412, innerH: 839, pointerCoarse: true }))
     const expected = Math.hypot(412, 839) / 2 / REF_HALF_DIAG
     expect(v.cameraZoom).toBeCloseTo(expected, 2)
-    expect(v.cameraZoom).toBeGreaterThan(TOUCH_ZOOM_MIN)
-    expect(v.cameraZoom).toBeLessThan(TOUCH_ZOOM_MAX)
+    expect(v.cameraZoom).toBeGreaterThan(ADAPTIVE_ZOOM_MIN)
+    expect(v.cameraZoom).toBeLessThan(ADAPTIVE_ZOOM_MAX)
   })
 
-  it('tactile minuscule (320×480) → clampé au plancher de lisibilité', () => {
+  it('tactile minuscule (320×480) → clampé au plancher de lisibilité — INCHANGÉ', () => {
     const v = computeViewport(raw({ innerW: 320, innerH: 480, pointerCoarse: true }))
-    expect(v.cameraZoom).toBe(TOUCH_ZOOM_MIN)
+    expect(v.cameraZoom).toBe(ADAPTIVE_ZOOM_MIN)
   })
 
-  it('tablette tactile 1920×1080 → clampé au plafond (jamais plus zoomé que le desktop)', () => {
+  it('tablette tactile 1920×1080 → clampé au plafond (jamais plus zoomé que le desktop) — INCHANGÉ', () => {
     const v = computeViewport(raw({ innerW: 1920, innerH: 1080, pointerCoarse: true }))
-    expect(v.cameraZoom).toBe(TOUCH_ZOOM_MAX)
+    expect(v.cameraZoom).toBe(ADAPTIVE_ZOOM_MAX)
   })
 
-  it('la diagonale visible tactile ne dépasse jamais la référence (spawns hors écran)', () => {
+  it('pointeur et tactile de MÊME taille d\'écran → MÊME zoom (adaptatif à la taille, plus au type)', () => {
+    const pointer = computeViewport(raw({ innerW: 1024, innerH: 640, pointerCoarse: false }))
+    const touch = computeViewport(raw({ innerW: 1024, innerH: 640, pointerCoarse: true }))
+    expect(pointer.cameraZoom).toBe(touch.cameraZoom)
+  })
+
+  it('la diagonale visible ne dépasse jamais la référence (spawns hors écran), tactile ET pointeur', () => {
     // Balaye des tailles d'écran variées : halfDiag(écran)/zoom ≤ RÉF partout
-    // (au plancher TOUCH_ZOOM_MIN près, où l'écran est si petit que la vue
+    // (au plancher ADAPTIVE_ZOOM_MIN près, où l'écran est si petit que la vue
     // reste très en-dessous de la référence de toute façon).
     const sizes: Array<[number, number]> = [
       [412, 839], [390, 844], [844, 390], [915, 412], [768, 1024], [1024, 768], [360, 640]
     ]
     for (const [w, h] of sizes) {
-      const v = computeViewport(raw({ innerW: w, innerH: h, pointerCoarse: true }))
-      const visibleHalfDiag = Math.hypot(w, h) / 2 / v.cameraZoom
-      expect(visibleHalfDiag).toBeLessThanOrEqual(REF_HALF_DIAG + 1) // +1 : arrondi round2
+      for (const pointerCoarse of [true, false]) {
+        const v = computeViewport(raw({ innerW: w, innerH: h, pointerCoarse }))
+        const visibleHalfDiag = Math.hypot(w, h) / 2 / v.cameraZoom
+        expect(visibleHalfDiag).toBeLessThanOrEqual(REF_HALF_DIAG + 1) // +1 : arrondi round2
+      }
     }
   })
 })

@@ -59,10 +59,11 @@ export class CameraController {
    * `playerSprites`), en coop centre sur le centroïde des vivants et ajuste le zoom.
    *
    * `baseZoom` (P4 refonte mobile) : zoom de base fourni par la source de vérité
-   * responsive — desktop = SOLO_ZOOM (1.2, comportement historique inchangé),
-   * tactile = adaptatif à l'écran. En coop on prend min(baseZoom, palier
-   * d'écartement) : le dé-zoom de groupe ne peut que ÉLARGIR la vue, jamais la
-   * resserrer en-deçà de la base.
+   * responsive, adaptatif à la TAILLE du viewport (pas au type d'entrée) — grand
+   * écran = SOLO_ZOOM (1.2, comportement historique inchangé), petit écran (PC
+   * ou tactile) = dé-zoomé pour voir autant de terrain. En coop on prend
+   * min(baseZoom, palier d'écartement) : le dé-zoom de groupe ne peut que
+   * ÉLARGIR la vue, jamais la resserrer en-deçà de la base.
    */
   update(
     state: AppViewState,
