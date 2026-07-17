@@ -33,7 +33,7 @@ describe('App — écrans & navigation', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     const s = app.getState()
     expect(s.screen).toBe('title')
-    expect(s.menu?.items.map((i) => i.id)).toEqual(['jouer', 'players', 'stage', 'options', 'editeur'])
+    expect(s.menu?.items.map((i) => i.id)).toEqual(['jouer', 'players', 'stage', 'scores', 'succes', 'options', 'editeur'])
     expect(s.players.length).toBe(0)
   })
 
@@ -120,6 +120,39 @@ describe('App — écrans & navigation', () => {
     app.confirm() // valide le perso par défaut (solo, 1 seul joueur)
     expect(app.getState().screen).toBe('game')
     expect(app.getState().players.length).toBe(1)
+  })
+
+  it('« Scores » au titre ouvre le tableau du niveau sélectionné, et « B » revient au titre', () => {
+    localStorage.clear() // profil neuf : aucun stage n'a de score
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    // Atteint « Scores » UNIQUEMENT par nav() — aucune fonction n'exige la souris (règle 8).
+    app.nav('down') // players
+    app.nav('down') // stage
+    app.nav('down') // scores
+    expect(app.getState().menu?.index).toBe(3)
+    app.confirm()
+    const s = app.getState()
+    expect(s.screen).toBe('hiscores')
+    expect(s.hiScores?.stageId).toBe('terrain_vierge')
+    // Consultation, pas inscription : aucune ligne en surbrillance, et tableau vide.
+    expect(s.hiScores?.rank).toBe(-1)
+    expect(s.hiScores?.entries).toEqual([])
+    app.back()
+    expect(app.getState().screen).toBe('title')
+  })
+
+  it('« Scores » suit le sélecteur de niveau du titre (les classements sont par stage)', () => {
+    localStorage.clear()
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    app.nav('down') // players
+    app.nav('down') // stage
+    app.nav('right') // niveau suivant : terrassement
+    app.nav('down') // scores
+    app.confirm()
+    // C'est TOUT le pari de l'option (a) : pas de 2e sélecteur dans l'écran des
+    // scores, le niveau choisi au titre décide du tableau affiché.
+    expect(app.getState().hiScores?.stageId).toBe('terrassement')
+    expect(app.getState().hiScores?.stageTitle).toBe('Terrassement')
   })
 
   it('met en pause puis reprend', () => {

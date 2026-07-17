@@ -31,6 +31,9 @@ const CSS = `
 .sce-btn-primary{background:#2f7a55}
 .sce-title{font-weight:bold;color:#e8a400;letter-spacing:.04em;white-space:nowrap;padding-right:2px}
 .sce-group{display:flex;align-items:center;gap:5px;padding:0 8px;border-left:2px solid #000;align-self:stretch}
+.sce-check{display:flex;align-items:center;gap:5px;background:#3a2c1c;border:2px solid #000;padding:4px 8px;font-size:12px;cursor:pointer;white-space:nowrap;user-select:none}
+.sce-check:hover{background:#513c26}
+.sce-check input{accent-color:#c8892f;width:13px;height:13px;cursor:pointer;margin:0}
 .sce-group-label{font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:#9a8a72;align-self:center;padding-right:1px}
 .sce-palette{position:absolute;top:52px;left:8px;bottom:8px;width:340px;display:flex;flex-direction:column;overflow:hidden}
 .sce-pal-title{padding:8px 10px;font-weight:bold;color:#ffb424;border-bottom:2px solid #000;font-size:13px}
@@ -192,7 +195,7 @@ export function bootEditor(): void {
     }
     const rect = canvas.getBoundingClientRect()
     const w = curScene.cameras.main.getWorldPoint(e.clientX - rect.left, e.clientY - rect.top)
-    const s = state.applySnap(w.x - OFFSET_X, w.y - OFFSET_Y)
+    const s = state.applySnapFor(id, w.x - OFFSET_X, w.y - OFFSET_Y)
     state.addInstance(id, s.x, s.y)
   })
 

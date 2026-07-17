@@ -1,5 +1,6 @@
 import { PNG } from 'pngjs'
 import { writeFileSync, mkdirSync } from 'node:fs'
+import { glyph, GW, GH, textWidth } from './signFont.mjs'
 
 // Signalétique stage 01 AVEC TEXTE + ligne de marquage topo, authorées en pixel
 // pur (police 5×7 maison) — PixelLab ne rend pas de texte lisible (prompt global
@@ -46,35 +47,10 @@ function ring(p, cx, cy, rOut, rIn, r, g, b) {
   }
 }
 
-// Police pixel 5×7 (sous-ensemble utile aux panneaux).
-const G = {
-  A: [' ### ', '#   #', '#   #', '#####', '#   #', '#   #', '#   #'],
-  C: [' ####', '#    ', '#    ', '#    ', '#    ', '#    ', ' ####'],
-  D: ['#### ', '#   #', '#   #', '#   #', '#   #', '#   #', '#### '],
-  E: ['#####', '#    ', '#    ', '#### ', '#    ', '#    ', '#####'],
-  I: ['#####', '  #  ', '  #  ', '  #  ', '  #  ', '  #  ', '#####'],
-  M: ['#   #', '## ##', '# # #', '#   #', '#   #', '#   #', '#   #'],
-  N: ['#   #', '##  #', '# # #', '# # #', '#  ##', '#   #', '#   #'],
-  O: [' ### ', '#   #', '#   #', '#   #', '#   #', '#   #', ' ### '],
-  P: ['#### ', '#   #', '#   #', '#### ', '#    ', '#    ', '#    '],
-  R: ['#### ', '#   #', '#   #', '#### ', '# #  ', '#  # ', '#   #'],
-  S: [' ####', '#    ', '#    ', ' ### ', '    #', '    #', '#### '],
-  T: ['#####', '  #  ', '  #  ', '  #  ', '  #  ', '  #  ', '  #  '],
-  U: ['#   #', '#   #', '#   #', '#   #', '#   #', '#   #', ' ### '],
-  V: ['#   #', '#   #', '#   #', '#   #', '#   #', ' # # ', '  #  '],
-  X: ['#   #', '#   #', ' # # ', '  #  ', ' # # ', '#   #', '#   #'],
-  '0': [' ### ', '#   #', '#  ##', '# # #', '##  #', '#   #', ' ### '],
-  '3': ['#### ', '    #', '    #', ' ### ', '    #', '    #', '#### '],
-  ' ': ['     ', '     ', '     ', '     ', '     ', '     ', '     ']
-}
-const GW = 5, GH = 7
-function textWidth(text, S, gap = 1) {
-  return text.length * GW * S + (text.length - 1) * gap * S
-}
 function drawText(p, text, x, y, S, ink, gap = 1) {
   let gx = x
   for (const ch of text) {
-    const g = G[ch] ?? G[' ']
+    const g = glyph(ch)
     for (let ry = 0; ry < GH; ry++) for (let rx = 0; rx < GW; rx++) {
       if (g[ry][rx] === '#') rect(p, gx + rx * S, y + ry * S, gx + rx * S + S - 1, y + ry * S + S - 1, ...ink)
     }

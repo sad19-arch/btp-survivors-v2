@@ -12,13 +12,11 @@ import { POOL_KEYS, SPLATTER_KEYS, DROP_CLUSTER_KEYS, type CarnageSize } from '@
 import { DESKTOP_ZOOM, type ViewportBus } from '@ui/viewport'
 import { WORLD } from '@content/config'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
-import { createGround } from '@render/ground'
-import { createLandmark, createStructures, phaseSalt, resolvePlacement, type ExclusionCircle } from '@render/props'
+import { createGround, groundTilesForLayout } from '@render/ground'
+import { createLandmark, createStructures, phaseSalt, type ExclusionCircle } from '@render/props'
 import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { resolveComposedLayout } from '@content/runtimeLayouts'
-import { walkFrame } from '@render/sprites'
-import { ambientOffset } from '@render/ambientNpc'
-import { stageRender, type StageRender, FINAL_BOSS_SKIN, CONVOYEUR_SKIN, SHARED_WORKER_NPCS, CITY_BUILDINGS, CITY_PERIMETER } from '@render/stages'
+import { stageRender, type StageRender, FINAL_BOSS_SKIN, CONVOYEUR_SKIN, CAMION_SKIN, SHARED_WORKER_NPCS, CITY_BUILDINGS, CITY_PERIMETER } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { DamageNumberPool } from '@render/damageNumbers'
 import { VfxManager } from '@render/scenes/vfxManager'
@@ -30,6 +28,9 @@ import { TelegraphRenderer } from '@render/scenes/telegraphRenderer'
 import { SiteRenderer } from '@render/scenes/siteRenderer'
 import { SiteStructures, hasStructurePlan } from '@render/scenes/siteStructures'
 import { SiteWorkers } from '@render/scenes/siteWorkers'
+import { IntroSequencer } from '@render/scenes/introSequencer'
+import { CinemaStageImpl } from '@render/scenes/cinemaStageImpl'
+import { createCinemaDeps } from '@render/scenes/cinemaDeps'
 import { buildSiteLayout } from '@core/siteLayout'
 import { AuraPulseEvent, PrisonerFreedEvent, DestructibleBrokenEvent, EnemyDiedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
@@ -37,6 +38,7 @@ import { DestructibleRenderer } from '@render/scenes/destructibleRenderer'
 import { destructibleDef, destructiblesForStage, COIN_PICKUP } from '@content/destructibles'
 import { PALETTE_HEX } from '@ui/palette'
 import { PerfProbe, type PerfSnapshot } from '@render/perf/perfProbe'
+import { INTRO_SCRIPTS } from '@content/introScripts'
 
 /** Feuille PARTAGÉE (tous stages) : le joueur. Ennemis ET boss sont PAR STAGE (voir stages.ts). */
 const SHARED_SHEETS: ReadonlyArray<readonly [string, string, number]> = [['player', 'player_j1.png', 192]]
@@ -113,14 +115,6 @@ export class GameScene extends Phaser.Scene {
    * détruit une et en recrée une autre) — jamais un singleton de module.
    */
   private pool!: SpritePool
-  /** PNJ(s) d'ambiance non-hostiles du stage — tableau (B1+). */
-  private ambientSprites: Array<{
-    sprite: Phaser.GameObjects.Sprite
-    anchor: { x: number; y: number }
-    seed: number
-    behavior: 'work' | 'patrol'
-    framePeriodMs: number
-  }> = []
   /** Bulles râleuses des PNJ d'ambiance (état + cooldowns) — extraites de GameScene. */
   private readonly bubbles = new SpeechBubbleManager(this)
   /** Rendu du télégraphe des formations (marqueur au sol + flèche de bord) — Task 10. */
@@ -132,6 +126,12 @@ export class GameScene extends Phaser.Scene {
   private siteStructures!: SiteStructures
   /** Ouvriers navetteurs (T6) — module dédié, GameScene délègue. */
   private siteWorkers!: SiteWorkers
+  /** Façade cinématique (T5) — implémentation Phaser des CinemaDeps, instance fraîche par scène. */
+  private cinemaStage!: CinemaStageImpl
+  /** Séquenceur d'intro (T5) — dispatche les IntroCommand vers cinemaStage. Instance fraîche par scène. */
+  private intro!: IntroSequencer
+  /** Suivi de la transition introActive (T6) — pour déclencher dispose() dès la fin de l'intro. */
+  private prevIntroActive = false
   /**
    * VFX des armes à impulsion (marteau/pied-de-biche/court-circuit), déclenché
    * par l'événement d'aura de la sim. Une forme dédiée par `kind` — pas de
@@ -288,8 +288,11 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * Zoom caméra de BASE courant, tiré de la source de vérité responsive
-   * (ViewportBus, câblé par main.ts). Desktop : DESKTOP_ZOOM constant (parité
-   * PC) ; tactile : adaptatif à l'écran. Repli DESKTOP_ZOOM sans bus (harness).
+   * (ViewportBus, câblé par main.ts) — adaptatif à la TAILLE du viewport, pas
+   * au type d'entrée : un écran ≥ 1920×1080 retombe sur DESKTOP_ZOOM (1.2,
+   * parité PC historique) que ce soit tactile ou pointeur ; un petit écran
+   * (PC ou tactile) dé-zoome pour voir autant de terrain. Repli DESKTOP_ZOOM
+   * sans bus (harness).
    */
   private baseZoom(): number {
     return this.sceneData.viewport?.current().cameraZoom ?? DESKTOP_ZOOM
@@ -337,6 +340,12 @@ export class GameScene extends Phaser.Scene {
   preload(): void {
     // Assets PROPRES AU STAGE (sol, décalques, props, skins d'ennemis).
     for (const t of this.stage.ground) {
+      this.load.image(t.key, t.file)
+    }
+    // Sols d'AUTRES stages référencés par la compo (fond global `groundKey` ou
+    // plaques posées) : sans ce préchargement, la texture n'existe pas au moment
+    // du rendu et le sol choisi retomberait silencieusement sur celui du stage.
+    for (const t of groundTilesForLayout(resolveComposedLayout(this.loadedStageId))) {
       this.load.image(t.key, t.file)
     }
     for (const d of this.stage.decals) {
@@ -419,6 +428,13 @@ export class GameScene extends Phaser.Scene {
         frameWidth: CONVOYEUR_SKIN.frame,
         frameHeight: CONVOYEUR_SKIN.frame
       })
+      // Skin PARTAGÉ du camion benne des chemins camion, chargé une fois pour tous
+      // les stages : sans lui, un `truck_path` posé ailleurs qu'au stage 02 restait
+      // muet (le repli `prop_s2_truck` n'existe que là-bas).
+      this.load.spritesheet(CAMION_SKIN.key, CAMION_SKIN.file, {
+        frameWidth: CAMION_SKIN.frame,
+        frameHeight: CAMION_SKIN.frame
+      })
       // Feuilles dédiées des personnages (phase C) : NON préchargées ici. `preload`
       // s'exécute au boot (avant la sélection) puis seulement au changement de stage —
       // les joueurs (donc leurs persos) n'y sont pas encore connus. Et précharger tout
@@ -500,7 +516,6 @@ export class GameScene extends Phaser.Scene {
     // damageFlash, lastMove, prisonniers, introStartMs/introDone) est porté par une
     // instance FRAÎCHE de PlayerRenderer recréée dans create() — rien à nettoyer ici.
     this.camera.reset()
-    this.ambientSprites = []
     this.bubbles.reset()
     this.decorStreamerFrame = 0
     // Nettoie les chunks streamés (si le streamer est déjà initialisé — pas au 1er appel).
@@ -533,15 +548,26 @@ export class GameScene extends Phaser.Scene {
     this.siteStructures = new SiteStructures(this)
     // Ouvriers navetteurs (T6) : instance fraîche par scène.
     this.siteWorkers = new SiteWorkers(this)
+    // Cinématique d'intro (T5) : façade Phaser + séquenceur. Instance fraîche par
+    // scène. La construction de la façade (câblage caméra/tweens + dispatch des
+    // cues bandeau/voix/SFX) vit dans `createCinemaDeps` — pas dans GameScene.
+    this.cinemaStage = new CinemaStageImpl(createCinemaDeps(this, this.camera, this.app.events))
+    this.intro = new IntroSequencer(this.cinemaStage)
+    this.intro.load(INTRO_SCRIPTS[this.loadedStageId] ?? [])
     // Sol : base tuilée (TileSprite, O(1)) + streamer de décalques/props par chunks.
     // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
     const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
     // Base du sol (TileSprite seul — décalques gérés par le DecorStreamer).
-    const groundAssets: { tileKeys: string[]; baseTileIndex?: number } = {
+    const groundAssets: { tileKeys: string[]; baseTileIndex?: number; overrideKey?: string } = {
       tileKeys: this.stage.ground.map((g) => g.key)
     }
     if (this.stage.baseTileIndex !== undefined) {
       groundAssets.baseTileIndex = this.stage.baseTileIndex
+    }
+    // Sol de fond choisi par la compo (éventuellement la tuile d'un AUTRE stage).
+    const composedGround = resolveComposedLayout(this.loadedStageId)?.groundKey
+    if (composedGround !== undefined) {
+      groundAssets.overrideKey = composedGround
     }
     createGround(this, WORLD.width, WORLD.height, groundAssets)
     // Streamer de décor : décalques + props streamés autour de la caméra par chunks de
@@ -647,73 +673,37 @@ export class GameScene extends Phaser.Scene {
       // Réseau bâti (tranchées/tuyaux/regards) — streamé par chunks autour de la caméra.
       this.siteStructures.setPlan(WORLD.width, WORLD.height, this.loadedStageId)
       // Ouvriers navetteurs (T6) : construits depuis le même layout que le siteRenderer.
-      // On passe les clés PNJ RÉELLEMENT chargées du stage (numérotées par stage) pour
-      // que _resolveKey matche une texture existante partout, pas seulement au stage 02.
-      const npcKeys = (this.stage.ambient ?? []).map((a) => a.key)
-      this.siteWorkers.reset(this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId, npcKeys)
-    }
-    // PNJ(s) d'ambiance non-hostiles (geste métier) — un sprite par entrée, placement seedé
-    // hors centre. Chaque PNJ reçoit un seed individuel dérivé de stageSeed + index, ce qui
-    // garantit un placement déterministe et hors-chevauchement même si le tableau grandit (B5+).
-    // T4 : geometry.ambientAngle cible le PREMIER PNJ (chef de file) ; les suivants tournent
-    // autour d'angles dérivés (+ 40° par PNJ) pour rester dans le même secteur.
-    const AMB_DIST_MIN = 420
-    const AMB_DIST_MAX = 520
-    // Les stages pilotés par le PLAN de chantier (sitePrograms) tirent leur vie
-    // des ouvriers navetteurs (SiteWorkers, purposeful) : on N'AJOUTE PAS en plus
-    // les PNJ errants Lissajous — c'était la double-population incohérente
-    // (tailles disparates + errance « dans tous les sens »). Les feuilles PNJ
-    // restent chargées (preload) car SiteWorkers les réutilise.
-    // NORMALISATION PNJ : le vieux système d'errance (ambientSprites Lissajous,
-    // tailles disparates) est DÉSACTIVÉ sur TOUS les stages — plus aucun « petit
-    // PNJ ». La vie du chantier vient exclusivement des SiteWorkers (échelle
-    // unique, déplacements utiles). Les feuilles `stage.ambient` restent
-    // préchargées (skins réutilisés par SiteWorkers). Liste forcée vide.
-    const ambientList = (this.stage.ambient ?? []).slice(0, 0)
-    for (const [npcIdx, amb] of ambientList.entries()) {
-      if (!this.textures.exists(amb.key)) { continue }
-      // Rayon forfaitaire du PNJ : demi-frame compact (64 px) × scale.
-      const ambRadius = Math.round(amb.scale * 64)
-      // Angle : le premier PNJ suit geometry.ambientAngle (ou formule seedée),
-      // les suivants sont décalés de 40° dans le même secteur.
-      const baseAngleDeg =
-        stageGeometry?.ambientAngle !== undefined
-          ? stageGeometry.ambientAngle
-          : (((stageSeed * 2654435761) >>> 0) % 1000) / 1000 * 360
-      const ambAngleDeg = (baseAngleDeg + npcIdx * 40) % 360
-      // Dart-throwing déterministe : sel unique par PNJ pour ne pas dépendre des
-      // autres placements (structures/landmark) ni des autres PNJs.
-      const npcSalt = (0xab7c1234 + npcIdx * 0x9e3779b9) >>> 0
-      const ambRng = (() => {
-        let t = ((stageSeed ^ npcSalt) >>> 0)
-        return () => {
-          t = (t + 0x6d2b79f5) >>> 0
-          let r = Math.imul(t ^ (t >>> 15), 1 | t)
-          r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) >>> 0
-          return ((r ^ (r >>> 14)) >>> 0) / 4294967296
-        }
-      })()
-      const pos = resolvePlacement(
-        ambAngleDeg,
-        AMB_DIST_MIN, AMB_DIST_MAX,
-        WORLD.width / 2, WORLD.height / 2,
-        WORLD.width, WORLD.height, 40,
-        exclusions, placed, ambRadius, ambRng
+      // On passe les FEUILLES (clé + behavior + kind), pas seulement leurs clés :
+      // SiteWorkers en tire un pool par rôle de marche. Avec les seules clés, il
+      // fallait deviner le rôle au nom de fichier — d'où 19 feuilles que personne
+      // ne demandait. `StageAmbientNpc` est un sur-ensemble de `WalkerSheet`.
+      const npcSheets = this.stage.ambient ?? []
+      // PNJ MÉTIER du stage (geste + objet) : on passe les feuilles `kind:'trade'`
+      // et le secteur d'ancrage ; SiteWorkers les rend comme postes fixes animés.
+      // Sans ça, ces feuilles n'étaient atteignables que via une compo sauvée —
+      // registre vide ⇒ zéro métier affiché sur les 10 stages.
+      const tradeNpcs = {
+        entries: (this.stage.ambient ?? [])
+          .filter((a) => a.kind === 'trade')
+          .map((a) => ({ key: a.key, scale: a.scale })),
+        baseAngleDeg: stageGeometry?.ambientAngle ?? 55
+      }
+      this.siteWorkers.reset(
+        this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId, npcSheets, tradeNpcs
       )
-      const sprite = this.add.sprite(pos.x, pos.y, amb.key).setScale(amb.scale).setDepth(1)
-      // Seed individuel dérivé de stageSeed + index → chaque PNJ a une errance et
-      // une réplique DISTINCTES même si le tableau contient plusieurs entrées (B3 fix).
-      const npcSeed = (stageSeed ^ (npcIdx * 0x9e3779b9)) >>> 0
-      this.ambientSprites.push({
-        sprite,
-        anchor: { x: pos.x, y: pos.y },
-        seed: npcSeed,
-        behavior: amb.behavior,
-        framePeriodMs: amb.framePeriodMs ?? 300
-      })
-      // Chaque PNJ devient une ancre (les props ne se poseront pas dessus).
-      placed.push({ x: pos.x, y: pos.y, r: ambRadius })
     }
+    // PNJ d'ambiance : UN SEUL système par plan de chantier — les SiteWorkers.
+    //
+    // Les feuilles `stage.ambient` sont préchargées puis rendues EXCLUSIVEMENT par
+    // SiteWorkers (ci-dessus) : navetteurs à l'échelle unique (WORKER_SCALE) pour
+    // les feuilles ouvrier, postes fixes animés pour les feuilles `kind:'trade'`.
+    //
+    // ⚠️ NE JAMAIS réintroduire ici un second système d'errance (ancien
+    // `ambientSprites` Lissajous) : faire coexister les deux recréait la
+    // double-population incohérente — tailles disparates (les `scale` de
+    // `stage.ambient` vont de 0.62 à 1.67, contre WORKER_SCALE=0.62 unique) et
+    // errance « dans tous les sens » par-dessus des ouvriers aux trajets utiles.
+    // Pour afficher une feuille de plus, la brancher sur SiteWorkers.
 
     // ── Streamer de décor (construit ici, ancres = tout ce qui a été posé) ───────
     // Les props streamés évitent désormais structures + landmark + PNJ (anti-chevauchement)
@@ -786,6 +776,7 @@ export class GameScene extends Phaser.Scene {
       this.siteRenderer.dispose()
       this.siteStructures.dispose()
       this.siteWorkers.dispose()
+      this.intro.dispose()
       this.touchInput?.dispose()
       this.touchInput = null
     })
@@ -828,9 +819,7 @@ export class GameScene extends Phaser.Scene {
         loadedChunks: this.decorStreamer.loadedChunkCount,
         decorObjects: this.decorStreamer.decorObjectCount
       })
-      // B4 — Sondes PNJ d'ambiance (test-only) : positions actuelles et bulles actives.
-      this.seam.debugAmbientNpcs = (): { x: number; y: number }[] =>
-        this.ambientSprites.map((npc) => ({ x: npc.sprite.x, y: npc.sprite.y }))
+      // B4 — Sonde bulles d'ambiance (test-only).
       this.seam.debugActiveBubbles = (): number => this.bubbles.activeCount
       // T5 — Sonde clusters de terrain (test-only) : nombre de sprites actifs.
       this.seam.debugSiteInfo = (): { spriteCount: number } => ({
@@ -841,11 +830,24 @@ export class GameScene extends Phaser.Scene {
         count: number
         workers: { role: string; texture: string; x: number; y: number }[]
       } => this.siteWorkers.workerDebugInfo
+      // T5 — Sonde cinématique d'intro (test-only) : état actif + elapsed + actorCount + zoom.
+      this.seam.debugIntroInfo = (): { active: boolean; elapsedMs: number; actorCount: number; cameraZoom: number } => ({
+        active: this.app.getState().introActive,
+        elapsedMs: this.app.getState().introElapsedMs,
+        actorCount: this.cinemaStage.actorCount,
+        cameraZoom: this.cameras.main.zoom,
+      })
       this.seam.debugCameraOverview = (zoom: number, cx: number, cy: number): void => {
         this.camera.setOverview({ zoom, cx, cy })
       }
       // Sonde perf (test/overlay only) : snapshot du profileur de temps de frame.
       this.seam.debugPerfProfile = (): PerfSnapshot => this.perfSnapshot()
+      // Sonde Carnage (test-only) : état RÉEL du renderer — `active` (que le toggle
+      // ne propage qu'au prochain update()), `alive` et le plafond de la plateforme.
+      this.seam.debugCarnageInfo = (): { active: boolean; alive: number; cap: number } | null =>
+        this.carnage === null
+          ? null
+          : { active: this.carnage.isActive, alive: this.carnage.aliveCount, cap: this.carnage.cap }
     }
   }
 
@@ -865,6 +867,26 @@ export class GameScene extends Phaser.Scene {
       routeInput(this.app, this.readPlayerInputs(st.players.length))
       this.perf.measure('sim', () => this.app.advanceTime(Math.min(delta, MAX_FRAME_MS)))
     }
+    // Skip intro sur n'importe quelle entrée (non-test uniquement : en test le seam pilote).
+    if (st.introActive && !this.testMode) {
+      const inputs = this.readPlayerInputs(1)
+      const p1 = inputs.get(1)
+      if ((p1 !== undefined && (p1.pressed.length > 0 || p1.action || p1.move.x !== 0 || p1.move.y !== 0))) {
+        this.app.skipIntro()
+      }
+    }
+    // Séquenceur d'intro : dispatche les commandes cinématiques à la façade Phaser.
+    // Sauté en mode lite (pas de textures ni de sprites chargés).
+    if (st.introActive && !this.lite) {
+      this.intro.update(st.introElapsedMs)
+    }
+    // Transition introActive true→false : nettoyage immédiat des acteurs cosmétiques.
+    // Sans ce dispose(), les sprites spawné par le script restent dans la scène
+    // après skipIntro() (jusqu'au prochain shutdown de scène).
+    if (this.prevIntroActive && !st.introActive) {
+      this.intro.dispose()
+    }
+    this.prevIntroActive = st.introActive
     this.syncSprites()
     this.camera.update(st, this.players.sprites, this.baseZoom())
     // Streamer de décor : throttlé toutes les 4 frames pour éviter un scan de Map
@@ -928,12 +950,6 @@ export class GameScene extends Phaser.Scene {
       this.siteWorkers.sync(state)
     }
 
-    // PNJ(s) d'ambiance : errance douce (B3) + animation de geste (boucle lente).
-    for (const npc of this.ambientSprites) {
-      const off = ambientOffset(npc.seed, this.time.now, npc.behavior)
-      npc.sprite.setPosition(npc.anchor.x + off.dx, npc.anchor.y + off.dy)
-      npc.sprite.setFrame(walkFrame(0, this.time.now, npc.framePeriodMs))
-    }
     // Bulles de dialogue (humour râleur rétro) sur les PNJ du chantier : métier
     // posé → 'job' (blasé, moqueur), ouvrier mobile → 'civilian' (panique). Un
     // ennemi à portée déclenche les répliques « monstre proche ». Priorité stage

@@ -12,6 +12,53 @@ describe('EditorState — multi-sélection / copier-coller / batch', () => {
 
   const make = (): EditorState => new EditorState('terrain_vierge')
 
+  /**
+   * Snap imposé par l'ASSET (kit de routes 256 px).
+   *
+   * Le piège que ça verrouille : `gridSize` vaut 128 et `snap` vaut **false** par
+   * défaut. Une tuile de route de 256 posée à la souris ne tomberait donc jamais
+   * en face de sa voisine — les pixels raccordent, la POSE non, et le kit serait
+   * inutilisable sans que rien ne le signale. Le pas est donc une contrainte de
+   * l'asset, pas une préférence de l'utilisateur.
+   */
+  describe('applySnapFor — pas imposé par le prefab', () => {
+    const ROUTE = 'obj_pal_route_goudron_droite'
+
+    it('une tuile de route s\'aligne sur 256 MÊME si le snap global est éteint', () => {
+      const s = make()
+      expect(s.snap).toBe(false)
+      expect(s.gridSize).toBe(128)
+      expect(s.applySnapFor(ROUTE, 300, 140)).toEqual({ x: 256, y: 256 })
+      expect(s.applySnapFor(ROUTE, 100, 100)).toEqual({ x: 0, y: 0 })
+    })
+
+    it('deux tuiles posées à des points quelconques deviennent EXACTEMENT adjacentes', () => {
+      const s = make()
+      const a = s.applySnapFor(ROUTE, 260, 10)
+      const b = s.applySnapFor(ROUTE, 300, 260)
+      expect(b.x - a.x).toBe(0)
+      expect(b.y - a.y).toBe(256) // pile une tuile d'écart : le raccord tient
+    })
+
+    it('un prefab ordinaire garde le comportement d\'avant (snap global éteint = libre)', () => {
+      const s = make()
+      expect(s.applySnapFor('obj_pal_hedge', 137, 42)).toEqual({ x: 137, y: 42 })
+    })
+
+    it('un prefab ordinaire suit la grille de 128 quand le snap global est actif', () => {
+      const s = make()
+      s.toggleSnap()
+      expect(s.applySnapFor('obj_pal_hedge', 137, 42)).toEqual({ x: 128, y: 0 })
+    })
+
+    it('snapStepFor ne déclare un pas que pour les routes', () => {
+      const s = make()
+      expect(s.snapStepFor(ROUTE)).toBe(256)
+      expect(s.snapStepFor('obj_pal_hedge')).toBeNull()
+      expect(s.snapStepFor('prefab_inconnu')).toBeNull()
+    })
+  })
+
   it('addInstance sélectionne uniquement la nouvelle instance', () => {
     const s = make()
     const a = s.addInstance('obj_a', 0, 0)

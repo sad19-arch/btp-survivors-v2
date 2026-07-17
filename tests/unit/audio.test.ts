@@ -1,14 +1,49 @@
 import { describe, it, expect } from 'vitest'
-import { musicForState, MUSIC, SFX, VOICE, voiceStage, SFX_FILES, MUSIC_FILES_SHARED, VOICE_FILES } from '@/audio/manifest'
+import {
+  musicForState, MUSIC, SFX, VOICE, voiceStage, SFX_FILES, MUSIC_FILES_SHARED, VOICE_FILES,
+  WEAPON_SFX_IDS, WEAPON_SFX_FILES_REJETES, WEAPON_FILE_TRIM, WEAPON_FILE_VOLUME,
+  WEAPON_FILE_BANDE_LUFS, weaponFileGain, CARNAGE_GORE_IDS, CARNAGE_GORE_IDS_REJETES
+} from '@/audio/manifest'
+import { WEAPON_ZZFX } from '@/audio/weaponSfx'
 import { clamp01, musicGain, sfxGain, duckedGain, type AudioLevels } from '@/audio/settings'
 import { Simulation } from '@core/simulation'
+import type { Screen } from '@/app/appState'
 import { WEAPONS } from '@content/weapons'
 import { AudioDirector } from '@/audio/audioDirector'
-import { EvolvedEvent, BossSpawnedEvent } from '@core/events'
+import { EvolvedEvent, BossSpawnedEvent, EnemyDiedEvent } from '@core/events'
+import type { AppViewState } from '@/app/appState'
 
 describe('audio — musique par état (pure)', () => {
-  const g = (screen: string, stageId: string, bossPresent = false): string | null =>
+  const g = (screen: Screen, stageId: string, bossPresent = false): string | null =>
     musicForState({ screen, stageId, bossPresent })
+
+  /**
+   * LA faille de classe : `musicForState` retombait sur `default` pour tout écran
+   * qu'il ne nommait pas — et `default` rend la musique DU STAGE. Résultat : ouvrir
+   * les Options ou la sélection de perso depuis le titre lançait la musique de
+   * chantier par-dessus un menu, et l'écran des succès la relançait sur une run finie.
+   *
+   * On énumère ici TOUS les écrans hors-jeu. La liste est dérivée du type `Screen` :
+   * `SCREENS_HORS_JEU` + `SCREENS_DE_JEU` doivent couvrir l'union — si un écran est
+   * ajouté sans être classé, le `switch` exhaustif de `musicForState` casse le BUILD.
+   */
+  const SCREENS_HORS_JEU: readonly Screen[] = [
+    'characterSelect',
+    'options',
+    'achievements',
+    'nameEntry',
+    'hiscores',
+    'paused'
+  ]
+
+  it('AUCUN écran hors-jeu ne joue la musique du stage', () => {
+    for (const screen of SCREENS_HORS_JEU) {
+      // Le stage est renseigné (comme en vrai : le flag survit à la run) et un boss
+      // est présent : les deux chemins qui menaient à une musique de jeu.
+      expect(g(screen, 'finitions', true), `écran ${screen}`).toBe(MUSIC.menu)
+      expect(g(screen, 'finitions', false), `écran ${screen}`).toBe(MUSIC.menu)
+    }
+  })
 
   it('titre → titre ; pause → menu ; victoire/gameover → leur thème', () => {
     expect(g('title', 'terrain_vierge')).toBe(MUSIC.title)
@@ -67,6 +102,105 @@ describe('audio — cohérence manifeste ↔ préchargement', () => {
     for (let order = 1; order <= 10; order++) {
       expect(loaded.has(voiceStage(order)), `stage ${order}`).toBe(true)
     }
+  })
+})
+
+/**
+ * Niveaux des SFX d'armes en fichier.
+ *
+ * Un mix se juge à l'oreille — mais un fichier livré 22 à 53 dB sous ses voisines
+ * ne relève pas du goût, il ne s'entend simplement JAMAIS. C'est ce que ces tests
+ * verrouillent : pas « le mix est bon », mais « aucun son n'est objectivement
+ * hors-jeu, et aucune correction n'est appliquée à l'aveugle ».
+ *
+ * Les mesures citées viennent de `npm run audio:qa` (EBU R128, max momentané).
+ */
+describe('audio — niveaux des SFX d\'armes (fichier)', () => {
+  it('une arme sans trim joue au gain commun de la famille', () => {
+    expect(weaponFileGain('cloueur')).toBe(WEAPON_FILE_VOLUME)
+    expect(weaponFileGain('extincteur')).toBe(WEAPON_FILE_VOLUME)
+    expect(weaponFileGain('arme_inconnue')).toBe(WEAPON_FILE_VOLUME) // repli, jamais 0
+  })
+
+  it('la brouette (fichier 22 dB sous sa famille) est remontée au-dessus du gain commun', () => {
+    // +17 dB → ×7.08. Sans ça elle jouait à ≈ −43 dBFS, 25 dB sous la musique.
+    expect(weaponFileGain('brouette')).toBeCloseTo(WEAPON_FILE_VOLUME * 7.079, 2)
+    expect(weaponFileGain('brouette')).toBeGreaterThan(weaponFileGain('cloueur'))
+  })
+
+  it('AUCUN trim ne fait clipper sa source (pic mesuré + gain ≤ −0.5 dBFS)', () => {
+    // LA garde de ce mécanisme : remonter un fichier est sûr tant que son pic
+    // reste sous 0 dBFS. C'est ce qui interdit de viser la médiane de la famille
+    // pour la brouette (+22 dB l'aurait posée à +4 dBFS).
+    for (const [id, trim] of Object.entries(WEAPON_FILE_TRIM)) {
+      expect(trim.picDbfs + trim.gainDb, `${id} clipperait`).toBeLessThanOrEqual(-0.5)
+    }
+  })
+
+  it('tout trim atterrit DANS la bande mesurée de la famille (il aligne, il ne mixe pas)', () => {
+    for (const [id, trim] of Object.entries(WEAPON_FILE_TRIM)) {
+      const apres = trim.mesureLufs + trim.gainDb
+      expect(apres, `${id} sous la famille`).toBeGreaterThanOrEqual(WEAPON_FILE_BANDE_LUFS.min)
+      expect(apres, `${id} au-dessus de la famille`).toBeLessThanOrEqual(WEAPON_FILE_BANDE_LUFS.max)
+    }
+  })
+
+  it('tout trim porte sur une arme réellement jouée en fichier (pas de trim mort)', () => {
+    for (const id of Object.keys(WEAPON_FILE_TRIM)) {
+      expect(WEAPON_SFX_IDS, `trim ${id} sans fichier déclaré`).toContain(id)
+    }
+  })
+
+  it('une arme au fichier rejeté n\'est PAS déclarée, et garde un zzfx pour la couvrir', () => {
+    // Le rejet n'a de sens que si le repli existe : sinon on remplace un son
+    // inaudible par du silence, ce qui est pire.
+    for (const id of WEAPON_SFX_FILES_REJETES) {
+      expect(WEAPON_SFX_IDS, `${id} encore déclaré en fichier`).not.toContain(id)
+      expect(WEAPON_ZZFX[id], `${id} sans repli zzfx`).toBeDefined()
+    }
+  })
+
+  it('goudron et coulee_bitume, régénérés, sont rebranchés SANS trim', () => {
+    // Ces deux-là ont été livrés morts puis régénérés (−11.5 et −12.2 LUFS,
+    // dans la bande de la famille). Le fait qu'ils ne demandent AUCUN trim est
+    // le signe que la source est bonne : un trim ici voudrait dire qu'on
+    // rattrape au gain un fichier qu'il fallait refaire — l'erreur d'origine.
+    for (const id of ['goudron', 'coulee_bitume']) {
+      expect(WEAPON_SFX_IDS, `${id} pas rebranché`).toContain(id)
+      expect(WEAPON_SFX_FILES_REJETES, `${id} encore en quarantaine`).not.toContain(id)
+      expect(WEAPON_FILE_TRIM[id], `${id} rattrapé au gain au lieu d'être sain`).toBeUndefined()
+    }
+  })
+})
+
+describe('audio — pool de gore du Mode Carnage', () => {
+  it('aucune variante écartée ne reste dans le pool tiré au sort', () => {
+    // Liste vide aujourd'hui — gore_2, longtemps 20 dB sous ses pairs, a été
+    // régénérée (−12.1 LUFS) et a rejoint le pool. L'invariant, lui, tient :
+    // une variante écartée pour son niveau ne doit JAMAIS être tirée au sort,
+    // car sous le même volume elle s'entendrait comme un trou.
+    for (const rejete of CARNAGE_GORE_IDS_REJETES) {
+      expect(CARNAGE_GORE_IDS, `gore_${rejete} écarté mais encore dans le pool`).not.toContain(rejete)
+    }
+  })
+
+  it('les 5 variantes livrées sont toutes dans le pool (aucune n\'est en quarantaine)', () => {
+    // Le pendant du test ci-dessus : il interdit de tirer une variante écartée,
+    // celui-ci interdit d'en OUBLIER une en quarantaine après régénération —
+    // c'est exactement l'état dans lequel gore_2 a dormi.
+    expect(CARNAGE_GORE_IDS).toEqual([1, 2, 3, 4, 5])
+    expect(CARNAGE_GORE_IDS_REJETES).toEqual([])
+  })
+
+  it('le pool garde plusieurs variantes (une seule saoulerait à une mort/seconde)', () => {
+    expect(CARNAGE_GORE_IDS.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('le cue carnageGore est throttlé bien plus haut que le cue de kill', () => {
+    // Son gras et sale à cadence de horde → bouillie s'il suit `enemyKilled`.
+    const gore = SFX['carnageGore']?.throttleMs ?? 0
+    const kill = SFX['enemyKilled']?.throttleMs ?? 0
+    expect(gore).toBeGreaterThan(kill * 3)
   })
 })
 
@@ -164,6 +298,123 @@ describe('audio — le boss final déclenche une réplique dédiée (distincte d
     events.dispatchEvent(new BossSpawnedEvent('mid'))
     expect(addedKeys.length).toBe(1)
     expect(VOICE.boss).toContain(addedKeys[0])
+  })
+})
+
+/**
+ * Le commit du Mode Carnage (6f1650a) annonce « chaque ennemi tué laisse une
+ * gerbe […] avec un bruit de chair broyée » : les 5 fichiers ont été livrés, le
+ * cue `carnageGore` entièrement spécifié… et jamais appelé. Le son n'existait
+ * que sur le papier. Ces tests verrouillent les deux sens du branchement.
+ */
+describe('audio — bruit de chair du Mode Carnage', () => {
+  /** Fake capturant les cues joués (`sound.play`), pas seulement les voix (`add`). */
+  function fakeSoundManager(): { manager: Phaser.Sound.BaseSoundManager; playedKeys: string[] } {
+    const playedKeys: string[] = []
+    const manager = {
+      locked: false,
+      play: (key: string) => { playedKeys.push(key); return true },
+      add: () => ({ play: () => true, stop: () => true, destroy: () => {}, once: () => {}, volume: 0, isPlaying: false }),
+      game: { cache: { audio: { exists: () => true } }, scene: { getScene: () => null } }
+    } as unknown as Phaser.Sound.BaseSoundManager
+    return { manager, playedKeys }
+  }
+
+  /** État minimal suffisant pour `observe()` — seul `carnage` nous intéresse ici. */
+  function fakeState(carnage: boolean): AppViewState {
+    return {
+      screen: 'game', stageId: 'terrain_vierge', stageOrder: 1,
+      enemies: [], players: [], carnage
+    } as unknown as AppViewState
+  }
+
+  function mort(): EnemyDiedEvent {
+    return new EnemyDiedEvent(10, 20, 'imp', false, undefined, 'cloueur', 1, 0)
+  }
+
+  const settings: AudioLevels = { master: 1, music: 1, sfx: 1, muted: false }
+
+  it('HORS Mode Carnage, une mort ne produit AUCUN bruit de chair', () => {
+    const events = new EventTarget()
+    const { manager, playedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, events, () => settings)
+    director.observe(fakeState(false))
+    playedKeys.length = 0 // ignore les cues d'entrée d'écran
+    events.dispatchEvent(mort())
+    expect(playedKeys.filter((k) => k.startsWith('sfx_gore_'))).toEqual([])
+  })
+
+  it('EN Mode Carnage, une mort produit une variante de gore du pool', () => {
+    const events = new EventTarget()
+    const { manager, playedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, events, () => settings)
+    director.observe(fakeState(true))
+    playedKeys.length = 0
+    events.dispatchEvent(mort())
+    const gores = playedKeys.filter((k) => k.startsWith('sfx_gore_'))
+    expect(gores.length).toBe(1)
+    expect(CARNAGE_GORE_IDS.map((n) => `sfx_gore_${n}`)).toContain(gores[0])
+  })
+
+  it('le Mode Carnage coupé en cours de run refait taire les morts', () => {
+    const events = new EventTarget()
+    const { manager, playedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, events, () => settings)
+    director.observe(fakeState(true))
+    director.observe(fakeState(false)) // le Konami rebascule → le son doit suivre
+    playedKeys.length = 0
+    events.dispatchEvent(mort())
+    expect(playedKeys.filter((k) => k.startsWith('sfx_gore_'))).toEqual([])
+  })
+})
+
+/**
+ * Cinématique d'intro : la façade dispatche des cues cosmétiques (`clonk`, voix)
+ * que `main.ts` route vers l'AudioDirector via ces deux méthodes publiques. Ces
+ * cues étaient des NO-OPS dans la branche cinéma d'origine — on verrouille ici
+ * qu'ils produisent un vrai son (et pas un cue mort).
+ */
+describe('audio — cues de cinématique (playNamedCue / playNamedVoice)', () => {
+  function fakeSoundManager(): {
+    manager: Phaser.Sound.BaseSoundManager
+    playedKeys: string[]
+    addedKeys: string[]
+  } {
+    const playedKeys: string[] = []
+    const addedKeys: string[] = []
+    const manager = {
+      locked: false,
+      play: (key: string) => { playedKeys.push(key); return true },
+      add: (key: string) => { addedKeys.push(key); return { play: () => true, stop: () => true, destroy: () => {}, once: () => {}, volume: 0, isPlaying: false } },
+      game: { cache: { audio: { exists: () => true } }, scene: { getScene: () => null } }
+    } as unknown as Phaser.Sound.BaseSoundManager
+    return { manager, playedKeys, addedKeys }
+  }
+
+  const settings: AudioLevels = { master: 1, music: 1, sfx: 1, muted: false }
+
+  it("playNamedCue('clonk') joue le cue « clonk » (pas de cue mort)", () => {
+    // Le cue 'clonk' DOIT exister dans le manifeste, sinon playCue no-op silencieux.
+    expect(SFX['clonk']).toBeDefined()
+    const { manager, playedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, new EventTarget(), () => settings)
+    director.playNamedCue('clonk')
+    expect(playedKeys.length).toBe(1)
+    expect(SFX['clonk']?.keys).toContain(playedKeys[0])
+  })
+
+  it("playNamedVoice(key) lance la réplique via add()", () => {
+    const { manager, addedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, new EventTarget(), () => settings)
+    director.playNamedVoice('voice_go_go_go')
+    expect(addedKeys).toEqual(['voice_go_go_go'])
+  })
+
+  it("un cue inconnu ne joue rien (no-op sûr)", () => {
+    const { manager, playedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, new EventTarget(), () => settings)
+    director.playNamedCue('cue_qui_nexiste_pas')
+    expect(playedKeys).toEqual([])
   })
 })
 

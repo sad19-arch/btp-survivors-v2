@@ -248,16 +248,119 @@ describe('sitePlan — stages sans programme', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Lisibilité du plan ASCII (l'artefact de revue humaine — `npm run site:plan`)
+// ─────────────────────────────────────────────────────────────────────────────
+describe('sitePrograms — glyphes de zone lisibles sur le plan ASCII', () => {
+  /**
+   * `tools/site-plan-ascii.ts` réserve ces caractères à l'INFRASTRUCTURE. Une
+   * zone qui en reprend un se déguise en route/portail/clôture sur la planche —
+   * et le plan qu'on relit ment. Pris sur le fait deux fois en écrivant SP-T7
+   * (`zone_lot_gaines` en 'G' = portail, `zone_reception` en 'R' = route) : d'où
+   * l'invariant, plutôt que deux corrections ponctuelles.
+   */
+  const RESERVED = new Set(['R', 'G', '#', 'o', '=', '*', '.'])
+
+  it('aucun glyphe de zone ne reprend un caractère réservé', () => {
+    for (const [stageId, program] of Object.entries(SITE_PROGRAMS)) {
+      for (const zone of program.zones) {
+        expect(
+          RESERVED.has(zone.glyph),
+          `${stageId}/${zone.id} : glyphe "${zone.glyph}" réservé à l'infrastructure du plan ASCII`
+        ).toBe(false)
+      }
+    }
+  })
+
+  // ⚠️ PAS de règle « un glyphe = une zone ». Elle a été écrite, elle est FAUSSE :
+  // TERRASSEMENT donne exprès 'k' à `piquets_ne` ET `piquets_so`. Le glyphe dénote
+  // la NATURE de la zone (deux lignes de piquets se lisent pareil), pas son
+  // identité — et la légende, elle, liste bien les deux. Un glyphe partagé entre
+  // zones de MÊME rôle est une abréviation correcte, pas une ambiguïté.
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Intégrité des programmes (ce que les contraintes géométriques ne voient pas)
+// ─────────────────────────────────────────────────────────────────────────────
+describe('sitePrograms — intégrité du registre', () => {
+  it('tout clusterId référencé par un programme existe dans CLUSTERS', () => {
+    for (const [stageId, program] of Object.entries(SITE_PROGRAMS)) {
+      for (const zone of program.zones) {
+        for (const pf of zone.prefabs ?? []) {
+          expect(
+            CLUSTERS[pf.clusterId],
+            `${stageId}/${zone.id} référence le cluster inconnu "${pf.clusterId}"`
+          ).toBeDefined()
+        }
+      }
+    }
+  })
+
+  it('tout id de `connect` correspond à une zone du programme', () => {
+    for (const [stageId, program] of Object.entries(SITE_PROGRAMS)) {
+      const ids = new Set(program.zones.map((z) => z.id))
+      for (const id of program.connect) {
+        expect(ids.has(id), `${stageId} : connect référence la zone inconnue "${id}"`).toBe(true)
+      }
+    }
+  })
+
+  it('tout ancrage `adjacent` vise une zone DÉJÀ placée (l\'ordre du programme compte)', () => {
+    // `resolveAnchor` lit `placed` : une cible déclarée APRÈS retombe sur le
+    // repli nord silencieusement. Le test rend la faute visible.
+    for (const [stageId, program] of Object.entries(SITE_PROGRAMS)) {
+      const placed = new Set<string>()
+      for (const zone of program.zones) {
+        if (zone.anchor.kind === 'adjacent') {
+          expect(
+            placed.has(zone.anchor.to),
+            `${stageId}/${zone.id} : ancrée sur "${zone.anchor.to}", déclarée plus tard (ou absente)`
+          ).toBe(true)
+        }
+        placed.add(zone.id)
+      }
+    }
+  })
+
+  it('chaque stage a AU PLUS une zone signature', () => {
+    for (const [stageId, program] of Object.entries(SITE_PROGRAMS)) {
+      const sigs = program.zones.filter((z) => z.signature === true)
+      expect(sigs.length, `${stageId} : ${sigs.length} zones signature`).toBeLessThanOrEqual(1)
+    }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Contraintes de niveau LAYOUT (placement des prefabs) — C4 et C9
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Scènes portant un engin EN TRAVAIL (le parc = machines parquées, exempt). */
+/**
+ * Scènes portant un engin EN TRAVAIL (le parc = machines parquées, exempt).
+ *
+ * ⚠️ Ce test exige `machines.length > 0` sur CHAQUE stage programmé : tout stage
+ * ajouté à `SITE_PROGRAMS` doit donc déclarer ici ses scènes à engin, sinon C4
+ * ne vérifie plus rien chez lui (et échoue, ce qui est le comportement voulu).
+ * Les scènes `*_parc` en sont volontairement absentes : un parc, c'est des
+ * machines rangées au cordeau — la règle d'écartement ne s'y applique pas.
+ */
 const MACHINE_CLUSTERS = new Set([
   'scene_dig_active',
   'scene_spoil',
   'scene_foundation_pour_spawn',
   'scene_mixer_waiting',
   'scene_small_mixer_patch',
+  // Stages 05→10 (SP-T7) : signature (engin au tableau) + front de travail.
+  'scene_gros_oeuvre_signature',
+  'scene_gros_oeuvre_work',
+  'scene_echafaudages_signature',
+  'scene_echafaudages_work',
+  'scene_charpente_signature',
+  'scene_charpente_work',
+  'scene_second_oeuvre_signature',
+  'scene_second_oeuvre_work',
+  'scene_finitions_signature',
+  'scene_finitions_work',
+  'scene_livraison_signature',
+  'scene_livraison_work',
 ])
 
 /** Clusters hors-zone par nature (infrastructure du site). */

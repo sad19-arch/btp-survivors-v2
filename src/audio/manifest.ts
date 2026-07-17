@@ -1,3 +1,5 @@
+import type { Screen } from '@/app/appState'
+
 /**
  * Manifeste audio (data-driven, PUR — aucun Phaser/DOM ici, testable en Vitest).
  *
@@ -93,17 +95,110 @@ const SFX_NAMES: readonly string[] = [
  */
 export const WEAPON_SFX_IDS: readonly string[] = [
   // Armes de base (scie = whir périodique discret, throttlé côté AudioDirector).
-  'cloueur', 'boulons', 'cle_molette', 'brouette', 'pied_de_biche', 'extincteur', 'goudron', 'scie', 'chalumeau',
+  'cloueur', 'boulons', 'cle_molette', 'brouette', 'pied_de_biche', 'extincteur', 'scie', 'chalumeau',
   // Armes évoluées.
-  'mitrailleuse_clous', 'haute_tension', 'coulee_bitume', 'tempete_boulons', 'cle_choc', 'canon_mousse', 'transpalette', 'lance_thermique'
+  'mitrailleuse_clous', 'haute_tension', 'tempete_boulons', 'cle_choc', 'canon_mousse', 'transpalette', 'lance_thermique',
+  // Régénérées après avoir été livrées mortes (cf. `WEAPON_SFX_FILES_REJETES`).
+  'goudron', 'coulee_bitume'
 ]
+
+/**
+ * Armes dont le FICHIER généré est INEXPLOITABLE — volontairement absentes de
+ * `WEAPON_SFX_IDS` pour que `playWeaponSfx` retombe sur le zzfx taillé main.
+ *
+ * VIDE aujourd'hui : le mécanisme reste, la quarantaine est levée.
+ *
+ * Historique, parce que c'est le mode de panne à ne pas refaire — `goudron` et
+ * `coulee_bitume` ont été livrés MORTS par b67ec6c/1480078, mesurés à −50.3 et
+ * −58.2 LUFS (M-max) quand leur famille tient dans −20…−5 : 45-53 dB sous leurs
+ * voisines, sous une musique à ≈ −18 dBFS. Le défaut n'était pas « un peu bas » :
+ * leur fenêtre de 20 ms la PLUS FORTE plafonnait à −42.9 et −54.1 dBFS, sans la
+ * moindre attaque — des queues de son sans corps. REGÉNÉRÉS (ElevenLabs), ils
+ * mesurent désormais −11.5 et −12.2 LUFS, dans la bande de la famille et sans
+ * trim : un fichier sain n'a besoin d'aucun rattrapage.
+ *
+ * La cause racine : le critère de recette de ces deux commits était « chargement
+ * 200 vérifié » — un fichier qui se télécharge, pas un fichier qui s'entend.
+ * `npm run audio:qa` mesure désormais le niveau et casse sur ce cas.
+ */
+export const WEAPON_SFX_FILES_REJETES: readonly string[] = []
+
+/** Gain nominal d'un SFX d'arme en FICHIER, avant trim et avant le gain SFX utilisateur. */
+export const WEAPON_FILE_VOLUME = 0.5
+
+/**
+ * Bande de niveau de la famille « SFX d'armes en fichier », telle que MESURÉE sur
+ * les fichiers réellement livrés (EBU R128, max momentané) : de −20.3 LUFS
+ * (tempete_boulons) à −5.2 (extincteur), médiane −11.1. Sert de garde-fou aux
+ * trims — une correction qui sort de cette bande n'aligne plus, elle décide.
+ */
+export const WEAPON_FILE_BANDE_LUFS = { min: -25, max: -5 } as const
+
+/** Rattrapage de niveau d'un fichier d'arme, avec les mesures qui le justifient. */
+export interface WeaponFileTrim {
+  /** Correction appliquée au fichier, en dB. */
+  readonly gainDb: number
+  /** Niveau MESURÉ du fichier (EBU R128, max momentané, LUFS). */
+  readonly mesureLufs: number
+  /** Pic échantillon MESURÉ du fichier (dBFS) — prouve que le trim ne le fait pas clipper. */
+  readonly picDbfs: number
+}
+
+/**
+ * Trims par arme — le strict minimum, uniquement pour un fichier objectivement
+ * HORS de sa famille.
+ *
+ * Pourquoi ça existe : `WEAPON_FILE_VOLUME` est un gain UNIQUE pour toute la
+ * famille. Un gain unique ne veut dire quelque chose que si les sources sont
+ * alignées. `weapon_brouette.mp3` est à −33.3 LUFS quand ses voisines tiennent
+ * dans −20.3…−5.2 : sous le gain commun elle jouait à ≈ −43 dBFS, soit 25 dB
+ * SOUS la musique — donc jamais entendue. Contrairement à goudron/coulee_bitume,
+ * le fichier est SAIN (17 dB au-dessus de son bruit de fond) : il n'est pas à
+ * jeter, il est à remonter.
+ *
+ * Pourquoi +17 dB et pas « au niveau de la médiane » : ce n'est pas un choix de
+ * mixage, c'est ce que la physique du fichier autorise. Son pic est à
+ * −18.2 dBFS ; +17 dB le pose à −1.2 dBFS, soit le maximum sans clipper. Ça la
+ * dépose à ≈ −16 LUFS, dans la bande de la famille. Viser la médiane (−11.1)
+ * aurait demandé +22 dB et l'aurait fait clipper à +4 dBFS.
+ *
+ * ⚠️ Ce mécanisme aligne, il ne mixe pas. Les 15 dB d'écart qui subsistent entre
+ * les autres armes ne sont PAS corrigés : un souffle d'extincteur et un pop de
+ * cloueur n'ont aucune raison de peser pareil. Ça, c'est l'oreille qui tranche.
+ */
+export const WEAPON_FILE_TRIM: Readonly<Record<string, WeaponFileTrim>> = {
+  brouette: { gainDb: 17, mesureLufs: -33.3, picDbfs: -18.2 }
+}
+
+/**
+ * Gain d'un SFX d'arme en fichier (avant le gain SFX utilisateur) : le gain
+ * commun de la famille, corrigé du trim mesuré s'il y en a un. PUR → testable.
+ */
+export function weaponFileGain(id: string): number {
+  const trim = WEAPON_FILE_TRIM[id]
+  return WEAPON_FILE_VOLUME * (trim === undefined ? 1 : 10 ** (trim.gainDb / 20))
+}
 
 /**
  * Variantes de bruit de chair broyée du Mode Carnage (ElevenLabs).
  * PLUSIEURS variantes : à raison d'une mort par seconde, une seule saoulerait vite.
  * Fichiers volontairement courts (~0.7-0.8 s, ~7 Ko pièce, 40 Ko le lot).
+ *
+ * `gore_2` a été livrée à −34.1 LUFS (M-max) contre −15.2…−11.1 pour ses 4 sœurs :
+ * tirée dans le même pool sous le MÊME `volume`, elle s'entendait comme un trou —
+ * une mort sur cinq muette. Elle avait la bonne FORME (des impacts, une queue)
+ * mais sans corps : sa fenêtre la plus forte plafonnait à −29.7 dBFS quand
+ * gore_1 monte à −9.1. Non rattrapable au gain (pic déjà à −15.7 dBFS : +20 dB
+ * l'auraient fait clipper à +4). REGÉNÉRÉE, elle mesure −12.1 LUFS et a rejoint
+ * le pool.
  */
 export const CARNAGE_GORE_IDS: readonly number[] = [1, 2, 3, 4, 5]
+
+/**
+ * Variantes de gore écartées du pool (niveau incohérent) — cf. `CARNAGE_GORE_IDS`.
+ * VIDE aujourd'hui : le mécanisme reste, la quarantaine est levée.
+ */
+export const CARNAGE_GORE_IDS_REJETES: readonly number[] = []
 
 export const SFX_FILES: ReadonlyArray<readonly [string, string]> = [
   ...SFX_NAMES.map((n) => [`sfx_${n}`, `audio/sfx/${n}.wav`] as const),
@@ -194,6 +289,10 @@ export const SFX: Readonly<Record<string, SfxCue>> = {
   break_rubble: { keys: ['sfx_break_rubble'], volume: 0.5, rateJitter: 0.12, throttleMs: 80 },
   // Impact « chantier » synchro sur le slam-in du logo du titre (refonte arcade).
   titleSlam: { keys: ['sfx_title_slam'], volume: 0.9 },
+  // Cinématique d'intro (terrassement) : le « clonk » de la pelle qui heurte la
+  // fosse. RÉUTILISE un impact dur existant (aucun asset généré) — swap 1 ligne
+  // le jour où un vrai « clonk » dédié est produit.
+  clonk: { keys: ['sfx_harsh_destruction'], volume: 0.75 },
   /**
    * Mode Carnage : bruit de chair broyée à la mort d'un ennemi.
    *
@@ -275,26 +374,54 @@ const STAGE_MUSIC: Readonly<Record<string, MusicKey>> = {
 }
 
 export interface MusicContext {
-  screen: string
+  /** Typé `Screen`, pas `string` : c'est ce qui rend le `switch` ci-dessous vérifiable. */
+  screen: Screen
   stageId: string
   bossPresent: boolean
 }
 
-/** Musique désirée pour un état (null = silence). PURE → testable. */
+/**
+ * Musique désirée pour un état (null = silence). PURE → testable.
+ *
+ * ⚠️ Le `switch` est EXHAUSTIF, et c'est le cœur du correctif. Il y avait avant un
+ * `default` qui rendait la musique du STAGE : tout écran non nommé — donc tout écran
+ * AJOUTÉ PLUS TARD — se mettait silencieusement à jouer la musique de chantier
+ * par-dessus un menu ou une run finie. La faille s'était déjà déclenchée trois fois
+ * (`characterSelect`, `options`, `achievements` ; `characterSelect` allait jusqu'à
+ * jouer la musique de BOSS si un boss était vivant à l'écran d'avant).
+ *
+ * Le `never` final transforme cette classe de bug en ERREUR DE COMPILATION : ajouter
+ * un écran à `Screen` sans le classer ici casse le build, au lieu de partir en
+ * silence jusqu'à ce qu'un joueur l'entende.
+ */
 export function musicForState(ctx: MusicContext): MusicKey | null {
   switch (ctx.screen) {
     case 'title':
       return MUSIC.title
-    case 'paused':
-      return MUSIC.menu
     case 'victory':
       return MUSIC.victory
     case 'gameover':
       return MUSIC.gameover
-    default: // game / upgrade : la musique de jeu continue (boss prioritaire)
+    // Tous les écrans HORS JEU : la run est finie, ou pas commencée. Aucun ne doit
+    // laisser passer la musique du stage (ni celle du boss).
+    case 'paused':
+    case 'characterSelect':
+    case 'options':
+    case 'nameEntry':
+    case 'hiscores':
+    case 'achievements':
+      return MUSIC.menu
+    // Les seuls écrans de JEU : la musique de chantier tourne (boss prioritaire).
+    case 'game':
+    case 'upgrade':
       if (ctx.bossPresent) {
         return MUSIC.boss
       }
       return STAGE_MUSIC[ctx.stageId] ?? MUSIC.stage_01
+    default: {
+      // Écran non classé → le build casse ICI, à la compilation.
+      const jamais: never = ctx.screen
+      return jamais
+    }
   }
 }

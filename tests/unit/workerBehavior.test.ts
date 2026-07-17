@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   commutePos,
-  loadVisible,
   panicDecision,
   AT_END_THRESHOLD,
   PANIC_R
@@ -84,16 +83,6 @@ describe('commutePos', () => {
     expect(mid.x).toBeCloseTo(150, 1)
     expect(mid.y).toBeCloseTo(200, 1)
     expect(mid.leg).toBe('ab')
-  })
-})
-
-describe('loadVisible', () => {
-  it('visible a aller (leg=ab)', () => {
-    expect(loadVisible('ab')).toBe(true)
-  })
-
-  it('invisible au retour (leg=ba)', () => {
-    expect(loadVisible('ba')).toBe(false)
   })
 })
 

@@ -1,5 +1,6 @@
 import type { GameState, PlayerState } from '@core/types'
 import type { CardKind } from '@core/systems/cards'
+import type { HiScoreEntry } from '@ui/hiscores'
 
 /** Issue d'une run terminée : chantier interrompu (mort) ou livré (boss final tué). */
 export type RunOutcome = 'defeat' | 'victory'
@@ -38,6 +39,13 @@ export interface RunReport {
   remainingSeconds: number
   /** Total d'ennemis tués (= score). */
   kills: number
+  /**
+   * Score de CLASSEMENT de la run (cf. `computeRunScore`) — combine kills, temps,
+   * niveau et or, ×1.5 en victoire. Distinct de `kills` : c'est LUI qui est
+   * comparé au tableau des high scores et inscrit dans `HiScoreEntry.score`.
+   * Figé avec le reste du rapport (jamais recalculé d'une frame à l'autre).
+   */
+  runScore: number
   /** Or ramassé sur la run. */
   coins: number
   /** Niveau atteint (joueur 1 — le détail par joueur est dans `perPlayer`). */
@@ -98,7 +106,7 @@ export interface ChestOpenView {
   isSuper: boolean
 }
 
-/** Écran applicatif courant (dérivé de l'état de la simulation + surcouche Options). */
+/** Écran applicatif courant (dérivé de l'état de la simulation + surcouches). */
 export type Screen =
   | 'title'
   | 'characterSelect'
@@ -108,6 +116,74 @@ export type Screen =
   | 'gameover'
   | 'victory'
   | 'options'
+  | 'nameEntry'
+  | 'hiscores'
+  | 'achievements'
+
+/**
+ * Saisie du prénom en fin de run (écran `nameEntry`), résolue pour l'affichage :
+ * les CARACTÈRES (pas les index dans l'alphabet) — l'overlay n'a ainsi pas à
+ * connaître `NAME_ENTRY_ALPHABET`.
+ *
+ * `cursor` est le focus de cet écran : il ne vit PAS dans le `FocusModel` (qui
+ * n'a qu'un item ici), mais dans l'état pur `NameEntryState` — c'est pourquoi il
+ * doit figurer dans la signature de l'overlay, sinon déplacer le curseur ne
+ * redessinerait rien.
+ */
+export interface NameEntryView {
+  /** 8 caractères résolus (espace = case vide). */
+  chars: string[]
+  /** Case focalisée (0..7). */
+  cursor: number
+  /** Nom résolu (trimé) — ce qui sera inscrit au tableau. */
+  name: string
+  /** Score de classement de la run qu'on s'apprête à inscrire (cf. `RunReport.runScore`). */
+  score: number
+  /** Libellé du stage dont on rejoint le classement. */
+  stageTitle: string
+}
+
+/** Tableau des high scores affiché (écran `hiscores`) après inscription. */
+export interface HiScoresView {
+  /** Stage dont on affiche le classement (les tableaux sont PAR stage). */
+  stageId: string
+  /** Libellé humain du stage (ex. « Terrain vierge »). */
+  stageTitle: string
+  /** Top 20 trié par score décroissant. */
+  entries: HiScoreEntry[]
+  /** Rang (0-19) de la ligne du joueur, à mettre en surbrillance ; -1 si aucune. */
+  rank: number
+}
+
+/**
+ * Une ligne de l'écran des succès, RÉSOLUE pour l'affichage : le catalogue
+ * (`src/content/achievements`) croisé avec le profil (`src/ui/achievements`).
+ * L'overlay affiche, il ne teste aucun prédicat et ne lit aucun `localStorage`.
+ */
+export interface AchievementEntryView {
+  id: string
+  label: string
+  description: string
+  /**
+   * Chemin d'icône relatif à `public/`, ou `null` si le succès n'en déclare pas
+   * (l'affichage retombe alors sur un monogramme). `null` plutôt qu'optionnel :
+   * `exactOptionalPropertyTypes` rendrait la construction bruyante pour rien.
+   */
+  icon: string | null
+  unlocked: boolean
+}
+
+/**
+ * Écran des succès (consultation depuis le titre). Contient TOUT le catalogue,
+ * y compris les succès verrouillés : le joueur doit VOIR ce qu'il lui reste à
+ * faire (même doctrine que `starRow` — une note qu'on ne voit pas n'incite à
+ * rien). Figé à l'ouverture : le profil ne bouge pas pendant qu'on le consulte.
+ */
+export interface AchievementsView {
+  entries: AchievementEntryView[]
+  /** Succès débloqués (dénominateur = `entries.length`). */
+  unlockedCount: number
+}
 
 /** Une entrée d'inventaire résolue : id + nom lisible + niveau courant. */
 export interface InventoryEntry {
@@ -185,6 +261,12 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   runId: number
   /** Intro de run en cours (sim gelée, micro-animation d'entrée). */
   introActive: boolean
+  /**
+   * Temps écoulé depuis le début de l'intro (ms).
+   * Progresse de 0 jusqu'à `totalIntroMs` ; reste 0 si introActive est faux.
+   * Utilisé par la cinématique render-only pour animer les séquences.
+   */
+  introElapsedMs: number
   /** Libellé humain de la phase courante (ex. « Réseaux enterrés »). */
   stageTitle: string
   /** Sous-titre de la phase (ex. « Tranchées et canalisations »). */
@@ -193,6 +275,12 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   stageOrder: number
   /** Sélection de personnage en cours (joueur actif / total + perso courant) ; `null` hors de ce flux. */
   characterSelect: { player: number; total: number; charId: string } | null
+  /** Saisie du prénom en cours (fin de run, score qualifiant) ; `null` hors de ce flux. */
+  nameEntry: NameEntryView | null
+  /** Tableau des scores affiché (après inscription du nom) ; `null` hors de ce flux. */
+  hiScores: HiScoresView | null
+  /** Écran des succès ouvert (consultation depuis le titre) ; `null` hors de ce flux. */
+  achievements: AchievementsView | null
   /** Mini-carte affichée (bas-gauche) — bascule clavier M / manette Back/Select. */
   minimapVisible: boolean
   /**

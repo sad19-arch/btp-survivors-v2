@@ -7,7 +7,7 @@
  * Ne dépend NI de Phaser NI du DOM.
  */
 
-import { emptyLayout, type EmbeddedElement, type EmbeddedShape, type LayoutInstance, type LayoutMarker, type MarkerType, type LayoutNpc, type LayoutPath, type NpcKind, type StageLayout, type Vec2 } from '@content/stageLayout'
+import { emptyLayout, type EmbeddedElement, type EmbeddedShape, type LayoutInstance, type LayoutMarker, type MarkerType, type LayoutNpc, type LayoutPath, type NpcKind, type StageLayout, type Vec2, PATH_LIMITS } from '@content/stageLayout'
 import { ZONE_BY_TYPE } from './zones'
 
 export { SCHEMA_VERSION, emptyLayout } from '@content/stageLayout'
@@ -21,6 +21,12 @@ export interface ParseResult {
 
 function num(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback
+}
+
+/** Borne une valeur numérique, ou `undefined` si ce n'est pas un nombre fini. */
+function clampNum(v: unknown, min: number, max: number): number | undefined {
+  if (typeof v !== 'number' || !Number.isFinite(v)) { return undefined }
+  return Math.min(max, Math.max(min, v))
 }
 
 /** Parse une forme collidable embarquée (cercle ou segment). null si invalide. */
@@ -47,6 +53,16 @@ function parseElements(v: unknown): EmbeddedElement[] | undefined {
     const e: EmbeddedElement = { assetKey: o.assetKey, dx: num(o.dx, 0), dy: num(o.dy, 0), scale: num(o.scale, 1) }
     if (o.flipX === true) {e.flipX = true}
     if (o.collide === 'both' || o.collide === 'enemies' || o.collide === 'none') {e.collide = o.collide}
+    // Couche de rendu : préserver, sinon un aller-retour sauvegarde/chargement
+    // la perd et les routes/décals remontent à hauteur de prop (même classe de
+    // bug que `destructible` juste en dessous).
+    if (o.layer === 'ground' || o.layer === 'decal' || o.layer === 'prop' || o.layer === 'struct') {e.layer = o.layer}
+    // Plaque de sol : sans ça, une plaque rechargée redeviendrait une image
+    // ÉTIRÉE de 64 px — le sol posé disparaîtrait à la première sauvegarde.
+    if (typeof o.tile === 'object' && o.tile !== null) {
+      const t = o.tile as Record<string, unknown>
+      if (typeof t.w === 'number' && typeof t.h === 'number') {e.tile = { w: t.w, h: t.h }}
+    }
     const shape = parseShape(o.shape)
     if (shape !== undefined) {e.shape = shape}
     // Objet DESTRUCTIBLE : préserver le routage vers les entités cassables (sim).
@@ -87,6 +103,18 @@ export function parseLayout(raw: string, fallbackStage: string): ParseResult {
 
   const cp = (d.cameraPreview ?? {}) as Record<string, unknown>
   base.cameraPreview = { width: num(cp.width, 1280), height: num(cp.height, 720) }
+
+  // Sol de fond choisi pour la compo (tuile d'un AUTRE stage possible).
+  if (typeof d.groundKey === 'string' && d.groundKey !== '') {
+    base.groundKey = d.groundKey
+  }
+
+  // keepSitePlan:false : préserver, sinon la compo redemanderait le plan de
+  // chantier procédural par-dessus elle à chaque rechargement (même classe de
+  // bug que `destructible`/`layer`/`tile`/les réglages de chemin ci-dessous).
+  if (typeof d.keepSitePlan === 'boolean') {
+    base.keepSitePlan = d.keepSitePlan
+  }
 
   if (Array.isArray(d.instances)) {
     base.instances = d.instances
@@ -148,7 +176,19 @@ export function parseLayout(raw: string, fallbackStage: string): ParseResult {
               })
               .filter((v): v is Vec2 => v !== null)
           : []
-        return { id: typeof o.id === 'string' ? o.id : `${t}_${i + 1}`, type: t, points: pts }
+        const lp: LayoutPath = { id: typeof o.id === 'string' ? o.id : `${t}_${i + 1}`, type: t, points: pts }
+        // Réglages du chemin : PRÉSERVER, sinon ils disparaissent en silence à la
+        // première sauvegarde (déjà vécu 3× ici : destructible, layer, tile).
+        if (typeof o.name === 'string' && o.name !== '') { lp.name = o.name }
+        if (typeof o.skin === 'string' && o.skin !== '') { lp.skin = o.skin }
+        const count = clampNum(o.count, PATH_LIMITS.count.min, PATH_LIMITS.count.max)
+        if (count !== undefined) { lp.count = Math.round(count) }
+        const speed = clampNum(o.speed, PATH_LIMITS.speed.min, PATH_LIMITS.speed.max)
+        if (speed !== undefined) { lp.speed = speed }
+        const pauseMs = clampNum(o.pauseMs, PATH_LIMITS.pauseMs.min, PATH_LIMITS.pauseMs.max)
+        if (pauseMs !== undefined) { lp.pauseMs = pauseMs }
+        if (typeof o.oneWay === 'boolean') { lp.oneWay = o.oneWay }
+        return lp
       })
       .filter((v): v is LayoutPath => v !== null)
   }

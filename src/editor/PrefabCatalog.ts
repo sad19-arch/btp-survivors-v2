@@ -12,8 +12,9 @@
  * y résolvent leurs clés.
  */
 
-import { STAGE_RENDER, SHARED_WORKER_NPCS, CITY_BUILDINGS, type StageRender, type StageAmbientNpc } from '@render/stages'
+import { STAGE_RENDER, SHARED_WORKER_NPCS, CITY_BUILDINGS, CAMION_SKIN, type StageRender, type StageAmbientNpc } from '@render/stages'
 import { CLUSTERS } from '@content/clusters'
+import type { PathType, TilePatch } from '@content/stageLayout'
 import { destructiblesForStage } from '@content/destructibles'
 import { ZONE_DEFS } from './zones'
 
@@ -26,6 +27,8 @@ export interface PrefabElement {
   dy: number
   scale: number
   flipX?: boolean
+  /** Plaque de sol : texture RÉPÉTÉE sur w×h px (et non étirée). */
+  tile?: TilePatch
 }
 
 export type MarkerTool = 'spawn' | 'signature_zone' | 'worker_path' | 'truck_path' | 'zone_main_work' | 'zone_logistics' | 'zone_atmosphere'
@@ -44,6 +47,21 @@ export interface PaletteEntry {
   npcKind?: 'trade' | 'worker'
   /** Type de destructible posé par cette entrée (catégorie `destructibles`). */
   destructibleTypeId?: string
+  /**
+   * Pas de grille IMPOSÉ à la pose, en px (défaut : `EditorState.gridSize`, et
+   * seulement si le snap global est actif).
+   *
+   * Le kit de routes est le cas qui l'exige : deux tuiles 256 ne raccordent QUE
+   * si elles sont posées sur un multiple de 256. Or le snap global est à `false`
+   * par défaut et la grille à 128 → à la souris, deux tuiles ne tombent JAMAIS
+   * en face. Une entrée qui déclare `snap` force donc l'alignement, que le snap
+   * global soit actif ou non : c'est une contrainte de l'ASSET, pas une
+   * préférence de l'utilisateur.
+   *
+   * Déclaré en DONNÉE (comme le rôle → la couche) : surtout pas déduit d'un
+   * match de sous-chaîne sur la clé.
+   */
+  snap?: number
 }
 
 export interface Category {
@@ -88,6 +106,7 @@ export const STAGE_LIST: ReadonlyArray<{ id: string; label: string }> = [
 
 export const CATEGORIES: Category[] = [
   { id: 'scenes', label: 'Scènes principales' },
+  { id: 'sol', label: 'Sol (textures)' },
   { id: 'npc_metier', label: 'PNJ métier (fixe)' },
   { id: 'npc_ouvrier', label: 'PNJ ouvrier (mobile)' },
   { id: 'destructibles', label: 'Destructibles (cassables)' },
@@ -97,14 +116,155 @@ export const CATEGORIES: Category[] = [
   { id: 'baselife', label: 'Base vie légère' },
   { id: 'stocks', label: 'Stocks & logistique' },
   { id: 'routes', label: 'Routes & accès' },
-  { id: 'workers', label: 'Ouvriers & chemins' },
+  { id: 'workers', label: 'Chemins (trajets)' },
   { id: 'safety', label: 'Sécurité / barrières' },
+  // Pack « palette » (`public/palette/*`) : décor PARTAGÉ par les 10 stages, versé
+  // dans `SHARED_DECOR_ASSETS`. L'ordre de ce tableau = l'ordre d'affichage.
+  { id: 'verdure', label: 'Verdure' },
+  { id: 'mobilier', label: 'Mobilier urbain' },
+  { id: 'reseaux', label: 'Réseaux & stockage' },
+  { id: 'engins', label: 'Engins statiques' },
+  { id: 'vie_chantier', label: 'Vie de chantier' },
+  { id: 'marquages', label: 'Marquages & traces' },
+  { id: 'nature', label: 'Nature & périphérie' },
   { id: 'decor', label: 'Décor secondaire' },
   { id: 'objects', label: 'Objets isolés avancés' },
   { id: 'buildings', label: 'Immeubles (bordure)' },
   { id: 'divers', label: 'Divers' },
   { id: 'markers', label: 'Marqueurs' }
 ]
+
+/**
+ * PACK « PALETTE » — décor générique PARTAGÉ par les 10 stages (`public/palette/*`).
+ *
+ * Ces assets n'appartiennent à AUCUNE phase : une haie, un lampadaire ou un
+ * big-bag ont leur place sur le terrain vierge comme sur la livraison. Ils ne
+ * passent donc pas par `STAGE_RENDER` (qui porte l'identité d'UNE phase) mais par
+ * `SHARED_DECOR_ASSETS`, seul mécanisme de partage cross-stage du catalogue.
+ * Le jeu ne les scatter jamais : ils sont posés à la main dans l'éditeur.
+ *
+ * UNE SEULE TABLE pour la donnée d'un asset (fichier + libellé + catégorie + rôle).
+ * Les libellés vivaient sinon en double (`EditorAsset.label` ET `ASSET_META.label`),
+ * ce qui laisse les deux diverger en silence : ici `PALETTE_PACK` et `ASSET_META`
+ * sont tous deux DÉRIVÉS de cette table.
+ *
+ * ⚠️ `role` n'est pas décoratif : c'est lui qui fixe la COUCHE d'affichage
+ * (`layerForRole` → `RenderLayer`) et le repli de solidité (`roleSolidityFallback`).
+ * Un marquage au sol DOIT être `decal` (sinon il flotte à hauteur de prop — le bug
+ * historique de `piste_strip`) ; un volume habitable DOIT être `structure`.
+ * La solidité réelle, elle, est DÉCLARÉE dans `@content/assetSolidity`.
+ */
+interface PaletteItem {
+  key: string
+  file: string
+  label: string
+  category: string
+  role: AssetRole
+  /**
+   * Pas de grille IMPOSÉ à la pose (px). Voir `PaletteEntry.snap` : une tuile de
+   * route ne raccorde que posée sur un multiple de sa taille.
+   */
+  snap?: number
+}
+
+const PALETTE_ITEMS: readonly PaletteItem[] = [
+  // ── Verdure ───────────────────────────────────────────────────────────────
+  { key: 'pal_tree_dead', file: 'palette/props/tree_dead.png', label: 'Arbre mort', category: 'verdure', role: 'prop' },
+  { key: 'pal_tree_pine', file: 'palette/props/tree_pine.png', label: 'Conifère', category: 'verdure', role: 'prop' },
+  { key: 'pal_tree_sapling', file: 'palette/props/tree_sapling.png', label: 'Jeune arbre tuteuré', category: 'verdure', role: 'prop' },
+  { key: 'pal_hedge', file: 'palette/props/hedge.png', label: 'Haie taillée', category: 'verdure', role: 'prop' },
+  { key: 'pal_tall_grass', file: 'palette/props/tall_grass.png', label: 'Herbes hautes', category: 'verdure', role: 'prop' },
+  { key: 'pal_stump', file: 'palette/props/stump.png', label: 'Souche', category: 'verdure', role: 'prop' },
+  { key: 'pal_leaf_pile', file: 'palette/props/leaf_pile.png', label: 'Tas de feuilles', category: 'verdure', role: 'prop' },
+  { key: 'pal_planter', file: 'palette/props/planter.png', label: 'Jardinière', category: 'verdure', role: 'prop' },
+  { key: 'pal_flower_bed', file: 'palette/props/flower_bed.png', label: 'Massif fleuri', category: 'verdure', role: 'prop' },
+
+  // ── Mobilier urbain ───────────────────────────────────────────────────────
+  { key: 'pal_street_lamp', file: 'palette/props/street_lamp.png', label: 'Lampadaire', category: 'mobilier', role: 'prop' },
+  { key: 'pal_bench', file: 'palette/props/bench.png', label: 'Banc public', category: 'mobilier', role: 'prop' },
+  { key: 'pal_litter_bin', file: 'palette/props/litter_bin.png', label: 'Corbeille de rue', category: 'mobilier', role: 'prop' },
+  { key: 'pal_fire_hydrant', file: 'palette/props/fire_hydrant.png', label: 'Borne incendie', category: 'mobilier', role: 'prop' },
+  { key: 'pal_bollards', file: 'palette/props/bollards.png', label: 'Potelets', category: 'mobilier', role: 'prop' },
+  { key: 'pal_post_box', file: 'palette/props/post_box.png', label: 'Boîte aux lettres', category: 'mobilier', role: 'prop' },
+  { key: 'pal_bus_shelter', file: 'palette/structures/bus_shelter.png', label: 'Abribus', category: 'mobilier', role: 'structure' },
+  { key: 'pal_manhole_cover', file: 'palette/decals/manhole_cover.png', label: "Plaque d'égout", category: 'mobilier', role: 'decal' },
+  { key: 'pal_tree_grate', file: 'palette/decals/tree_grate.png', label: "Grille d'arbre", category: 'mobilier', role: 'decal' },
+
+  // ── Réseaux & stockage ────────────────────────────────────────────────────
+  { key: 'pal_electrical_cabinet', file: 'palette/props/electrical_cabinet.png', label: 'Coffret électrique', category: 'reseaux', role: 'prop' },
+  { key: 'pal_site_locker', file: 'palette/props/site_locker.png', label: 'Armoire de chantier', category: 'reseaux', role: 'prop' },
+  { key: 'pal_generator', file: 'palette/props/generator.png', label: 'Groupe électrogène', category: 'reseaux', role: 'prop' },
+  { key: 'pal_air_compressor', file: 'palette/props/air_compressor.png', label: 'Compresseur', category: 'reseaux', role: 'prop' },
+  { key: 'pal_water_tank', file: 'palette/props/water_tank.png', label: 'Citerne à eau', category: 'reseaux', role: 'prop' },
+  { key: 'pal_rubble_skip', file: 'palette/props/rubble_skip.png', label: 'Benne à gravats', category: 'reseaux', role: 'prop' },
+  { key: 'pal_big_bag', file: 'palette/props/big_bag.png', label: 'Big-bag', category: 'reseaux', role: 'prop' },
+  { key: 'pal_block_pallet', file: 'palette/props/block_pallet.png', label: 'Palette de parpaings', category: 'reseaux', role: 'prop' },
+  { key: 'pal_cement_bags', file: 'palette/props/cement_bags.png', label: 'Sacs de ciment', category: 'reseaux', role: 'prop' },
+  { key: 'pal_pvc_pipes', file: 'palette/props/pvc_pipes.png', label: 'Tuyaux PVC', category: 'reseaux', role: 'prop' },
+  { key: 'pal_duct_coil', file: 'palette/props/duct_coil.png', label: 'Couronne de gaine', category: 'reseaux', role: 'prop' },
+  { key: 'pal_concrete_foot', file: 'palette/props/concrete_foot.png', label: 'Plot béton', category: 'reseaux', role: 'prop' },
+  { key: 'pal_jersey_barrier', file: 'palette/props/jersey_barrier.png', label: 'Séparateur GBA', category: 'reseaux', role: 'prop' },
+
+  // ── Engins statiques ──────────────────────────────────────────────────────
+  { key: 'pal_van', file: 'palette/props/van.png', label: 'Camionnette', category: 'engins', role: 'prop' },
+  { key: 'pal_plant_trailer', file: 'palette/props/plant_trailer.png', label: 'Remorque porte-engin', category: 'engins', role: 'prop' },
+  { key: 'pal_site_dumper', file: 'palette/props/site_dumper.png', label: 'Dumper', category: 'engins', role: 'prop' },
+  { key: 'pal_forklift', file: 'palette/props/forklift.png', label: 'Chariot élévateur', category: 'engins', role: 'prop' },
+
+  // ── Vie de chantier ───────────────────────────────────────────────────────
+  { key: 'pal_site_office', file: 'palette/structures/site_office.png', label: 'Bungalow de chantier', category: 'vie_chantier', role: 'structure' },
+  { key: 'pal_site_canteen', file: 'palette/structures/site_canteen.png', label: 'Réfectoire', category: 'vie_chantier', role: 'structure' },
+  { key: 'pal_site_changing_room', file: 'palette/structures/site_changing_room.png', label: 'Vestiaire', category: 'vie_chantier', role: 'structure' },
+  { key: 'pal_scaffold_bay', file: 'palette/structures/scaffold_bay.png', label: "Module d'échafaudage", category: 'vie_chantier', role: 'structure' },
+  { key: 'pal_notice_board', file: 'palette/props/notice_board.png', label: "Panneau d'affichage", category: 'vie_chantier', role: 'prop' },
+  { key: 'pal_fire_extinguisher', file: 'palette/props/fire_extinguisher.png', label: 'Extincteur', category: 'vie_chantier', role: 'prop' },
+  { key: 'pal_trestles', file: 'palette/props/trestles.png', label: 'Tréteaux', category: 'vie_chantier', role: 'prop' },
+  { key: 'pal_step_ladder', file: 'palette/props/step_ladder.png', label: 'Échelle', category: 'vie_chantier', role: 'prop' },
+
+  // ── Marquages & traces ────────────────────────────────────────────────────
+  { key: 'pal_oil_stain', file: 'palette/decals/oil_stain.png', label: "Tache d'huile", category: 'marquages', role: 'decal' },
+  { key: 'pal_crosswalk', file: 'palette/decals/crosswalk.png', label: 'Passage piéton', category: 'marquages', role: 'decal' },
+  { key: 'pal_road_arrow', file: 'palette/decals/road_arrow.png', label: 'Flèche au sol', category: 'marquages', role: 'decal' },
+  { key: 'pal_hazard_hatching', file: 'palette/decals/hazard_hatching.png', label: 'Zébras de danger', category: 'marquages', role: 'decal' },
+  { key: 'pal_steel_road_plate', file: 'palette/props/steel_road_plate.png', label: "Plaque d'acier", category: 'marquages', role: 'prop' },
+  { key: 'pal_footbridge', file: 'palette/props/footbridge.png', label: 'Passerelle de chantier', category: 'marquages', role: 'prop' },
+
+  // ── Nature & périphérie ───────────────────────────────────────────────────
+  { key: 'pal_gravel_pile', file: 'palette/props/gravel_pile.png', label: 'Tas de gravier', category: 'nature', role: 'prop' },
+  { key: 'pal_sand_pile', file: 'palette/props/sand_pile.png', label: 'Tas de sable', category: 'nature', role: 'prop' },
+  { key: 'pal_culvert_pipes', file: 'palette/props/culvert_pipes.png', label: 'Buses béton', category: 'nature', role: 'prop' },
+  { key: 'pal_embankment', file: 'palette/props/embankment.png', label: 'Talus', category: 'nature', role: 'prop' },
+  { key: 'pal_farm_fence', file: 'palette/props/farm_fence.png', label: 'Clôture agricole', category: 'nature', role: 'prop' },
+  { key: 'pal_muddy_pond', file: 'palette/decals/muddy_pond.png', label: 'Mare', category: 'nature', role: 'decal' },
+
+  // ── Routes & accès (kit 256 px) ───────────────────────────────────────────
+  // Tuiles composées par `tools/assets/make-roads.mjs` : chaussée + accotements
+  // en matière PixelLab, géométrie exacte. Elles raccordent PAR CONSTRUCTION —
+  // l'axe traverse toujours le bord au milieu (128) et perpendiculairement, donc
+  // toutes les pièces présentent le MÊME profil de bord.
+  //
+  // `role: 'decal'` (→ `layerForRole` → couche 'decal') : une route est peinte au
+  // SOL et ne bloque pas. C'est exactement le bug historique de `piste_strip`,
+  // qui flottait à hauteur de prop faute de rôle correct.
+  //
+  // `snap: 256` : sans lui, les tuiles ne tombent jamais en face (grille 128,
+  // snap global à false par défaut). Une seule orientation par pièce suffit —
+  // l'instance porte `rotation` (0/90/180/270), transportée jusqu'au jeu par
+  // `buildSiteLayout` (`rotationDeg`) puis appliquée par `siteRenderer`.
+  { key: 'pal_route_goudron_droite', file: 'palette/routes/goudron_droite.png', label: 'Goudron — droite', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_goudron_virage', file: 'palette/routes/goudron_virage.png', label: 'Goudron — virage 90°', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_goudron_te', file: 'palette/routes/goudron_te.png', label: 'Goudron — T', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_goudron_croisement', file: 'palette/routes/goudron_croisement.png', label: 'Goudron — croisement', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_goudron_fin', file: 'palette/routes/goudron_fin.png', label: 'Goudron — fin (barre d\'arrêt)', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_piste_droite', file: 'palette/routes/piste_droite.png', label: 'Piste — droite', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_piste_virage', file: 'palette/routes/piste_virage.png', label: 'Piste — virage 90°', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_piste_te', file: 'palette/routes/piste_te.png', label: 'Piste — T', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_piste_croisement', file: 'palette/routes/piste_croisement.png', label: 'Piste — croisement', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_piste_fin', file: 'palette/routes/piste_fin.png', label: 'Piste — fin', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_jonction', file: 'palette/routes/jonction_goudron_piste.png', label: 'Jonction goudron → piste', category: 'routes', role: 'decal', snap: 256 }
+]
+
+const PALETTE_PACK: EditorAsset[] = PALETTE_ITEMS.map(({ key, file, label, role }) => ({ key, file, label, role }))
 
 /**
  * Décor PARTAGÉ (clôtures/portail/routes) : assets réels (`public/terrain/*`)
@@ -118,7 +278,8 @@ const SHARED_DECOR_ASSETS: EditorAsset[] = [
   { key: 'road_strip', file: 'terrain/road_strip.png', label: 'Bande de route', role: 'decal' },
   { key: 'piste_strip', file: 'terrain/piste_strip.png', label: 'Bande de piste', role: 'decal' },
   // Immeubles de bordure (anneau urbain) — posables sur tous les stages.
-  ...CITY_BUILDINGS.map((b) => ({ key: b.key, file: b.file, label: b.label, role: 'structure' as const }))
+  ...CITY_BUILDINGS.map((b) => ({ key: b.key, file: b.file, label: b.label, role: 'structure' as const })),
+  ...PALETTE_PACK
 ]
 
 /**
@@ -127,7 +288,7 @@ const SHARED_DECOR_ASSETS: EditorAsset[] = [
  * et à leur donner un nom métier (au lieu du nom de fichier humanisé). Une clé
  * absente = comportement par défaut (catégorie déduite du rôle, libellé humanisé).
  */
-const ASSET_META: Record<string, { label: string; category: string }> = {
+const ASSET_META: Record<string, { label: string; category: string; snap?: number }> = {
   // Stage 01 — implantation / topographie (assets EXISTANTS)
   prop_stakes: { label: 'Piquets topo', category: 'topo' },
   struct_stage01_plot: { label: 'Parcelle piquetée', category: 'topo' },
@@ -163,9 +324,13 @@ const ASSET_META: Record<string, { label: string; category: string }> = {
   // Décor PARTAGÉ (clôtures/portail/routes) → catégorie « Divers » sur tous les stages.
   fence_panel: { label: 'Panneau de clôture', category: 'divers' },
   fence_post: { label: 'Poteau de clôture', category: 'divers' },
-  site_gate: { label: 'Portail de chantier', category: 'divers' },
-  road_strip: { label: 'Bande de route', category: 'divers' },
-  piste_strip: { label: 'Bande de piste', category: 'divers' },
+  site_gate: { label: 'Portail de chantier', category: 'routes' },
+  // Les routes étaient rangées dans « Divers » alors que la catégorie « Routes &
+  // accès » existait : elle n'était peuplée que par une scène d'un seul stage,
+  // donc vide — et donc MASQUÉE — partout ailleurs. La fonctionnalité était là,
+  // c'est l'étiquette qui manquait.
+  road_strip: { label: 'Bande de route goudronnée', category: 'routes' },
+  piste_strip: { label: 'Bande de piste (terre)', category: 'routes' },
   decal_stage01_layout_line: { label: 'Ligne de marquage', category: 'marking' },
   // Immeubles de bordure (anneau urbain) → catégorie dédiée « Immeubles ».
   building_office: { label: 'Immeuble de bureau', category: 'buildings' },
@@ -181,11 +346,21 @@ const ASSET_META: Record<string, { label: string; category: string }> = {
   building_lyon_canut: { label: 'Immeuble canut', category: 'buildings' },
   building_lyon_bouchon: { label: 'Bouchon lyonnais', category: 'buildings' },
   building_lyon_fourviere: { label: 'Basilique de Fourvière', category: 'buildings' },
-  building_lyon_hotel_dieu: { label: 'Grand Hôtel-Dieu', category: 'buildings' }
+  building_lyon_hotel_dieu: { label: 'Grand Hôtel-Dieu', category: 'buildings' },
+
+  // Ouvriers génériques : les 3 sprites sont distincts, leurs anciens noms
+  // « A/B/C » ne le disaient pas. Le prénom se lit dans la palette sans cliquer.
+  npc_ouvrier_zinedine: { label: 'Ouvrier — Zinedine', category: 'npc_ouvrier' },
+  npc_ouvrier_marius: { label: 'Ouvrier — Marius', category: 'npc_ouvrier' },
+  npc_ouvrier_erling: { label: 'Ouvrier — Erling', category: 'npc_ouvrier' },
+
+  // Pack « palette » : DÉRIVÉ de `PALETTE_ITEMS` (source unique) — le libellé et la
+  // catégorie ne peuvent pas diverger de l'asset qu'ils décrivent.
+  ...Object.fromEntries(PALETTE_ITEMS.map((i) => [i.key, { label: i.label, category: i.category, snap: i.snap }]))
 }
 
-/** Méta (label FR + catégorie) d'un asset, ou null si non répertorié. */
-export function assetMeta(key: string): { label: string; category: string } | null {
+/** Méta (label FR + catégorie + pas de grille imposé) d'un asset, ou null si non répertorié. */
+export function assetMeta(key: string): { label: string; category: string; snap?: number } | null {
   const building = CITY_BUILDINGS.find((candidate) => candidate.key === key)
   if (building !== undefined) {
     return { label: building.label, category: 'buildings' }
@@ -225,9 +400,39 @@ const MARKERS: PaletteEntry[] = [
   ...ZONE_DEFS.map((z): PaletteEntry => ({
     id: 'marker_' + z.type, label: z.label, category: 'markers', kind: 'marqueur', size: 'grande', marker: z.type
   })),
-  { id: 'marker_truck_path', label: 'Chemin camion', category: 'markers', kind: 'marqueur', size: 'petite', marker: 'truck_path' },
+  // Les 2 outils de chemin vivent dans la MÊME section : « Chemin camion » était
+  // rangé dans « Marqueurs » et « Chemin ouvrier » dans « Ouvriers & chemins » —
+  // rien ne disait qu'ils allaient ensemble, ni même que le second existait.
+  { id: 'marker_truck_path', label: 'Chemin camion', category: 'workers', kind: 'marqueur', size: 'petite', marker: 'truck_path' },
   { id: 'marker_worker_path', label: 'Chemin ouvrier', category: 'workers', kind: 'marqueur', size: 'petite', marker: 'worker_path' }
 ]
+
+/**
+ * Côté d'une plaque de sol posée, en px monde (~4×4 tuiles de 64).
+ * L'utilisateur la redimensionne ensuite (échelle uniforme de l'instance).
+ */
+const GROUND_PATCH_SIZE = 256
+
+/**
+ * TOUTES les tuiles de sol de TOUS les stages, en assets PARTAGÉS.
+ *
+ * Le jeu en déclare 6 par stage (60 au total) et les charge toutes, mais
+ * `ground.ts` n'en rend qu'UNE — la tuile de base du stage courant. **50 étaient
+ * donc chargées puis jamais affichées.** On les rend posables, et cross-stage :
+ * c'est ce qui permet de mettre le sol du 05 sur le 01, sans une seule génération.
+ */
+const GROUND_TILE_ASSETS: EditorAsset[] = STAGE_LIST.flatMap(({ id, label }) => {
+  const sr = STAGE_RENDER[id]
+  if (sr === undefined) { return [] }
+  return sr.ground.map((g, i) => ({
+    key: g.key,
+    file: g.file,
+    // « Sol — 03 · Fondations (v2) » : le stage d'origine doit être lisible, sinon
+    // 60 entrées nommées « Sol » sont indiscernables.
+    label: `Sol — ${label}${i > 0 ? ` (v${i + 1})` : ''}`,
+    role: 'ground' as const
+  }))
+})
 
 /** Assets d'un stage, dérivés du manifeste de rendu du jeu. */
 function buildStageAssets(stageId: string): { assets: EditorAsset[]; groundKey: string | null } {
@@ -247,8 +452,10 @@ function buildStageAssets(stageId: string): { assets: EditorAsset[]; groundKey: 
 
   const groundTile = sr.ground[sr.baseTileIndex ?? 0] ?? sr.ground[0]
   const groundKey = groundTile?.key ?? null
-  if (groundTile !== undefined) {
-    add({ key: groundTile.key, file: groundTile.file, label: 'Sol', role: 'ground' })
+  // Les 60 tuiles (tous stages) : posables partout, et non plus la seule tuile
+  // de base du stage courant. `add` déduplique, donc celle du stage y est déjà.
+  for (const g of GROUND_TILE_ASSETS) {
+    add(g)
   }
   if (sr.landmark !== undefined) {
     add({ key: sr.landmark.key, file: sr.landmark.file, label: humanize(sr.landmark.file), role: 'landmark' })
@@ -302,6 +509,23 @@ function objectEntries(assets: EditorAsset[]): PaletteEntry[] {
   const out: PaletteEntry[] = []
   for (const a of assets) {
     if (a.role === 'ground') {
+      // Les sols étaient exclus de la palette (`continue` sec) : le stock existait
+      // mais restait impossible à poser. Ils deviennent des PLAQUES — texture
+      // répétée sur `tile`, non bloquante, sous les décalques.
+      out.push({
+        id: 'obj_' + a.key,
+        label: a.label,
+        category: 'sol',
+        kind: 'decor',
+        size: 'grande',
+        elements: [{
+          assetKey: a.key,
+          dx: 0,
+          dy: 0,
+          scale: 1.0,
+          tile: { w: GROUND_PATCH_SIZE, h: GROUND_PATCH_SIZE }
+        }]
+      })
       continue
     }
     const meta = assetMeta(a.key)
@@ -318,7 +542,14 @@ function objectEntries(assets: EditorAsset[]): PaletteEntry[] {
     const isDecal = a.role === 'decal'
     const size: EntrySize = a.role === 'landmark' || a.role === 'structure' ? 'grande' : isDecal ? 'petite' : 'moyenne'
     const category = meta?.category ?? (isDecal ? 'decor' : 'objects')
-    out.push({ id: 'obj_' + a.key, label, category, kind: isDecal ? 'decor' : 'objet', size, elements: [{ assetKey: a.key, dx: 0, dy: 0, scale: 1.0 }] })
+    const entry: PaletteEntry = { id: 'obj_' + a.key, label, category, kind: isDecal ? 'decor' : 'objet', size, elements: [{ assetKey: a.key, dx: 0, dy: 0, scale: 1.0 }] }
+    // Contrainte de pose portée par l'ASSET (kit de routes) — cf. `PaletteEntry.snap`.
+    if (meta?.snap !== undefined) {
+      entry.snap = meta.snap
+      // Une tuile de route n'est pas une vignette : elle occupe 2 cellules.
+      entry.size = 'grande'
+    }
+    out.push(entry)
   }
   return out
 }
@@ -337,7 +568,9 @@ function npcEntries(sr: StageRender | undefined): PaletteEntry[] {
     const kind: 'trade' | 'worker' = npc.kind === 'worker' ? 'worker' : 'trade'
     out.push({
       id: 'npc_' + npc.key,
-      label: humanize(npc.file),
+      // `assetMeta` d'abord : le nom de fichier humanisé donnerait « Ouvrier
+      // Zinedine Walk ». Le prénom ne sert à rien s'il arrive noyé dans du bruit.
+      label: assetMeta(npc.key)?.label ?? humanize(npc.file),
       category: kind === 'worker' ? 'npc_ouvrier' : 'npc_metier',
       kind: 'objet',
       size: 'moyenne',
@@ -550,4 +783,62 @@ export function editorAsset(key: string): EditorAsset | undefined {
 }
 export function paletteEntry(id: string): PaletteEntry | undefined {
   return active.entries.find((e) => e.id === id)
+}
+
+/**
+ * Sprites de véhicule utilisables comme marcheurs d'un chemin camion, PROPRES à un
+ * stage : proposés seulement là où `STAGE_RENDER` les charge vraiment.
+ *
+ * `prop_s2_truck` n'est déclaré qu'au stage 02 (`terrassement`) et reste une image
+ * MONO-frame retournée par `flipX` — c'était la source de l'échec silencieux tant
+ * qu'il servait aussi de REPLI. Ce n'est plus le cas : le repli est désormais
+ * `CAMION_SKIN`, partagé par les 10 stages (cf. `SHARED_VEHICLE_SKINS`).
+ */
+const VEHICLE_SKINS: ReadonlyArray<{ key: string; label: string }> = [
+  { key: 'prop_s2_truck', label: 'Camion benne (stage 02, 1 sens)' }
+]
+
+/**
+ * Véhicules PARTAGÉS : chargés par `GameScene.preload` sur les 10 stages, ils ne
+ * figurent dans aucun `STAGE_RENDER` — les filtrer par stage les rendrait donc
+ * invisibles PARTOUT. On les propose inconditionnellement.
+ */
+const SHARED_VEHICLE_SKINS: ReadonlyArray<{ key: string; label: string }> = [
+  { key: CAMION_SKIN.key, label: 'Camion benne (4 directions)' }
+]
+
+/**
+ * Skins proposés pour les marcheurs d'un chemin, FILTRÉS par la famille.
+ *
+ * Le filtre n'est pas cosmétique : `type` décide de l'animation de marche et de
+ * l'orientation (`isCamion` dans siteWorkers). Un skin de camion sur un chemin
+ * d'ouvrier produirait un camion qui MARCHE.
+ */
+export function walkerSkinsFor(
+  stageId: string,
+  type: PathType
+): Array<{ key: string; label: string }> {
+  const sr = STAGE_RENDER[stageId]
+  if (type === 'truck_path') {
+    // Un véhicule n'est proposé que si le stage le charge VRAIMENT — et il faut
+    // balayer les 3 familles : `prop_s2_truck` est déclaré en `structures` (engin
+    // -héros posé une fois), pas en `props`. Ne regarder que `props` rendrait la
+    // liste vide PARTOUT, y compris sur le seul stage qui a un camion.
+    const loaded = new Set<string>()
+    for (const s of sr?.structures ?? []) {loaded.add(s.key)}
+    for (const p of sr?.props ?? []) {loaded.add(p.key)}
+    for (const e of sr?.editorExtras ?? []) {loaded.add(e.key)}
+    // Les partagés d'abord : c'est le défaut sain (4 directions, tous stages).
+    return [...SHARED_VEHICLE_SKINS, ...VEHICLE_SKINS.filter((v) => loaded.has(v.key))]
+  }
+  const out: Array<{ key: string; label: string }> = []
+  const seen = new Set<string>()
+  const push = (npc: StageAmbientNpc): void => {
+    if (seen.has(npc.key)) {return}
+    seen.add(npc.key)
+    out.push({ key: npc.key, label: assetMeta(npc.key)?.label ?? humanize(npc.file) })
+  }
+  for (const npc of sr?.ambient ?? []) {push(npc)}
+  for (const npc of SHARED_WORKER_NPCS) {push(npc)}
+  return out
 }

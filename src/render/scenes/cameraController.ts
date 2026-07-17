@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
 import { shakeForDamage } from '@render/shakeForDamage'
+import { type CamPose, type Ease, lerpCam } from '@render/cameraTrajectory'
 
 /** Zoom cible en solo / dernier survivant (identique au zoom initial de `create()` = 1.2). */
 const SOLO_ZOOM = 1.2
@@ -33,7 +34,9 @@ export class CameraController {
   /** −1 = non initialisé (avant la première frame de jeu). */
   private lastTotalHp = -1
   /** Mode overview (outil de revue visuelle) : caméra gelée sur un cadrage fixe. null = suivi normal. */
-  private overview: { zoom: number; cx: number; cy: number } | null = null
+  private overview: CamPose | null = null
+  /** Animation caméra en cours (mode overview animé). null = statique. */
+  private camAnim: { from: CamPose; to: CamPose; ms: number; ease: Ease; elapsed: number } | null = null
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -51,7 +54,55 @@ export class CameraController {
   reset(): void {
     this.following = false
     this.lastTotalHp = -1
+    this.camAnim = null
+    this.overview = null
     this.scene.cameras.main.stopFollow()
+  }
+
+  /**
+   * Coupe franche : place la caméra immédiatement sur le cadrage demandé.
+   * Annule toute animation en cours.
+   */
+  camCut(cx: number, cy: number, zoom: number): void {
+    this.overview = { cx, cy, zoom }
+    this.camAnim = null
+  }
+
+  /**
+   * Démarre une animation de caméra vers la pose cible sur `ms` millisecondes.
+   * Si la caméra n'est pas en mode overview, pose d'abord le cadrage courant comme point de départ.
+   */
+  camZoomTo(cx: number, cy: number, zoom: number, ms: number, ease: Ease): void {
+    const cam = this.scene.cameras.main
+    const from: CamPose = this.overview ?? {
+      cx: cam.scrollX + cam.width / 2 / cam.zoom,
+      cy: cam.scrollY + cam.height / 2 / cam.zoom,
+      zoom: cam.zoom,
+    }
+    const to: CamPose = { cx, cy, zoom }
+    if (this.overview === null) {
+      this.overview = from
+    }
+    this.camAnim = { from, to, ms, ease, elapsed: 0 }
+  }
+
+  /**
+   * Punch-in : zoom rapide agressif vers (cx,cy,zoom) avec easeOut.
+   * L'appelant passe un `ms` court (~80-150 ms) pour l'effet snap.
+   */
+  camPunchIn(cx: number, cy: number, zoom: number, ms: number): void {
+    this.camZoomTo(cx, cy, zoom, ms, 'easeOut')
+  }
+
+  /**
+   * Filé rapide : anime le centre vers (cx,cy) en gardant le zoom courant,
+   * avec easing easeOut + micro-shake caméra pour simuler le flou de mouvement.
+   */
+  camWhipPan(cx: number, cy: number, ms: number): void {
+    const cam = this.scene.cameras.main
+    const currentZoom = this.overview?.zoom ?? cam.zoom
+    this.camZoomTo(cx, cy, currentZoom, ms, 'easeOut')
+    this.scene.cameras.main.shake(Math.min(ms, 120), 0.004)
   }
 
   /**
@@ -59,18 +110,29 @@ export class CameraController {
    * `playerSprites`), en coop centre sur le centroïde des vivants et ajuste le zoom.
    *
    * `baseZoom` (P4 refonte mobile) : zoom de base fourni par la source de vérité
-   * responsive — desktop = SOLO_ZOOM (1.2, comportement historique inchangé),
-   * tactile = adaptatif à l'écran. En coop on prend min(baseZoom, palier
-   * d'écartement) : le dé-zoom de groupe ne peut que ÉLARGIR la vue, jamais la
-   * resserrer en-deçà de la base.
+   * responsive, adaptatif à la TAILLE du viewport (pas au type d'entrée) — grand
+   * écran = SOLO_ZOOM (1.2, comportement historique inchangé), petit écran (PC
+   * ou tactile) = dé-zoomé pour voir autant de terrain. En coop on prend
+   * min(baseZoom, palier d'écartement) : le dé-zoom de groupe ne peut que
+   * ÉLARGIR la vue, jamais la resserrer en-deçà de la base.
    */
   update(
     state: AppViewState,
     playerSprites: ReadonlyMap<number, Phaser.GameObjects.GameObject>,
     baseZoom: number = SOLO_ZOOM
   ): void {
-    // Mode overview (revue) : cadrage fixe, on court-circuite tout le suivi.
+    // Mode overview (revue) : cadrage fixe ou animé, on court-circuite tout le suivi.
     if (this.overview !== null) {
+      // Avance l'animation si active.
+      if (this.camAnim !== null) {
+        this.camAnim.elapsed += this.scene.game.loop.delta
+        const t = this.camAnim.ms <= 0 ? 1 : this.camAnim.elapsed / this.camAnim.ms
+        this.overview = lerpCam(this.camAnim.from, this.camAnim.to, t, this.camAnim.ease)
+        if (t >= 1) {
+          this.overview = this.camAnim.to
+          this.camAnim = null
+        }
+      }
       const cam = this.scene.cameras.main
       cam.stopFollow()
       this.following = false

@@ -4,6 +4,7 @@ import { Simulation } from '@core/simulation'
 import { World } from '@core/world'
 import { rescueSystem } from '@core/systems/rescue'
 import { RESCUE, INTRO, PLAYER_BASE } from '@content/config'
+import { ConstructionPhaseId } from '@content/phases'
 import type { PlayerComp, Vec2 } from '@core/types'
 
 /** Composant joueur minimal pour les tests de systèmes. */
@@ -167,14 +168,17 @@ describe('Clin d’œil — ouvrier prisonnier', () => {
 
 describe('Clin d’œil — intro de run', () => {
   it('gèle la sim pendant l’intro puis la libère', () => {
-    const app = new App({ seed: 1, mode: 'solo', autostart: true, intro: true })
+    // Stage AVEC script de montage (terrassement) → gel long `stageCinematicMs` ;
+    // un stage sans script retomberait sur le préambule court `durationMs`
+    // (cf. `introDurationFor`) et cette durée-ci ne s'appliquerait pas.
+    const app = new App({ seed: 1, mode: 'solo', autostart: true, intro: true, phaseId: ConstructionPhaseId.TERRASSEMENT })
     expect(app.getState().introActive).toBe(true)
 
-    app.advanceTime(INTRO.durationMs - 200)
+    app.advanceTime(INTRO.stageCinematicMs - 200)
     expect(app.getState().introActive).toBe(true)
     expect(app.getState().elapsedMs).toBe(0) // sim gelée
 
-    app.advanceTime(300) // dépasse la durée d'intro
+    app.advanceTime(300) // dépasse la durée d'intro (stageCinematicMs)
     expect(app.getState().introActive).toBe(false)
 
     app.advanceTime(1000)

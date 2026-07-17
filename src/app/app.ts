@@ -15,8 +15,24 @@ import {
 } from '@core/events'
 import { FocusModel } from '@ui/focusModel'
 import { addMetaCoins } from '@ui/metaProgress'
+import { readHiScore, writeHiScore } from '@ui/hiscore'
+import { readHiScores, qualifies, insertHiScore, type HiScoreEntry } from '@ui/hiscores'
+import { commitRun, readUnlocked } from '@ui/achievements'
+import { ACHIEVEMENTS, type AchievementProgress } from '@content/achievements'
+import { AchievementUnlockedEvent } from './achievementBridge'
+import { computeRunScore } from '@content/score'
+import {
+  emptyNameEntry,
+  moveCursor,
+  cycleChar,
+  clearChar,
+  nameOf,
+  NAME_ENTRY_ALPHABET,
+  type NameEntryState
+} from './nameEntry'
 import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
-import { FINAL_BOSS, INTRO, MODE_PLAYER_COUNT, modeForCount } from '@content/config'
+import { FINAL_BOSS, MODE_PLAYER_COUNT, modeForCount } from '@content/config'
+import { introDurationFor } from '@content/introScripts'
 import { WEAPONS } from '@content/weapons'
 import { PASSIVES, aggregatePassives } from '@content/passives'
 import { describeWeaponLevelDelta } from '@content/weaponDelta'
@@ -24,7 +40,7 @@ import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/char
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
 import { evolutionStatuses } from '@core/systems/evolution'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
-import type { AppViewState, RunReport, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
+import type { AchievementsView, AppViewState, RunReport, HiScoresView, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
 import { selectDeathQuote } from '@content/deathQuotes'
 import { selectVictoryQuote } from '@content/victoryQuotes'
 import { EVOLUTIONS } from '@content/evolutions'
@@ -70,6 +86,19 @@ const GAMEOVER_ITEMS: MenuItemView[] = [
   { id: 'recommencer', label: 'Recommencer', hint: null },
   { id: 'titre', label: 'Menu titre', hint: null }
 ]
+/**
+ * Écran du tableau des scores : les 20 lignes sont CONSULTATIVES (pas des items
+ * de menu), seul « Retour » est focalisable. Un tableau navigable exigerait un
+ * scroll — explicitement rejeté par la DA (cf. `styles.ts`, « compacité du
+ * rapport ») puisque le jeu doit rester 100 % manette.
+ */
+const HISCORES_ITEMS: MenuItemView[] = [{ id: 'retour', label: 'Retour', hint: null }]
+/**
+ * Écran des succès : même parti pris que le tableau des scores — les ~10 lignes
+ * sont CONSULTATIVES, seul « Retour » est focalisable. Le catalogue tient à
+ * l'écran (grille 2 colonnes), donc rien à scroller (cf. `styles.ts`).
+ */
+const ACHIEVEMENTS_ITEMS: MenuItemView[] = [{ id: 'retour', label: 'Retour', hint: null }]
 
 /**
  * Coquille applicative : orchestre les écrans (Titre → Jeu → Pause / Upgrade /
@@ -110,6 +139,8 @@ export class App {
   private comboBuffer: ComboAction[] = []
   /** Intro activée (vrai joueur) ; désactivée en test/e2e/capture. */
   private readonly introEnabled: boolean
+  /** Durée totale de l'intro pour la run en cours (0 si intro désactivée). */
+  private totalIntroMs = 0
   /** Temps restant de gel pour l'intro de run, en ms (0 = pas d'intro en cours). */
   private introMsLeft = 0
   /** Écran Options ouvert (surcouche au-dessus du titre / pause). */
@@ -151,6 +182,44 @@ export class App {
   private _runReport: RunReport | null = null
   /** Garde one-shot : pièces du run déjà versées au total méta (fin de run). */
   private _coinsBanked = false
+  /**
+   * Saisie du prénom en cours (écran `nameEntry`) ; `null` hors de ce flux.
+   * Le curseur de saisie vit ICI, pas dans le `FocusModel` : l'écran n'a qu'un
+   * item de menu, et `nav()` route gauche/droite → case, haut/bas → lettre
+   * (cf. [[nameEntry]]). C'est ce qui permet à `routeInput` de rester sans
+   * condition d'écran — la grille est une affaire d'App, pas d'input.
+   */
+  private nameEntryState: NameEntryState | null = null
+  /** Tableau des scores affiché (écran `hiscores`, après inscription) ; `null` hors de ce flux. */
+  private hiScoreView: HiScoresView | null = null
+  /**
+   * Garde one-shot : le score du run a déjà été TRAITÉ (inscrit au tableau, ou
+   * jugé non qualifiant). Sans elle, chaque validation sur l'écran de fin
+   * relancerait la saisie du prénom et ré-inscrirait la même run.
+   * Remis à `false` à chaque `start()`, comme `_coinsBanked`/`_runReport`.
+   */
+  private _scoreHandled = false
+  /**
+   * Garde one-shot : les succès de la run ont déjà été versés au profil.
+   *
+   * ⚠️ VITALE — `commitRun` n'est PAS idempotent (c'est documenté et verrouillé
+   * par test côté `src/ui/achievements.ts`) : un appel = une run terminée, donc
+   * ses cumuls s'AJOUTENT. Or `getState()` tourne à 60 Hz sur l'écran de fin :
+   * sans cette garde, une seconde passée sur le rapport compterait les kills de
+   * la run SOIXANTE fois, et « 1000 ennemis » tomberait au premier game over.
+   * Même patron que `_coinsBanked` / `_scoreHandled` — remis à `false` par `start()`.
+   */
+  private _achievementsBanked = false
+  /**
+   * Coffres ouverts sur la run courante (`ChestOpenedEvent`, non plafonné).
+   * Compté ici faute de compteur dans `GameState` — l'événement est le seul
+   * porteur de l'information, et il ne survit pas au pas.
+   */
+  private runChestsOpened = 0
+  /** Évolutions d'arme de la run courante (`EvolvedEvent`, non plafonné) — même raison. */
+  private runEvolutions = 0
+  /** Écran des succès ouvert (consultation depuis le titre) ; `null` hors de ce flux. */
+  private achievementsView: AchievementsView | null = null
 
   constructor(opts: AppOptions) {
     this.seed = opts.seed
@@ -174,6 +243,20 @@ export class App {
     this.bumpState()
     this._runReport = null
     this._coinsBanked = false
+    // Flux high-scores : une nouvelle run = un nouveau score à inscrire, et aucun
+    // écran de saisie/tableau en cours (sinon `screen` resterait bloqué dessus).
+    this._scoreHandled = false
+    this.nameEntryState = null
+    this.hiScoreView = null
+    // Succès : une nouvelle run = de nouveaux cumuls à verser UNE fois, et des
+    // compteurs d'événements repartant de zéro (sinon la run suivante hériterait
+    // des coffres/évolutions de la précédente et les compterait deux fois).
+    this._achievementsBanked = false
+    this.runChestsOpened = 0
+    this.runEvolutions = 0
+    // L'écran des succès est une surcouche du TITRE : lancer une partie le ferme
+    // (sinon `screen` resterait bloqué dessus, comme pour `hiScoreView`).
+    this.achievementsView = null
     const wasStarted = this.started // RE-démarrage ? (partie déjà en cours)
     this.mode = mode
     this.selectedCharacters = [...characters] // persiste pour restart/stage suivant/setSeed
@@ -212,17 +295,24 @@ export class App {
     })
     this.sim.events.addEventListener('evolved', (e) => {
       const ev = e as EvolvedEvent
+      this.runEvolutions++ // cumul de run pour les succès (l'événement ne survit pas au pas)
       this.events.dispatchEvent(new EvolvedEvent(ev.weaponId, ev.playerId))
     })
     this.sim.events.addEventListener('chestOpened', (e) => {
       const ev = e as ChestOpenedEvent
+      this.runChestsOpened++ // idem — les 3 issues de coffre comptent comme « ouvert »
       this.events.dispatchEvent(new ChestOpenedEvent(ev.kind, ev.playerId, ev.isSuper))
     })
     this.sim.events.addEventListener('destructibleBroken', (e) => {
       const ev = e as DestructibleBrokenEvent
       this.events.dispatchEvent(new DestructibleBrokenEvent(ev.x, ev.y, ev.typeId))
     })
-    this.introMsLeft = this.introEnabled ? INTRO.durationMs : 0
+    // Durée du gel d'intro : cinématique complète (6.5 s) si le stage a un script
+    // de montage, sinon micro-préambule héros (2 s) — cf. `introDurationFor`. En
+    // test/e2e l'intro est désactivée (introEnabled=false → 0). La sim est GELÉE
+    // pendant tout ce laps : la durée est cosmétique, sans effet sur le déterminisme.
+    this.totalIntroMs = this.introEnabled ? introDurationFor(this.selectedPhase) : 0
+    this.introMsLeft = this.totalIntroMs
     this.started = true
     // Bump SEULEMENT sur un RE-démarrage (game over→restart, stage suivant,
     // setSeed) : le rendu repart alors d'une scène propre (cf. `runId`, fuite
@@ -297,6 +387,20 @@ export class App {
     // Sélecteur de niveau au titre : gauche/droite changent la phase (pas le focus).
     if (this.screen === 'title' && this.focus.current() === 'stage' && (dir === 'left' || dir === 'right')) {
       this.cycleStage(dir === 'right' ? 1 : -1)
+      this.emitUi('menuMove')
+      return
+    }
+    // Saisie du prénom : les 4 directions pilotent la GRILLE, jamais le focus
+    // (un seul item). C'est ici — et pas dans `src/input` — que le vocabulaire
+    // up/down/left/right prend son sens sur cet écran : `routeInput` reste sans
+    // condition d'écran, ce qui garde la règle « 100 % manette » tenable.
+    if (this.screen === 'nameEntry' && this.nameEntryState !== null) {
+      this.nameEntryState =
+        dir === 'left'
+          ? moveCursor(this.nameEntryState, -1)
+          : dir === 'right'
+            ? moveCursor(this.nameEntryState, 1)
+            : cycleChar(this.nameEntryState, dir === 'up' ? 1 : -1)
       this.emitUi('menuMove')
       return
     }
@@ -389,6 +493,21 @@ export class App {
       case 'gameover':
         this.started = false
         break
+      case 'nameEntry':
+        // « B » EFFACE la case, il ne quitte PAS l'écran : quitter par réflexe
+        // ferait perdre la saisie (et le score, qu'on ne peut plus inscrire).
+        if (this.nameEntryState !== null) {
+          this.nameEntryState = clearChar(this.nameEntryState)
+        }
+        break
+      case 'hiscores':
+        // Le tableau est consultatif : « B » en sort comme « Retour ».
+        this.hiScoreView = null
+        break
+      case 'achievements':
+        // Consultatif lui aussi : « B » revient au titre, comme « Retour ».
+        this.achievementsView = null
+        break
       case 'characterSelect':
         if (this.charSelectPlayer > 1) {
           this.charSelectPlayer--
@@ -417,6 +536,14 @@ export class App {
     this.bumpState()
     this.sim?.resume()
     this.refreshFocus()
+  }
+
+  /** Saute l'intro (fin du gel) — câblée sur toute entrée pendant l'intro. */
+  skipIntro(): void {
+    if (this.introMsLeft <= 0) { return }
+    this.introMsLeft = 0
+    this.refreshFocus()
+    this.bumpState()
   }
 
   /** Bascule pause/reprise (touche dédiée). */
@@ -616,6 +743,15 @@ export class App {
           ? 0
           : Math.max(0, Math.floor(stageDurationMs / 1000) - Math.floor(elapsedMs / 1000)),
         kills: base.score,
+        // Score de CLASSEMENT (≠ kills) : figé ici avec le reste du rapport, donc
+        // stable entre deux `getState()` — c'est lui qu'on compare au tableau.
+        runScore: computeRunScore({
+          kills: base.score,
+          elapsedMs,
+          level: base.players[0]?.level ?? 1,
+          coins: base.coins,
+          outcome: victory ? 'victory' : 'defeat'
+        }),
         coins: base.coins,
         level: base.players[0]?.level ?? 1,
         perPlayer: base.players.map((p) => ({ id: p.id, kills: p.kills, level: p.level, alive: p.alive })),
@@ -649,6 +785,26 @@ export class App {
         // n'en souffle alors pas un mot, le secret reste un secret.
         carnage: this.carnageStats
       }
+      // HI-SCORE de l'écran titre : meilleur score TOUS stages confondus. Écrit
+      // ici, sous la même garde one-shot que le rapport (`getState` tourne à
+      // 60 Hz) et seulement s'il bat l'ancien — `writeHiScore` n'a aucun garde-fou
+      // et écrase à l'aveugle. Sans cet appel, la barre du titre était figée à
+      // « 000000 » : `writeHiScore` n'avait AUCUN appelant en production.
+      if (this._runReport.runScore > readHiScore()) {
+        writeHiScore(this._runReport.runScore)
+      }
+    }
+    // Succès : verse les compteurs de la run au profil, UNE SEULE FOIS (cf.
+    // `_achievementsBanked` — `commitRun` n'est pas idempotent et `getState`
+    // tourne à 60 Hz). Les ids nouvellement débloqués partent en ÉVÉNEMENT, pas
+    // dans l'état : un one-shot porté par l'état serait consommé par le premier
+    // `getState()` venu (le seam, typiquement) et le trophée ne s'afficherait
+    // jamais (cf. [[achievementBridge]]).
+    if ((screen === 'gameover' || screen === 'victory') && !this._achievementsBanked) {
+      this._achievementsBanked = true
+      for (const id of commitRun(this.runProgress(base, screen === 'victory'))) {
+        this.events.dispatchEvent(new AchievementUnlockedEvent(id))
+      }
     }
     return {
       ...base,
@@ -660,12 +816,30 @@ export class App {
       carnage: this.carnage,
       runId: this.runId,
       introActive: this.introMsLeft > 0,
+      introElapsedMs: Math.max(0, this.totalIntroMs - this.introMsLeft),
       stageTitle: phase?.title ?? '—',
       stageSubtitle: phase?.subtitle ?? '',
       stageOrder: phase?.order ?? 0,
       characterSelect: this.charSelectOpen
         ? { player: this.charSelectPlayer, total: this.selectedPlayers, charId: this.rosterIds()[this.charCursor] ?? DEFAULT_CHARACTER_ID }
         : null,
+      // Saisie du prénom : les index d'alphabet sont résolus ICI en caractères —
+      // l'overlay affiche, il n'interprète pas.
+      nameEntry:
+        this.nameEntryState === null
+          ? null
+          : {
+              chars: this.nameEntryState.chars.map((i) => NAME_ENTRY_ALPHABET[i] ?? ' '),
+              cursor: this.nameEntryState.cursor,
+              name: nameOf(this.nameEntryState),
+              score: this._runReport?.runScore ?? 0,
+              stageTitle: this._runReport?.stageTitle ?? '—'
+            },
+      hiScores: this.hiScoreView === null ? null : { ...this.hiScoreView, entries: [...this.hiScoreView.entries] },
+      achievements:
+        this.achievementsView === null
+          ? null
+          : { ...this.achievementsView, entries: [...this.achievementsView.entries] },
       minimapVisible: this.minimapVisible,
       justEvolvedWeaponName:
         base.justEvolved !== null
@@ -719,6 +893,20 @@ export class App {
     if (this.optionsOpen) {
       return 'options'
     }
+    // Surcouches de fin de run (saisie du prénom → tableau) : elles s'empilent
+    // AU-DESSUS du rapport, qui reste l'écran de fin (la sim est toujours en
+    // `gameover`/`won` dessous). En sortir rend la main au rapport.
+    if (this.hiScoreView !== null) {
+      return 'hiscores'
+    }
+    // Surcouche du TITRE (jamais ouverte en run) : la remettre à `null` rend la
+    // main au titre, `started` étant faux — aucun câblage de plus.
+    if (this.achievementsView !== null) {
+      return 'achievements'
+    }
+    if (this.nameEntryState !== null) {
+      return 'nameEntry'
+    }
     if (this.charSelectOpen && !this.started) {
       return 'characterSelect'
     }
@@ -758,9 +946,32 @@ export class App {
         return this.upgradeItems()
       case 'options':
         return this.optionsItems()
+      case 'nameEntry':
+        return this.nameEntryItems()
+      case 'hiscores':
+        return HISCORES_ITEMS
+      case 'achievements':
+        return ACHIEVEMENTS_ITEMS
       default:
         return []
     }
+  }
+
+  /**
+   * Item UNIQUE de l'écran de saisie : la grille de lettres n'est PAS une liste
+   * de menu (elle se pilote par `nav`, cf. [[nameEntry]]) — le `FocusModel` est
+   * donc trivial, et il n'y a rien à scroller. Le libellé porte le nom en cours
+   * pour que `renderToText()` le donne au seam (jeu « à l'aveugle »).
+   */
+  private nameEntryItems(): MenuItemView[] {
+    const name = this.nameEntryState === null ? '' : nameOf(this.nameEntryState)
+    return [
+      {
+        id: 'nom',
+        label: name,
+        hint: 'Gauche/Droite : case · Haut/Bas : lettre · A : valider · B : effacer'
+      }
+    ]
   }
 
   /** Écran Options : volumes (◄/►) + mute + retour. */
@@ -805,16 +1016,97 @@ export class App {
     return items
   }
 
-  /** Items du titre : Jouer, sélecteur de joueurs (◄/►), sélecteur de niveau (◄/►), Options. */
+  /** Items du titre : Jouer, sélecteur de joueurs (◄/►), sélecteur de niveau (◄/►), Scores, Options. */
   private titleItems(): MenuItemView[] {
     const phase = ORDERED_PHASES.find((p) => p.id === this.selectedPhase)
     return [
       { id: 'jouer', label: 'Jouer', hint: null },
       { id: 'players', label: `◄ Joueurs : ${this.selectedPlayers} ►`, hint: 'Gauche/Droite pour changer' },
       { id: 'stage', label: `◄ Niveau ${phase?.order ?? 1}/10 : ${phase?.title ?? '—'} ►`, hint: 'Gauche/Droite pour changer' },
+      // Placé JUSTE SOUS le sélecteur de niveau : le tableau affiché est celui du
+      // niveau sélectionné ci-dessus (les classements sont par stage). L'adjacence
+      // porte le lien — c'est ce qui dispense l'écran `hiscores` d'un 2e sélecteur.
+      { id: 'scores', label: 'Scores', hint: 'Tableau du niveau sélectionné' },
+      // Voisin de « Scores » : les deux consultent le palmarès du joueur. Les
+      // succès, eux, sont GLOBAUX (aucun `stageId` dans le catalogue) — ils ne
+      // dépendent pas du sélecteur de niveau juste au-dessus.
+      { id: 'succes', label: 'Succès', hint: 'Trophées débloqués' },
       { id: 'options', label: 'Options', hint: null },
       { id: 'editeur', label: 'Éditeur de niveaux', hint: 'Créer / modifier un stage' }
     ]
+  }
+
+  /**
+   * Ouvre le tableau des scores du niveau SÉLECTIONNÉ au titre, en consultation.
+   *
+   * Réutilise tel quel l'écran `hiscores` du flux de fin de run : `screen` le
+   * dérive déjà de `hiScoreView`, et `back()`/« Retour » le remettent à `null` →
+   * on retombe sur le titre (`started === false`) sans câblage supplémentaire.
+   *
+   * `rank: -1` = aucune ligne en surbrillance : on consulte, on ne vient pas de
+   * s'inscrire. Le tableau peut être vide (profil neuf) — le panneau le dit.
+   */
+  private openHiScores(): void {
+    const phase = ORDERED_PHASES.find((p) => p.id === this.selectedPhase)
+    this.hiScoreView = {
+      stageId: this.selectedPhase,
+      stageTitle: phase?.title ?? '—',
+      entries: readHiScores(this.selectedPhase),
+      rank: -1
+    }
+  }
+
+  /**
+   * Compteurs de LA RUN qui vient de finir, prêts à être fusionnés au profil.
+   *
+   * Chaque champ suit la nature documentée dans `src/content/achievements.ts` —
+   * les `MEILLEURE RUN` livrent la valeur BRUTE de la run (`mergeProgress` en
+   * prendra le `max`), les `CUMUL PROFIL` livrent le delta de cette run (il sera
+   * ADDITIONNÉ). Ne rien deviner ici : additionner un record débloquerait
+   * « tenir 10 minutes » avec dix runs d'une minute.
+   *
+   * Aucune source plafonnée : `score` et `bossKills` sont des cumuls de `GameState`,
+   * `rescue.rescued` un compteur de sim, coffres/évolutions des cumuls d'App
+   * alimentés par des événements non bornés. Zéro `EnemyDiedEvent` (cf. l'en-tête
+   * de `src/content/achievements.ts`).
+   */
+  private runProgress(base: GameState, victory: boolean): AchievementProgress {
+    return {
+      // CUMUL PROFIL — `score` EST le compteur de kills cumulé de la run.
+      kills: base.score,
+      bossKills: base.bossKills,
+      chestsOpened: this.runChestsOpened,
+      weaponEvolutions: this.runEvolutions,
+      prisonersFreed: base.rescue.rescued,
+      // Un chantier livré par run gagnée, zéro sinon.
+      stagesCompleted: victory ? 1 : 0,
+      // MEILLEURE RUN — valeurs brutes de CETTE run ; le profil en gardera le max.
+      bestSurvivalMs: base.elapsedMs,
+      bestLevel: base.players.reduce((max, p) => Math.max(max, p.level), 0)
+    }
+  }
+
+  /**
+   * Ouvre l'écran des succès (consultation depuis le titre) : croise le catalogue
+   * avec le profil persisté. Figé à l'ouverture — le profil ne bouge pas pendant
+   * qu'on le regarde, et on évite de relire `localStorage` à 60 Hz.
+   *
+   * Les succès VERROUILLÉS restent dans la liste (grisés) : le joueur doit voir
+   * ce qu'il lui reste à faire (même doctrine que `starRow`).
+   */
+  private openAchievements(): void {
+    const unlocked = readUnlocked()
+    const entries = ACHIEVEMENTS.map((def) => ({
+      id: def.id,
+      label: def.label,
+      description: def.description,
+      icon: def.icon ?? null,
+      unlocked: unlocked.has(def.id)
+    }))
+    this.achievementsView = {
+      entries,
+      unlockedCount: entries.filter((e) => e.unlocked).length
+    }
   }
 
   /** Liste des ids du roster de personnages, dans l'ordre stable déclaré. */
@@ -887,6 +1179,71 @@ export class App {
     })
   }
 
+  /** Stage de la run qui vient de finir (le classement est PAR stage). */
+  private runStageId(): string {
+    return this.sim?.getState().stageId ?? this.selectedPhase
+  }
+
+  /**
+   * Ouvre la saisie du prénom si le score de la run entre au tableau du stage.
+   * Renvoie `true` si l'écran s'est ouvert (l'appelant doit alors s'arrêter là).
+   *
+   * `_scoreHandled` est une garde one-shot par run : sans elle, chaque validation
+   * sur l'écran de fin rouvrirait la saisie et permettrait d'inscrire la même run
+   * autant de fois qu'on presse « A ».
+   */
+  private maybeStartNameEntry(): boolean {
+    if (this._scoreHandled || this.nameEntryState !== null) {
+      return false
+    }
+    const report = this._runReport
+    if (report === null) {
+      return false
+    }
+    if (!qualifies(this.runStageId(), report.runScore)) {
+      this._scoreHandled = true // score trop faible : on ne re-teste pas à chaque « A »
+      return false
+    }
+    this.nameEntryState = emptyNameEntry()
+    this.refreshFocus()
+    return true
+  }
+
+  /**
+   * Valide le prénom saisi : inscrit la run au tableau du stage et affiche le
+   * classement, ligne du joueur en surbrillance. `_scoreHandled` verrouille
+   * l'inscription : re-presser « A » ne crée pas de doublon.
+   *
+   * Un nom laissé vide est accepté (l'arcade n'a jamais bloqué personne sur la
+   * saisie) et retombe sur un libellé par défaut.
+   */
+  private submitName(): void {
+    const state = this.nameEntryState
+    const report = this._runReport
+    if (state === null || report === null || this._scoreHandled) {
+      return
+    }
+    const stageId = this.runStageId()
+    const typed = nameOf(state)
+    const entry: HiScoreEntry = {
+      name: typed === '' ? 'ANONYME' : typed,
+      score: report.runScore,
+      kills: report.kills,
+      elapsedMs: report.elapsedMs,
+      level: report.level
+    }
+    const rank = insertHiScore(stageId, entry)
+    this._scoreHandled = true
+    this.nameEntryState = null
+    this.hiScoreView = {
+      stageId,
+      stageTitle: report.stageTitle,
+      entries: readHiScores(stageId),
+      rank
+    }
+    this.refreshFocus()
+  }
+
   private menu(screen: Screen): MenuView | null {
     const items = this.menuItems()
     if (items.length === 0) {
@@ -944,6 +1301,10 @@ export class App {
         this.cyclePlayers(1)
       } else if (id === 'stage') {
         this.cycleStage()
+      } else if (id === 'scores') {
+        this.openHiScores()
+      } else if (id === 'succes') {
+        this.openAchievements()
       } else if (id === 'options') {
         this.optionsOpen = true
       } else if (id === 'editeur') {
@@ -969,7 +1330,35 @@ export class App {
       this.refreshFocus()
       return
     }
+    if (screen === 'nameEntry') {
+      if (id === 'nom') {
+        this.submitName()
+      }
+      this.refreshFocus()
+      return
+    }
+    if (screen === 'hiscores') {
+      if (id === 'retour') {
+        this.hiScoreView = null // → retour au rapport de fin de run
+      }
+      this.refreshFocus()
+      return
+    }
+    if (screen === 'achievements') {
+      if (id === 'retour') {
+        this.achievementsView = null // → retour au titre
+      }
+      this.refreshFocus()
+      return
+    }
     if (screen === 'gameover') {
+      // Avant de quitter le rapport : si le score entre au tableau, on passe par
+      // la saisie du prénom (l'action demandée n'est PAS exécutée cette fois —
+      // le joueur la re-validera au retour du tableau). Un score arcade ne se
+      // perd pas parce qu'on a appuyé sur « Recommencer » un peu vite.
+      if (this.maybeStartNameEntry()) {
+        return
+      }
       if (id === 'recommencer') {
         this.restart()
       } else if (id === 'titre') {
@@ -979,6 +1368,9 @@ export class App {
       return
     }
     if (screen === 'victory') {
+      if (this.maybeStartNameEntry()) {
+        return
+      }
       if (id === 'stage_suivant') {
         const i = ORDERED_PHASES.findIndex((p) => p.id === this.selectedPhase)
         const next = ORDERED_PHASES[i + 1]
@@ -1007,6 +1399,7 @@ function emptyState(seed: number, stageId: ConstructionPhaseId): GameState {
     elapsedMs: 0,
     wave: 0,
     score: 0,
+    bossKills: 0,
     coordSystem: 'origin top-left, +x right, +y down',
     players: [],
     enemies: [],

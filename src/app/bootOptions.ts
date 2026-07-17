@@ -18,6 +18,8 @@ export interface BootOptions {
   perf: boolean
   /** Active le panneau de debug tactile (`?debug=1`) — spawns/level-up/arsenal (gated dev/test). */
   debug: boolean
+  /** Force l'intro cosmétique même en mode test (`?intro=1&test=1`). */
+  intro: boolean
 }
 
 const VALID_MODES: ReadonlySet<string> = new Set<GameMode>(['solo', 'coop', 'coop3', 'coop4'])
@@ -42,6 +44,7 @@ export function parseBootOptions(search: string): BootOptions {
   const editor = params.get('editor') === 'true'
   const perf = params.get('perf') === '1'
   const debug = params.get('debug') === '1'
+  const intro = params.get('intro') === '1'
 
-  return { autostart, seed, test, level, lite, editor, perf, debug }
+  return { autostart, seed, test, level, lite, editor, perf, debug, intro }
 }

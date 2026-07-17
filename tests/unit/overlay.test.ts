@@ -18,7 +18,7 @@ describe('Overlay (DOM)', () => {
     expect(root.querySelector('.logo__btp')?.textContent).toBe('BTP')
     expect(root.querySelector('.logo__carnage')?.textContent).toBe('CARNAGE')
     const items = root.querySelectorAll('.menu__item')
-    expect(items.length).toBe(5) // Jouer, Joueurs (sélecteur), Niveau (sélecteur), Options, Éditeur
+    expect(items.length).toBe(7) // Jouer, Joueurs (sélecteur), Niveau (sélecteur), Scores, Succès, Options, Éditeur
     expect(root.querySelectorAll('.menu__item--focus').length).toBe(1)
     expect(items[0]?.classList.contains('menu__item--focus')).toBe(true)
   })
@@ -439,6 +439,7 @@ function makeDeathReport(overrides: Partial<import('@/app/appState').RunReport> 
     stageTitle: 'Terrain vierge',
     elapsedMs: 300_000,   // 5:00
     kills: 1248,
+    runScore: 14_054,     // score de classement (≠ kills) — cf. computeRunScore
     coins: 37,
     level: 6,
     perPlayer: [{ id: 1, kills: 1248, level: 6, alive: false }],

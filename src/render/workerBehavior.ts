@@ -5,7 +5,8 @@
  * Tout le temps est passé en argument → testable en Vitest sans environnement.
  */
 
-import type { StageLayout } from '@content/stageLayout'
+import { PATH_DEFAULT_SPEED, PATH_LIMITS, type PathType, type StageLayout } from '@content/stageLayout'
+import { resolveWorkerSkin } from '@render/stages'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes exportées (testables)
@@ -134,29 +135,102 @@ export interface PathResult {
   dirX: number
   dirY: number
   atEnd: boolean
+  /**
+   * false = marcheur CACHÉ (sens unique, entre la sortie et la réapparition).
+   * Sans ce champ, un camion en sens unique se téléporterait À VUE du bout au
+   * départ — l'artefact visuel que le sens unique est censé éviter.
+   */
+  visible: boolean
+}
+
+/** Réglages de parcours. Absent = aller-retour continu (comportement historique). */
+export interface PathOpts {
+  /**
+   * Aller-retour : arrêt VISIBLE à chaque extrémité (livraison, chargement).
+   * Sens unique : temps INVISIBLE entre la sortie et la réapparition au départ
+   * (= espacement du flux). Deux sens distincts, assumés : dans un cas le
+   * marcheur attend, dans l'autre il est parti.
+   */
+  pauseMs?: number
+  /** true = A→B puis disparaît et réapparaît en A (flux). false = aller-retour. */
+  oneWay?: boolean
 }
 
 /**
- * Position sur une POLYLIGNE parcourue en aller-retour continu (ping-pong).
+ * `atEnd` = PROXIMITÉ d'une extrémité de la polyligne (0 ou `total`), à partir
+ * de la distance parcourue depuis le début.
  *
- * - L = longueur cumulée des segments.
- * - phase = (tMs/1000 * speed) modulo 2L ; si phase ≥ L on repart en sens inverse.
- * - `dist` = distance parcourue depuis le début (0..L), `dirX/dirY` = sens courant.
+ * Sémantique historique (commutePos, et l'ancien pathFollow avant 06415cf) :
+ * vrai si on est à moins de AT_END_THRESHOLD px de A OU de B, que ce soit à
+ * l'aller, au retour, ou à l'arrêt. Ce n'est PAS une phase de cycle (pause vs
+ * marche) — un marcheur en pause à une extrémité y est, un marcheur à 10 px du
+ * bout aussi. Piège corrigé : mettre `atEnd` en dur selon la branche (pause ou
+ * non) désynchronise le champ de la position réelle dès que pauseMs=0.
+ */
+function atEndFromDist(dist: number, total: number): boolean {
+  return dist < AT_END_THRESHOLD || total - dist < AT_END_THRESHOLD
+}
+
+/** Position à `dist` px du début de la polyligne (0..total). */
+function pointAtDistance(
+  points: ReadonlyArray<PathPoint>,
+  segLen: ReadonlyArray<number>,
+  dist: number
+): { x: number; y: number; seg: number; dirX: number; dirY: number } {
+  let d = dist
+  for (let i = 0; i < segLen.length; i++) {
+    const l = segLen[i] as number
+    const a = points[i] as PathPoint
+    const b = points[i + 1] as PathPoint
+    if (d <= l || i === segLen.length - 1) {
+      const t = l < 0.001 ? 0 : Math.min(1, Math.max(0, d / l))
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const len = Math.hypot(dx, dy) || 1
+      return {
+        x: a.x + dx * t,
+        y: a.y + dy * t,
+        seg: i,
+        dirX: dx / len,
+        dirY: dy / len
+      }
+    }
+    d -= l
+  }
+  const first = points[0] as PathPoint
+  return { x: first.x, y: first.y, seg: 0, dirX: 1, dirY: 0 }
+}
+
+/**
+ * Position sur une POLYLIGNE, en fonction PURE du temps.
  *
- * Cas dégénérés : 0 point → origine ; 1 point (ou longueur nulle) → immobile.
+ * Le raisonnement est en TEMPS, pas en distance : une pause est du temps. Soit
+ * `tTrajet = longueur / vitesse` et `pause = pauseMs / 1000` :
+ *
+ *  - aller-retour : cycle = 2·tTrajet + 2·pause
+ *      aller → pause VISIBLE en B → retour → pause VISIBLE en A → …
+ *  - sens unique  : cycle = tTrajet + pause
+ *      aller → INVISIBLE pendant `pause` → réapparaît en A
+ *
+ * Cas dégénérés : 0 point → origine ; 1 point, longueur nulle, ou vitesse ≤ 0
+ * → immobile au départ (jamais de division par zéro, jamais de NaN).
  */
 export function pathFollow(
   points: ReadonlyArray<PathPoint>,
   tMs: number,
-  speedPxPerSec: number
+  speedPxPerSec: number,
+  opts?: PathOpts
 ): PathResult {
   const n = points.length
   if (n === 0) {
-    return { x: 0, y: 0, seg: 0, dirX: 1, dirY: 0, atEnd: true }
+    return { x: 0, y: 0, seg: 0, dirX: 1, dirY: 0, atEnd: true, visible: true }
   }
   const first = points[0] as PathPoint
-  if (n === 1) {
-    return { x: first.x, y: first.y, seg: 0, dirX: 1, dirY: 0, atEnd: true }
+  const still = (): PathResult => ({
+    x: first.x, y: first.y, seg: 0, dirX: 1, dirY: 0, atEnd: true, visible: true
+  })
+  if (n === 1 || speedPxPerSec <= 0) {
+    return still()
   }
 
   const segLen: number[] = []
@@ -169,47 +243,49 @@ export function pathFollow(
     total += l
   }
   if (total < 0.001) {
-    return { x: first.x, y: first.y, seg: 0, dirX: 1, dirY: 0, atEnd: true }
+    return still()
   }
 
-  const traveled = (tMs / 1000) * speedPxPerSec
-  const phase = traveled % (2 * total)
-  const forward = phase < total
-  const dist = forward ? phase : 2 * total - phase
+  const tTravel = total / speedPxPerSec
+  const pause = Math.max(0, opts?.pauseMs ?? 0) / 1000
+  const t = Math.max(0, tMs) / 1000
+  const oneWay = opts?.oneWay === true
 
-  // Segment contenant `dist`.
-  let acc = 0
-  let seg = 0
-  while (seg < segLen.length - 1 && acc + (segLen[seg] as number) < dist) {
-    acc += segLen[seg] as number
-    seg += 1
+  if (oneWay) {
+    const cycle = tTravel + pause
+    const u = cycle <= 0 ? 0 : t % cycle
+    if (u >= tTravel) {
+      // Sorti : caché jusqu'à la réapparition en A. Physiquement en B (dist=total)
+      // → atEnd vrai par proximité, pas parce qu'on est « dans la fenêtre de pause ».
+      const p = pointAtDistance(points, segLen, total)
+      return { ...p, atEnd: atEndFromDist(total, total), visible: false }
+    }
+    const dist = u * speedPxPerSec
+    const p = pointAtDistance(points, segLen, dist)
+    return { ...p, atEnd: atEndFromDist(dist, total), visible: true }
   }
-  const a = points[seg] as PathPoint
-  const b = points[seg + 1] as PathPoint
-  const l = (segLen[seg] as number) || 1
-  const t = (dist - acc) / l
-  const x = a.x + (b.x - a.x) * t
-  const y = a.y + (b.y - a.y) * t
-  let dirX = (b.x - a.x) / l
-  let dirY = (b.y - a.y) / l
-  if (!forward) {
-    dirX = -dirX
-    dirY = -dirY
+
+  const cycle = 2 * tTravel + 2 * pause
+  const u = cycle <= 0 ? 0 : t % cycle
+  if (u < tTravel) {
+    const dist = u * speedPxPerSec
+    const p = pointAtDistance(points, segLen, dist)
+    return { ...p, atEnd: atEndFromDist(dist, total), visible: true }
   }
-  const atEnd = dist < AT_END_THRESHOLD || total - dist < AT_END_THRESHOLD
-  return { x, y, seg, dirX, dirY, atEnd }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// loadVisible
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Charge visible : le worker porte quelque chose à l'aller (A→B), mains vides au retour.
- * Sémantique : aller = évacuer les déblais, retour = revenir chercher.
- */
-export function loadVisible(leg: 'ab' | 'ba'): boolean {
-  return leg === 'ab'
+  if (u < tTravel + pause) {
+    // Arrêt visible en B, face au sens d'arrivée. dist=total → atEnd vrai par proximité.
+    const p = pointAtDistance(points, segLen, total)
+    return { ...p, atEnd: atEndFromDist(total, total), visible: true }
+  }
+  if (u < 2 * tTravel + pause) {
+    const back = u - (tTravel + pause)
+    const dist = total - back * speedPxPerSec
+    const p = pointAtDistance(points, segLen, dist)
+    return { ...p, dirX: -p.dirX, dirY: -p.dirY, atEnd: atEndFromDist(dist, total), visible: true }
+  }
+  // Arrêt visible en A, face au sens d'arrivée (le retour). dist=0 → atEnd vrai par proximité.
+  const p = pointAtDistance(points, segLen, 0)
+  return { ...p, dirX: -p.dirX, dirY: -p.dirY, atEnd: atEndFromDist(0, total), visible: true }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -276,6 +352,92 @@ export function fleeVelocity(
   return { vx: nx * speed, vy: ny * speed }
 }
 
+/** Un marcheur planifié sur un chemin. `phaseMs` étale les marcheurs sur le cycle. */
+export interface PathWalkerPlan {
+  pathId: string
+  type: PathType
+  /** null = le rendu choisit le défaut de la famille (porteur / camion). */
+  skin: string | null
+  /** Polyligne en coordonnées MONDE. */
+  points: PathPoint[]
+  speed: number
+  pauseMs: number
+  oneWay: boolean
+  /** Décalage temporel de CE marcheur (étalement sur le cycle). */
+  phaseMs: number
+}
+
+/** Borne une valeur dans [min, max]. */
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, v))
+}
+
+/**
+ * Un chemin → N plans de marcheurs ÉTALÉS sur le cycle.
+ *
+ * PUR : aucune dépendance à Phaser. `siteWorkers` se contente de créer un sprite
+ * par plan — d'où la testabilité de l'étalement sans navigateur.
+ *
+ * L'étalement décale chaque marcheur de `cycle / count` : ils se répartissent
+ * d'eux-mêmes et se croisent, sans aucun réglage.
+ *
+ * Les bornes sont RÉAPPLIQUÉES ici, et pas seulement dans `parseLayout` : les
+ * compos du registre committé (`composedLayouts.ts`) arrivent en objets typés
+ * sans repasser par le parse. Sans ce reborne, une vitesse à 0 dans une compo
+ * générée produirait un cycle infini ; un `count` à 999, 999 sprites.
+ */
+export function planPathWalkers(
+  layout: StageLayout,
+  worldW: number,
+  worldH: number
+): PathWalkerPlan[] {
+  const offX = worldW / 2
+  const offY = worldH / 2
+  const out: PathWalkerPlan[] = []
+
+  for (const p of layout.paths) {
+    if (p.points.length < 2) {
+      continue
+    }
+    const count = Math.round(clamp(p.count ?? 1, PATH_LIMITS.count.min, PATH_LIMITS.count.max))
+    if (count <= 0) {
+      continue
+    }
+
+    const points = p.points.map((pt) => ({ x: offX + pt.x, y: offY + pt.y }))
+    const speed = clamp(p.speed ?? PATH_DEFAULT_SPEED[p.type], PATH_LIMITS.speed.min, PATH_LIMITS.speed.max)
+    const pauseMs = clamp(p.pauseMs ?? 0, PATH_LIMITS.pauseMs.min, PATH_LIMITS.pauseMs.max)
+    const oneWay = p.oneWay === true
+
+    let total = 0
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i] as PathPoint
+      const b = points[i + 1] as PathPoint
+      total += Math.hypot(b.x - a.x, b.y - a.y)
+    }
+    const travelMs = (total / speed) * 1000
+    const cycleMs = oneWay ? travelMs + pauseMs : 2 * travelMs + 2 * pauseMs
+
+    for (let i = 0; i < count; i++) {
+      out.push({
+        pathId: p.id,
+        type: p.type,
+        // `skin: ''` (l'inspecteur remet « (défaut) » en chaîne vide) doit valoir
+        // « aucun skin » : sinon le rendu chercherait une texture nommée '' et
+        // le marcheur disparaîtrait au lieu de retomber sur le défaut.
+        // Alias : une compo d'avant le renommage peut porter `npc_ouvrier_a/b/c`.
+        skin: p.skin !== undefined && p.skin !== '' ? resolveWorkerSkin(p.skin) : null,
+        points,
+        speed,
+        pauseMs,
+        oneWay,
+        phaseMs: count > 1 ? (cycleMs / count) * i : 0
+      })
+    }
+  }
+  return out
+}
+
 /**
  * PNJ posés dans une compo → jobs de rendu (pur, testable, sans Phaser).
  * Convertit les coords composition (origine = centre monde) en monde.
@@ -292,6 +454,150 @@ export function planNpcJobs(
     role: n.kind === 'worker' ? 'npc_worker' : 'npc_trade',
     x: offX + n.x,
     y: offY + n.y,
-    skin: n.skin
+    // Alias : une compo sauvegardée avant le renommage pose encore
+    // `npc_ouvrier_a/b/c`. Sans cette résolution, ses PNJ disparaissent.
+    skin: resolveWorkerSkin(n.skin)
   }))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pools de feuilles par rôle de marche
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Feuille PNJ candidate à un rôle de marche.
+ * Sous-ensemble STRUCTUREL de `StageAmbientNpc` : la couche écran passe les
+ * entrées du stage telles quelles, le module reste un observateur (il ne va pas
+ * lire `STAGE_RENDER` lui-même).
+ */
+export interface WalkerSheet {
+  key: string
+  behavior: 'work' | 'patrol'
+  kind?: 'trade' | 'worker'
+}
+
+/** Feuilles éligibles à chaque rôle de marche, dans l'ordre de DÉCLARATION. */
+export interface WalkerPools {
+  /** Rôles `porteur` / `navetteur` (marche franche, charge). */
+  porteur: string[]
+  /** Rôle `signaleur` (patrouille). */
+  signaleur: string[]
+}
+
+/**
+ * Feuilles ouvrier du stage → pools par rôle de marche.
+ *
+ * POURQUOI : `_resolveKey` ne retenait qu'UNE feuille par rôle (premier indice de
+ * nom, sinon repli sur la 1re/2e feuille chargée). Les 24 jobs `signaleur` d'un
+ * stage pointaient donc TOUS la même texture, et les autres feuilles ouvrier
+ * n'étaient demandées par personne : 19 des 21 feuilles orphelines le sont par
+ * ce seul mécanisme. Distribuer les jobs DÉJÀ existants sur un pool rend l'art
+ * atteignable sans créer un seul job — donc sans toucher au cull à
+ * `WORKER_COUNT`, qui sélectionne des jobs et non des textures.
+ *
+ * Les pools sont bâtis sur `behavior` (la donnée qui DIT le rôle), pas sur le
+ * nom : `npc_stage05_porteur_blocs` est déclaré `patrol` et doit patrouiller,
+ * quel que soit son nom. L'ordre de déclaration est conservé → la feuille
+ * historiquement choisie reste en tête du pool (index 0), donc le premier job de
+ * chaque rôle garde sa texture : pas de churn visuel gratuit.
+ *
+ * Les feuilles `kind:'trade'` sont EXCLUES, et la raison n'est PAS « ce sont des
+ * gestes » : les feuilles `_work` le sont tout autant (VÉRIFIÉ sur les planches —
+ * toutes mono-ligne, 4 à 8 frames ; `walkFrameOf` s'adapte au gabarit réel). Les
+ * vraies raisons :
+ *  - elles sont DÉJÀ atteignables par le chemin `npc_trade` (auto-placement) :
+ *    les mettre aussi dans un pool de marche ne gagnerait aucune feuille ;
+ *  - elles portent une échelle CALIBRÉE par feuille (0.62/0.78) qu'un rôle de
+ *    marche écraserait avec le `WORKER_SCALE` uniforme ;
+ *  - les exclure corrige un défaut réel : sur `gros_oeuvre`, le repli d'indice de
+ *    `_resolveKey` faisait afficher `npc_stage05_grutier_trade` aux 24 signaleurs.
+ *
+ * Replis (toujours TOTAL tant qu'une feuille existe) : un pool vide emprunte à
+ * l'autre (`echafaudages` n'a que des `patrol`) ; si aucune feuille ouvrier, on
+ * retombe sur les feuilles restantes plutôt que de ne rien afficher.
+ */
+export function buildWalkerPools(sheets: readonly WalkerSheet[]): WalkerPools {
+  const workers = sheets.filter((s) => s.kind !== 'trade')
+  const porteur = workers.filter((s) => s.behavior === 'work').map((s) => s.key)
+  const signaleur = workers.filter((s) => s.behavior === 'patrol').map((s) => s.key)
+
+  // Repli 1 : un rôle sans feuille dédiée emprunte à l'autre.
+  const anyWorker = workers.map((s) => s.key)
+  const porteurPool = porteur.length > 0 ? porteur : (signaleur.length > 0 ? signaleur : anyWorker)
+  const signaleurPool = signaleur.length > 0 ? signaleur : (porteur.length > 0 ? porteur : anyWorker)
+
+  // Repli 2 : stage sans AUCUNE feuille ouvrier → les feuilles restantes
+  // (métier). Préserve la totalité historique de `_resolveKey`.
+  const all = sheets.map((s) => s.key)
+  return {
+    porteur: porteurPool.length > 0 ? porteurPool : all,
+    signaleur: signaleurPool.length > 0 ? signaleurPool : all
+  }
+}
+
+/**
+ * Feuille d'un job à `index` dans son pool (cyclique, déterministe).
+ * Pool vide → `null` (aucun ouvrier créé : jamais de texture fantôme).
+ */
+export function pickWalkerSkin(pool: readonly string[], index: number): string | null {
+  if (pool.length === 0) {
+    return null
+  }
+  return pool[((index % pool.length) + pool.length) % pool.length] ?? null
+}
+
+/** Distance min/max des PNJ métier auto-placés par rapport au centre du monde (px). */
+export const AUTO_TRADE_DIST_MIN = 420
+export const AUTO_TRADE_DIST_MAX = 520
+
+/** Écart angulaire entre deux métiers auto-placés (degrés) — secteur commun, silhouettes distinctes. */
+export const AUTO_TRADE_ANGLE_STEP = 40
+
+/**
+ * PNJ MÉTIER auto-placés sur un stage SANS compo sauvée (pur, testable).
+ *
+ * Les feuilles `kind:'trade'` (geste métier avec l'objet) n'étaient rendues que
+ * par le chemin « compo posée » (`planNpcJobs`), inatteignable tant que le
+ * registre des compos est vide — c.-à-d. sur les 10 stages. Ce planner donne au
+ * chemin de repli génératif les mêmes ancres que celles historiquement utilisées
+ * par les PNJ d'ambiance (rayon 420..520 autour du centre, secteur `baseAngleDeg`,
+ * un métier tous les 40°) : hors zone de spawn joueur, dans le monde, sans
+ * chevauchement.
+ *
+ * Rôle `npc_trade` ⇒ poste FIXE animé, rendu par le MÊME système que les autres
+ * ouvriers (SiteWorkers). On ne réintroduit donc PAS la double-population
+ * (ambiance errante « Lissajous » + navetteurs) qui donnait des tailles et des
+ * déplacements incohérents.
+ *
+ * Déterministe : aucune source d'aléa hors `seed`.
+ */
+export function planAutoTradeNpcs(
+  tradeKeys: readonly string[],
+  worldW: number,
+  worldH: number,
+  seed: number,
+  baseAngleDeg: number
+): Array<{ role: 'npc_trade'; x: number; y: number; skin: string }> {
+  const cx = worldW / 2
+  const cy = worldH / 2
+  const out: Array<{ role: 'npc_trade'; x: number; y: number; skin: string }> = []
+  for (const [i, skin] of tradeKeys.entries()) {
+    // Sel unique par PNJ : le placement d'un métier ne dépend pas du nombre des autres.
+    const salt = (0xab7c1234 + i * 0x9e3779b9) >>> 0
+    const h = Math.imul((seed ^ salt) >>> 0, 2654435761) >>> 0
+    const t = (h % 1000) / 1000
+    const dist = AUTO_TRADE_DIST_MIN + t * (AUTO_TRADE_DIST_MAX - AUTO_TRADE_DIST_MIN)
+    const angleDeg = (baseAngleDeg + i * AUTO_TRADE_ANGLE_STEP) % 360
+    const a = (angleDeg * Math.PI) / 180
+    // Convention Phaser (+y vers le bas) : on soustrait le sinus.
+    const x = cx + Math.cos(a) * dist
+    const y = cy - Math.sin(a) * dist
+    out.push({
+      role: 'npc_trade',
+      x: Math.max(0, Math.min(worldW, Math.round(x))),
+      y: Math.max(0, Math.min(worldH, Math.round(y))),
+      skin
+    })
+  }
+  return out
 }
