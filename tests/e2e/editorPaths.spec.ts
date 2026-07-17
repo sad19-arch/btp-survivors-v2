@@ -94,7 +94,7 @@ test('un chemin déjà tracé se RE-sélectionne au clic sur son tracé', async 
   await expect(page.locator('#path-speed')).toBeVisible()
 })
 
-test('un chemin CAMION sur un stage sans camion le DIT (fini l’échec silencieux)', async ({ page }) => {
+test('un chemin CAMION est rendu sur un stage SANS camion propre (le camion partagé)', async ({ page }) => {
   await openEditor(page)
   await page.locator('.sce-card[title="marker_truck_path"]').click()
   const canvas = page.locator('canvas')
@@ -104,7 +104,43 @@ test('un chemin CAMION sur un stage sans camion le DIT (fini l’échec silencie
   await canvas.click({ position: { x: box.width * 0.4, y: box.height * 0.6 } })
   await canvas.click({ position: { x: box.width * 0.6, y: box.height * 0.6 } })
   await page.keyboard.press('Enter')
-  // L'éditeur ouvre sur `fondations`, qui n'a pas de sprite de camion : le chemin
-  // était ignoré par un `continue` MUET côté rendu. L'inspecteur l'annonce.
-  await expect(page.locator('.sce-warn-err')).toContainText('pas de sprite de camion')
+
+  // Ce test attendait AVANT un avertissement « pas de sprite de camion » :
+  // l'éditeur ouvre sur `terrain_vierge` (`START_STAGE`), et seul le stage 02
+  // déclarait un camion, donc le chemin tombait dans un `continue` MUET. L'avertissement ne
+  // corrigeait rien — il ANNONÇAIT la panne. La cause est supprimée (`CAMION_SKIN`
+  // partagé, chargé sur les 10 stages), donc on verrouille désormais l'inverse :
+  // le chemin FONCTIONNE, et plus personne n'a de raison de s'en excuser.
+  await expect(page.locator('.sce-insp-title')).toContainText('Chemin camion')
+  // Un marcheur est réellement proposé — c'est ça, « le chemin est rendu ».
+  await expect(page.locator('#path-skin option')).toContainText(['(défaut)', 'Camion benne (4 directions)'])
+  // Le filtre par famille tient : jamais un PNJ ne conduit un chemin camion.
+  await expect(page.locator('#path-skin option')).toHaveCount(2)
+  // Plus AUCUNE alerte rouge — ni celle du camion, ni une autre.
+  await expect(page.locator('.sce-warn-err')).toHaveCount(0)
+})
+
+/**
+ * Le mécanisme d'alerte rouge (`.sce-warn-err`) n'est pas mort avec le camion : il
+ * porte encore la validation du layout. On le verrouille sur un cas ENCORE RÉEL —
+ * un prefab inconnu (compo écrite à la main, ou asset renommé/supprimé sous une
+ * compo existante) — sans quoi la suppression de l'alerte camion laisserait tout
+ * l'affichage des erreurs sans le moindre test.
+ */
+test('une compo qui référence un prefab INCONNU le dit en rouge', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.clear()
+    // Clé = `stageComposer:` + le stage d'OUVERTURE (`START_STAGE` = terrain_vierge,
+    // et non `fondations` : ce dernier n'est que le défaut du champ d'EditorScene,
+    // écrasé par `init(data.stageId)` — l'ancien commentaire de ce fichier se trompait).
+    // `parseLayout` ne valide PAS les prefabs contre la palette (un layout se charge
+    // même incomplet) : c'est `warnings()` qui doit le rattraper.
+    window.localStorage.setItem('stageComposer:terrain_vierge', JSON.stringify({
+      stage: 'terrain_vierge',
+      instances: [{ id: 'i1', prefab: 'prefab_qui_nexiste_pas', x: 0, y: 0 }]
+    }))
+  })
+  await page.goto('/?editor=true')
+  await page.waitForSelector('.sce-card[title="marker_worker_path"]', { timeout: 30_000 })
+  await expect(page.locator('.sce-warn-err')).toContainText('Prefab inconnu : prefab_qui_nexiste_pas.')
 })

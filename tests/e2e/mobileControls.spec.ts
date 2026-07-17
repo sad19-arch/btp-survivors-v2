@@ -33,13 +33,23 @@ test('mobile : le stick est masqué hors du jeu (au titre)', async ({ page }, te
 })
 
 /**
- * P4 refonte mobile — champ de vision : le zoom caméra vient de la source de
- * vérité responsive. Desktop : 1.2 STRICT (parité PC, zéro régression).
- * Mobile : adaptatif — la DIAGONALE de monde visible rejoint la référence PC
- * (1600×900, demi-diag ≈ 918) sans jamais la dépasser (les spawns, ancrés à
- * SPAWN.ringRadius = 1040, restent hors écran).
+ * P4 refonte mobile + MOB-LATER — champ de vision : le zoom caméra vient de la
+ * source de vérité responsive (`computeViewport`), adaptatif à la TAILLE du
+ * viewport et non au type d'entrée.
+ *
+ * Ce test exigeait « desktop = 1.2 STRICT ». Cette règle N'EXISTE PLUS : MOB-LATER
+ * (« zoom adaptatif aussi sur petit écran PC ») l'a remplacée par une formule
+ * unique — zoom = clamp(demi-diagonale écran / REF_HALF_DIAG, 0.45, 1.2). Un écran
+ * ≥ 1920×1080 y retombe exactement sur 1.2 (parité PC intacte), mais le viewport
+ * Playwright « Desktop Chrome » fait 1280×720 → 0.80. L'égalité stricte encodait
+ * donc la taille de la fenêtre de test, pas une règle produit.
+ *
+ * L'INVARIANT réel, lui, est le même pour les deux plateformes et vaut mieux qu'une
+ * égalité : la demi-diagonale de monde visible reste ≤ la référence PC (≈ 918), donc
+ * en-deçà de SPAWN.ringRadius = 1040 — les ennemis apparaissent HORS écran. C'est
+ * la propriété de gameplay que la formule sert ; c'est elle qu'on verrouille.
  */
-test('FOV : zoom desktop 1.2 strict / mobile élargi (diagonale ≈ référence PC)', async ({ page }, testInfo) => {
+test('FOV : zoom adaptatif borné / diagonale visible ≤ référence PC (spawn hors-écran)', async ({ page }, testInfo) => {
   const isMobile = testInfo.project.name === 'mobile'
   await page.goto('/?autostart=solo&level=1&seed=7&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
@@ -53,17 +63,30 @@ test('FOV : zoom desktop 1.2 strict / mobile élargi (diagonale ≈ référence 
   expect(cam).not.toBeNull()
   if (cam === null) { return }
 
+  const visibleW = cam.w / cam.zoom
+  const visibleHalfDiag = Math.hypot(cam.w, cam.h) / 2 / cam.zoom
+
+  // ─ Invariant commun aux DEUX plateformes (c'est le cœur du test) ─
+  // Bornes de la formule : jamais plus zoomé que la référence PC, jamais moins
+  // lisible que le plancher (héros ~99 px monde ⇒ ≥ ~45 px écran).
+  expect(cam.zoom).toBeGreaterThanOrEqual(0.45)
+  expect(cam.zoom).toBeLessThanOrEqual(1.2)
+  // Spawn hors-écran : diagonale visible ≤ référence PC (918) + tolérance d'arrondi
+  // (`cameraZoom` est snappé à 2 décimales). Au-delà, un ennemi apparu sur l'anneau
+  // SPAWN.ringRadius = 1040 serait visible à l'écran — bug de gameplay, pas cosmétique.
+  expect(visibleHalfDiag).toBeLessThanOrEqual(919)
+
   if (isMobile) {
-    // Zoom adaptatif dans les bornes [0.45, 1.2[ et vue NETTEMENT élargie.
-    expect(cam.zoom).toBeGreaterThanOrEqual(0.45)
+    // Pixel 7 (412×839) : la formule dé-zoome fortement.
     expect(cam.zoom).toBeLessThan(0.7)
-    const visibleW = cam.w / cam.zoom
-    const visibleHalfDiag = Math.hypot(cam.w, cam.h) / 2 / cam.zoom
     // Avant P4 : ~343 unités monde de large sur Pixel 7. Après : > 700 (≈ ×2.3).
     expect(visibleW).toBeGreaterThan(700)
-    // Invariant spawn hors-écran : diagonale visible ≤ référence PC (918) + arrondi.
-    expect(visibleHalfDiag).toBeLessThanOrEqual(919)
   } else {
-    expect(cam.zoom).toBeCloseTo(1.2, 5)
+    // Desktop Chrome (1280×720) : plus petit que la référence 1920×1080, donc la
+    // formule dé-zoome AUSSI sur PC (MOB-LATER). Borne haute stricte : à 1.2 sur
+    // 1280×720 la vue serait ~1.5× trop étroite et le jeu injouable au regard de la
+    // référence — c'est la régression que le seuil garde, pas une valeur figée.
+    expect(cam.zoom).toBeLessThan(1.2)
+    expect(visibleW).toBeGreaterThan(900)
   }
 })

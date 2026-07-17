@@ -381,15 +381,13 @@ export class EditorOverlay {
       this.inspector.appendChild(none)
     }
 
-    // Le camion sans texture était ignoré par un `continue` MUET : on traçait, et
-    // rien n'apparaissait, sans un mot. Seul le stage 02 déclare un camion.
-    if (isTruck && skins.length === 0) {
-      const w = document.createElement('div')
-      w.className = 'sce-warn sce-warn-err'
-      w.textContent = 'Ce niveau n’a pas de sprite de camion : AUCUN véhicule n’apparaîtra sur ce chemin. Utilise un chemin ouvrier, ou compose sur « 02 · Terrassement ».'
-      this.inspector.appendChild(w)
-    }
-
+    // Ici vivait un avertissement « ce niveau n'a pas de sprite de camion ». Il
+    // signalait un `continue` MUET côté rendu : seul le stage 02 déclarait un
+    // camion, donc un chemin camion tracé sur les 9 autres ne produisait RIEN.
+    // C'était un pansement sur la panne, pas un correctif. La cause est supprimée
+    // (`CAMION_SKIN` partagé, chargé par `GameScene.preload` sur les 10 stages) :
+    // `walkerSkinsFor(_, 'truck_path')` ne peut plus rendre une liste vide, la
+    // condition était donc DÉFINITIVEMENT morte. Un chemin camion est rendu partout.
     const row = document.createElement('div')
     row.className = 'sce-insp-actions'
     row.appendChild(btn('Supprimer le chemin (Suppr)', () => state.deletePath(p.id), 'sce-btn-danger'))
