@@ -47,6 +47,21 @@ export interface PaletteEntry {
   npcKind?: 'trade' | 'worker'
   /** Type de destructible posé par cette entrée (catégorie `destructibles`). */
   destructibleTypeId?: string
+  /**
+   * Pas de grille IMPOSÉ à la pose, en px (défaut : `EditorState.gridSize`, et
+   * seulement si le snap global est actif).
+   *
+   * Le kit de routes est le cas qui l'exige : deux tuiles 256 ne raccordent QUE
+   * si elles sont posées sur un multiple de 256. Or le snap global est à `false`
+   * par défaut et la grille à 128 → à la souris, deux tuiles ne tombent JAMAIS
+   * en face. Une entrée qui déclare `snap` force donc l'alignement, que le snap
+   * global soit actif ou non : c'est une contrainte de l'ASSET, pas une
+   * préférence de l'utilisateur.
+   *
+   * Déclaré en DONNÉE (comme le rôle → la couche) : surtout pas déduit d'un
+   * match de sous-chaîne sur la clé.
+   */
+  snap?: number
 }
 
 export interface Category {
@@ -145,6 +160,11 @@ interface PaletteItem {
   label: string
   category: string
   role: AssetRole
+  /**
+   * Pas de grille IMPOSÉ à la pose (px). Voir `PaletteEntry.snap` : une tuile de
+   * route ne raccorde que posée sur un multiple de sa taille.
+   */
+  snap?: number
 }
 
 const PALETTE_ITEMS: readonly PaletteItem[] = [
@@ -215,7 +235,33 @@ const PALETTE_ITEMS: readonly PaletteItem[] = [
   { key: 'pal_culvert_pipes', file: 'palette/props/culvert_pipes.png', label: 'Buses béton', category: 'nature', role: 'prop' },
   { key: 'pal_embankment', file: 'palette/props/embankment.png', label: 'Talus', category: 'nature', role: 'prop' },
   { key: 'pal_farm_fence', file: 'palette/props/farm_fence.png', label: 'Clôture agricole', category: 'nature', role: 'prop' },
-  { key: 'pal_muddy_pond', file: 'palette/decals/muddy_pond.png', label: 'Mare', category: 'nature', role: 'decal' }
+  { key: 'pal_muddy_pond', file: 'palette/decals/muddy_pond.png', label: 'Mare', category: 'nature', role: 'decal' },
+
+  // ── Routes & accès (kit 256 px) ───────────────────────────────────────────
+  // Tuiles composées par `tools/assets/make-roads.mjs` : chaussée + accotements
+  // en matière PixelLab, géométrie exacte. Elles raccordent PAR CONSTRUCTION —
+  // l'axe traverse toujours le bord au milieu (128) et perpendiculairement, donc
+  // toutes les pièces présentent le MÊME profil de bord.
+  //
+  // `role: 'decal'` (→ `layerForRole` → couche 'decal') : une route est peinte au
+  // SOL et ne bloque pas. C'est exactement le bug historique de `piste_strip`,
+  // qui flottait à hauteur de prop faute de rôle correct.
+  //
+  // `snap: 256` : sans lui, les tuiles ne tombent jamais en face (grille 128,
+  // snap global à false par défaut). Une seule orientation par pièce suffit —
+  // l'instance porte `rotation` (0/90/180/270), transportée jusqu'au jeu par
+  // `buildSiteLayout` (`rotationDeg`) puis appliquée par `siteRenderer`.
+  { key: 'pal_route_goudron_droite', file: 'palette/routes/goudron_droite.png', label: 'Goudron — droite', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_goudron_virage', file: 'palette/routes/goudron_virage.png', label: 'Goudron — virage 90°', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_goudron_te', file: 'palette/routes/goudron_te.png', label: 'Goudron — T', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_goudron_croisement', file: 'palette/routes/goudron_croisement.png', label: 'Goudron — croisement', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_goudron_fin', file: 'palette/routes/goudron_fin.png', label: 'Goudron — fin (barre d\'arrêt)', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_piste_droite', file: 'palette/routes/piste_droite.png', label: 'Piste — droite', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_piste_virage', file: 'palette/routes/piste_virage.png', label: 'Piste — virage 90°', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_piste_te', file: 'palette/routes/piste_te.png', label: 'Piste — T', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_piste_croisement', file: 'palette/routes/piste_croisement.png', label: 'Piste — croisement', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_piste_fin', file: 'palette/routes/piste_fin.png', label: 'Piste — fin', category: 'routes', role: 'decal', snap: 256 },
+  { key: 'pal_route_jonction', file: 'palette/routes/jonction_goudron_piste.png', label: 'Jonction goudron → piste', category: 'routes', role: 'decal', snap: 256 }
 ]
 
 const PALETTE_PACK: EditorAsset[] = PALETTE_ITEMS.map(({ key, file, label, role }) => ({ key, file, label, role }))
@@ -242,7 +288,7 @@ const SHARED_DECOR_ASSETS: EditorAsset[] = [
  * et à leur donner un nom métier (au lieu du nom de fichier humanisé). Une clé
  * absente = comportement par défaut (catégorie déduite du rôle, libellé humanisé).
  */
-const ASSET_META: Record<string, { label: string; category: string }> = {
+const ASSET_META: Record<string, { label: string; category: string; snap?: number }> = {
   // Stage 01 — implantation / topographie (assets EXISTANTS)
   prop_stakes: { label: 'Piquets topo', category: 'topo' },
   struct_stage01_plot: { label: 'Parcelle piquetée', category: 'topo' },
@@ -310,11 +356,11 @@ const ASSET_META: Record<string, { label: string; category: string }> = {
 
   // Pack « palette » : DÉRIVÉ de `PALETTE_ITEMS` (source unique) — le libellé et la
   // catégorie ne peuvent pas diverger de l'asset qu'ils décrivent.
-  ...Object.fromEntries(PALETTE_ITEMS.map((i) => [i.key, { label: i.label, category: i.category }]))
+  ...Object.fromEntries(PALETTE_ITEMS.map((i) => [i.key, { label: i.label, category: i.category, snap: i.snap }]))
 }
 
-/** Méta (label FR + catégorie) d'un asset, ou null si non répertorié. */
-export function assetMeta(key: string): { label: string; category: string } | null {
+/** Méta (label FR + catégorie + pas de grille imposé) d'un asset, ou null si non répertorié. */
+export function assetMeta(key: string): { label: string; category: string; snap?: number } | null {
   const building = CITY_BUILDINGS.find((candidate) => candidate.key === key)
   if (building !== undefined) {
     return { label: building.label, category: 'buildings' }
@@ -496,7 +542,14 @@ function objectEntries(assets: EditorAsset[]): PaletteEntry[] {
     const isDecal = a.role === 'decal'
     const size: EntrySize = a.role === 'landmark' || a.role === 'structure' ? 'grande' : isDecal ? 'petite' : 'moyenne'
     const category = meta?.category ?? (isDecal ? 'decor' : 'objects')
-    out.push({ id: 'obj_' + a.key, label, category, kind: isDecal ? 'decor' : 'objet', size, elements: [{ assetKey: a.key, dx: 0, dy: 0, scale: 1.0 }] })
+    const entry: PaletteEntry = { id: 'obj_' + a.key, label, category, kind: isDecal ? 'decor' : 'objet', size, elements: [{ assetKey: a.key, dx: 0, dy: 0, scale: 1.0 }] }
+    // Contrainte de pose portée par l'ASSET (kit de routes) — cf. `PaletteEntry.snap`.
+    if (meta?.snap !== undefined) {
+      entry.snap = meta.snap
+      // Une tuile de route n'est pas une vignette : elle occupe 2 cellules.
+      entry.size = 'grande'
+    }
+    out.push(entry)
   }
   return out
 }

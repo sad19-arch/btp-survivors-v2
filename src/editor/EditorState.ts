@@ -651,6 +651,26 @@ export class EditorState {
     const g = this.gridSize
     return { x: Math.round(x / g) * g, y: Math.round(y / g) * g }
   }
+  /**
+   * Pas de grille EXIGÉ par un prefab, s'il en déclare un (`PaletteEntry.snap`).
+   * `null` = aucune exigence → le snap global (préférence utilisateur) s'applique.
+   */
+  snapStepFor(prefab: string): number | null {
+    return paletteEntry(prefab)?.snap ?? null
+  }
+  /**
+   * Snap pour la pose/le déplacement d'un PREFAB donné.
+   *
+   * Un prefab qui DÉCLARE un pas (tuile de route) est aligné MÊME si le snap
+   * global est désactivé : sans ça, deux tuiles 256 ne raccordent jamais — c'est
+   * une contrainte de l'asset, pas une préférence. Tout autre prefab garde le
+   * comportement d'avant, au bit près.
+   */
+  applySnapFor(prefab: string, x: number, y: number): Vec2 {
+    const step = this.snapStepFor(prefab)
+    if (step === null) {return this.applySnap(x, y)}
+    return { x: Math.round(x / step) * step, y: Math.round(y / step) * step }
+  }
 
   // ── import / export ───────────────────────────────────────────────────────
   exportJson(): string {

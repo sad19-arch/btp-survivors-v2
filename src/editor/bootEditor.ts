@@ -195,7 +195,7 @@ export function bootEditor(): void {
     }
     const rect = canvas.getBoundingClientRect()
     const w = curScene.cameras.main.getWorldPoint(e.clientX - rect.left, e.clientY - rect.top)
-    const s = state.applySnap(w.x - OFFSET_X, w.y - OFFSET_Y)
+    const s = state.applySnapFor(id, w.x - OFFSET_X, w.y - OFFSET_Y)
     state.addInstance(id, s.x, s.y)
   })
 

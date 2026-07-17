@@ -267,7 +267,7 @@ export class EditorScene extends Phaser.Scene {
     const cam = this.cameras.main
     const wx = cam.midPoint.x
     const wy = cam.midPoint.y
-    const p = this.state.applySnap(wx - OFFSET_X, wy - OFFSET_Y)
+    const p = this.state.applySnapFor(this.activePrefab, wx - OFFSET_X, wy - OFFSET_Y)
     const entry = paletteEntry(this.activePrefab)
     if (entry?.npcSkin !== undefined) {
       this.state.addNpc(entry.npcSkin, entry.npcKind ?? 'trade', OFFSET_X + p.x, OFFSET_Y + p.y)
@@ -361,7 +361,7 @@ export class EditorScene extends Phaser.Scene {
     // Prefab actif → poser. Une entrée PNJ (npcSkin défini) pose un LayoutNpc
     // AVANT la branche instance (les PNJ sont un système distinct du décor).
     if (this.activePrefab !== null) {
-      const s = this.state.applySnap(comp.x, comp.y)
+      const s = this.state.applySnapFor(this.activePrefab, comp.x, comp.y)
       const entry = paletteEntry(this.activePrefab)
       if (entry?.npcSkin !== undefined) {
         this.state.addNpc(entry.npcSkin, entry.npcKind ?? 'trade', OFFSET_X + s.x, OFFSET_Y + s.y)
@@ -490,6 +490,17 @@ export class EditorScene extends Phaser.Scene {
     if (this.dragId !== null && p.leftButtonDown()) {
       const w = this.worldPoint(p)
       const raw = { x: w.x - OFFSET_X - this.dragOffset.x, y: w.y - OFFSET_Y - this.dragOffset.y }
+      // Prefab à pas IMPOSÉ (tuile de route) : la grille EST l'alignement. On
+      // court-circuite `alignSnap` — son magnétisme de 22 px sur les bords des
+      // objets voisins décalerait la tuile hors du pas de 256, et le raccord
+      // sauterait sans que rien ne le signale.
+      const inst = this.dragIsNpc ? undefined : this.state.instances.find((i) => i.id === this.dragId)
+      const step = inst !== undefined ? this.state.snapStepFor(inst.prefab) : null
+      if (step !== null && inst !== undefined) {
+        const s = this.state.applySnapFor(inst.prefab, raw.x, raw.y)
+        this.state.moveInstance(this.dragId, s.x, s.y)
+        return
+      }
       const gridSnap = this.state.applySnap(raw.x, raw.y)
       const aligned = this.alignSnap(gridSnap.x, gridSnap.y, this.dragId)
       if (this.dragIsNpc) {

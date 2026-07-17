@@ -15,7 +15,7 @@ import { assetSolidity } from '@content/assetSolidity'
  *     tableau. C'est le bug « routes livrées mais introuvables » (cf.
  *     `editorCatalog.test.ts`) : la fonctionnalité était là, l'étiquette manquait.
  *  3. **Pas de retour au fourre-tout.** `objectEntries` retombe sur `objects` quand
- *     `ASSET_META` ne connaît pas la clé. Silencieux, et 55 items y disparaîtraient.
+ *     `ASSET_META` ne connaît pas la clé. Silencieux, et 66 items y disparaîtraient.
  *  4. **Le fichier existe.** Une clé qui pointe sur un PNG absent ne casse rien au
  *     build : elle produit une texture manquante à l'exécution, dans l'éditeur.
  *  5. **Couche d'affichage.** Un marquage au sol doit être `decal`, sinon il
@@ -25,7 +25,8 @@ import { assetSolidity } from '@content/assetSolidity'
  */
 
 const PREFIX = 'pal_'
-const EXPECTED_COUNT = 55
+/** 55 items des 7 familles de décor + 11 tuiles du kit de routes 256 px. */
+const EXPECTED_COUNT = 66
 
 function paletteAssets(stageId: string) {
   return getStageCatalog(stageId).assets.filter((a) => a.key.startsWith(PREFIX))
@@ -69,14 +70,31 @@ describe('pack palette — cohérence des données', () => {
     expect(unnamed.map((a) => a.key)).toEqual([])
   })
 
-  it('les 7 familles du pack sont toutes peuplées', () => {
+  it('les 8 familles du pack sont toutes peuplées', () => {
     const counts = new Map<string, number>()
     for (const e of paletteEntries('livraison_audit')) {
       counts.set(e.category, (counts.get(e.category) ?? 0) + 1)
     }
-    for (const family of ['verdure', 'mobilier', 'reseaux', 'engins', 'vie_chantier', 'marquages', 'nature']) {
+    for (const family of ['verdure', 'mobilier', 'reseaux', 'engins', 'vie_chantier', 'marquages', 'nature', 'routes']) {
       expect(counts.get(family) ?? 0, `famille « ${family} » vide`).toBeGreaterThan(0)
     }
+  })
+
+  it('chaque tuile de route IMPOSE le pas de 256 (sans quoi elle ne raccorde pas)', () => {
+    // Le raccord ne dépend pas que des pixels : une tuile 256 posée à la souris
+    // sur une grille de 128, snap global à `false` par défaut, ne tombe JAMAIS en
+    // face de sa voisine. `snap` est donc porté par l'ENTRÉE (donnée), et
+    // `EditorState.applySnapFor` l'applique même si le snap global est éteint.
+    const routes = paletteEntries('livraison_audit').filter((e) => e.category === 'routes')
+    expect(routes).toHaveLength(11)
+    for (const e of routes) {
+      expect(e.snap, `${e.id} doit imposer un pas de 256`).toBe(256)
+    }
+  })
+
+  it('aucune entrée HORS routes n’impose de pas (le reste garde le comportement d’avant)', () => {
+    const others = paletteEntries('livraison_audit').filter((e) => e.category !== 'routes')
+    expect(others.filter((e) => e.snap !== undefined).map((e) => e.id)).toEqual([])
   })
 })
 
