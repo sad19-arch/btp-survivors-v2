@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   musicForState, MUSIC, SFX, VOICE, voiceStage, SFX_FILES, MUSIC_FILES_SHARED, VOICE_FILES,
   WEAPON_SFX_IDS, WEAPON_SFX_FILES_REJETES, WEAPON_FILE_TRIM, WEAPON_FILE_VOLUME,
-  WEAPON_FILE_BANDE_LUFS, weaponFileGain, CARNAGE_GORE_IDS, CARNAGE_GORE_ID_REJETE
+  WEAPON_FILE_BANDE_LUFS, weaponFileGain, CARNAGE_GORE_IDS, CARNAGE_GORE_IDS_REJETES
 } from '@/audio/manifest'
 import { WEAPON_ZZFX } from '@/audio/weaponSfx'
 import { clamp01, musicGain, sfxGain, duckedGain, type AudioLevels } from '@/audio/settings'
@@ -159,13 +159,37 @@ describe('audio — niveaux des SFX d\'armes (fichier)', () => {
       expect(WEAPON_ZZFX[id], `${id} sans repli zzfx`).toBeDefined()
     }
   })
+
+  it('goudron et coulee_bitume, régénérés, sont rebranchés SANS trim', () => {
+    // Ces deux-là ont été livrés morts puis régénérés (−11.5 et −12.2 LUFS,
+    // dans la bande de la famille). Le fait qu'ils ne demandent AUCUN trim est
+    // le signe que la source est bonne : un trim ici voudrait dire qu'on
+    // rattrape au gain un fichier qu'il fallait refaire — l'erreur d'origine.
+    for (const id of ['goudron', 'coulee_bitume']) {
+      expect(WEAPON_SFX_IDS, `${id} pas rebranché`).toContain(id)
+      expect(WEAPON_SFX_FILES_REJETES, `${id} encore en quarantaine`).not.toContain(id)
+      expect(WEAPON_FILE_TRIM[id], `${id} rattrapé au gain au lieu d'être sain`).toBeUndefined()
+    }
+  })
 })
 
 describe('audio — pool de gore du Mode Carnage', () => {
-  it('la variante écartée n\'est pas dans le pool tiré au sort', () => {
-    // gore_2 est 20 dB sous ses pairs : tirée dans le même pool, sous le même
-    // volume, elle s'entendrait comme un trou (une mort sur cinq muette).
-    expect(CARNAGE_GORE_IDS).not.toContain(CARNAGE_GORE_ID_REJETE)
+  it('aucune variante écartée ne reste dans le pool tiré au sort', () => {
+    // Liste vide aujourd'hui — gore_2, longtemps 20 dB sous ses pairs, a été
+    // régénérée (−12.1 LUFS) et a rejoint le pool. L'invariant, lui, tient :
+    // une variante écartée pour son niveau ne doit JAMAIS être tirée au sort,
+    // car sous le même volume elle s'entendrait comme un trou.
+    for (const rejete of CARNAGE_GORE_IDS_REJETES) {
+      expect(CARNAGE_GORE_IDS, `gore_${rejete} écarté mais encore dans le pool`).not.toContain(rejete)
+    }
+  })
+
+  it('les 5 variantes livrées sont toutes dans le pool (aucune n\'est en quarantaine)', () => {
+    // Le pendant du test ci-dessus : il interdit de tirer une variante écartée,
+    // celui-ci interdit d'en OUBLIER une en quarantaine après régénération —
+    // c'est exactement l'état dans lequel gore_2 a dormi.
+    expect(CARNAGE_GORE_IDS).toEqual([1, 2, 3, 4, 5])
+    expect(CARNAGE_GORE_IDS_REJETES).toEqual([])
   })
 
   it('le pool garde plusieurs variantes (une seule saoulerait à une mort/seconde)', () => {

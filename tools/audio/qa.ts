@@ -36,7 +36,7 @@ import { join, relative } from 'node:path'
 import {
   WEAPON_FILE_TRIM,
   WEAPON_SFX_FILES_REJETES,
-  CARNAGE_GORE_ID_REJETE
+  CARNAGE_GORE_IDS_REJETES
 } from '@/audio/manifest'
 
 const AUDIO_DIR = join('public', 'audio')
@@ -77,7 +77,7 @@ const FAMILLES: readonly Famille[] = [
  */
 const REJETES_CONNUS = new Set<string>([
   ...WEAPON_SFX_FILES_REJETES.map((id) => `sfx/weapons/weapon_${id}.mp3`),
-  `sfx/carnage/gore_${CARNAGE_GORE_ID_REJETE}.mp3`
+  ...CARNAGE_GORE_IDS_REJETES.map((n) => `sfx/carnage/gore_${n}.mp3`)
 ])
 
 /**

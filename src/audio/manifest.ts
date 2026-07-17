@@ -97,27 +97,31 @@ export const WEAPON_SFX_IDS: readonly string[] = [
   // Armes de base (scie = whir périodique discret, throttlé côté AudioDirector).
   'cloueur', 'boulons', 'cle_molette', 'brouette', 'pied_de_biche', 'extincteur', 'scie', 'chalumeau',
   // Armes évoluées.
-  'mitrailleuse_clous', 'haute_tension', 'tempete_boulons', 'cle_choc', 'canon_mousse', 'transpalette', 'lance_thermique'
+  'mitrailleuse_clous', 'haute_tension', 'tempete_boulons', 'cle_choc', 'canon_mousse', 'transpalette', 'lance_thermique',
+  // Régénérées après avoir été livrées mortes (cf. `WEAPON_SFX_FILES_REJETES`).
+  'goudron', 'coulee_bitume'
 ]
 
 /**
  * Armes dont le FICHIER généré est INEXPLOITABLE — volontairement absentes de
  * `WEAPON_SFX_IDS` pour que `playWeaponSfx` retombe sur le zzfx taillé main.
  *
- * Mesuré (EBU R128, max momentané) sur les fichiers livrés par b67ec6c/1480078 :
- *   weapon_goudron.mp3       M-max −50.3 LUFS · pic −30.0 dBFS · 4 dB au-dessus de son propre bruit de fond
- *   weapon_coulee_bitume.mp3 M-max −58.2 LUFS · pic −40.9 dBFS · 9 dB au-dessus de son propre bruit de fond
- * Le reste de la famille tient dans −20…−5 LUFS. Ces deux-là jouaient donc à
- * ~45-53 dB SOUS leurs voisines, sous une musique à ≈ −18 dBFS : inaudibles.
- * Ils ne sont pas rattrapables au gain — il n'y a quasiment que du bruit de
- * fond à remonter. Les fichiers restent dans `public/` en attendant une
- * REGÉNÉRATION ; les rebrancher = les remettre dans `WEAPON_SFX_IDS`.
+ * VIDE aujourd'hui : le mécanisme reste, la quarantaine est levée.
+ *
+ * Historique, parce que c'est le mode de panne à ne pas refaire — `goudron` et
+ * `coulee_bitume` ont été livrés MORTS par b67ec6c/1480078, mesurés à −50.3 et
+ * −58.2 LUFS (M-max) quand leur famille tient dans −20…−5 : 45-53 dB sous leurs
+ * voisines, sous une musique à ≈ −18 dBFS. Le défaut n'était pas « un peu bas » :
+ * leur fenêtre de 20 ms la PLUS FORTE plafonnait à −42.9 et −54.1 dBFS, sans la
+ * moindre attaque — des queues de son sans corps. REGÉNÉRÉS (ElevenLabs), ils
+ * mesurent désormais −11.5 et −12.2 LUFS, dans la bande de la famille et sans
+ * trim : un fichier sain n'a besoin d'aucun rattrapage.
  *
  * La cause racine : le critère de recette de ces deux commits était « chargement
  * 200 vérifié » — un fichier qui se télécharge, pas un fichier qui s'entend.
  * `npm run audio:qa` mesure désormais le niveau et casse sur ce cas.
  */
-export const WEAPON_SFX_FILES_REJETES: readonly string[] = ['goudron', 'coulee_bitume']
+export const WEAPON_SFX_FILES_REJETES: readonly string[] = []
 
 /** Gain nominal d'un SFX d'arme en FICHIER, avant trim et avant le gain SFX utilisateur. */
 export const WEAPON_FILE_VOLUME = 0.5
@@ -180,17 +184,21 @@ export function weaponFileGain(id: string): number {
  * PLUSIEURS variantes : à raison d'une mort par seconde, une seule saoulerait vite.
  * Fichiers volontairement courts (~0.7-0.8 s, ~7 Ko pièce, 40 Ko le lot).
  *
- * ⚠️ `gore_2` est ÉCARTÉ (cf. `CARNAGE_GORE_ID_REJETE`) : les 4 retenues tiennent
- * dans 4 dB (M-max −15.2…−11.1 LUFS), gore_2 est à −34.1 — 20 dB sous ses pairs.
- * Tirée au sort dans le même pool sous le MÊME `volume`, elle s'entendrait comme
- * un trou : une mort sur cinq muette. Et elle n'est pas rattrapable au gain (son
- * pic est déjà à −15.7 dBFS pour un M-max de −34.1 : +20 dB de correction la
- * ferait clipper à +4 dBFS). À REGÉNÉRER pour rejoindre le pool.
+ * `gore_2` a été livrée à −34.1 LUFS (M-max) contre −15.2…−11.1 pour ses 4 sœurs :
+ * tirée dans le même pool sous le MÊME `volume`, elle s'entendait comme un trou —
+ * une mort sur cinq muette. Elle avait la bonne FORME (des impacts, une queue)
+ * mais sans corps : sa fenêtre la plus forte plafonnait à −29.7 dBFS quand
+ * gore_1 monte à −9.1. Non rattrapable au gain (pic déjà à −15.7 dBFS : +20 dB
+ * l'auraient fait clipper à +4). REGÉNÉRÉE, elle mesure −12.1 LUFS et a rejoint
+ * le pool.
  */
-export const CARNAGE_GORE_IDS: readonly number[] = [1, 3, 4, 5]
+export const CARNAGE_GORE_IDS: readonly number[] = [1, 2, 3, 4, 5]
 
-/** Variante de gore écartée du pool (niveau incohérent) — cf. `CARNAGE_GORE_IDS`. */
-export const CARNAGE_GORE_ID_REJETE = 2
+/**
+ * Variantes de gore écartées du pool (niveau incohérent) — cf. `CARNAGE_GORE_IDS`.
+ * VIDE aujourd'hui : le mécanisme reste, la quarantaine est levée.
+ */
+export const CARNAGE_GORE_IDS_REJETES: readonly number[] = []
 
 export const SFX_FILES: ReadonlyArray<readonly [string, string]> = [
   ...SFX_NAMES.map((n) => [`sfx_${n}`, `audio/sfx/${n}.wav`] as const),
