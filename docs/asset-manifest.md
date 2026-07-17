@@ -151,6 +151,55 @@ noir sur blanc** — même classe que le « NOT a side view » ignoré de §3bis
 **nier une composition la RENFORCE**. Un prompt a même ajouté un petit
 personnage non demandé.
 
+## 3quater. Contraintes d'API mesurées (lot « machines vivantes », 5 engins)
+
+### 🔴 La TAILLE DE CANVAS peut forcer un fond OPAQUE
+
+**Canvas 224×192 ⇒ fond opaque, 3/3 d'échecs** (v1, v2, v7) contre **0/5** en
+224×176 · 224×160 · 192×192 · 176×176 · 96×96 — **à prompt et `view`
+IDENTIQUES**. Ce n'est pas le prompt : c'est **la taille**. Si un fond opaque
+sort, **changer de canvas** avant de retoucher le texte.
+
+### 🔴 `animate_object` v3 APLATIT la perspective — aucun paramètre n'y peut rien
+
+Testé **2 vues source × 3 formulations**, dont un « camera locked » explicite.
+L'animation revient plus plate que sa source, quoi qu'on fasse. **Aucun
+paramètre d'API ne pilote la vue de l'animation.** Conséquence : un asset dont
+la 3/4 est le seul intérêt **perdra** en s'animant — l'accepter ou garder la
+statique.
+
+### `keep_first_frame: false` supprime le piège de la frame-0 opaque À LA SOURCE
+
+Plutôt que de rogner après coup : `frame_count: 6` + `keep_first_frame: false`
+⇒ 6 frames générées, **aucune frame de référence à retirer**.
+
+### La parade 3/4 échoue sur la GÉOMÉTRIE, pas sur la classe d'objet
+
+Demander « RAISED HIGH / TALL » a **cassé** la 3/4 d'une nacelle (2 échecs) ;
+demander **« compact, wider than tall »** l'a restaurée. Ce n'est pas « les
+poteaux » qui résistent — c'est **tout ce qui est haut-et-fin**.
+
+### L'angle mort sémantique du packing : « ça ACCUMULE », pas « ce type de geste »
+
+Prédire l'aller-retour d'après le **type de mouvement** (« monte/descend »,
+« balancier ») est **faux** : vérifié image par image sur nacelle et crochet →
+le modèle rend des **cycles complets** (frame N ≈ frame 0), boucle directe.
+Ce qui décide vraiment : **est-ce que quelque chose s'accumule ?** Le tas de
+terre du bulldozer, oui — boucler le ferait disparaître d'un coup. Une nacelle,
+non. Mesuré : **1 aller-retour sur 6**.
+
+### Caler `scale` sur la MASSE APPARENTE, pas sur la hauteur
+
+Caler sur la hauteur de figure **surdimensionne** quand la perspective change
+l'aspect (toupie : 1,69 contre 1,20 attendu). Utiliser **√(w·h)** de la
+bounding box.
+
+### Dérive TEXTE
+
+Du baragouin gravé sur un châssis (1re occurrence). Négation explicite
+« NO letters, NO writing » requise — c'est l'un des rares cas où la négation
+marche, parce qu'elle porte sur un **ajout**, pas sur une composition.
+
 **Parade** : retirer **tout** le vocabulaire de circulation et ne décrire que le
 POSITIF (« a flat expanse of bare dry earth… empty soil only ») → terre nue propre
 du premier coup.
