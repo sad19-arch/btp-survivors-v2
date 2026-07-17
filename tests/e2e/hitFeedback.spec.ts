@@ -181,8 +181,14 @@ test('perf horde : fps-horde reste stable après l\'ajout du feedback de coup', 
 
   console.log(`[hitFeedback-perf] samples=${sample.count} median=${sample.median.toFixed(2)}ms p95=${sample.p95.toFixed(2)}ms`)
   // Seuils alignés sur fps-horde (WebGL logiciel SwiftShader) : la MÉDIANE garde contre
-  // une régression O(N²) du feedback de coup (mesuré ≈34 ms ici, mode NON-lite = rendu
-  // complet), le p95 (≈117 ms mesuré) est dominé par la queue SwiftShader, pas le code.
-  expect(sample.median).toBeLessThan(50)
-  expect(sample.p95).toBeLessThan(175)
+  // une régression O(N²) du feedback de coup ; le p95 capte la queue (GC/scheduling).
+  //
+  // RÉTABLIS (2026-07-17) à 33/50 — cf. le bloc de justification détaillé dans
+  // fps-horde.spec.ts. L'« élévation » de 12d63ef (médiane ≈34 ms, p95 ≈117 ms) ne se
+  // reproduit pas : re-mesuré ici médiane 16,20 ms / p95 26,60 ms (chromium) et
+  // 16,10 / 19,00 (mobile), en SUITE PLEINE. (Le commentaire précédent disait « mode
+  // NON-lite = rendu complet » : c'était faux, ce test boote bien en `&lite=1` ligne 145,
+  // exactement comme fps-horde — d'où des chiffres identiques, ce qui est cohérent.)
+  expect(sample.median).toBeLessThan(33)
+  expect(sample.p95).toBeLessThan(50)
 })
