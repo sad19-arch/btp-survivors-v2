@@ -102,7 +102,11 @@ export const WEAPON_SFX_IDS: readonly string[] = [
   // Armes évoluées.
   'mitrailleuse_clous', 'haute_tension', 'tempete_boulons', 'cle_choc', 'canon_mousse', 'transpalette', 'lance_thermique',
   // Régénérées après avoir été livrées mortes (cf. `WEAPON_SFX_FILES_REJETES`).
-  'goudron', 'coulee_bitume'
+  'goudron', 'coulee_bitume',
+  // Visée manuelle (bonbonne de gaz), inspirée de l'otage enragé (ElevenLabs).
+  'bonbonne_chantier', 'detonation_chaine',
+  // Évolutions des 3 armes MVP historiques (scie/marteau/pied-de-biche).
+  'tronconneuse_chantier', 'brise_roche', 'barre_a_mine'
 ]
 
 /**
@@ -435,6 +439,7 @@ export function musicForState(ctx: MusicContext): MusicKey | null {
     case 'nameEntry':
     case 'hiscores':
     case 'achievements':
+    case 'evolutions':
       return MUSIC.menu
     // Les seuls écrans de JEU : la musique de chantier tourne (boss prioritaire).
     case 'game':

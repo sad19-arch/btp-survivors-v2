@@ -17,10 +17,19 @@ import { test, expect } from '@playwright/test'
  * MODE : `&lite=1` pour éviter de charger les lourdes feuilles de sprites.
  * Le décor (décalques/props) s'appuie sur des images légères qui chargent même
  * en mode lite (elles ne sont pas conditionnées par `!this.lite`).
+ *
+ * `&level=terrassement` (PAS le stage par défaut `terrain_vierge`) : GameScene
+ * suspend tout le DecorStreamer générique (`decorSuppressed`) dès qu'un stage a
+ * une composition committée (`src/content/composedLayouts.ts` — la compo apporte
+ * son propre décor authoré, le streamer générique ferait doublon/conflit).
+ * `terrain_vierge` EN A une depuis le passage du Stage Composer Editor ; ce test
+ * cible donc un stage qui n'en a PAS pour exercer réellement le streaming —
+ * sur `terrain_vierge`, `loadedChunks` resterait bloqué à 0 indéfiniment (pas un
+ * problème de timing/RAF lent : la condition n'est simplement jamais vraie).
  */
 
 test('world-streaming: le décor est borné et présent pendant le déplacement', async ({ page }) => {
-  await page.goto('/?autostart=solo&seed=1&test=1&lite=1')
+  await page.goto('/?autostart=solo&seed=1&test=1&lite=1&level=terrassement')
   await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 15000 })
 
   // Attendre que le streamer ait eu au moins 1 frame réelle pour charger les chunks
@@ -78,10 +87,11 @@ test('world-streaming: le décor est borné et présent pendant le déplacement'
 })
 
 test('world-streaming: le nombre de chunks chargés reste borné (≤ 25)', async ({ page }) => {
-  await page.goto('/?autostart=solo&seed=42&test=1&lite=1')
+  await page.goto('/?autostart=solo&seed=42&test=1&lite=1&level=terrassement')
   await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 15000 })
 
-  // Attendre le premier chargement réel de chunks.
+  // Attendre le premier chargement réel de chunks (cf. commentaire d'en-tête —
+  // `terrassement`, pas `terrain_vierge`, pour ne pas retomber sur un stage composé).
   await page.waitForFunction(
     () => (window.__GAME__?.debugDecorInfo?.()?.loadedChunks ?? 0) > 0,
     { timeout: 5000 }

@@ -23,6 +23,30 @@ describe('tryEvolve', () => {
     const { w, e } = setup([{ id: 'cloueur', level: 7 }], [{ id: 'air_comprime', level: 1 }])
     expect(tryEvolve(w, e)).toBeNull()
   })
+  it('bonbonne_chantier max + surcharge de gaz → détonation en chaîne', () => {
+    const { w, e } = setup([{ id: 'bonbonne_chantier', level: 8 }], [{ id: 'surcharge_gaz', level: 1 }])
+    expect(tryEvolve(w, e)).toBe('detonation_chaine')
+    const slot0 = w.get(e, 'weapons')?.slots[0]
+    expect(slot0?.id).toBe('detonation_chaine')
+  })
+  it('scie max + disque diamant → tronçonneuse de chantier', () => {
+    const { w, e } = setup([{ id: 'scie', level: 8 }], [{ id: 'disque_diamant', level: 1 }])
+    expect(tryEvolve(w, e)).toBe('tronconneuse_chantier')
+    const slot0 = w.get(e, 'weapons')?.slots[0]
+    expect(slot0?.id).toBe('tronconneuse_chantier')
+  })
+  it('marteau max + compresseur pneumatique → brise-roche', () => {
+    const { w, e } = setup([{ id: 'marteau', level: 8 }], [{ id: 'compresseur_pneumatique', level: 1 }])
+    expect(tryEvolve(w, e)).toBe('brise_roche')
+    const slot0 = w.get(e, 'weapons')?.slots[0]
+    expect(slot0?.id).toBe('brise_roche')
+  })
+  it('pied_de_biche max + chaussures de sécurité → barre à mine', () => {
+    const { w, e } = setup([{ id: 'pied_de_biche', level: 8 }], [{ id: 'chaussures_securite', level: 1 }])
+    expect(tryEvolve(w, e)).toBe('barre_a_mine')
+    const slot0 = w.get(e, 'weapons')?.slots[0]
+    expect(slot0?.id).toBe('barre_a_mine')
+  })
   it('resets cooldownLeftMs on evolution', () => {
     const w = new World()
     const e = w.spawn()

@@ -76,5 +76,35 @@ export const EVOLUTIONS: readonly EvolutionDef[] = [
     evolved: 'lance_thermique',
     reqBaseLevel: baseMaxLevel('chalumeau'),
     reqPassiveLevel: 1
+  },
+  // Bonbonne de chantier maxée + surcharge de gaz (pression accumulée) → détonation en chaîne.
+  {
+    base: 'bonbonne_chantier',
+    passive: 'surcharge_gaz',
+    evolved: 'detonation_chaine',
+    reqBaseLevel: baseMaxLevel('bonbonne_chantier'),
+    reqPassiveLevel: 1
+  },
+  // Les 3 armes MVP historiques (jamais retouchées depuis) — audit de couverture.
+  {
+    base: 'scie',
+    passive: 'disque_diamant',
+    evolved: 'tronconneuse_chantier',
+    reqBaseLevel: baseMaxLevel('scie'),
+    reqPassiveLevel: 1
+  },
+  {
+    base: 'marteau',
+    passive: 'compresseur_pneumatique',
+    evolved: 'brise_roche',
+    reqBaseLevel: baseMaxLevel('marteau'),
+    reqPassiveLevel: 1
+  },
+  {
+    base: 'pied_de_biche',
+    passive: 'chaussures_securite',
+    evolved: 'barre_a_mine',
+    reqBaseLevel: baseMaxLevel('pied_de_biche'),
+    reqPassiveLevel: 1
   }
 ] as const

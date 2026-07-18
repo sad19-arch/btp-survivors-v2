@@ -122,6 +122,15 @@ function normalize(v: Vec2): Vec2 {
 }
 
 /**
+ * Snappe un vecteur de déplacement NON NUL sur la cardinale la plus proche
+ * (nord/sud/est/ouest) — pour les armes à visée manuelle (`PlayerComp.facing`).
+ * Pure, déterministe. L'appelant garantit `x !== 0 || y !== 0`.
+ */
+function snapCardinal(x: number, y: number): Vec2 {
+  return Math.abs(x) > Math.abs(y) ? { x: x > 0 ? 1 : -1, y: 0 } : { x: 0, y: y > 0 ? 1 : -1 }
+}
+
+/**
  * Façade de simulation : c'est le « seam » exposé plus tard sur `window.__GAME__`.
  *
  * Pilote le World de façon déterministe (seed + pas fixe), accepte des entrées
@@ -758,7 +767,8 @@ export class Simulation {
         damageMult: 1,
         cooldownMult: 1,
         pickupRadius: PLAYER_BASE.pickupRadius,
-        characterId: char.id
+        characterId: char.id,
+        facing: { x: 0, y: 1 } // sud par défaut, cohérent avec le repli de dirRow (rendu)
       })
       this.world.add(e, 'progress', initialProgress())
       this.world.add(e, 'weapons', {
@@ -1179,6 +1189,11 @@ export class Simulation {
       const surfaceMult = pos === undefined ? 1 : surfaceSlowMultiplierAt(pos.x, pos.y, this.slowZones)
       vel.x = dir.x * player.speed * surfaceMult
       vel.y = dir.y * player.speed * surfaceMult
+      // Visée manuelle (bonbonne_chantier) : mémorise la dernière direction cardinale
+      // non-nulle. PERSISTE quand le joueur s'arrête (jamais remise à zéro ici).
+      if (dir.x !== 0 || dir.y !== 0) {
+        player.facing = snapCardinal(dir.x, dir.y)
+      }
     }
   }
 

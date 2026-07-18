@@ -34,6 +34,12 @@ const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; f
   transpalette: { key: 'proj_brouette', scale: 0.82, spin: false, faceVel: false },
   // Boule de feu de l'otage enragé (allié) : sprite PixelLab dédié (flamme qui vrille).
   boule_feu: { key: 'proj_boule_feu', scale: 0.9, spin: true, faceVel: false },
+  // Bonbonne de chantier (visée manuelle, cadeau des ouvriers libérés) : réutilise le
+  // même sprite que la boule de feu de l'otage — même lecture visuelle, zéro nouvel asset.
+  bonbonne_chantier: { key: 'proj_boule_feu', scale: 1.15, spin: true, faceVel: false },
+  detonation_chaine: { key: 'proj_boule_feu', scale: 1.4, spin: true, faceVel: false },
+  // Tronçonneuse de chantier (évolution de la scie orbitale) : mêmes lames, plus grosses.
+  tronconneuse_chantier: { key: 'proj_scie', scale: 1.3, spin: true, faceVel: false },
 }
 /**
  * Sprites de pickups par type. Typé `Record<PickupKind, …>` : le compilateur

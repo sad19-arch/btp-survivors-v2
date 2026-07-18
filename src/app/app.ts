@@ -42,7 +42,7 @@ import { loadHaptics, saveHaptics } from './hapticsSettings'
 import { evolutionStatuses } from '@core/systems/evolution'
 import { chestRevealTotalMs } from '@ui/overlay'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
-import type { AchievementsView, AppViewState, RunReport, HiScoresView, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
+import type { AchievementsView, AppViewState, RunReport, HiScoresView, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen, EvolutionEntryView, EvolutionsView } from './appState'
 import { selectDeathQuote } from '@content/deathQuotes'
 import { selectVictoryQuote } from '@content/victoryQuotes'
 import { EVOLUTIONS } from '@content/evolutions'
@@ -92,6 +92,7 @@ const KONAMI: readonly ComboAction[] = [
 /** Items fixes des menus (hors titre — dynamique — et cartes d'upgrade). */
 const PAUSE_ITEMS: MenuItemView[] = [
   { id: 'reprendre', label: 'Reprendre', hint: null },
+  { id: 'evolutions', label: 'Évolutions', hint: null },
   { id: 'options', label: 'Options', hint: null },
   { id: 'recommencer', label: 'Recommencer', hint: null },
   { id: 'quitter', label: 'Quitter', hint: null }
@@ -113,6 +114,11 @@ const HISCORES_ITEMS: MenuItemView[] = [{ id: 'retour', label: 'Retour', hint: n
  * l'écran (grille 2 colonnes), donc rien à scroller (cf. `styles.ts`).
  */
 const ACHIEVEMENTS_ITEMS: MenuItemView[] = [{ id: 'retour', label: 'Retour', hint: null }]
+/**
+ * Écran « Évolutions d'armes » (consultation depuis la PAUSE, en run) : même parti
+ * pris que les succès — liste CONSULTATIVE, seul « Retour » est focalisable.
+ */
+const EVOLUTIONS_ITEMS: MenuItemView[] = [{ id: 'retour', label: 'Retour', hint: null }]
 
 /**
  * Coquille applicative : orchestre les écrans (Titre → Jeu → Pause / Upgrade /
@@ -248,6 +254,8 @@ export class App {
   private runEvolutions = 0
   /** Écran des succès ouvert (consultation depuis le titre) ; `null` hors de ce flux. */
   private achievementsView: AchievementsView | null = null
+  /** Écran « Évolutions d'armes » ouvert (consultation depuis la pause) ; `null` hors de ce flux. */
+  private evolutionsView: EvolutionsView | null = null
 
   constructor(opts: AppOptions) {
     this.seed = opts.seed
@@ -285,6 +293,9 @@ export class App {
     // L'écran des succès est une surcouche du TITRE : lancer une partie le ferme
     // (sinon `screen` resterait bloqué dessus, comme pour `hiScoreView`).
     this.achievementsView = null
+    // Idem pour les évolutions (surcouche de la PAUSE) : une nouvelle run repart
+    // d'un inventaire vierge, une vue périmée de la run précédente n'a pas de sens.
+    this.evolutionsView = null
     const wasStarted = this.started // RE-démarrage ? (partie déjà en cours)
     this.mode = mode
     this.selectedCharacters = [...characters] // persiste pour restart/stage suivant/setSeed
@@ -552,6 +563,10 @@ export class App {
       case 'achievements':
         // Consultatif lui aussi : « B » revient au titre, comme « Retour ».
         this.achievementsView = null
+        break
+      case 'evolutions':
+        // Consultatif : « B » revient à la pause, comme « Retour ».
+        this.evolutionsView = null
         break
       case 'characterSelect':
         if (this.charSelectPlayer > 1) {
@@ -895,6 +910,10 @@ export class App {
         this.achievementsView === null
           ? null
           : { ...this.achievementsView, entries: [...this.achievementsView.entries] },
+      evolutions:
+        this.evolutionsView === null
+          ? null
+          : { ...this.evolutionsView, entries: [...this.evolutionsView.entries] },
       minimapVisible: this.minimapVisible,
       chestSkipToken: this.chestSkipToken,
       justEvolvedWeaponName:
@@ -960,6 +979,12 @@ export class App {
     if (this.achievementsView !== null) {
       return 'achievements'
     }
+    // Surcouche de la PAUSE (contrairement aux succès) : s'ouvre pendant une run,
+    // cette zone du getter s'évalue avant le test `!this.started` donc ça marche
+    // sans câblage supplémentaire.
+    if (this.evolutionsView !== null) {
+      return 'evolutions'
+    }
     if (this.nameEntryState !== null) {
       return 'nameEntry'
     }
@@ -1008,6 +1033,8 @@ export class App {
         return HISCORES_ITEMS
       case 'achievements':
         return ACHIEVEMENTS_ITEMS
+      case 'evolutions':
+        return EVOLUTIONS_ITEMS
       default:
         return []
     }
@@ -1168,6 +1195,55 @@ export class App {
     this.achievementsView = {
       entries,
       unlockedCount: entries.filter((e) => e.unlocked).length
+    }
+  }
+
+  /**
+   * Ouvre l'écran « Évolutions d'armes » (pause) : croise le catalogue `EVOLUTIONS`
+   * avec l'inventaire courant de TOUS les joueurs (union, cohérent avec un menu
+   * pause global plutôt que par-joueur — prêt-N-joueurs). Ne liste que les
+   * évolutions dont la forme de base OU évoluée est déjà possédée par au moins un
+   * joueur — « armes déjà acquises », pas un almanach complet (le jeu n'a pas de
+   * méta-progression). Figé à l'ouverture, comme les succès.
+   */
+  private openEvolutionsView(): void {
+    const players = this.sim?.getState().players ?? []
+    const entries: EvolutionEntryView[] = []
+    for (const evo of EVOLUTIONS) {
+      let owned: { id: string; level: number } | null = null
+      for (const p of players) {
+        const i = p.weapons.indexOf(evo.evolved)
+        if (i >= 0) {
+          owned = { id: evo.evolved, level: p.weaponLevels[i] ?? 1 }
+          break
+        }
+      }
+      if (owned === null) {
+        for (const p of players) {
+          const i = p.weapons.indexOf(evo.base)
+          if (i >= 0) {
+            owned = { id: evo.base, level: p.weaponLevels[i] ?? 1 }
+            break
+          }
+        }
+      }
+      if (owned === null) {
+        continue
+      }
+      entries.push({
+        weaponId: owned.id,
+        weaponName: WEAPONS[owned.id]?.name ?? owned.id,
+        weaponLevel: owned.level,
+        reqBaseLevel: evo.reqBaseLevel,
+        evolvedName: WEAPONS[evo.evolved]?.name ?? evo.evolved,
+        passiveId: evo.passive,
+        passiveName: PASSIVES[evo.passive]?.name ?? evo.passive,
+        evolved: owned.id === evo.evolved
+      })
+    }
+    this.evolutionsView = {
+      entries,
+      evolvedCount: entries.filter((e) => e.evolved).length
     }
   }
 
@@ -1348,6 +1424,8 @@ export class App {
     if (screen === 'paused') {
       if (id === 'reprendre') {
         this.sim?.resume()
+      } else if (id === 'evolutions') {
+        this.openEvolutionsView()
       } else if (id === 'options') {
         this.optionsOpen = true
       } else if (id === 'recommencer') {
@@ -1414,6 +1492,13 @@ export class App {
     if (screen === 'achievements') {
       if (id === 'retour') {
         this.achievementsView = null // → retour au titre
+      }
+      this.refreshFocus()
+      return
+    }
+    if (screen === 'evolutions') {
+      if (id === 'retour') {
+        this.evolutionsView = null // → retour à la pause
       }
       this.refreshFocus()
       return

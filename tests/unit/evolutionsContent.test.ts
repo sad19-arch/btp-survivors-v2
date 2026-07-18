@@ -46,3 +46,25 @@ describe('Évolutions — pic de puissance (dégâts ≥ base niv max)', () => {
     })
   }
 })
+
+/**
+ * Garde-fou de COUVERTURE : toute arme de base (maxLevel: 8, donc montable en jeu)
+ * doit pouvoir évoluer. Casse si une future arme de base est ajoutée à `WEAPONS`
+ * sans entrée correspondante dans `EVOLUTIONS` — répond durablement à la demande
+ * « vérifie que TOUTES les armes ont une évolution ».
+ */
+describe('Évolutions — couverture complète des armes de base', () => {
+  const baseWeaponIds = Object.values(WEAPONS)
+    .filter((w) => w.maxLevel === 8)
+    .map((w) => w.id)
+
+  it('au moins une arme de base à auditer (garde le test honnête)', () => {
+    expect(baseWeaponIds.length).toBeGreaterThan(0)
+  })
+
+  for (const id of baseWeaponIds) {
+    it(`« ${id} » a une évolution définie`, () => {
+      expect(EVOLUTIONS.some((evo) => evo.base === id), `aucune EvolutionDef avec base=« ${id} »`).toBe(true)
+    })
+  }
+})

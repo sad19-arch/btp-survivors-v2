@@ -790,6 +790,9 @@ export class Overlay {
         case 'achievements':
           this.screenLayer.append(this.achievementsPanel(state))
           break
+        case 'evolutions':
+          this.screenLayer.append(this.evolutionsPanel(state))
+          break
         case 'upgrade':
           this.screenLayer.append(this.upgradePanel(state))
           break
@@ -1590,6 +1593,61 @@ export class Overlay {
       'ach__img',
       'ach__mono'
     )
+  }
+
+  /**
+   * Écran « Évolutions d'armes » (pause) : croise `EVOLUTIONS` avec l'inventaire
+   * courant (résolu dans `App.openEvolutionsView`). Même parti pris que les succès
+   * (grille 2 colonnes, consultatif, seul « Retour » focalisable) — mais ici chaque
+   * ligne montre une PAIRE d'icônes (arme → catalyseur) plutôt qu'une seule, et
+   * l'étoile marque « déjà évoluée cette run » au lieu de « débloqué ».
+   */
+  private evolutionsPanel(state: AppViewState): HTMLElement {
+    const view = state.evolutions
+    const entries = view?.entries ?? []
+    const grid = h('div', { className: 'ach__grid evo__grid' })
+    for (const e of entries) {
+      const row = h('div', { className: e.evolved ? 'ach-row ach-row--on' : 'ach-row' })
+      row.append(
+        h(
+          'div',
+          { className: 'evo__pair' },
+          icon(e.weaponId, e.weaponName, 'ach__plinth', 'ach__img', 'ach__mono'),
+          h('div', { className: 'evo__arrow', text: '→' }),
+          icon(e.passiveId, e.passiveName, 'ach__plinth', 'ach__img', 'ach__mono')
+        ),
+        h(
+          'div',
+          { className: 'ach__text' },
+          h('div', { className: 'ach__name', text: e.evolved ? e.evolvedName : e.weaponName }),
+          h('div', {
+            className: 'ach__desc',
+            text: e.evolved
+              ? `Évoluée · catalyseur : ${e.passiveName}`
+              : `Niveau ${e.weaponLevel}/${e.reqBaseLevel} · catalyseur : ${e.passiveName}`
+          })
+        ),
+        h('img', {
+          className: 'ach__star',
+          attrs: { src: e.evolved ? 'ui_star_on.png' : 'ui_star_off.png', alt: '' }
+        })
+      )
+      grid.append(row)
+    }
+    const panel = h(
+      'div',
+      { className: 'panel panel--achievements panel--evolutions arc-metal' },
+      h('h1', { className: 'panel__title achievements__title', text: 'ÉVOLUTIONS D\'ARMES' }),
+      h('p', {
+        className: 'panel__subtitle',
+        text: entries.length === 0
+          ? 'Aucune arme à évolution acquise pour l\'instant.'
+          : `${view?.evolvedCount ?? 0} / ${entries.length} évoluées`
+      }),
+      grid,
+      this.menuList(state)
+    )
+    return h('div', { className: 'screen' }, panel)
   }
 
   /**

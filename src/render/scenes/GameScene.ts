@@ -178,7 +178,10 @@ export class GameScene extends Phaser.Scene {
     if (p.kind === 'sweep') {
       // Niveau du pied-de-biche du frappeur (joueur le plus proche du balayage) →
       // le VFX scale avec le niveau (progression visible). Lecture d'état pure.
-      const level = this.weaponLevelNear(p.x, p.y, 'pied_de_biche')
+      // Barre à mine (évolution, maxLevel 1) : `weaponLevelNear(..., 'pied_de_biche')`
+      // ne trouverait plus rien une fois l'arme évoluée (retombe à 1, VFX faible) —
+      // même patron que chalumeau/lance_thermique juste en dessous.
+      const level = p.weaponId === 'barre_a_mine' ? 8 : this.weaponLevelNear(p.x, p.y, 'pied_de_biche')
       this.vfx.spawnSweepArc(p.x, p.y, p.radius, level)
       // Léger kick « coup de barre à mine », renforcé au haut niveau.
       const lf = Math.max(0, Math.min(1, (level - 1) / 7))
@@ -198,12 +201,21 @@ export class GameScene extends Phaser.Scene {
     if (p.kind === 'cone') {
       // Deux armes partagent le kind 'cone' : extincteur (mousse) et chalumeau /
       // lance thermique (flammes) — le pulse porte l'id d'arme pour router le VFX.
+      // Retour playtest : ces 4 armes cône (extincteur/chalumeau/canon_mousse/
+      // lance_thermique) étaient les SEULES à ne déclencher AUCUN screen-shake
+      // (sweep/strike/aura en ont tous un) — cause du « on voit à peine leur
+      // impact ». Même patron que sweep juste au-dessus (intensité scalée au niveau).
       if (p.weaponId === 'chalumeau' || p.weaponId === 'lance_thermique') {
         const level = p.weaponId === 'lance_thermique' ? 8 : this.weaponLevelNear(p.x, p.y, 'chalumeau')
         this.vfx.spawnFlameCone(p.x, p.y, p.radius, p.dirX, p.dirY, level, p.weaponId === 'lance_thermique')
+        const lf = Math.max(0, Math.min(1, (level - 1) / 7))
+        this.cameras.main.shake(80, 0.003 + lf * 0.0025)
         return
       }
       this.vfx.spawnConeVfx(p.x, p.y, p.radius, p.dirX, p.dirY)
+      const level = this.weaponLevelNear(p.x, p.y, p.weaponId ?? 'extincteur')
+      const lf = Math.max(0, Math.min(1, (level - 1) / 7))
+      this.cameras.main.shake(80, 0.003 + lf * 0.0025)
       return
     }
     // Marteau : onde de choc + scale-pop + léger screen-shake (coup lourd).
