@@ -1,10 +1,17 @@
 /**
- * RUMBLE manette (juice #2) — couche input, purement observationnelle.
+ * RUMBLE (juice #2) — couche input, purement observationnelle.
  *
- * Émet des secousses via l'API Gamepad standard (`vibrationActuator.playEffect`),
- * feature-détectée : NO-OP silencieux si absente (Firefox/Safari, pad sans moteur,
- * headless). Jamais requis pour jouer — c'est un bonus manette. Désactivable via
- * le menu Options (`Rumbler.setEnabled`), câblé sur `app.getVibrations()`.
+ * DEUX canaux, feature-détectés indépendamment (NO-OP silencieux si absents) :
+ *  - `vibrationActuator.playEffect` d'une manette physique connectée (API Gamepad) ;
+ *  - `navigator.vibrate()` (Web Vibration API), le vibreur du TÉLÉPHONE lui-même —
+ *    retour playtest : sans manette physique branchée (le user teste au téléphone en
+ *    tactile), `navigator.getGamepads()` est TOUJOURS vide, donc le canal manette seul
+ *    ne peut jamais être ressenti. C'est ce second canal qui rend le rumble perceptible
+ *    hors manette. Les deux coexistent (desktop+manette continue de vibrer normalement ;
+ *    `navigator.vibrate` est un no-op silencieux sur desktop sans matériel).
+ *
+ * Jamais requis pour jouer — c'est un bonus. Désactivable via le menu Options
+ * (`Rumbler.setEnabled`), câblé sur `app.getVibrations()`.
  *
  * Aucune dépendance Phaser/DOM-lourde : lit `navigator.getGamepads()` directement
  * (comme le HUD manettes de l'overlay). Le temps réel (`performance.now`) est injecté
@@ -93,12 +100,20 @@ export class Rumbler {
         startDelay: 0
       })?.catch?.(() => {})
     }
+    // Vibreur du téléphone (Web Vibration API) — seul canal ressenti sans manette physique.
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(Math.round(p.ms))
+    }
     return true
   }
 
   private stopAll(): void {
     for (const act of this.actuators()) {
       void act.reset?.()?.catch?.(() => {})
+    }
+    // `vibrate(0)` (ou un tableau vide) annule toute vibration du téléphone en cours.
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(0)
     }
   }
 

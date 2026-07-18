@@ -57,7 +57,8 @@ describe('Rumbler — émission sur la manette', () => {
     const r = new Rumbler(true, { now })
     r.play(RUMBLE.hurt, true)
     expect(playEffect).toHaveBeenCalledTimes(1)
-    const [type, params] = playEffect.mock.calls[0] ?? []
+    const call: unknown[] = playEffect.mock.calls[0] ?? []
+    const [type, params] = call
     expect(type).toBe('dual-rumble')
     expect(params).toMatchObject({ strongMagnitude: RUMBLE.hurt.strong, weakMagnitude: RUMBLE.hurt.weak, duration: RUMBLE.hurt.ms })
   })
@@ -78,6 +79,47 @@ describe('Rumbler — émission sur la manette', () => {
 
   it('sans API Gamepad (navigator.getGamepads absent) : play() ne jette pas', () => {
     vi.stubGlobal('navigator', {})
+    const r = new Rumbler(true, { now })
+    expect(() => r.play(RUMBLE.kill, true)).not.toThrow()
+  })
+})
+
+/**
+ * Fallback vibreur téléphone (retour playtest) : SEUL canal ressenti sans manette
+ * physique connectée (`navigator.getGamepads()` est alors toujours vide). Coexiste
+ * avec le canal manette (les deux tirent sur le même `play()`).
+ */
+describe('Rumbler — fallback navigator.vibrate (téléphone, sans manette)', () => {
+  function stubVibrate(): { vibrate: ReturnType<typeof vi.fn> } {
+    const vibrate = vi.fn()
+    // Pas de vibrationActuator (aucune manette) — reproduit le cas « test au téléphone ».
+    vi.stubGlobal('navigator', { getGamepads: () => [], vibrate })
+    return { vibrate }
+  }
+
+  it('play() appelle navigator.vibrate(ms) même sans manette connectée', () => {
+    const { vibrate } = stubVibrate()
+    const r = new Rumbler(true, { now })
+    expect(r.play(RUMBLE.hurt, true)).toBe(true)
+    expect(vibrate).toHaveBeenCalledWith(RUMBLE.hurt.ms)
+  })
+
+  it('désactivé : n\'appelle jamais navigator.vibrate', () => {
+    const { vibrate } = stubVibrate()
+    const r = new Rumbler(false, { now })
+    r.play(RUMBLE.boss, true)
+    expect(vibrate).not.toHaveBeenCalled()
+  })
+
+  it('setEnabled(false) annule une vibration en cours via vibrate(0)', () => {
+    const { vibrate } = stubVibrate()
+    const r = new Rumbler(true, { now })
+    r.setEnabled(false)
+    expect(vibrate).toHaveBeenCalledWith(0)
+  })
+
+  it('sans API Vibration (navigator.vibrate absent) : play() ne jette pas', () => {
+    vi.stubGlobal('navigator', { getGamepads: () => [] })
     const r = new Rumbler(true, { now })
     expect(() => r.play(RUMBLE.kill, true)).not.toThrow()
   })

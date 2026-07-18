@@ -107,6 +107,9 @@ export class SiteRenderer {
 
   private siteOverlays: Phaser.GameObjects.GameObject[] = []
 
+  /** Textures absentes déjà signalées — un avertissement par clé, pas par élément/frame. */
+  private readonly warnedMissingTexture = new Set<string>()
+
   constructor(private readonly scene: Phaser.Scene) {}
 
   /**
@@ -169,8 +172,15 @@ export class SiteRenderer {
       const ty = (vx: number, vy: number): number => (flip ? -vx : vx) * sin + vy * cos
 
       for (const elem of elements) {
-        // Vérifier que la texture est chargée (repli silencieux si absente).
+        // Vérifier que la texture est chargée (repli SILENCIEUX en prod — un asset
+        // manquant ne doit jamais planter le rendu — mais signalé une fois en dev,
+        // sinon un élément posé à l'éditeur peut disparaître en jeu sans AUCUNE trace
+        // — retour playtest : routes/bancs invisibles faute de préchargement).
         if (!this.scene.textures.exists(elem.assetKey)) {
+          if (import.meta.env.DEV && !this.warnedMissingTexture.has(elem.assetKey)) {
+            this.warnedMissingTexture.add(elem.assetKey)
+            console.warn(`[siteRenderer] texture absente, élément ignoré : ${elem.assetKey}`)
+          }
           continue
         }
 

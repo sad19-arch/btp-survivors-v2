@@ -61,7 +61,13 @@ export const PICKUP = {
    */
   gemLifeMs: 20000,
   /** Vitesse d'aspiration quand le power-up aimant est actif (px/s, > magnetSpeed). */
-  magnetPullSpeed: 900
+  magnetPullSpeed: 900,
+  /**
+   * Plafond de pickups de soin (`heal`) actifs simultanément sur la carte (retour
+   * playtest : sans lifeMs, ils s'accumulaient sans borne si non ramassés). Même
+   * patron que `CHEST.maxActive` (cf. `chestDirector.ts`).
+   */
+  healMaxActive: 5
 } as const
 
 /**

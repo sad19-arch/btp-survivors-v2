@@ -26,6 +26,8 @@ export const MUSIC = {
   boss: 'music_boss',
   victory: 'music_victory',
   gameover: 'music_gameover',
+  /** Musique épique dédiée à la modale de coffre (juice casino, retour playtest). */
+  chest: 'music_chest',
   stage_01: 'music_stage_01',
   stage_02: 'music_stage_02',
   stage_03: 'music_stage_03',
@@ -53,6 +55,7 @@ export const MUSIC_FILES_SHARED: ReadonlyArray<readonly [string, string]> = [
   [MUSIC.boss, 'audio/music/boss.mp3'],
   [MUSIC.victory, 'audio/music/victory.mp3'],
   [MUSIC.gameover, 'audio/music/gameover.ogg'],
+  [MUSIC.chest, 'audio/music/chest.mp3'],
   [AMB, 'audio/amb/chantier.ogg']
 ]
 
@@ -211,7 +214,9 @@ export const SFX_FILES: ReadonlyArray<readonly [string, string]> = [
   // Fanfares d'ouverture de coffre (ElevenLabs) : normale + super (plus épique).
   ['sfx_chest_fanfare', 'audio/sfx/chest_fanfare.mp3'],
   ['sfx_chest_fanfare_super', 'audio/sfx/chest_fanfare_super.mp3'],
-  // Stinger d'anticipation de vague (ElevenLabs) : klaxon/sirène de chantier qui monte.
+  // « Kling kling » de machine à sous (ElevenLabs) : tic répété pendant le spectacle du coffre.
+  ['sfx_chest_kling', 'audio/sfx/chest_kling.mp3'],
+  // Stinger d'anticipation (ElevenLabs) : klaxon/sirène de chantier — RÉSERVÉ au boss final.
   ['sfx_wave_incoming', 'audio/sfx/wave_incoming.mp3'],
   // Mode Carnage (ElevenLabs) : 5 bruits de chair broyée, tirés au sort à la mort.
   // Volontairement courts (~0.7-0.8 s, ~7 Ko pièce) : ils jouent en rafale.
@@ -289,6 +294,8 @@ export const SFX: Readonly<Record<string, SfxCue>> = {
   // Ouverture de coffre (ElevenLabs) : fanfare normale + super (plus forte/épique).
   chestFanfare: { keys: ['sfx_chest_fanfare'], volume: 0.8 },
   chestFanfareSuper: { keys: ['sfx_chest_fanfare_super'], volume: 1.0 },
+  // « Kling kling » (retour playtest) : throttle court, jitter léger pour ne pas sonner en boucle mécanique.
+  chestKling: { keys: ['sfx_chest_kling'], volume: 0.55, rateJitter: 0.1, throttleMs: 100 },
   // Anticipation de vague (juice #9) : throttlé pour éviter deux klaxons rapprochés.
   waveIncoming: { keys: ['sfx_wave_incoming'], volume: 0.6, throttleMs: 3000 },
   gameOver: { keys: ['sfx_lose_1'], volume: 0.7 },
@@ -388,6 +395,8 @@ export interface MusicContext {
   screen: Screen
   stageId: string
   bossPresent: boolean
+  /** Modale de coffre affichée (partie totalement gelée) — priorité ABSOLUE, cf. plus bas. */
+  chestOpen: boolean
 }
 
 /**
@@ -405,6 +414,12 @@ export interface MusicContext {
  * silence jusqu'à ce qu'un joueur l'entende.
  */
 export function musicForState(ctx: MusicContext): MusicKey | null {
+  // Coffre ouvert (retour playtest) : priorité ABSOLUE, même au-dessus du boss — la
+  // partie est totalement gelée pendant la modale, la musique de coffre l'emporte
+  // (crossfade automatique de retour au boss/stage une fois `chestOpen` redevenu null).
+  if (ctx.chestOpen) {
+    return MUSIC.chest
+  }
   switch (ctx.screen) {
     case 'title':
       return MUSIC.title

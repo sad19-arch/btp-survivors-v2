@@ -553,6 +553,10 @@ const CSS = `
   display: flex; flex-direction: column; align-items: center; gap: 12px;
   min-width: 380px; pointer-events: none; z-index: 20;
   animation: jackpot-in 0.18s ease-out;
+  /* Retour playtest : panneau x2. Propriété zoom (pas transform: scale) pour ne
+     pas entrer en conflit avec les transform: translate(...) des animations
+     ci-dessous (centrage + jackpot-in/rainbow) tout en gardant le pixel-art net. */
+  zoom: 2;
 }
 #ui-root .jackpot--super { border-color: ${PALETTE.blanc}; animation: jackpot-in 0.18s ease-out, jackpot-rainbow 0.72s steps(1, end) infinite; }
 #ui-root .jackpot__title, #ui-root .jackpot__chest, #ui-root .jackpot__reels, #ui-root .jackpot__reveal { position: relative; z-index: 2; }

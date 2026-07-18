@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   musicForState, MUSIC, SFX, VOICE, voiceStage, SFX_FILES, MUSIC_FILES_SHARED, VOICE_FILES,
   WEAPON_SFX_IDS, WEAPON_SFX_FILES_REJETES, WEAPON_FILE_TRIM, WEAPON_FILE_VOLUME,
@@ -10,12 +10,12 @@ import { Simulation } from '@core/simulation'
 import type { Screen } from '@/app/appState'
 import { WEAPONS } from '@content/weapons'
 import { AudioDirector } from '@/audio/audioDirector'
-import { EvolvedEvent, BossSpawnedEvent, EnemyDiedEvent } from '@core/events'
+import { EvolvedEvent, BossSpawnedEvent, EnemyDiedEvent, ChestOpenedEvent } from '@core/events'
 import type { AppViewState } from '@/app/appState'
 
 describe('audio — musique par état (pure)', () => {
   const g = (screen: Screen, stageId: string, bossPresent = false): string | null =>
-    musicForState({ screen, stageId, bossPresent })
+    musicForState({ screen, stageId, bossPresent, chestOpen: false })
 
   /**
    * LA faille de classe : `musicForState` retombait sur `default` pour tout écran
@@ -365,6 +365,63 @@ describe('audio — bruit de chair du Mode Carnage', () => {
     playedKeys.length = 0
     events.dispatchEvent(mort())
     expect(playedKeys.filter((k) => k.startsWith('sfx_gore_'))).toEqual([])
+  })
+})
+
+/**
+ * « Kling kling » de machine à sous (retour playtest) : tic répété PENDANT le
+ * spectacle du coffre, arrêté dès que `observe()` constate `chestOpen → null`.
+ * Vérifie les deux sens du branchement (démarre, s'arrête), pas de fuite de minuteur.
+ */
+describe('audio — « kling kling » de machine à sous', () => {
+  function fakeSoundManager(): { manager: Phaser.Sound.BaseSoundManager; playedKeys: string[] } {
+    const playedKeys: string[] = []
+    const manager = {
+      locked: false,
+      play: (key: string) => { playedKeys.push(key); return true },
+      add: () => ({ play: () => true, stop: () => true, destroy: () => {}, once: () => {}, volume: 0, isPlaying: false }),
+      game: { cache: { audio: { exists: () => true } }, scene: { getScene: () => null } }
+    } as unknown as Phaser.Sound.BaseSoundManager
+    return { manager, playedKeys }
+  }
+
+  function fakeGameState(chestOpen: unknown): AppViewState {
+    return {
+      screen: 'game', stageId: 'terrain_vierge', stageOrder: 1,
+      enemies: [], players: [], carnage: false, chestOpen
+    } as unknown as AppViewState
+  }
+
+  const settings: AudioLevels = { master: 1, music: 1, sfx: 1, muted: false }
+
+  // `performance` DOIT être fake avec les timers : sinon `playCue`'s throttle (basé
+  // sur `performance.now()`) voit tous les tics de l'intervalle au même instant réel
+  // (avanceTimersByTime ne fait pas s'écouler de vrai temps) et les avale tous sauf le 1er.
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'performance'] }) })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('chestOpened démarre un tic répété qui joue sfx_chest_kling', () => {
+    const events = new EventTarget()
+    const { manager, playedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, events, () => settings)
+    director.observe(fakeGameState(null))
+    playedKeys.length = 0
+    events.dispatchEvent(new ChestOpenedEvent('weapon-up', 1, false))
+    vi.advanceTimersByTime(500) // ~3-4 tics à 140ms
+    expect(playedKeys.filter((k) => k === 'sfx_chest_kling').length).toBeGreaterThan(1)
+  })
+
+  it("le tic s'arrête dès qu'observe() constate chestOpen → null (pas de fuite)", () => {
+    const events = new EventTarget()
+    const { manager, playedKeys } = fakeSoundManager()
+    const director = new AudioDirector(manager, events, () => settings)
+    director.observe(fakeGameState(null))
+    events.dispatchEvent(new ChestOpenedEvent('weapon-up', 1, false))
+    director.observe(fakeGameState({ isSuper: false, results: [] })) // modale affichée
+    director.observe(fakeGameState(null)) // modale fermée → coupe le minuteur
+    playedKeys.length = 0
+    vi.advanceTimersByTime(1000)
+    expect(playedKeys.filter((k) => k === 'sfx_chest_kling')).toEqual([])
   })
 })
 

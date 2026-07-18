@@ -17,6 +17,7 @@ import { createLandmark, createStructures, phaseSalt, type ExclusionCircle } fro
 import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { resolveComposedLayout } from '@content/runtimeLayouts'
 import { stageRender, type StageRender, FINAL_BOSS_SKIN, CONVOYEUR_SKIN, CAMION_SKIN, SHARED_WORKER_NPCS, CITY_BUILDINGS, CITY_PERIMETER } from '@render/stages'
+import { PALETTE_ASSETS } from '@content/paletteAssets'
 import { SpritePool } from '@render/spritePool'
 import { DamageNumberPool } from '@render/damageNumbers'
 import { CritTextRenderer } from '@render/scenes/critTextRenderer'
@@ -130,8 +131,6 @@ export class GameScene extends Phaser.Scene {
   private hitstopCooldownMsLeft = 0
   /** Dernier palier de 100 kills franchi (juice #8) — émet un event `milestone` (son+rumble). −1 = non initialisé. */
   private lastMilestone = -1
-  /** Une formation était télégraphiée à la frame précédente (juice #9 : stinger sur l'apparition). */
-  private prevHadFormation = false
   /**
    * Streamer de décor par chunks (décalques + props) : génère le décor autour
    * de la caméra et détruit celui qui s'éloigne. Coût constant quelle que soit
@@ -611,6 +610,14 @@ export class GameScene extends Phaser.Scene {
     for (const b of CITY_BUILDINGS) {
       this.load.image(b.key, b.file)
     }
+    // Catalogue palette (retour playtest) : routes/bancs/mobilier/etc. posés à la
+    // main dans l'éditeur restaient INVISIBLES en jeu — cette liste n'était chargée
+    // QUE par l'éditeur. `siteRenderer` ignore silencieusement toute texture absente
+    // (`this.scene.textures.exists`) : sans ce préchargement, aucun élément placé via
+    // le catalogue palette ne pouvait jamais s'afficher, quelle que soit la compo.
+    for (const a of PALETTE_ASSETS) {
+      this.load.image(a.key, a.file)
+    }
   }
 
   /** Réinitialise l'état par-run (indispensable car `scene.restart` réutilise l'instance). */
@@ -1070,13 +1077,6 @@ export class GameScene extends Phaser.Scene {
 
     // Télégraphe des formations (Task 10) : marqueur au sol + flèche de bord d'écran.
     this.telegraph.sync(state, this.cameras.main)
-    // Stinger d'anticipation (juice #9) : klaxon quand un télégraphe APPARAÎT (0→≥1),
-    // une fois par vague (pas à chaque frame). Le cue no-op si l'asset n'est pas chargé.
-    const hasFormation = state.pendingFormations.length > 0
-    if (hasFormation && !this.prevHadFormation) {
-      this.app.events.dispatchEvent(new Event('waveIncoming'))
-    }
-    this.prevHadFormation = hasFormation
 
     // Clusters de terrain (T5) + ouvriers (T6) : rendu cosmétique, sauté en lite (cf. reset).
     if (!this.lite) {

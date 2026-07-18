@@ -93,6 +93,18 @@ const MILESTONE_STEP = 100
 /** Durée d'affichage du bandeau de palier (ms). */
 const MILESTONE_SHOW_MS = 1400
 
+/** Taille de base (px) du chiffre de CADENCE, avant croissance. */
+const CADENCE_FONT_BASE_PX = 26
+/** Croissance (px) par kill dans l'enchaînement — retour playtest : « de plus en plus gros ». */
+const CADENCE_FONT_GROWTH_PX = 0.5
+/** Taille max (px) — borne pour ne pas déborder le panneau `.cadence`. */
+const CADENCE_FONT_MAX_PX = 54
+
+/** Taille du chiffre de CADENCE pour un enchaînement donné. Fonction PURE → testable. */
+export function cadenceFontSizePx(comboCount: number): number {
+  return Math.min(CADENCE_FONT_MAX_PX, CADENCE_FONT_BASE_PX + comboCount * CADENCE_FONT_GROWTH_PX)
+}
+
 /**
  * Overlay DOM des écrans (Titre / Pause / Upgrade / Game Over) + HUD. Observe
  * l'état de l'App et se redessine ; il n'écrit jamais la logique (la navigation
@@ -235,6 +247,13 @@ export class Overlay {
   /** Dernier palier de 100 kills déjà célébré (0 = aucun), + échéance du bandeau. */
   private celebratedMilestone = 0
   private milestoneUntil = -1
+  /**
+   * Horloge virtuelle de la CADENCE (retour playtest) : n'avance QUE hors modale de
+   * coffre (`state.chestOpen`). `lastCadenceRealNow` = dernier `performance.now()` vu
+   * (calcule le dt réel à intégrer) ; -1 = non initialisée.
+   */
+  private cadenceClockMs = 0
+  private lastCadenceRealNow = -1
 
   constructor(
     root: HTMLElement,
@@ -482,10 +501,30 @@ export class Overlay {
       this.comboExpiresAt = -1
       this.celebratedMilestone = 0
       this.milestoneUntil = -1
+      this.lastCadenceRealNow = -1
+      this.cadenceClockMs = 0
       this.cadenceEl.classList.remove('cadence--on')
       this.milestoneEl.classList.remove('milestone--on')
       return
     }
+    // Horloge VIRTUELLE (retour playtest) : n'avance PAS tant qu'une modale de coffre
+    // est affichée (`state.chestOpen`) — sinon la fenêtre de combo/le bandeau de palier
+    // se vident en temps RÉEL pendant que le joueur regarde un spectacle où la partie
+    // est totalement gelée. Miroir de comment `chestRevealMsLeft` gèle la sim côté app.
+    // `lastCadenceRealNow` est INVALIDÉ (-1) tant qu'on est gelé : le premier appel
+    // suivant le dégel ne crédite PAS tout le temps réel écoulé PENDANT le gel (sinon
+    // la fenêtre saute d'un coup à la réouverture au lieu de reprendre son décompte).
+    const frozen = state.chestOpen !== null
+    if (frozen) {
+      this.lastCadenceRealNow = -1
+    } else {
+      if (this.lastCadenceRealNow >= 0) {
+        this.cadenceClockMs += Math.max(0, now - this.lastCadenceRealNow)
+      }
+      this.lastCadenceRealNow = now
+    }
+    const clock = this.cadenceClockMs
+
     const score = state.score
     // 1er passage de la run : mémorise sans dériver (pas de faux combo ni palier au (re)départ).
     if (this.prevScore < 0) {
@@ -495,8 +534,8 @@ export class Overlay {
     const delta = score - this.prevScore
     if (delta > 0) {
       this.comboCount += delta
-      this.comboExpiresAt = now + COMBO_WINDOW_MS
-    } else if (now >= this.comboExpiresAt) {
+      this.comboExpiresAt = clock + COMBO_WINDOW_MS
+    } else if (clock >= this.comboExpiresAt) {
       this.comboCount = 0
     }
     // Palier (#8) : franchissement d'un multiple de MILESTONE_STEP.
@@ -507,20 +546,22 @@ export class Overlay {
       this.milestoneEl.classList.remove('milestone--on')
       void this.milestoneEl.offsetWidth // reflow → rejoue l'animation « pop »
       this.milestoneEl.classList.add('milestone--on')
-      this.milestoneUntil = now + MILESTONE_SHOW_MS
+      this.milestoneUntil = clock + MILESTONE_SHOW_MS
     }
-    if (this.milestoneUntil > 0 && now >= this.milestoneUntil) {
+    if (this.milestoneUntil > 0 && clock >= this.milestoneUntil) {
       this.milestoneEl.classList.remove('milestone--on')
       this.milestoneUntil = -1
     }
-    // Rendu de la CADENCE : chiffre + couleur de palier + barre de fenêtre restante.
+    // Rendu de la CADENCE : chiffre (taille croissante, bornée) + couleur de palier
+    // + barre de fenêtre restante.
     if (this.comboCount >= CADENCE_MIN) {
       const color = CADENCE_TIERS.find((t) => this.comboCount >= t.min)?.color ?? PALETTE.jauneSecurite
       this.cadenceEl.classList.add('cadence--on')
       this.cadenceLabelEl.textContent = `CADENCE ×${this.comboCount}`
       this.cadenceLabelEl.style.color = color
+      this.cadenceLabelEl.style.fontSize = `${cadenceFontSizePx(this.comboCount)}px`
       this.cadenceFillEl.style.backgroundColor = color
-      const remain = Math.max(0, Math.min(1, (this.comboExpiresAt - now) / COMBO_WINDOW_MS))
+      const remain = Math.max(0, Math.min(1, (this.comboExpiresAt - clock) / COMBO_WINDOW_MS))
       this.cadenceFillEl.style.width = `${(remain * 100).toFixed(1)}%`
     } else {
       this.cadenceEl.classList.remove('cadence--on')

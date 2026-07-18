@@ -111,10 +111,32 @@ export function reapDeadEnemies(world: World, lootRng?: Rng, died?: DiedEnemy[])
   return { total: dead.length, killsByPlayer, bossKills }
 }
 
-/** Tire au plus UN bonus (soin / aimant / coffre) selon les chances configurées. */
+/**
+ * Compte les pickups d'un `kind` donné actuellement au sol. Même patron que
+ * `countActiveChests` ([chestDirector.ts](../systems/chestDirector.ts)) — sert à
+ * plafonner l'accumulation des pickups PERSISTANTS (sans `lifeMs`, cf. `dropPickup`).
+ */
+export function countActivePickupsOfKind(world: World, kind: PickupKind): number {
+  let count = 0
+  for (const e of world.query('pickup')) {
+    const pk = world.get(e, 'pickup')
+    if (pk?.type === kind) {
+      count++
+    }
+  }
+  return count
+}
+
+/**
+ * Tire au plus UN bonus (soin / aimant / coffre) selon les chances configurées.
+ * `heal` est en plus PLAFONNÉ (`PICKUP.healMaxActive`) : sans `lifeMs`, un soin non
+ * ramassé reste au sol indéfiniment — retour playtest, ils s'accumulaient sans borne.
+ */
 function maybeDropBonus(world: World, rng: Rng, pos: Vec2): void {
   if (rng.chance(PICKUP_DROPS.heal.chance)) {
-    dropPickup(world, pos, 'heal', PICKUP_DROPS.heal.value)
+    if (countActivePickupsOfKind(world, 'heal') < PICKUP.healMaxActive) {
+      dropPickup(world, pos, 'heal', PICKUP_DROPS.heal.value)
+    }
   } else if (rng.chance(PICKUP_DROPS.magnet.chance)) {
     dropPickup(world, pos, 'magnet', PICKUP_DROPS.magnet.value)
   } else if (rng.chance(PICKUP_DROPS.chest.chance)) {

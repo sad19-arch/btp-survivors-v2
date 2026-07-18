@@ -33,14 +33,14 @@ const PHASE_TO_KEY: ReadonlyArray<readonly [string, string]> = [
 describe('stageMusic — une musique dédiée par stage', () => {
   it('chacun des 10 phaseId retourne sa clé unique', () => {
     for (const [phaseId, expectedKey] of PHASE_TO_KEY) {
-      const result = musicForState({ screen: 'game', stageId: phaseId, bossPresent: false })
+      const result = musicForState({ screen: 'game', stageId: phaseId, bossPresent: false, chestOpen: false })
       expect(result, `phase ${phaseId}`).toBe(expectedKey)
     }
   })
 
   it('toutes les clés de stage sont distinctes (pas de doublons)', () => {
     const keys = PHASE_TO_KEY.map(([phaseId]) =>
-      musicForState({ screen: 'game', stageId: phaseId, bossPresent: false })
+      musicForState({ screen: 'game', stageId: phaseId, bossPresent: false, chestOpen: false })
     )
     const unique = new Set(keys)
     expect(unique.size).toBe(PHASE_TO_KEY.length)
@@ -48,30 +48,39 @@ describe('stageMusic — une musique dédiée par stage', () => {
 
   it('boss présent → MUSIC.boss (prioritaire sur la musique de stage)', () => {
     for (const [phaseId] of PHASE_TO_KEY) {
-      const result = musicForState({ screen: 'game', stageId: phaseId, bossPresent: true })
+      const result = musicForState({ screen: 'game', stageId: phaseId, bossPresent: true, chestOpen: false })
       expect(result, `boss sur phase ${phaseId}`).toBe(MUSIC.boss)
     }
   })
 
   it('titre → MUSIC.title', () => {
-    expect(musicForState({ screen: 'title', stageId: 'terrain_vierge', bossPresent: false })).toBe(MUSIC.title)
+    expect(musicForState({ screen: 'title', stageId: 'terrain_vierge', bossPresent: false, chestOpen: false })).toBe(MUSIC.title)
   })
 
   it('pause → MUSIC.menu', () => {
-    expect(musicForState({ screen: 'paused', stageId: 'terrain_vierge', bossPresent: false })).toBe(MUSIC.menu)
+    expect(musicForState({ screen: 'paused', stageId: 'terrain_vierge', bossPresent: false, chestOpen: false })).toBe(MUSIC.menu)
   })
 
   it('victory → MUSIC.victory', () => {
-    expect(musicForState({ screen: 'victory', stageId: 'terrain_vierge', bossPresent: false })).toBe(MUSIC.victory)
+    expect(musicForState({ screen: 'victory', stageId: 'terrain_vierge', bossPresent: false, chestOpen: false })).toBe(MUSIC.victory)
   })
 
   it('gameover → MUSIC.gameover', () => {
-    expect(musicForState({ screen: 'gameover', stageId: 'terrain_vierge', bossPresent: false })).toBe(MUSIC.gameover)
+    expect(musicForState({ screen: 'gameover', stageId: 'terrain_vierge', bossPresent: false, chestOpen: false })).toBe(MUSIC.gameover)
   })
 
   it("l'upgrade garde la musique de stage courante", () => {
-    expect(musicForState({ screen: 'upgrade', stageId: 'terrain_vierge', bossPresent: false })).toBe(MUSIC.stage_01)
-    expect(musicForState({ screen: 'upgrade', stageId: 'livraison_audit', bossPresent: false })).toBe(MUSIC.stage_10)
+    expect(musicForState({ screen: 'upgrade', stageId: 'terrain_vierge', bossPresent: false, chestOpen: false })).toBe(MUSIC.stage_01)
+    expect(musicForState({ screen: 'upgrade', stageId: 'livraison_audit', bossPresent: false, chestOpen: false })).toBe(MUSIC.stage_10)
+  })
+
+  it('coffre ouvert → MUSIC.chest, PRIORITAIRE même sur un boss présent (retour playtest)', () => {
+    expect(
+      musicForState({ screen: 'game', stageId: 'terrain_vierge', bossPresent: true, chestOpen: true })
+    ).toBe(MUSIC.chest)
+    expect(
+      musicForState({ screen: 'upgrade', stageId: 'livraison_audit', bossPresent: false, chestOpen: true })
+    ).toBe(MUSIC.chest)
   })
 })
 

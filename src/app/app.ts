@@ -63,6 +63,18 @@ export interface AppOptions {
 /** Action prise en compte par le code secret (directions + valider/annuler). */
 type ComboAction = NavDir | 'back' | 'confirm'
 
+/**
+ * Grâce (ms) laissée au gel casino après un SKIP (A). Retour playtest : mettre
+ * `chestRevealMsLeft` à 0 DANS le même appel que `confirm()` permettait au
+ * `advanceTime()` de CETTE frame de reprendre la sim avant que la boucle DOM
+ * indépendante (`overlay.sync()`, dans `main.ts`, sur son propre `requestAnimationFrame`)
+ * n'ait eu l'occasion de retirer le panneau — course entre deux boucles non
+ * synchronisées. Cette grâce garantit plusieurs frames réelles de gel supplémentaire
+ * (le décompte existant dans `advanceTime` s'en charge), le temps que l'overlay
+ * observe `chestSkipToken` et ferme la modale AVANT que la partie ne reprenne visiblement.
+ */
+const CHEST_SKIP_GRACE_MS = 96
+
 /** Séquence Konami recontextualisée : ↑↑↓↓←→←→ B A (B=annuler, A=valider). */
 const KONAMI: readonly ComboAction[] = [
   'up',
@@ -476,7 +488,7 @@ export class App {
     // Ouverture de coffre en cours : A SAUTE le spectacle (dégèle + ferme la machine à
     // sous). Consommé ici → ne déclenche rien d'autre. Le résultat est déjà appliqué.
     if (this.chestRevealMsLeft > 0) {
-      this.chestRevealMsLeft = 0
+      this.chestRevealMsLeft = CHEST_SKIP_GRACE_MS
       this.chestSkipToken++
       return
     }

@@ -416,7 +416,34 @@ describe('App — gel « casino » à l\'ouverture de coffre', () => {
     const token0 = app.getState().chestSkipToken
     app.confirm()
     expect(app.getState().chestSkipToken).toBe(token0 + 1)
-    // Dégelé : le temps de jeu repart.
+    // Dégelé (après la grâce de skip, cf. `CHEST_SKIP_GRACE_MS` — 2 avances : la 1re
+    // consomme la grâce, la 2e fait effectivement repartir la sim).
+    app.advanceTime(100)
+    app.advanceTime(100)
+    expect(app.getState().elapsedMs).toBeGreaterThan(t0)
+  })
+
+  /**
+   * Fix course modale coffre (retour playtest) : `confirm()` NE remet PAS
+   * `chestRevealMsLeft` à 0 dans le même appel — sinon le `advanceTime()` de la
+   * MÊME frame (routeInput → confirm() → advanceTime, dans `GameScene.update()`)
+   * ferait déjà repartir la sim avant que la boucle DOM indépendante
+   * (`overlay.sync()`, sur son propre rAF dans `main.ts`) n'ait eu l'occasion de
+   * retirer le panneau `.jackpot`. Une grâce (`CHEST_SKIP_GRACE_MS`) garde le gel
+   * actif un instant de plus après le skip.
+   */
+  it('skip (A) laisse une grâce : le gel reste actif un instant de plus AVANT que la sim ne reprenne', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugSpawnChestOnPlayer()
+    app.advanceTime(STEP_MS)
+    const t0 = app.getState().elapsedMs
+    app.confirm() // skip
+    // Immédiatement après le skip, la sim est ENCORE gelée (grâce en cours).
+    expect(app.getState().elapsedMs).toBe(t0)
+    // Un premier advanceTime consomme la grâce restante — la sim n'avance PAS ENCORE.
+    app.advanceTime(100)
+    expect(app.getState().elapsedMs).toBe(t0)
+    // La grâce est épuisée : la sim reprend enfin.
     app.advanceTime(100)
     expect(app.getState().elapsedMs).toBeGreaterThan(t0)
   })

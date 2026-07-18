@@ -134,6 +134,15 @@ export class AudioDirector {
    * depuis le bus) obtiennent un tick propre dès que observe() tourne.
    */
   private voicePriorityThisTick = 0
+  /**
+   * Minuteur du « kling kling » de machine à sous (retour playtest) : tourne tant
+   * que la modale de coffre est affichée, arrêté dès qu'`observe()` constate que
+   * `state.chestOpen` est redevenu `null`. Décorrélé de l'overlay (pas de plomberie
+   * DOM→audio) : suit le MÊME état (`AppViewState.chestOpen`) que `musicForState`.
+   */
+  private chestKlingTimer: number | null = null
+  /** `chestOpen` observé à la frame précédente — détecte la transition true→false. */
+  private prevChestOpen = false
 
   constructor(sound: Phaser.Sound.BaseSoundManager, events: EventTarget, getSettings: () => AudioLevels) {
     this.sound = sound
@@ -196,6 +205,11 @@ export class AudioDirector {
       // Le boss final a une réplique dédiée (plus forte) — le mid-boss garde le pool générique.
       const role = (e as BossSpawnedEvent).role
       this.playVoice(role === 'final' ? VOICE.bossFinal : VOICE.boss, 2)
+      // Klaxon d'anticipation (juice #9) : RÉSERVÉ au boss final (retour playtest — le
+      // stinger générique sur chaque télégraphe de vague se déclenchait trop souvent).
+      if (role === 'final') {
+        this.playCue('waveIncoming')
+      }
     })
     // (Plus de SFX générique sur `auraPulse` : aura/sweep/strike/cône sonnent
     // désormais par ARME via `weaponFired`/zzfx. L'auraPulse reste pour les VFX.)
@@ -209,6 +223,9 @@ export class AudioDirector {
       // Fanfare d'ouverture (ElevenLabs) pour TOUT coffre ; super = plus épique.
       // L'évolution ajoute sa voix triomphante via 'evolved' (pas de doublon fanfare).
       this.playCue((e as ChestOpenedEvent).isSuper ? 'chestFanfareSuper' : 'chestFanfare')
+      // « Kling kling » machine à sous (retour playtest) : tic répété pendant le
+      // spectacle, arrêté dans `observe()` dès que `chestOpen` redevient null.
+      this.startChestKling()
     })
     on('upgradePick', () => { this.playCue('upgradePick') })
     // Palier de kills (juice #8) : tampon « validé » à chaque tranche de 100 déblayés.
@@ -422,6 +439,12 @@ export class AudioDirector {
     this.voicePriorityThisTick = 0
     // Miroir du Mode Carnage : observé, jamais décidé ici (cf. `carnageActive`).
     this.carnageActive = state.carnage
+    // Coupe le « kling kling » dès que la modale de coffre se ferme (transition true→false).
+    const chestOpenNow = state.chestOpen !== null
+    if (this.prevChestOpen && !chestOpenNow) {
+      this.stopChestKling()
+    }
+    this.prevChestOpen = chestOpenNow
     // Voix « AIL Entertainment presents » : jouée UNIQUEMENT pendant le splash studio
     // (fenêtre begin/endStudioPresents). On (re)tente ici tant que la fenêtre est ouverte
     // — couvre le cas « asset voix pas encore chargé » au boot. Jamais sur le titre.
@@ -442,7 +465,12 @@ export class AudioDirector {
     }
     // Musique de fond (boss prioritaire, rotation par phase).
     const bossPresent = boss !== undefined
-    const desired = musicForState({ screen: state.screen, stageId: state.stageId, bossPresent })
+    const desired = musicForState({
+      screen: state.screen,
+      stageId: state.stageId,
+      bossPresent,
+      chestOpen: chestOpenNow
+    })
     if (desired !== this.currentKey) {
       this.switchMusic(desired)
     }
@@ -463,6 +491,20 @@ export class AudioDirector {
     if (this.titleSlamTimer !== null) {
       window.clearTimeout(this.titleSlamTimer)
       this.titleSlamTimer = null
+    }
+  }
+
+  /** Démarre le tic répété du « kling kling » (anti-double-arm : un seul minuteur à la fois). */
+  private startChestKling(): void {
+    this.stopChestKling()
+    this.chestKlingTimer = window.setInterval(() => { this.playCue('chestKling') }, 140)
+  }
+
+  /** Coupe le tic dès que la modale de coffre se ferme (`observe()`, sur `chestOpen`). */
+  private stopChestKling(): void {
+    if (this.chestKlingTimer !== null) {
+      window.clearInterval(this.chestKlingTimer)
+      this.chestKlingTimer = null
     }
   }
 

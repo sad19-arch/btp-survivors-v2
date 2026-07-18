@@ -1,7 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { App } from '@/app/app'
-import { Overlay } from '@ui/overlay'
+import { Overlay, cadenceFontSizePx } from '@ui/overlay'
 import type { ChestOpenView } from '@/app/appState'
+
+describe('cadenceFontSizePx — taille du chiffre de CADENCE (pure)', () => {
+  it('croît avec le compteur', () => {
+    expect(cadenceFontSizePx(50)).toBeGreaterThan(cadenceFontSizePx(5))
+  })
+
+  it('est bornée (ne dépasse jamais un plafond)', () => {
+    expect(cadenceFontSizePx(10_000)).toBe(cadenceFontSizePx(100_000))
+  })
+})
 
 function mount(): { root: HTMLElement; overlay: Overlay } {
   const root = document.createElement('div')
@@ -526,6 +536,66 @@ describe('Overlay — CADENCE (combo) + palier (juice #7/#8)', () => {
     overlay.sync(title.getState())
     expect(root.querySelector('.cadence')?.classList.contains('cadence--on')).toBe(false)
     expect(root.querySelector('.milestone')?.classList.contains('milestone--on')).toBe(false)
+  })
+
+  it('le chiffre de CADENCE grossit avec l\'enchaînement (borné)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(atScore(app, 0))
+    overlay.sync(atScore(app, 6)) // juste au-dessus du seuil (CADENCE_MIN=5)
+    const small = root.querySelector<HTMLElement>('.cadence__label')?.style.fontSize
+    overlay.sync(atScore(app, 200)) // très gros enchaînement
+    const big = root.querySelector<HTMLElement>('.cadence__label')?.style.fontSize
+    expect(parseFloat(big ?? '0')).toBeGreaterThan(parseFloat(small ?? '0'))
+  })
+})
+
+describe('Overlay — CADENCE : pause (pas reset) pendant la modale de coffre (retour playtest)', () => {
+  function atScoreAndChest(
+    app: App,
+    score: number,
+    chestOpen: import('@/app/appState').AppViewState['chestOpen']
+  ): import('@/app/appState').AppViewState {
+    return { ...app.getState(), score, chestOpen }
+  }
+  const OPEN: ChestOpenView = { isSuper: false, results: [] }
+
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['performance'] }) })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('la fenêtre de combo NE se vide PAS pendant que la modale est affichée (temps réel gelé)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(atScoreAndChest(app, 0, null))
+    overlay.sync(atScoreAndChest(app, 10, null)) // combo actif (fenêtre 2000ms)
+    overlay.sync(atScoreAndChest(app, 10, OPEN)) // modale ouverte → gel
+    vi.advanceTimersByTime(5000) // 5s réelles, largement > la fenêtre de combo
+    overlay.sync(atScoreAndChest(app, 10, OPEN))
+    expect(root.querySelector('.cadence')?.classList.contains('cadence--on')).toBe(true)
+  })
+
+  it('après fermeture, la fenêtre reprend son décompte EXACT (pas de saut lié au temps gelé)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(atScoreAndChest(app, 0, null))
+    overlay.sync(atScoreAndChest(app, 10, null))
+    overlay.sync(atScoreAndChest(app, 10, OPEN))
+    vi.advanceTimersByTime(5000) // gelé : ne doit RIEN consommer de la fenêtre
+    overlay.sync(atScoreAndChest(app, 10, null)) // modale fermée → reprend
+    expect(root.querySelector('.cadence')?.classList.contains('cadence--on')).toBe(true)
+    vi.advanceTimersByTime(2100) // > COMBO_WINDOW_MS APRÈS la reprise seulement
+    overlay.sync(atScoreAndChest(app, 10, null))
+    expect(root.querySelector('.cadence')?.classList.contains('cadence--on')).toBe(false)
+  })
+
+  it('SANS modale, la fenêtre retombe normalement après COMBO_WINDOW_MS (non-régression)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(atScoreAndChest(app, 0, null))
+    overlay.sync(atScoreAndChest(app, 10, null))
+    vi.advanceTimersByTime(2100)
+    overlay.sync(atScoreAndChest(app, 10, null))
+    expect(root.querySelector('.cadence')?.classList.contains('cadence--on')).toBe(false)
   })
 })
 
