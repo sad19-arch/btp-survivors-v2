@@ -88,6 +88,12 @@ export interface EnemyComp {
   chestBearer?: boolean
   /** Rôle de boss (mini-boss intermédiaire vs boss final). Absent pour les ennemis non-boss. */
   bossRole?: 'mid' | 'final'
+  /**
+   * Tué par une boule d'un ALLIÉ enragé (otage libéré) : lu par `reapDeadEnemies`
+   * pour réduire la gemme d'XP (`RAGE.allyKillXpFraction`) et éviter le flood d'XP
+   * d'un wipe de masse. Absent = mort normale (XP pleine).
+   */
+  allyKill?: boolean
   contactDamage: number
   /** XP lâchée à la mort. */
   xpValue: number
@@ -149,6 +155,11 @@ export interface PickupComp {
    * que soit le rayon d'aimantation, puis collectée au contact (pas de vacuum sec).
    */
   magnetized?: boolean
+  /**
+   * Coffre RARE « super » (doré giga-brillant, 1/10) : donne 1 évolution + 2 montées
+   * (ou 3 montées) et déclenche le spectacle renforcé. Posé au drop du coffre.
+   */
+  isSuper?: boolean
 }
 
 /** Un projectile en vol. */
@@ -221,6 +232,35 @@ export interface PrisonerComp {
 }
 
 /**
+ * Otage libéré ENRAGÉ (allié TEMPORAIRE). Porté par l'entité `prisoner` (qui garde
+ * `freed:true`) — pas d'entité séparée. Il suit le joueur `ownerPlayerId` et lance
+ * des salves de boules de feu jusqu'à `remainingMs<=0`, puis dit « Merci » et fuit.
+ */
+export interface AllyComp {
+  /** PlayerId du sauveteur : cible du suivi ET owner des kills (attribution/XP). */
+  ownerPlayerId: number
+  /** Durée de vie restante (ms) avant « merci » + départ. */
+  remainingMs: number
+  /** Temps restant avant la prochaine salve (ms). */
+  salvoLeftMs: number
+}
+
+/**
+ * Boule de feu homing lancée par un allié enragé. Vise l'ENTITÉ `targetId` et
+ * applique son effet à l'impact : létal (ennemi normal) ou plafonné (boss/élite).
+ * N'est PAS un `projectile` (jamais passée à `collisionSystem`) → le compte de
+ * victimes reste EXACT (l'ensemble est figé au moment de la salve).
+ */
+export interface AllyBoltComp {
+  ownerPlayerId: number
+  targetId: EntityId
+  damage: number
+  /** true = tue la cible à l'impact (ennemi normal) ; false = dégât plafonné (boss/élite). */
+  lethal: boolean
+  speed: number
+}
+
+/**
  * Effet de ralentissement posé sur un ennemi (premier effet de contrôle du jeu).
  * Posé par les armes de kind `cone` (extincteur, canon_mousse).
  * Retiré par `slowSystem` quand `remainingMs` atteint 0.
@@ -288,6 +328,10 @@ export interface Components {
   orbiter: OrbiterComp
   weapons: WeaponLoadout
   prisoner: PrisonerComp
+  /** Otage libéré enragé (allié temporaire qui suit le joueur et tire des boules de feu). */
+  ally: AllyComp
+  /** Boule de feu homing d'un allié enragé (vise une entité, applique l'effet à l'impact). */
+  allyBolt: AllyBoltComp
   /** Objet destructible posé (PV + drop de pièces à la casse). */
   destructible: DestructibleComp
   passives: PassiveLoadout
@@ -385,6 +429,8 @@ export interface PickupState {
   y: number
   type: PickupKind
   value: number
+  /** Coffre RARE super doré (1/10) → sprite au sol distinct + spectacle renforcé. */
+  isSuper?: boolean
 }
 
 export interface PrisonerState {
@@ -392,6 +438,17 @@ export interface PrisonerState {
   x: number
   y: number
   freed: boolean
+}
+
+/** Vue d'un allié enragé (otage libéré qui suit le joueur et tire des boules de feu). */
+export interface AllyState {
+  id: number
+  x: number
+  y: number
+  /** PlayerId du sauveteur (owner). */
+  ownerId: number
+  /** Durée de vie restante (ms) — pour l'aura enragée + un éventuel décompte. */
+  remainingMs: number
 }
 
 /** Vue d'un objet destructible (rendu observateur : sprite du type + feedback de PV). */
@@ -444,6 +501,15 @@ export interface GameState {
   elapsedMs: number
   wave: number
   score: number
+  /**
+   * Boss neutralisés depuis le début de la run (`mid` + `final` confondus).
+   *
+   * Cumul de run au même titre que `score`, et pour la même raison : c'est la
+   * seule source FIABLE de morts de boss. `EnemyDiedEvent` porte bien `bossRole`
+   * mais il est plafonné par pas (événement de rendu) — un boss tué au milieu
+   * d'une vague n'y apparaîtrait pas.
+   */
+  bossKills: number
   /** Repère documenté pour décider sans regarder l'écran. */
   coordSystem: string
   players: PlayerState[]
@@ -452,6 +518,8 @@ export interface GameState {
   pickups: PickupState[]
   /** Ouvriers prisonniers présents (cage + sosie à libérer). */
   prisoners: PrisonerState[]
+  /** Alliés enragés actifs (otages libérés qui suivent le joueur et lancent des boules de feu). */
+  allies: AllyState[]
   /** Objets destructibles posés sur la carte (rendu + feedback de casse). */
   destructibles: DestructibleState[]
   /** Progression des sauvetages (mini-carte + HUD). */
@@ -486,12 +554,26 @@ export interface GameState {
 }
 
 /**
- * Résultat de l'ouverture d'un coffre (one-shot, cosmétique) — alimente la
- * machine à sous. `kind` : `evolution` (arme évoluée révélée), `cards` (choix de
- * cartes proposé), `heal` (soin de repli). `isSuper` : gros moment (évolution)
- * → variante « super coffre » arc-en-ciel à 3 rouleaux côté rendu.
+ * UNE issue d'ouverture de coffre, révélée par un rouleau de la machine à sous.
+ * `evolution` = une arme évolue en super-arme ; `weapon-up` = une arme possédée
+ * monte de niveau ; `heal` = soin de repli (tout maxé). PLUS de « cartes » : le
+ * coffre ne propose jamais d'écran de choix.
  */
-export type ChestOpenOutcome =
-  | { kind: 'evolution'; weaponId: string; isSuper: boolean }
-  | { kind: 'cards'; isSuper: boolean }
-  | { kind: 'heal'; isSuper: boolean }
+export interface ChestResult {
+  kind: 'evolution' | 'weapon-up' | 'heal'
+  /** Arme concernée (id évolué, ou id de l'arme montée). '' pour un soin. */
+  weaponId: string
+  /** Niveau résultant (montée : nouveau niveau ; évolution : 1). Absent pour un soin. */
+  level?: number
+}
+
+/**
+ * Résultat d'ouverture d'un coffre (one-shot, cosmétique) — alimente la machine à
+ * sous. `results` : 1 issue (coffre normal) ou jusqu'à 3 (super coffre : 1 évo + 2
+ * montées, ou 3 montées). `isSuper` : super coffre doré (rareté 1/10) → spectacle
+ * renforcé côté rendu.
+ */
+export interface ChestOpenOutcome {
+  isSuper: boolean
+  results: ChestResult[]
+}

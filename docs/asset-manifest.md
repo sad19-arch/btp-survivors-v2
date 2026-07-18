@@ -46,6 +46,230 @@ Prompt negatif global :
 no photorealism, no 3D render, no smooth digital painting, no soft gradients, no thin outlines, no messy tiny details, no UI text, no watermark, no isometric diamond perspective, no side-scroller perspective, no random tools as enemies, no ambiguous object-monster hybrid that cannot be read at small size
 ```
 
+## 3bis. ⚠️ LE PROMPT GLOBAL NE SUFFIT PAS — les dérives se battent par les PARAMÈTRES
+
+Découvert en produisant 55 items (2026-07-17). Le prompt négatif ci-dessus dit
+déjà « no photorealism, no 3D render » : **il n'a PAS empêché une camionnette
+photoréaliste anti-aliasée**. Ce qui l'a tuée, ce sont les **paramètres de l'API** :
+
+    detail:  'low detail'
+    shading: 'flat shading'
+
+Golden batch **3/7 → 12/12, puis 9/9, 9/9** dès la recette verrouillée. La prose
+seule est insuffisante ; le levier est dans les paramètres.
+
+### Les 4 dérives systématiques et leur parade (toutes MESURÉES)
+
+| Dérive | Ce qui NE marche PAS | Ce qui marche |
+|---|---|---|
+| **Photoréalisme / anti-aliasing** | « no photorealism » dans le prompt | `detail:'low detail'` + `shading:'flat shading'` |
+| **Vue de côté** sur les objets hauts | « NOT a side view » — **ignoré**, 2/2 sur des grues → élévation plate | **DÉCRIRE** la 3/4 : « la flèche court en DIAGONALE haut-gauche→bas-droite en perspective fuyante » · « on voit le DESSUS de la cabine » · « une ombre portée sombre au sol ». ⚠️ **Échoue sur les poteaux fins** (2/2 sur un lampadaire, bbox 35×156). Nuance : l'étalon `tree_b` fait 37×134 — un objet haut et fin **EST** la convention du jeu. Ne pas re-brûler de quota dessus. |
+| **Couleurs « embellies »** | « grey-brown » → tronc **VIOLET** · une tache d'huile sort **violette** | **Nier explicitement** : « WARM CHOCOLATE BROWN + **NOT purple/violet/mauve/lavender** ». Idem sable (gold, pas gris), mare (vert-brun, pas turquoise). |
+| **Volume sur les décalques** (qui doivent être PLATS) | corriger la couleur seule ⇒ ressort en **blob 3D brillant** | `high top-down` + `outline:'lineless'` + « **ZERO height**, no highlight, not a blob, not a dome » |
+
+### Le piège qui se reproduit à l'identique
+
+**Les vignettes de l'API MENTENT, toujours dans le même sens.** Mesuré deux fois :
+**6/6 → 3/6**, puis **7/7 → 3/7**. Juger sur `tools/assets/context-board.mjs`
+(vrai sol, vrai joueur à l'échelle, `PLAYER_SCALE = 0.516` → 99 px), **jamais sur
+vignette**.
+
+### Trois contraintes d'API mesurées
+
+- **La frame 0 de `v3` peut avoir un FOND OPAQUE** (c'est la frame de référence) :
+  elle fausse l'image **et** la mesure de raccord (95,9 % → verdict « aller-retour »
+  erroné ; sans elle : 1,74 = boucle directe). Refuser de packer un fond opaque.
+- **Max 10 jobs concurrents** (erreur 429). Canvas 256 ⇒ **`frame_count` ≤ 8**.
+- **Les objets/personnages EXPIRENT en 8 h.** Packer au fil de l'eau.
+
+### Packing d'animation : la mesure décide, SAUF quand elle est aveugle
+
+Critère : `raccord(dernière→première) > 2,2 × moyenne(frame→frame)` ⇒ sens unique
+⇒ aller-retour. Sinon **boucle directe**. Mesuré : **15/17 en boucle directe** —
+packer en aller-retour « au cas où » double la feuille pour rien.
+⚠️ **Angle mort sémantique** : le bulldozer `_work` **accumule un tas de terre** —
+la mesure dit « directe » (1,45) mais boucler ferait **disparaître le tas d'un
+coup**. La mesure est pixellique. Une animation qui **construit** quelque chose se
+juge à l'œil.
+
+### ⚠️ Le nommage §6 ci-dessous est PÉRIMÉ — `qa.ts` le dit lui-même
+
+Exiger le préfixe plat marquait **574 des 653 assets fautifs (88 %)**. La
+convention **en vigueur** : **le dossier porte la catégorie**
+(`public/<catégorie>/<nom>.png`). C'est ce que `qa.ts` valide depuis sa réparation
+(613 warnings → 0).
+
+## 3ter. Ce qu'un GÉNÉRATEUR ne peut pas faire — mesuré sur le kit de routes
+
+Découvert en produisant le kit de routes 256 px (2026-07-17, 8 générations). §3bis
+dit comment obtenir un BON asset. Ceci dit quand **aucun prompt ne suffira**.
+
+### Un kit de tuiles ne se génère pas, il se COMPOSE
+
+Un kit n'a qu'une exigence dure : le **raccord**. Deux pièces voisines doivent
+présenter au bord partagé le même profil. Deux `create_map_object` 256×256 lancés
+avec le **même préfixe de prompt** :
+
+| | droite | « virage » demandé |
+|---|---|---|
+| chaussée | x48..208 (**~160 px**) | x82..172 (**~90 px**) |
+| enrobé | `rgb(95,96,110)` | `rgb(84,86,91)` |
+| accotement | gravier pâle `rgb(228,215,182)` | **HERBE VERTE** `rgb(122,158,67)` |
+
+**78 % d'écart de largeur** → raccord impossible. Pire : on demandait un virage 90°
+« entrant au nord, sortant à l'est », le modèle a rendu un **carrefour**. ⇒ **La
+TOPOLOGIE n'est pas pilotable par la prose** : le modèle rend l'ARCHÉTYPE de
+l'objet. Corollaire général : dès qu'un asset doit être **exact** (raccord, grille,
+mesure), on fait générer la **MATIÈRE** et on compose la **GÉOMÉTRIE** soi-même
+(`tools/assets/make-roads.mjs`). Ce n'est pas contourner PixelLab : tous les pixels
+en viennent.
+
+⚠️ **`create_topdown_tileset` n'est PAS un kit de routes** (le brief le croyait) :
+c'est un Wang set **à COINS** (16 tuiles ; **32 px max**, 64 en `mode:'pro'`). Il
+donne une *région* d'enrobé — et une topologie à coins **ne peut pas** porter de
+ligne axiale, qui dépend de la DIRECTION de la route. Il a rendu l'enrobé **bleu
+marine**.
+
+### Le violet, suite : ce n'est PAS une erreur de teinte, c'est une RAMPE D'OMBRE
+
+§3bis dit « nier explicitement ». **Mesuré : insuffisant sur les grandes surfaces
+plates.** Avec `NOT purple, NOT violet, NOT mauve, NOT lavender` **dans le prompt** :
+ornières **violettes**, puis piste **lavande**. Avec l'enrobé : `rgb(95,96,110)` —
+bleu-violet (110 de bleu pour 95 de rouge). Wang : **bleu marine**. **4/4.**
+
+**Mécanisme** : les tons SOMBRES partent vers le violet (rampe d'ombre de la
+palette). **Parade qui marche** : demander des tons **ENSOLEILLÉS / CLAIRS** — le
+violet disparaît d'un coup (vérifié). Puis, si un ton sombre est nécessaire,
+l'obtenir **en post en multipliant les 3 canaux du MÊME facteur** : la teinte est
+mathématiquement conservée (`scaleRgb`).
+
+### « piste / ornière / roue » ⇒ VOIE FERRÉE (3/3)
+
+Trois prompts de piste de chantier ont rendu une **voie ferrée** (traverses +
+rails), dont un avec `NOT a railway, NO rails, NO sleepers, NO planks` **écrit
+noir sur blanc** — même classe que le « NOT a side view » ignoré de §3bis :
+**nier une composition la RENFORCE**. Un prompt a même ajouté un petit
+personnage non demandé.
+
+## 3quater. Contraintes d'API mesurées (lot « machines vivantes », 5 engins)
+
+### 🔴 La TAILLE DE CANVAS peut forcer un fond OPAQUE
+
+**Canvas 224×192 ⇒ fond opaque, 3/3 d'échecs** (v1, v2, v7) contre **0/5** en
+224×176 · 224×160 · 192×192 · 176×176 · 96×96 — **à prompt et `view`
+IDENTIQUES**. Ce n'est pas le prompt : c'est **la taille**. Si un fond opaque
+sort, **changer de canvas** avant de retoucher le texte.
+
+### 🔴 `animate_object` v3 APLATIT la perspective — aucun paramètre n'y peut rien
+
+Testé **2 vues source × 3 formulations**, dont un « camera locked » explicite.
+L'animation revient plus plate que sa source, quoi qu'on fasse. **Aucun
+paramètre d'API ne pilote la vue de l'animation.** Conséquence : un asset dont
+la 3/4 est le seul intérêt **perdra** en s'animant — l'accepter ou garder la
+statique.
+
+### `keep_first_frame: false` supprime le piège de la frame-0 opaque À LA SOURCE
+
+Plutôt que de rogner après coup : `frame_count: 6` + `keep_first_frame: false`
+⇒ 6 frames générées, **aucune frame de référence à retirer**.
+
+### La parade 3/4 échoue sur la GÉOMÉTRIE, pas sur la classe d'objet
+
+Demander « RAISED HIGH / TALL » a **cassé** la 3/4 d'une nacelle (2 échecs) ;
+demander **« compact, wider than tall »** l'a restaurée. Ce n'est pas « les
+poteaux » qui résistent — c'est **tout ce qui est haut-et-fin**.
+
+### L'angle mort sémantique du packing : « ça ACCUMULE », pas « ce type de geste »
+
+Prédire l'aller-retour d'après le **type de mouvement** (« monte/descend »,
+« balancier ») est **faux** : vérifié image par image sur nacelle et crochet →
+le modèle rend des **cycles complets** (frame N ≈ frame 0), boucle directe.
+Ce qui décide vraiment : **est-ce que quelque chose s'accumule ?** Le tas de
+terre du bulldozer, oui — boucler le ferait disparaître d'un coup. Une nacelle,
+non. Mesuré : **1 aller-retour sur 6**.
+
+### Caler `scale` sur la MASSE APPARENTE, pas sur la hauteur
+
+Caler sur la hauteur de figure **surdimensionne** quand la perspective change
+l'aspect (toupie : 1,69 contre 1,20 attendu). Utiliser **√(w·h)** de la
+bounding box.
+
+### Dérive TEXTE
+
+Du baragouin gravé sur un châssis (1re occurrence). Négation explicite
+« NO letters, NO writing » requise — c'est l'un des rares cas où la négation
+marche, parce qu'elle porte sur un **ajout**, pas sur une composition.
+
+**Parade** : retirer **tout** le vocabulaire de circulation et ne décrire que le
+POSITIF (« a flat expanse of bare dry earth… empty soil only ») → terre nue propre
+du premier coup.
+
+### Et parfois la bonne matière est DÉJÀ dans le dépôt
+
+Après 3 échecs sur la terre, la piste a été composée depuis
+`public/stage01/ground/tile_0.png` — **le sol du jeu**. Une piste de chantier *est*
+la terre du site, compactée : la prendre au sol garantit l'accord de palette avec
+le terrain sur lequel elle est posée, **ce qu'aucune génération séparée ne peut
+promettre**, et la tuile de sol est raccordable par construction (TileSprite).
+Avant de brûler du quota sur une matière générique, regarder ce qui existe.
+
+## 3quinquies. Lot « PNJ vie de chantier » (10 planches, 2026-07-17)
+
+### 🔴 La « recette verrouillée » à `size:180` NE PRODUIT PAS l'étalon
+
+Mesuré : **`create_character(size:180)` sort un canvas 256** (l'API agrandit
+~40 % pour loger l'animation). Or l'étalon `stage05/npc/macon_work.png` est un
+canvas **180 à 12 frames** — il ne PEUT donc pas venir de `size:180`. Il vient
+de **`size:128` → canvas 180**. Corollaire utile : **`size` = hauteur de la
+FIGURE, le canvas = ~1,4 × size**. On choisit donc `size` par la hauteur d'art
+voulue, pas par la cellule :
+
+| `size` | canvas | figure | affiché à `WORKER_SCALE 0.62` |
+|---:|---:|---:|---:|
+| 128 | 180 | ~130 | ~81 px |
+| 180 | 256 | ~165 | ~102 px (≈ joueur 99) |
+
+### 🔴 Coûts et quotas — trois mesures qui contredisent la doc de l'outil
+
+- **`animate_character` v3 coûte 1 génération PAR FRAME**, pas « 1/direction » :
+  `frame_count:6` ⇒ **6 générations**. Une planche = 5 (create) + 6 = **11**.
+- **Un job ÉCHOUÉ ne consomme RIEN** (vérifié au solde : 1113 → 1108 après un
+  create à 5 + un animate à 8 échoué). Re-tenter est gratuit — ne pas hésiter.
+- **1 `create_character` v3 = 2 jobs concurrents** ⇒ le plafond de 10 jobs est
+  atteint à **5 creates**, pas 10. Lancer par vagues de 5.
+
+### `animate_character` v3 ne TIENT PAS la couleur d'un objet entre les frames
+
+Le disque du signaleur, **rouge** dans la rotation, sort **blanc sur 2 frames
+sur 6** (rouge en 0/3/4/5, blanc en 1/2). Aucun paramètre ne l'empêche — même
+classe que « v3 aplatit la perspective » (§3quater). Ici c'est passable (ça se
+lit comme une palette qu'on RETOURNE), mais **ne jamais compter sur v3 pour
+tenir une couleur signalétique** : si la couleur porte le sens, la vérifier
+frame par frame.
+
+### Nier un MATÉRIAU / une COULEUR marche — nier une COMPOSITION non
+
+§3bis le disait des teintes ; c'est vrai des **matières**. « pale cream
+plasterboard » a rendu un **panneau de BOIS** ; le même prompt + « **NOT wood,
+NOT plywood, NOT brown, NOT timber** » a rendu le plâtre blanc **du premier
+coup**. La règle affinée : la négation marche sur ce qui est un **attribut**
+(couleur, matière, ajout : « NO letters ») et se retourne sur ce qui est une
+**composition/topologie** (« NOT a side view », « NOT a railway »).
+
+⚠️ Limite : « NO letters, NO writing » **n'empêche pas** les pseudo-glyphes sur
+les surfaces « à étiquette » (cartons du porteur S10). Illisible à 100 px donc
+toléré — mais ne pas promettre un asset sans marquage.
+
+### Le vrai piège de ce lot n'était pas PixelLab, c'était l'ÉCHELLE PERDUE
+
+`pack-npc.mjs` **imprime déjà** « scale pour ~95px = X », et ces X sont exactement
+les `scale: 1.4-1.67` de `stages.ts`. Le réglage §17.1 était juste — mais **trois
+chemins de rendu l'ignorent** (ambiance forcée vide, `WORKER_SCALE` unique,
+`NPC_SCALE` éditeur). D'où : **si le rendu impose une échelle unique, la
+calibration doit vivre DANS L'ART** (viser ~65 % de remplissage en hauteur), pas
+dans une donnée que personne ne lit. Vérifier le remplissage (bbox/cellule) est
+le contrôle qui attrape ça en une commande.
+
 ## 4. Methode Pixelabs recommandee
 
 | Etape | Methode |

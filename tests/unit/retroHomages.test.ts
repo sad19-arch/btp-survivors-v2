@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { App } from '@/app/app'
 import { Simulation } from '@core/simulation'
 import { World } from '@core/world'
-import { rescueSystem } from '@core/systems/rescue'
+import { rescueSystem, type EnragedFreed } from '@core/systems/rescue'
 import { RESCUE, INTRO, PLAYER_BASE } from '@content/config'
+import { ConstructionPhaseId } from '@content/phases'
 import type { PlayerComp, Vec2 } from '@core/types'
 
 /** Composant joueur minimal pour les tests de systèmes. */
@@ -95,7 +96,9 @@ describe('Casque doré — en attente d’un déclencheur', () => {
 
 describe('Clin d’œil — ouvrier prisonnier', () => {
   it('expose des prisonniers non libérés à distance du centre', () => {
-    const sim = new Simulation({ seed: 7, mode: 'solo' })
+    // Stage SANS compo → placement procédural (terrain_vierge est désormais
+    // compo-contrôlé, cf. siteLayoutPrisoners.test.ts).
+    const sim = new Simulation({ seed: 7, mode: 'solo', phaseId: ConstructionPhaseId.TERRASSEMENT })
     const prisoners = sim.getState().prisoners
     expect(prisoners.length).toBe(5)
     // tous non libérés au départ
@@ -110,12 +113,13 @@ describe('Clin d’œil — ouvrier prisonnier', () => {
   })
 
   it('placement déterministe (même seed → même positions)', () => {
-    const a = new Simulation({ seed: 42, mode: 'solo' }).getState().prisoners
-    const b = new Simulation({ seed: 42, mode: 'solo' }).getState().prisoners
+    const a = new Simulation({ seed: 42, mode: 'solo', phaseId: ConstructionPhaseId.TERRASSEMENT }).getState().prisoners
+    const b = new Simulation({ seed: 42, mode: 'solo', phaseId: ConstructionPhaseId.TERRASSEMENT }).getState().prisoners
+    expect(a.length).toBe(5)
     expect(a).toEqual(b)
   })
 
-  it('rescueSystem : proximité → libéré + soin borné, signale la libération', () => {
+  it('rescueSystem : proximité → libéré + soin borné + devient allié enragé', () => {
     const world = new World()
     const player = world.spawn()
     world.add(player, 'position', { x: 100, y: 100 })
@@ -125,13 +129,16 @@ describe('Clin d’œil — ouvrier prisonnier', () => {
     world.add(prisoner, 'position', { x: 110, y: 100 }) // à portée
     world.add(prisoner, 'prisoner', { freed: false })
 
-    const freed: Vec2[] = []
-    rescueSystem(world, freed)
+    const enraged: EnragedFreed[] = []
+    const thanked: Vec2[] = []
+    rescueSystem(world, enraged, thanked)
 
     expect(world.get(prisoner, 'prisoner')?.freed).toBe(true)
     expect(world.get(player, 'health')?.hp).toBe(50 + Math.round(PLAYER_BASE.hp * RESCUE.healFraction))
-    expect(freed.length).toBe(1)
-    expect(freed[0]).toEqual({ x: 110, y: 100 })
+    // Le libéré devient un allié enragé (owner = le sauveteur), signalé dans `enraged`.
+    expect(enraged).toEqual([{ x: 110, y: 100, playerId: PLAYER_COMP.playerId }])
+    expect(thanked.length).toBe(0)
+    expect(world.get(prisoner, 'ally')).toBeDefined()
   })
 
   it('rescueSystem : soin plafonné à maxHp', () => {
@@ -144,7 +151,7 @@ describe('Clin d’œil — ouvrier prisonnier', () => {
     world.add(prisoner, 'position', { x: 0, y: 0 })
     world.add(prisoner, 'prisoner', { freed: false })
 
-    rescueSystem(world, [])
+    rescueSystem(world, [], [])
     expect(world.get(player, 'health')?.hp).toBe(PLAYER_BASE.hp)
   })
 
@@ -157,24 +164,27 @@ describe('Clin d’œil — ouvrier prisonnier', () => {
     world.add(prisoner, 'position', { x: RESCUE.radius + 50, y: 0 })
     world.add(prisoner, 'prisoner', { freed: false })
 
-    const freed: Vec2[] = []
-    rescueSystem(world, freed)
+    const enraged: EnragedFreed[] = []
+    rescueSystem(world, enraged, [])
     expect(world.get(prisoner, 'prisoner')?.freed).toBe(false)
     expect(world.get(player, 'health')?.hp).toBe(100)
-    expect(freed.length).toBe(0)
+    expect(enraged.length).toBe(0)
   })
 })
 
 describe('Clin d’œil — intro de run', () => {
   it('gèle la sim pendant l’intro puis la libère', () => {
-    const app = new App({ seed: 1, mode: 'solo', autostart: true, intro: true })
+    // Stage AVEC script de montage (terrassement) → gel long `stageCinematicMs` ;
+    // un stage sans script retomberait sur le préambule court `durationMs`
+    // (cf. `introDurationFor`) et cette durée-ci ne s'appliquerait pas.
+    const app = new App({ seed: 1, mode: 'solo', autostart: true, intro: true, phaseId: ConstructionPhaseId.TERRASSEMENT })
     expect(app.getState().introActive).toBe(true)
 
-    app.advanceTime(INTRO.durationMs - 200)
+    app.advanceTime(INTRO.stageCinematicMs - 200)
     expect(app.getState().introActive).toBe(true)
     expect(app.getState().elapsedMs).toBe(0) // sim gelée
 
-    app.advanceTime(300) // dépasse la durée d'intro
+    app.advanceTime(300) // dépasse la durée d'intro (stageCinematicMs)
     expect(app.getState().introActive).toBe(false)
 
     app.advanceTime(1000)

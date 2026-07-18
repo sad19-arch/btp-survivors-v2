@@ -2,34 +2,37 @@
  * SiteWorkers — module de rendu des ouvriers navetteurs (T6).
  *
  * Des ouvriers d'ambiance font la navette entre deux zones du chantier (issues
- * des clusters), portent une charge visible à l'aller, et paniquent quand la
- * horde s'approche. Rendu pur/cosmétique : sim:check diff 0 garanti.
+ * des clusters) et paniquent quand la horde s'approche. Rendu pur/cosmétique :
+ * sim:check diff 0 garanti.
  *
  * CONTRAINTE ARCHITECTURE :
  *   Ce module ne contient QUE du rendu observateur.
  *   `GameScene` instancie et délègue via reset/sync/dispose (pattern uniforme).
- *   La logique de comportement (navette, charge, panique) vit dans
+ *   La logique de comportement (navette, panique) vit dans
  *   `src/render/workerBehavior.ts` (fonctions pures testées).
  *
  * Profondeurs DA :
  *   1   ouvriers navetteurs (même plan que les PNJ d'ambiance)
- *   2   charge portée (au-dessus de l'ouvrier)
  *   8   indicateur de panique (panneau « ! » — distinct des bulles prisonnier)
  *
  * Lisibilité :
  *   - Sprites PNJ existants (porteur/signaleur) → silhouette non-menaçante.
  *   - Indicateur de panique = panneau orange pixel « ! » (DA-safe, ≠ bulle « Merci »).
- *   - Charge = sprite prop_s2_dirt en miniature (scale 0.4), visible sur le worker.
+ *   - La CHARGE est DANS la feuille du porteur (brouette de terre, pile de
+ *     cartons, plaques…) : ne PAS rajouter un prop de charge par-dessus — le
+ *     prop `prop_s2_dirt` collé au rôle `porteur` doublait l'objet déjà dessiné
+ *     (tas de terre flottant sur une brouette déjà pleine).
  */
 
 import Phaser from 'phaser'
 import { buildSiteLayout, type PlacedCluster } from '@core/siteLayout'
 import { buildSitePlan } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
-import { commutePos, loadVisible, panicDecision, pathFollow, fleeVelocity, planNpcJobs, PANIC_R } from '@render/workerBehavior'
+import { commutePos, panicDecision, pathFollow, fleeVelocity, planAutoTradeNpcs, planNpcJobs, planPathWalkers, buildWalkerPools, pickWalkerSkin, PANIC_R, type WalkerSheet, type WalkerPools } from '@render/workerBehavior'
 import { resolveComposedLayout } from '@content/runtimeLayouts'
 import type { StageLayout } from '@content/stageLayout'
-import { dirRow, idleFrame, walkFrame } from '@render/sprites'
+import { dirRow, idleFrameOf, walkFrameOf } from '@render/sprites'
+import { CAMION_SKIN } from '@render/stages'
 import type { AppViewState } from '@/app/appState'
 import { PALETTE_HEX } from '@ui/palette'
 
@@ -83,9 +86,6 @@ const RESELECT_THROTTLE = 30
 /** Depth des sprites d'ouvriers. */
 const DEPTH_WORKER = 1
 
-/** Depth de la charge portée. */
-const DEPTH_LOAD = 2
-
 /** Depth de l'indicateur de panique. */
 const DEPTH_PANIC = 8
 
@@ -123,12 +123,51 @@ interface WorkerJob {
   phaseOffsetMs: number
   /** Polyligne à suivre (rôles 'path'/'path_camion'), en coordonnées MONDE. */
   points?: Array<{ x: number; y: number }>
+  /** Pause aux extrémités (rôles 'path'/'path_camion'). */
+  pauseMs?: number
+  /** Sens unique (rôles 'path'/'path_camion'). */
+  oneWay?: boolean
+  /**
+   * Échelle de rendu CALIBRÉE, per-feuille (rôle 'npc_trade').
+   * Absente ⇒ échelle unique des navetteurs (`WORKER_SCALE`).
+   */
+  scale?: number
+}
+
+/**
+ * Nombre de frames RÉEL d'une feuille (Phaser compte la frame `__BASE` en plus).
+ * Sert à choisir la bonne formule d'animation : les feuilles PNJ sont mono-ligne
+ * (5..12 frames de GESTE), le joueur et le camion sont en 4×4 (16 frames).
+ */
+function sheetFrames(sprite: Phaser.GameObjects.Sprite): number {
+  return Math.max(1, sprite.texture.frameTotal - 1)
+}
+
+/**
+ * Feuilles MÉTIER du stage (`kind:'trade'`) + secteur où les ancrer.
+ * Fournies par la couche écran (GameScene lit le registre de rendu) ; le module
+ * ne va pas chercher le stage lui-même (il reste un observateur).
+ */
+export interface TradeNpcSpec {
+  /**
+   * Feuilles métier dans l'ordre déclaré, avec leur échelle CALIBRÉE.
+   *
+   * L'échelle est per-feuille (et non le `WORKER_SCALE` unique des navetteurs) :
+   * les métiers viennent de deux générations d'art aux gabarits différents
+   * (feuilles 180² à ~135 px de contenu, feuilles 256² à ~168 px). Une échelle
+   * unique les afficherait de 64 à 112 px — soit exactement les « tailles
+   * disparates » que la normalisation cherchait à éliminer. Les valeurs sont
+   * MESURÉES sur la boîte englobante réelle (cf. `scale` dans `stages.ts`) pour
+   * viser ~99 px, la taille du joueur.
+   */
+  entries: ReadonlyArray<{ key: string; scale: number }>
+  /** Angle (degrés) du secteur d'ancrage — `geometry.ambientAngle` du stage. */
+  baseAngleDeg: number
 }
 
 interface ActiveWorker {
   job: WorkerJob
   sprite: Phaser.GameObjects.Sprite
-  loadSprite: Phaser.GameObjects.Image | null
   panicIndicator: Phaser.GameObjects.Container | null
   /** Position de fuite accumulée (en panique, s'éloigne de l'ennemi). */
   fleeX: number
@@ -160,6 +199,12 @@ export class SiteWorkers {
   /** Monde courant (pour le clamp de fuite). */
   private worldW = 0
   private worldH = 0
+  /**
+   * Feuilles éligibles par rôle de marche, bâties une fois par `reset` sur les
+   * seules feuilles RÉELLEMENT chargées. Les jobs y piochent par index → les 24
+   * signaleurs d'un stage ne partagent plus une texture unique.
+   */
+  private pools: WalkerPools = { porteur: [], signaleur: [] }
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -188,12 +233,26 @@ export class SiteWorkers {
    * Reconstruit les jobs depuis le siteLayout du stage courant.
    * Doit être appelé depuis `GameScene.create()` après `siteRenderer.reset()`.
    */
-  reset(seed: number, worldW: number, worldH: number, stageId: string, npcKeys: readonly string[] = []): void {
+  reset(
+    seed: number,
+    worldW: number,
+    worldH: number,
+    stageId: string,
+    npcSheets: readonly WalkerSheet[] = [],
+    tradeNpcs: TradeNpcSpec = { entries: [], baseAngleDeg: 0 }
+  ): void {
     this._destroyAll()
     this.jobs = []
     this.worldW = worldW
     this.worldH = worldH
     this.reselectFrame = 0
+
+    // Pools bâtis sur les feuilles RÉELLEMENT chargées : une feuille déclarée mais
+    // absente des textures ne doit jamais entrer dans un pool (sinon repli
+    // Graphics non animable → `setFrame` casse `create()`).
+    const loadedSheets = npcSheets.filter((s) => this.scene.textures.exists(s.key))
+    this.pools = buildWalkerPools(loadedSheets)
+    const npcKeys = loadedSheets.map((s) => s.key)
 
     const layout = buildSiteLayout(seed, worldW, worldH, stageId)
     if (layout.clusters.length === 0) {
@@ -232,9 +291,15 @@ export class SiteWorkers {
     // chemins tracés sont rendus. Sans compo → auto-peuplement (fallback).
     const composed = resolveComposedLayout(stageId)
     if (composed !== null) {
-      this._addComposedNpcsAndPaths(composed, worldW, worldH, npcKeys)
+      this._addComposedNpcsAndPaths(composed, worldW, worldH, tradeNpcs)
       return
     }
+
+    // PNJ MÉTIER du stage (geste + objet du métier). Sans ce bloc, les feuilles
+    // `kind:'trade'` n'étaient rendues que par le chemin « compo posée » — mort
+    // tant que le registre des compos est vide, c.-à-d. sur les 10 stages : elles
+    // étaient déclarées, packées, QA-OK… et jamais affichées.
+    jobIdx = this._addAutoTradeNpcs(tradeNpcs, worldW, worldH, seed, jobIdx)
 
     if (stageId === 'fondations') {
       jobIdx = this._addFoundationTradeWorkers(layout.clusters, npcKeys, jobIdx)
@@ -255,7 +320,11 @@ export class SiteWorkers {
       if (nearestSpoil === undefined) {
         continue
       }
-      const key = this._resolveKey('porteur', npcKeys)
+      // `jobIdx` (compteur GLOBAL, pas l'index de boucle) fait tourner le pool :
+      // porteurs et navetteurs se suivent dans le cycle et ne tombent donc pas sur
+      // la même feuille aux mêmes fouilles (ils y sont voisins à 120 px — deux
+      // jumeaux côte à côte se verraient).
+      const key = pickWalkerSkin(this.pools.porteur, jobIdx)
       if (key === null) {
         continue
       }
@@ -305,7 +374,7 @@ export class SiteWorkers {
       if (to === undefined) {
         continue
       }
-      const key = this._resolveKey('porteur', npcKeys)
+      const key = pickWalkerSkin(this.pools.porteur, jobIdx)
       if (key === null) {
         break
       }
@@ -372,7 +441,7 @@ export class SiteWorkers {
       if (ra === undefined || rb === undefined) {
         continue
       }
-      const key = this._resolveKey('signaleur', npcKeys)
+      const key = pickWalkerSkin(this.pools.signaleur, jobIdx)
       if (key === null) {
         continue
       }
@@ -406,7 +475,7 @@ export class SiteWorkers {
         if (from === undefined || to === undefined || from === to) {
           continue
         }
-        const key = this._resolveKey('porteur', npcKeys)
+        const key = pickWalkerSkin(this.pools.porteur, jobIdx)
         if (key === null) {
           break
         }
@@ -432,43 +501,78 @@ export class SiteWorkers {
    * Stage COMPOSÉ : ajoute les PNJ posés (métier fixe / ouvrier mobile) puis les
    * suiveurs de chemin (worker_path / truck_path). AUCUN auto-peuplement.
    */
-  private _addComposedNpcsAndPaths(composed: StageLayout, worldW: number, worldH: number, npcKeys: readonly string[]): void {
+  private _addComposedNpcsAndPaths(composed: StageLayout, worldW: number, worldH: number, tradeNpcs: TradeNpcSpec): void {
     let jobIdx = 0
     const offX = worldW / 2
     const offY = worldH / 2
+
+    // Échelle CALIBRÉE des feuilles métier (`stage.ambient`). Un métier POSÉ dans
+    // l'éditeur doit s'afficher à la même taille qu'un métier auto-placé : sans
+    // cette table, il retombait sur `WORKER_SCALE` (0.62) et une feuille calibrée
+    // à 0.78 (ex. `npc_stage01`, le géomètre posé au stage 01) s'affichait 20 %
+    // trop petite — l'éditeur mentait sur le résultat en jeu.
+    const tradeScale = new Map(tradeNpcs.entries.map((e) => [e.key, e.scale]))
 
     for (const nj of planNpcJobs(composed, worldW, worldH)) {
       if (!this.scene.textures.exists(nj.skin)) {
         continue
       }
-      this.jobs.push({
+      const job: WorkerJob = {
         textureKey: nj.skin, role: nj.role,
         ax: nj.x, ay: nj.y, bx: nj.x, by: nj.y, speed: 0,
         midX: nj.x, midY: nj.y, phaseOffsetMs: jobIdx * PHASE_OFFSET_MS
-      })
+      }
+      // Les ouvriers PARTAGÉS (`npc_ouvrier_*`) ne sont pas dans `stage.ambient` :
+      // absents de la table, ils gardent l'échelle unique des navetteurs.
+      const scale = tradeScale.get(nj.skin)
+      if (scale !== undefined) {
+        job.scale = scale
+      }
+      this.jobs.push(job)
       jobIdx++
     }
 
-    for (const p of composed.paths) {
-      if (p.points.length < 2) {
+    // Un chemin porte N marcheurs ÉTALÉS : le calcul (pur) vit dans
+    // `planPathWalkers` ; ici on ne fait que créer un sprite par plan.
+    //
+    // DEUX décalages se composent, et ils ne font pas le même travail :
+    //  - `plan.phaseMs` étale les marcheurs D'UN MÊME chemin (cycle/count) ;
+    //  - `pathBase` désynchronise les chemins ENTRE EUX — sans lui, tous les
+    //    chemins à 1 marcheur démarreraient à la phase 0 et deux pistes
+    //    parallèles avanceraient au pas cadencé (l'ancien `jobIdx * PHASE_OFFSET_MS`
+    //    le faisait déjà ; le perdre serait une régression de variété).
+    const pathBases = new Map<string, number>()
+    for (const plan of planPathWalkers(composed, worldW, worldH)) {
+      if (!pathBases.has(plan.pathId)) {
+        pathBases.set(plan.pathId, pathBases.size * PHASE_OFFSET_MS)
+      }
+      const pathBase = pathBases.get(plan.pathId) ?? 0
+      const isTruck = plan.type === 'truck_path'
+      // Skin explicite > défaut de la famille. Un skin absent des textures
+      // chargées retombe sur le défaut : jamais d'écran vide, jamais de crash.
+      // Le repli camion est le skin PARTAGÉ (chargé sur les 10 stages), et non plus
+      // `prop_s2_truck` — déclaré au SEUL stage 02, il faisait tomber les 9 autres
+      // dans le `continue` ci-dessous : un chemin camion posé dans l'éditeur y
+      // disparaissait sans un mot.
+      const wanted = plan.skin !== null && this.scene.textures.exists(plan.skin)
+        ? plan.skin
+        : (isTruck ? CAMION_SKIN.key : pickWalkerSkin(this.pools.porteur, jobIdx))
+      if (wanted === null || !this.scene.textures.exists(wanted)) {
+        // Rien à afficher (stage sans sprite camion). L'inspecteur de l'éditeur
+        // AVERTIT en amont — ici on ne peut que ne rien créer.
         continue
       }
-      const pts = p.points.map((pt) => ({ x: offX + pt.x, y: offY + pt.y }))
-      const first = pts[0] ?? { x: offX, y: offY }
-      const mid = pts[Math.floor(pts.length / 2)] ?? first
-      const isTruck = p.type === 'truck_path'
-      if (isTruck && !this.scene.textures.exists('prop_s2_truck')) {
-        continue
-      }
-      const key = isTruck ? 'prop_s2_truck' : this._resolveKey('porteur', npcKeys)
-      if (key === null) {
-        continue
-      }
+      const first = plan.points[0] ?? { x: offX, y: offY }
+      const mid = plan.points[Math.floor(plan.points.length / 2)] ?? first
       this.jobs.push({
-        textureKey: key, role: isTruck ? 'path_camion' : 'path',
+        textureKey: wanted, role: isTruck ? 'path_camion' : 'path',
         ax: first.x, ay: first.y, bx: first.x, by: first.y,
-        speed: isTruck ? CAMION_SPEED : NAVETTEUR_SPEED,
-        midX: mid.x, midY: mid.y, phaseOffsetMs: jobIdx * PHASE_OFFSET_MS, points: pts
+        speed: plan.speed,
+        midX: mid.x, midY: mid.y,
+        phaseOffsetMs: pathBase + plan.phaseMs,
+        points: plan.points,
+        pauseMs: plan.pauseMs,
+        oneWay: plan.oneWay
       })
       jobIdx++
     }
@@ -522,18 +626,29 @@ export class SiteWorkers {
       }
 
       // Suivi de CHEMIN composé (éditeur) : polyligne A→B→C, sans panique
-      // (route assignée). Camion = bob + flip ; ouvrier = anim de marche.
+      // (route assignée). Camion et ouvrier s'orientent de la MÊME façon (ligne de
+      // direction de la feuille) ; seul le tangage du camion les distingue.
       if (job.role === 'path' || job.role === 'path_camion') {
-        const pf = pathFollow(job.points ?? [], tMs, job.speed)
-        if (job.role === 'path_camion') {
-          const bob = Math.sin(tMs / 150) * CAMION_BOB_PX
-          aw.sprite.setPosition(pf.x, pf.y + bob)
-          aw.sprite.setFlipX(pf.dirX < 0)
-        } else {
-          aw.sprite.setPosition(pf.x, pf.y)
-          if (aw.animatable) {
-            aw.sprite.setFrame(walkFrame(dirRow(pf.dirX, pf.dirY), nowMs, 250))
-          }
+        const pf = pathFollow(job.points ?? [], tMs, job.speed, {
+          pauseMs: job.pauseMs ?? 0,
+          oneWay: job.oneWay === true
+        })
+        // Sens unique : le marcheur est SORTI — on le cache au lieu de le
+        // téléporter à vue du bout au départ.
+        aw.sprite.setVisible(pf.visible)
+        if (!pf.visible) {
+          continue
+        }
+        // Camion : léger tangage vertical. Sinon rien ne distingue plus les deux
+        // familles — le camion lit sa ligne de direction comme un ouvrier.
+        //
+        // Plus de `flipX` ici : la feuille porte 4 VRAIES orientations, et un camion
+        // vu de dessus n'est PAS son propre miroir (retourner la vue « est » sur un
+        // trajet vers le nord montrerait un camion couché en travers de sa route).
+        const bob = job.role === 'path_camion' ? Math.sin(tMs / 150) * CAMION_BOB_PX : 0
+        aw.sprite.setPosition(pf.x, pf.y + bob)
+        if (aw.animatable) {
+          aw.sprite.setFrame(walkFrameOf(sheetFrames(aw.sprite), dirRow(pf.dirX, pf.dirY), nowMs, 250))
         }
         continue
       }
@@ -572,7 +687,10 @@ export class SiteWorkers {
         }
         aw.sprite.setPosition(aw.fleeX, aw.fleeY)
         if (aw.animatable) {
-          aw.sprite.setFrame(dirX !== 0 || dirY !== 0 ? walkFrame(dirRow(dirX, dirY), nowMs, 200) : idleFrame(dirRow(0, 1)))
+          const n = sheetFrames(aw.sprite)
+          aw.sprite.setFrame(
+            dirX !== 0 || dirY !== 0 ? walkFrameOf(n, dirRow(dirX, dirY), nowMs, 200) : idleFrameOf(n, dirRow(0, 1))
+          )
         }
         continue
       }
@@ -614,12 +732,7 @@ export class SiteWorkers {
         // Direction de fuite pour l'animation (repli Graphics : pas de setFrame).
         if (aw.animatable) {
           const row = dirRow(pd.fx, pd.fy)
-          aw.sprite.setFrame(walkFrame(row, nowMs, 200))
-        }
-
-        // Cache la charge.
-        if (aw.loadSprite !== null) {
-          aw.loadSprite.setVisible(false)
+          aw.sprite.setFrame(walkFrameOf(sheetFrames(aw.sprite), row, nowMs, 200))
         }
 
         // Indicateur de panique (panneau « ! » orange).
@@ -636,20 +749,7 @@ export class SiteWorkers {
         const dirY = pos.leg === 'ab' ? dy : -dy
         if (aw.animatable) {
           const row = dirRow(dirX, dirY)
-          aw.sprite.setFrame(walkFrame(row, nowMs, 250))
-        }
-
-        // Charge : visible à l'aller (A→B) seulement.
-        const carrying = loadVisible(pos.leg)
-        if (aw.loadSprite !== null) {
-          aw.loadSprite.setVisible(carrying)
-          if (carrying) {
-            // Positionne la charge légèrement au-dessus et devant l'ouvrier.
-            aw.loadSprite.setPosition(
-              aw.sprite.x + dirX * 0.15,
-              aw.sprite.y - 20
-            )
-          }
+          aw.sprite.setFrame(walkFrameOf(sheetFrames(aw.sprite), row, nowMs, 250))
         }
 
         // Cache l'indicateur de panique.
@@ -740,9 +840,11 @@ export class SiteWorkers {
     const isCamion = job.role === 'camion' || job.role === 'path_camion'
     let sprite: Phaser.GameObjects.Sprite
     if (hasTexture) {
+      // Échelle calibrée du job (PNJ métier : gabarits d'art hétérogènes) sinon
+      // échelle unique des navetteurs, qui partagent tous le même gabarit 256².
       sprite = this.scene.add
         .sprite(x, y, job.textureKey)
-        .setScale(isCamion ? 1.0 : WORKER_SCALE)
+        .setScale(job.scale ?? (isCamion ? 1.0 : WORKER_SCALE))
         .setDepth(DEPTH_WORKER)
     } else {
       // Repli : cercle vert clair (non-menaçant, distinct des ennemis rouges).
@@ -759,30 +861,27 @@ export class SiteWorkers {
       sprite = g as unknown as Phaser.GameObjects.Sprite
     }
 
-    // Charge miniature — visible uniquement pour les porteurs.
-    let loadSprite: Phaser.GameObjects.Image | null = null
-    const loadKey = this.scene.textures.exists('prop_s2_dirt')
-      ? 'prop_s2_dirt'
-      : (this.scene.textures.exists('prop_stage03_rebar') ? 'prop_stage03_rebar' : null)
-    if (job.role === 'porteur' && loadKey !== null) {
-      loadSprite = this.scene.add
-        .image(x, y - 20, loadKey)
-        .setScale(loadKey === 'prop_stage03_rebar' ? 0.28 : 0.35)
-        .setDepth(DEPTH_LOAD)
-        .setVisible(false) // sera rendu visible au sync si loadVisible(leg)
-    }
-
     return {
       job,
       sprite,
-      loadSprite,
       panicIndicator: null,
       fleeX: x,
       fleeY: y,
       inPanic: false,
-      // Seul un vrai Sprite texturé de type feuille de marche accepte setFrame.
-      // Le camion (image mono-frame) et le repli Graphics ne sont PAS animables.
-      animatable: hasTexture && !isCamion
+      // Seul un vrai Sprite texturé de type feuille accepte setFrame.
+      //
+      // Le critère est la TEXTURE, pas le RÔLE : `!isCamion` interdisait à TOUT
+      // camion de s'animer, y compris au skin partagé 4×4 — aucun camion ne pouvait
+      // donc JAMAIS s'orienter. On regarde le nombre de frames RÉEL (Phaser compte
+      // la frame `__BASE` en plus → -1) : > 1 ⇒ vraie feuille.
+      //
+      // Le seuil dit exactement ce qu'il veut dire — « pas une image MONO-frame » —
+      // et rien de plus : `prop_s2_truck` (192×160, 1 frame) reste exclu, sinon un
+      // `setFrame(5)` le casserait. Ne PAS durcir à `>= SHEET_FRAMES` : ce flag sert
+      // aussi aux feuilles MONO-LIGNE des PNJ (5 à 8 frames, un GESTE et non des
+      // orientations), qu'un tel seuil figerait — c'est `walkFrameOf` qui adapte le
+      // défilé au gabarit réel de la feuille.
+      animatable: hasTexture && sheetFrames(sprite) > 1
     }
   }
 
@@ -830,9 +929,6 @@ export class SiteWorkers {
   /** Détruit un worker et ses objets graphiques associés. */
   private _destroyWorker(aw: ActiveWorker): void {
     aw.sprite.destroy()
-    if (aw.loadSprite !== null) {
-      aw.loadSprite.destroy()
-    }
     if (aw.panicIndicator !== null) {
       aw.panicIndicator.destroy()
     }
@@ -844,6 +940,52 @@ export class SiteWorkers {
       this._destroyWorker(aw)
     }
     this.active = []
+  }
+
+  /**
+   * Ancre les PNJ MÉTIER du stage (repli génératif, sans compo sauvée).
+   *
+   * Rôle `npc_trade` = poste FIXE animé, rendu par CE système : on n'ajoute pas
+   * une seconde population errante par-dessus les navetteurs (l'ancienne
+   * double-population « ambiance Lissajous + SiteWorkers » donnait des tailles
+   * et des trajectoires incohérentes — un seul système par plan de chantier).
+   *
+   * Placement délégué au planner PUR `planAutoTradeNpcs` (testé sans Phaser).
+   * @returns le prochain `jobIdx` libre.
+   */
+  private _addAutoTradeNpcs(
+    spec: TradeNpcSpec,
+    worldW: number,
+    worldH: number,
+    seed: number,
+    startIdx: number
+  ): number {
+    let jobIdx = startIdx
+    const scaleOf = new Map(spec.entries.map((e) => [e.key, e.scale]))
+    for (const p of planAutoTradeNpcs(spec.entries.map((e) => e.key), worldW, worldH, seed, spec.baseAngleDeg)) {
+      // Texture absente (stage en cours d'habillage) → on n'affiche rien plutôt
+      // que de risquer un setFrame sur une texture fantôme.
+      if (!this.scene.textures.exists(p.skin)) {
+        continue
+      }
+      this.jobs.push({
+        textureKey: p.skin,
+        role: p.role,
+        ax: p.x,
+        ay: p.y,
+        bx: p.x,
+        by: p.y,
+        speed: 0,
+        midX: p.x,
+        midY: p.y,
+        phaseOffsetMs: jobIdx * PHASE_OFFSET_MS,
+        // La clé vient de `spec.entries` : l'échelle est toujours présente. Le
+        // repli ne sert qu'à rester total (jamais d'échelle 0 = PNJ invisible).
+        scale: scaleOf.get(p.skin) ?? WORKER_SCALE
+      })
+      jobIdx++
+    }
+    return jobIdx
   }
 
   private _addFoundationTradeWorkers(
@@ -894,35 +1036,4 @@ export class SiteWorkers {
     return null
   }
 
-  /**
-   * Résout la clé de texture PNJ à utiliser selon le rôle, parmi les feuilles
-   * d'ambiance RÉELLEMENT chargées du stage courant (`npcKeys`, fournies par
-   * `GameScene` depuis `stage.ambient`). Les clés PNJ sont NUMÉROTÉES par stage
-   * (`npc_stage03_*`, `npc_stage04_*`…), pas nommées par phase — d'où l'ancien
-   * bug : on cherchait `npc_<phase>_porteur` + un repli `npc_stage02_*` codé en
-   * dur, qui ne matchait QUE le stage 02. Ici on matche par indice de rôle dans
-   * la clé, avec repli déterministe sur une feuille chargée quelconque.
-   *
-   * Retourne `null` si AUCUNE feuille chargée (stage sans PNJ / mode lite) →
-   * aucun ouvrier créé (jamais de texture manquante → jamais de repli Graphics
-   * non animable → jamais de crash `setFrame`).
-   */
-  private _resolveKey(role: 'porteur' | 'signaleur', npcKeys: readonly string[]): string | null {
-    const loaded = npcKeys.filter((k) => this.scene.textures.exists(k))
-    if (loaded.length === 0) {
-      return null
-    }
-    // Préfère une feuille dont le nom porte le rôle (le stage 02 nomme
-    // explicitement `npc_stage02_porteur`/`_signaleur` ; d'autres nomment
-    // `porteur_blocs`, `poseur_cable`…). `patrol` = équivalent signaleur.
-    const hints = role === 'porteur' ? ['porteur'] : ['signaleur', 'patrol']
-    const match = loaded.find((k) => hints.some((h) => k.includes(h)))
-    if (match !== undefined) {
-      return match
-    }
-    // Repli déterministe : porteur → 1re feuille, signaleur → 2e (variété
-    // visuelle) — toutes garanties chargées, donc de vrais Sprite animables.
-    const idx = role === 'porteur' ? 0 : Math.min(1, loaded.length - 1)
-    return loaded[idx] ?? loaded[0] ?? null
-  }
 }

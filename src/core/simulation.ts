@@ -4,6 +4,7 @@ import { SpatialGrid } from './spatialGrid'
 import {
   AuraPulseEvent,
   PrisonerFreedEvent,
+  PrisonerEnragedEvent,
   EnemyKilledEvent,
   EnemyDiedEvent,
   PlayerHurtEvent,
@@ -31,8 +32,10 @@ import { knockbackSystem } from './systems/knockback'
 import { reapDeadEnemies, type DiedEnemy, type ReapResult } from './systems/reap'
 import { reapDestructibles, destructibleContactSystem, type BrokenDestructible } from './systems/destructible'
 import { destructibleDef, type DestructibleSpawn } from '@content/destructibles'
-import { pickupSystem } from './systems/pickup'
-import { rescueSystem } from './systems/rescue'
+import { pickupSystem, type ChestCollector } from './systems/pickup'
+import { WEAPONS } from '@content/weapons'
+import { rescueSystem, type EnragedFreed } from './systems/rescue'
+import { allySystem, allyBoltSystem } from './systems/ally'
 import { reviveSystem } from './systems/revive'
 import { projectileLifetimeSystem } from './systems/projectile'
 import { hazardSystem } from './systems/hazard'
@@ -44,10 +47,10 @@ import { rollCards, type Inventory } from './systems/cards'
 import { tryEvolve } from './systems/evolution'
 import { tickChestBearer, dropChestBearerLoot } from './systems/chestDirector'
 import { resolveObstacleCollisions } from './systems/obstacleCollision'
-import { buildSiteLayout, type Obstacle, type SurfaceSlowZone } from './siteLayout'
+import { buildSiteLayout, type Obstacle, type SurfaceSlowZone, type PrisonerSpawn } from './siteLayout'
 import { surfaceSlowMultiplierAt } from './systems/surfaceSlow'
 import { buildFlowField, CELL_FLOW, HALF_FLOW, type FlowField } from './systems/flowField'
-import { bossLevelHpMult, CHEST, coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
+import { bossLevelHpMult, CHEST, coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RAGE, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
 import { SPAWN_RAMP, difficultyScaleAt } from '@content/spawnRamp'
 import { eventPoolForPhase } from '@content/waveEvents'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
@@ -59,6 +62,7 @@ import type {
   EntityId,
   GameMode,
   ChestOpenOutcome,
+  ChestResult,
   DestructibleState,
   GameState,
   HazardState,
@@ -69,6 +73,7 @@ import type {
   PlayerInput,
   PlayerState,
   PrisonerState,
+  AllyState,
   ProjectileState,
   Vec2
 } from './types'
@@ -137,6 +142,8 @@ export class Simulation {
   private chestRng: Rng
   /** RNG dédié aux destructibles (contenu en pièces) — séparé, ne décale pas la sim. */
   private destructibleRng: Rng
+  /** RNG dédié aux salves des alliés enragés — isolé (n'active qu'après libération d'un otage). */
+  private allyRng: Rng
   /** Pièces d'or collectées durant ce run (monnaie méta, persistée côté app). */
   private coinsThisRun = 0
   /** RNG dédié au directeur de vagues — séparé de tous les autres flux (placement déterministe). */
@@ -154,6 +161,12 @@ export class Simulation {
   private elapsedMs = 0
   private remainderMs = 0
   private score = 0
+  /**
+   * Boss tués depuis le début de la run (`mid` + `final`) — même nature que
+   * `score` : un cumul de run, NON plafonné, exposé dans l'état. Alimente les
+   * succès, qui ne peuvent pas compter les `EnemyDiedEvent` (bornés par pas).
+   */
+  private bossKills = 0
   /** Tally cumulatif de kills par joueur (attribution par dernier frappeur). */
   private killsByPlayer = new Map<number, number>()
   /** Contexte des morts du pas courant (Mode Carnage) — tableau RÉUTILISÉ, vidé
@@ -172,6 +185,12 @@ export class Simulation {
   private prevHpTotal = 0
   /** Nombre de prisonniers libérés depuis le début de la run (progression des sauvetages). */
   private rescuedTotal = 0
+  /**
+   * Nombre TOTAL de prisonniers de la run (dénominateur du HUD/minimap). Posé au
+   * `reset` : `RESCUE.count` en placement procédural, ou le nombre POSÉ dans la
+   * compo éditeur (peut être 0). Remplace l'ancien `RESCUE.count` figé.
+   */
+  private prisonerTotal: number = RESCUE.count
   /**
    * Flag transitoire (one-shot) : id de l'arme évoluée, posé dans
    * `handleChestPickups` ; remis à `null` par `getState()` après lecture
@@ -215,6 +234,7 @@ export class Simulation {
     this.prisonerRng = new Rng((opts.seed ^ 0x2b1d) | 0)
     this.chestRng = new Rng((opts.seed ^ 0x3c7a) | 0)
     this.destructibleRng = new Rng((opts.seed ^ 0x6e2f) | 0)
+    this.allyRng = new Rng((opts.seed ^ 0x4af3) | 0)
     this._waveRng = new Rng((opts.seed ^ 0x5a1e) | 0)
     this.phaseId = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
     this.phase = resolvePhase(this.phaseId)
@@ -365,14 +385,16 @@ export class Simulation {
       elapsedMs: this.elapsedMs,
       wave: 0,
       score: this.score,
+      bossKills: this.bossKills,
       coordSystem: COORD_SYSTEM,
       players: this.collectPlayers(),
       enemies: this.collectEnemies(),
       projectiles: this.collectProjectiles(),
       pickups: this.collectPickups(),
       prisoners: this.collectPrisoners(),
+      allies: this.collectAllies(),
       destructibles: this.collectDestructibles(),
-      rescue: { total: RESCUE.count, rescued: this.rescuedTotal },
+      rescue: { total: this.prisonerTotal, rescued: this.rescuedTotal },
       hazards: this.collectHazards(),
       pendingLevelUp: this.choiceQueue[0] ?? null,
       pendingFormations: this.collectPendingFormations(),
@@ -533,6 +555,56 @@ export class Simulation {
     }
   }
 
+  /**
+   * [Debug/seam] Convertit l'otage le plus proche du joueur `playerId` en ALLIÉ
+   * enragé, immédiatement (le téléporte au joueur + soin 30 % + `ally`), sans exiger
+   * la proximité. Indispensable au test headless : les otages spawnent à 1200–2800 px,
+   * impossible d'en libérer un « naturellement » en quelques pas. No-op s'il n'y a
+   * aucun otage non libéré ou aucun joueur `playerId`. Jamais utilisé en jeu normal.
+   */
+  debugEnragePrisoner(playerId = 1): void {
+    const pe = this.playerEntities.get(playerId)
+    if (pe === undefined) {
+      return
+    }
+    const ppos = this.world.get(pe, 'position')
+    const phealth = this.world.get(pe, 'health')
+    if (ppos === undefined || phealth === undefined) {
+      return
+    }
+    let best: number | undefined
+    let bestD2 = Infinity
+    for (const e of this.world.query('prisoner', 'position')) {
+      const prisoner = this.world.get(e, 'prisoner')
+      const pos = this.world.get(e, 'position')
+      if (prisoner === undefined || pos === undefined || prisoner.freed) {
+        continue
+      }
+      const dx = pos.x - ppos.x
+      const dy = pos.y - ppos.y
+      const d2 = dx * dx + dy * dy
+      if (d2 < bestD2) {
+        bestD2 = d2
+        best = e
+      }
+    }
+    if (best === undefined) {
+      return
+    }
+    const prisoner = this.world.get(best, 'prisoner')
+    const pos = this.world.get(best, 'position')
+    if (prisoner === undefined || pos === undefined) {
+      return
+    }
+    pos.x = ppos.x
+    pos.y = ppos.y
+    prisoner.freed = true
+    phealth.hp = Math.min(phealth.maxHp, phealth.hp + Math.round(phealth.maxHp * RESCUE.healFraction))
+    this.world.add(best, 'ally', { ownerPlayerId: playerId, remainingMs: RAGE.durationMs, salvoLeftMs: RAGE.salvoMs })
+    this.world.add(best, 'velocity', { x: 0, y: 0 })
+    this.rescuedTotal += 1
+  }
+
   /** Vue texte lisible pour « jouer à l'aveugle ». */
   renderToText(): string {
     const s = this.getState()
@@ -561,6 +633,7 @@ export class Simulation {
     this.prisonerRng = new Rng((seed ^ 0x2b1d) | 0)
     this.chestRng = new Rng((seed ^ 0x3c7a) | 0)
     this.destructibleRng = new Rng((seed ^ 0x6e2f) | 0)
+    this.allyRng = new Rng((seed ^ 0x4af3) | 0)
     this.coinsThisRun = 0
     this._waveRng = new Rng((seed ^ 0x5a1e) | 0)
     this.waveDir = createWaveDirectorState()
@@ -587,7 +660,16 @@ export class Simulation {
     this.lastFlowCol = -1
     this.lastFlowRow = -1
     this.spawnPlayers()
-    this.spawnPrisoners()
+    // Compo éditeur = vérité totale : si le layout DÉFINIT les prisonniers (même
+    // liste vide), on les pose tels quels et on COUPE le placement procédural.
+    // Sinon (pas de compo), fallback au scatter procédural historique (RNG dédié).
+    if (site.prisoners !== undefined) {
+      this.spawnPrisonersFromLayout(site.prisoners)
+      this.prisonerTotal = site.prisoners.length
+    } else {
+      this.spawnPrisoners()
+      this.prisonerTotal = RESCUE.count
+    }
     this.spawnDestructibles(site.destructibles ?? [])
     this.prevHpTotal = this.totalPlayerHp()
   }
@@ -615,6 +697,19 @@ export class Simulation {
       const y = Math.min(WORLD.height - margin, Math.max(margin, cy + Math.sin(angle) * dist))
       const e = this.world.spawn()
       this.world.add(e, 'position', { x, y })
+      this.world.add(e, 'prisoner', { freed: false })
+    }
+  }
+
+  /**
+   * Place les prisonniers POSÉS dans la compo éditeur (source de vérité). Aucun
+   * RNG — déterministe pur, comme `spawnDestructibles` : les positions viennent
+   * intégralement du layout.
+   */
+  private spawnPrisonersFromLayout(spawns: readonly PrisonerSpawn[]): void {
+    for (const s of spawns) {
+      const e = this.world.spawn()
+      this.world.add(e, 'position', { x: s.x, y: s.y })
       this.world.add(e, 'prisoner', { freed: false })
     }
   }
@@ -684,10 +779,13 @@ export class Simulation {
     // début d'`advanceTime` (avant les pas) pour durer exactement un appel
     // `advanceTime` complet, même si plusieurs pas sont exécutés en séquence.
     const pulses: AuraPulse[] = []
-    const freed: Vec2[] = []
+    // Otages : `enraged` = libérés devenus alliés (feedback « enragé ») ; `thanked` =
+    // otages qui remercient et s'en vont (expiration d'un allié OU libération au cap).
+    const enraged: EnragedFreed[] = []
+    const thanked: Vec2[] = []
     const fired: string[] = []
     const collected: PickupKind[] = []
-    const chestCollectors: number[] = []
+    const chestCollectors: ChestCollector[] = []
     const coinsCollected: number[] = []
     const brokenDestructibles: BrokenDestructible[] = []
     this.runSpawns(dtMs)
@@ -709,9 +807,21 @@ export class Simulation {
     this.rebuildEnemyGrid()
     weaponSystem(this.world, dtMs, pulses, fired, this.rng, this.enemyGrid)
     slowSystem(this.world, dtMs)
-    // Champ de flux : construit UNIQUEMENT si obstacles présents.
-    // Gate déterminisme : terrain_vierge (obstacles=[]) → flowField reste null
-    // → enemyAiSystem reçoit null → chemin de code actuel INCHANGÉ → sim:check diff 0.
+    // Champ de flux : construit UNIQUEMENT si des obstacles existent (sinon il n'y a
+    // rien à contourner et `enemyAiSystem` reçoit null = ligne droite vers le joueur).
+    //
+    // ⚠️ N'ALLEZ PAS CHERCHER ICI UNE GARDE DE DÉTERMINISME. Le commentaire qui vivait
+    // là l'affirmait — « terrain_vierge (obstacles=[]) → flowField reste null →
+    // sim:check diff 0 » — et c'était FAUX : terrain_vierge a reçu des clusters, et
+    // en porte aujourd'hui 36 (mesuré via `buildSiteLayout`, cf. STAGE_CLUSTERS dans
+    // `content/clusters.ts`). `sim:check` tourne sur le stage 01, voit donc collision
+    // ET champ de flux ; la baseline a été re-dérivée en conséquence. Raisonner sur
+    // l'ancienne affirmation menait droit à une fausse conclusion sur le déterminisme.
+    //
+    // Ce qui garantit RÉELLEMENT le déterminisme : `buildFlowField` est une fonction
+    // pure de (position, obstacles) — aucun RNG consommé, aucune horloge lue. Les
+    // obstacles viennent de `buildSiteLayout`, lui-même à seed. Même seed ⇒ mêmes
+    // obstacles ⇒ même champ ⇒ même partie. Le RNG des clusters est isolé (seed^0x51e0).
     if (this.obstacles.length > 0) {
       const leaderPos = this.getLeaderPosition()
       if (leaderPos !== null) {
@@ -733,12 +843,18 @@ export class Simulation {
     bossSystem(this.world, this.rng, this.phase, { ...bossScale, hp: bossScale.hp * coopHpFactor(this.playerCount()) })
     enemyAiSystem(this.world, this.elapsedMs, dtMs, this.flowField)
     tetherSystem(this.world, MODE_PLAYER_COUNT[this.mode] ?? 1, TETHER.maxRadius)
+    // Alliés enragés : suivi du joueur + salves (purge dirigée). AVANT `movementSystem`
+    // pour que la vélocité de suivi soit intégrée ce pas. `thanked` : otages qui expirent.
+    allySystem(this.world, dtMs, this.allyRng, thanked)
     movementSystem(this.world, dtMs)
     worldBoundsSystem(this.world, WORLD)
     // Résolution des obstacles statiques : repousse joueurs+ennemis hors du décor.
     // No-op pour terrain_vierge (obstacles = []) → sim:check diff 0 garanti.
     resolveObstacleCollisions(this.world, this.obstacles)
     boomerangSystem(this.world, dtMs)
+    // Boules de feu des alliés : homing + impact. APRÈS `movementSystem` (la boule a
+    // bougé), AVANT `reapDeadEnemies` : les kills létaux (hp=0) sont récoltés ce pas.
+    allyBoltSystem(this.world)
     this.rebuildEnemyGrid()
     collisionSystem(this.world, dtMs, this.enemyGrid)
     knockbackSystem(this.world, dtMs)
@@ -752,14 +868,16 @@ export class Simulation {
     this.diedEnemies.length = 0
     const reap: ReapResult = reapDeadEnemies(this.world, this.lootRng, this.diedEnemies)
     // Coffre GARANTI sur mort d'un porteur (convoyeur). Positions collectées AVANT
-    // le reap (qui supprime les entités). Pas de RNG : récompense méritée.
+    // le reap (qui supprime les entités). Le coffre lui-même est garanti ; seule sa
+    // RARETÉ (1/10 super doré) est tirée — RNG isolé `chestRng` (déterminisme préservé).
     for (const pos of deadBearerPositions) {
-      dropChestBearerLoot(this.world, pos)
+      dropChestBearerLoot(this.world, pos, this.chestRng.chance(CHEST.superChance))
     }
     // Destructibles cassés (armes OU contact) → lâchent leurs pièces, collectés
     // pour le VFX/débris. Ni score ni kill (ce ne sont pas des ennemis).
     reapDestructibles(this.world, brokenDestructibles)
     this.score += reap.total
+    this.bossKills += reap.bossKills
     // Cumul des kills par joueur (attribution par dernier frappeur).
     for (const [pid, n] of reap.killsByPlayer) {
       this.killsByPlayer.set(pid, (this.killsByPlayer.get(pid) ?? 0) + n)
@@ -769,8 +887,7 @@ export class Simulation {
       this.coinsThisRun += v
     }
     this.handleChestPickups(chestCollectors)
-    rescueSystem(this.world, freed)
-    this.rescuedTotal += freed.length
+    this.rescuedTotal += rescueSystem(this.world, enraged, thanked)
     projectileLifetimeSystem(this.world, dtMs)
     hazardSystem(this.world, dtMs, this.enemyGrid)
     // Après collision/reap (les joueurs peuvent tomber à terre ce pas-ci), avant les
@@ -799,8 +916,11 @@ export class Simulation {
     for (const p of pulses) {
       this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius, p.kind, p.dirX, p.dirY, p.weaponId))
     }
-    for (const f of freed) {
-      this.events.dispatchEvent(new PrisonerFreedEvent(f.x, f.y))
+    for (const t of thanked) {
+      this.events.dispatchEvent(new PrisonerFreedEvent(t.x, t.y))
+    }
+    for (const en of enraged) {
+      this.events.dispatchEvent(new PrisonerEnragedEvent(en.x, en.y, en.playerId))
     }
     for (const b of brokenDestructibles) {
       this.events.dispatchEvent(new DestructibleBrokenEvent(b.x, b.y, b.typeId))
@@ -822,65 +942,78 @@ export class Simulation {
   }
 
   /**
-   * Traite les coffres d'évolution ramassés ce pas — garantit TOUJOURS un effet :
+   * Traite les coffres ramassés ce pas — garantit TOUJOURS un effet, JAMAIS de
+   * cartes (plus d'écran de choix sur un coffre) :
    *
-   * 1. Évolution : `tryEvolve` ≠ null → `EvolvedEvent` + pose `_justEvolved`
-   *    (jackpot + voix, 1 frame).
-   * 2. Choix de cartes : construit l'inventaire → `rollCards` → si cartes dispo
-   *    → push dans `choiceQueue` (gel + écran Upgrade existants).
-   * 3. Secours (tout maxé) : soin `CHEST.fallbackHealPct * maxHp`, borné à maxHp.
+   * - AU PLUS UNE évolution (`tryEvolve`) en premier, si une arme est éligible.
+   * - Puis on COMPLÈTE avec des montées de niveau d'armes possédées tirées AU
+   *   HASARD (`levelUpRandomWeapon`, RNG isolé) jusqu'à atteindre le nombre d'issues :
+   *   1 pour un coffre normal, 3 pour un SUPER coffre doré (→ 1 évo + 2 montées,
+   *   ou 3 montées).
+   * - Repli : rien à faire (aucune évo, toutes les armes maxées) → soin.
    *
-   * Boucle intentionnelle : chaque coffre réévalue l'inventaire APRÈS la mutation
-   * du coffre précédent (une évolution consommée ce tour ne doit pas retenter
-   * d'évoluer la même arme deux fois dans la même frame). En solo, un seul
-   * ramasseur possible (joueur 1) → comportement inchangé.
+   * Les issues sont pré-calculées et exposées dans `_chestOpened.results` ; la
+   * machine à sous ne fait que les RÉVÉLER. En solo, un seul ramasseur (joueur 1).
    */
-  private handleChestPickups(collectors: number[]): void {
-    for (const playerId of collectors) {
-      const playerEntity = this.playerEntities.get(playerId)
-      if (playerEntity === undefined) {
+  private handleChestPickups(collectors: ChestCollector[]): void {
+    for (const { playerId, isSuper } of collectors) {
+      const pe = this.playerEntities.get(playerId)
+      if (pe === undefined) {
         continue
       }
+      const target = isSuper ? 3 : 1
+      const results: ChestResult[] = []
 
-      // Branche 1 : évolution disponible.
-      const evolvedId = tryEvolve(this.world, playerEntity)
+      // Au plus UNE évolution par coffre (en premier).
+      const evolvedId = tryEvolve(this.world, pe)
       if (evolvedId !== null) {
-        this.events.dispatchEvent(new EvolvedEvent(evolvedId, playerId))
+        results.push({ kind: 'evolution', weaponId: evolvedId, level: 1 })
         this._justEvolved = evolvedId
-        // Machine à sous « super » (gros moment) : révèle l'arme évoluée.
-        this._chestOpened = { kind: 'evolution', weaponId: evolvedId, isSuper: true }
-        this.events.dispatchEvent(new ChestOpenedEvent('evolution', playerId, true))
-        continue
+        this.events.dispatchEvent(new EvolvedEvent(evolvedId, playerId))
+      }
+      // Complète avec des montées de niveau d'armes possédées (aléatoire, seedé).
+      while (results.length < target) {
+        const up = this.levelUpRandomWeapon(pe)
+        if (up === null) {
+          break
+        }
+        results.push({ kind: 'weapon-up', weaponId: up.id, level: up.level })
+      }
+      // Repli : aucune évo ET toutes les armes maxées → soin d'urgence.
+      if (results.length === 0) {
+        const health = this.world.get(pe, 'health')
+        if (health !== undefined) {
+          health.hp = Math.min(health.maxHp, health.hp + health.maxHp * CHEST.fallbackHealPct)
+        }
+        results.push({ kind: 'heal', weaponId: '' })
       }
 
-      // Branche 2 : pas d'évolution — proposer des cartes si l'inventaire n'est pas maxé.
-      const loadout = this.world.get(playerEntity, 'weapons')
-      const passives = this.world.get(playerEntity, 'passives')
-      const inv: Inventory = {
-        weapons: loadout?.slots.map((s) => ({ id: s.id, level: s.level })) ?? [],
-        passives: passives?.list.map((p) => ({ id: p.id, level: p.level })) ?? []
-      }
-      // rollCards vérifie lui-même l'éligibilité (via eligibleCards) puis échantillonne :
-      // s'il renvoie ≥ 1 carte, l'inventaire n'est pas maxé → on propose un choix.
-      // (Pas de double-vérification eligibleCards : évite une fenêtre logique non testée.)
-      const choices = rollCards(this.rng, inv, PROGRESSION.choices)
-      if (choices.length > 0) {
-        this.choiceQueue.push({ playerId, choices })
-        // Machine à sous : la roulette tourne puis révèle l'écran de choix (temps gelé).
-        this._chestOpened = { kind: 'cards', isSuper: false }
-        this.events.dispatchEvent(new ChestOpenedEvent('cards', playerId, false))
-        continue
-      }
-
-      // Branche 3 : secours déterministe (tout maxé, rien à tirer).
-      const health = this.world.get(playerEntity, 'health')
-      if (health !== undefined) {
-        health.hp = Math.min(health.maxHp, health.hp + health.maxHp * CHEST.fallbackHealPct)
-      }
-      // Machine à sous : révèle une icône de soin.
-      this._chestOpened = { kind: 'heal', isSuper: false }
-      this.events.dispatchEvent(new ChestOpenedEvent('heal', playerId, false))
+      this._chestOpened = { isSuper, results }
+      this.events.dispatchEvent(new ChestOpenedEvent(results[0]?.kind ?? 'heal', playerId, isSuper))
     }
+  }
+
+  /**
+   * Monte de niveau UNE arme possédée NON maxée, tirée au hasard (RNG isolé
+   * `chestRng` → déterminisme préservé). Réutilise la mécanique de `applyCard`
+   * (`weapon-up`). Renvoie l'arme + son nouveau niveau, ou `null` si toutes les
+   * armes possédées sont déjà au niveau max.
+   */
+  private levelUpRandomWeapon(playerEntity: EntityId): { id: string; level: number } | null {
+    const loadout = this.world.get(playerEntity, 'weapons')
+    if (loadout === undefined) {
+      return null
+    }
+    const upgradable = loadout.slots.filter((s) => s.level < (WEAPONS[s.id]?.maxLevel ?? 1))
+    if (upgradable.length === 0) {
+      return null
+    }
+    const slot = upgradable[this.chestRng.int(0, upgradable.length - 1)]
+    if (slot === undefined) {
+      return null
+    }
+    slot.level += 1
+    return { id: slot.id, level: slot.level }
   }
 
   /**
@@ -1138,6 +1271,15 @@ export class Simulation {
       }
       projectiles.push({ id: e, x: pos.x, y: pos.y, vx: 0, vy: 0, type: orb.weaponId })
     }
+    // Les boules de feu des alliés sont rendues comme des projectiles (type 'boule_feu').
+    for (const e of this.world.query('allyBolt', 'position', 'velocity')) {
+      const pos = this.world.get(e, 'position')
+      const vel = this.world.get(e, 'velocity')
+      if (pos === undefined || vel === undefined) {
+        continue
+      }
+      projectiles.push({ id: e, x: pos.x, y: pos.y, vx: vel.x, vy: vel.y, type: 'boule_feu' })
+    }
     return projectiles
   }
 
@@ -1149,7 +1291,7 @@ export class Simulation {
       if (pos === undefined || pickup === undefined) {
         continue
       }
-      pickups.push({ id: e, x: pos.x, y: pos.y, type: pickup.type, value: pickup.value })
+      pickups.push({ id: e, x: pos.x, y: pos.y, type: pickup.type, value: pickup.value, ...(pickup.isSuper === true ? { isSuper: true } : {}) })
     }
     return pickups
   }
@@ -1165,6 +1307,19 @@ export class Simulation {
       prisoners.push({ id: e, x: pos.x, y: pos.y, freed: prisoner.freed })
     }
     return prisoners
+  }
+
+  private collectAllies(): AllyState[] {
+    const allies: AllyState[] = []
+    for (const e of this.world.query('ally', 'position')) {
+      const pos = this.world.get(e, 'position')
+      const ally = this.world.get(e, 'ally')
+      if (pos === undefined || ally === undefined) {
+        continue
+      }
+      allies.push({ id: e, x: pos.x, y: pos.y, ownerId: ally.ownerPlayerId, remainingMs: ally.remainingMs })
+    }
+    return allies
   }
 
   private collectDestructibles(): DestructibleState[] {

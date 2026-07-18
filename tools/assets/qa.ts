@@ -18,15 +18,72 @@ const PUBLIC_DIR = 'public'
 const REFERENCE_FILES = new Set(['player_j1.png'])
 
 /**
- * Catégories (= dossier parent) dont un sprite DOIT être détouré (fond transparent).
+ * Dossiers de travail : générations brutes en attente de tri, jamais chargées par
+ * le jeu. Les linter reviendrait à noter un brouillon.
+ */
+const IGNORED_DIRS = new Set(['_gate'])
+
+/**
+ * Catégories d'assets, portées par le DOSSIER (`public/stage01/enemies/imp_walk.png`).
+ *
+ * Le manifest §6 décrit un nommage PLAT (`enemy_stage01_imp_walk_192.png`), mais le
+ * dépôt s'est structuré en arborescence : le dossier porte le stage et la catégorie,
+ * le fichier ne porte plus que le nom. Exiger le préfixe plat sur l'arbre marquait
+ * 574 des 653 assets fautifs (88 %) — le linter ne mesurait plus rien. On valide donc
+ * ce qui est réellement en vigueur : le chemin.
+ *
+ * `needsAlpha` : la catégorie exige un fond transparent.
+ */
+const CATEGORIES: Record<string, { needsAlpha: boolean }> = {
+  ground: { needsAlpha: false }, // tuiles de sol : opaques par nature
+  ui: { needsAlpha: true },
+  vfx: { needsAlpha: true },
+  decals: { needsAlpha: true },
+  props: { needsAlpha: true },
+  structures: { needsAlpha: true },
+  landmarks: { needsAlpha: true },
+  npc: { needsAlpha: true },
+  enemies: { needsAlpha: true },
+  boss: { needsAlpha: true },
+  pickups: { needsAlpha: true },
+  weapons: { needsAlpha: true },
+  player: { needsAlpha: true },
+  routes: { needsAlpha: false }, // tuiles de route raccordables : bord à bord opaque
+  signs: { needsAlpha: true }
+}
+
+/**
+ * Packs partagés entre les 10 stages. Ils sont plats (pas de sous-dossier de
+ * catégorie), donc leur catégorie est déclarée ici.
+ */
+const SHARED_PACKS: Record<string, string> = {
+  city: 'structures', // immeubles de bordure de carte
+  carnage: 'decals', // flaques/éclaboussures du Mode Carnage
+  terrain: 'props', // clôtures, portails, bandes de route
+  shared: 'npc', // convoyeur & co.
+  signs: 'signs' // signalétique temporaire compositée
+}
+
+/**
+ * Catégories dont un sprite DOIT être détouré (fond transparent).
  * Un fond opaque plein (4 coins pleins = « boîte ») y est un DÉFAUT de détourage
  * que le simple test `hasAlpha` ne détecte pas (une boîte a un canal alpha à 255).
- * Exclus : `ground` (tuiles opaques par nature), `decals` (marques au sol à bord
- * doux), `vfx` (glows semi-transparents voulus), `ui` (panneaux opaques voulus).
+ * Exclus : `ground`/`routes` (tuiles opaques par nature), `decals` (marques au sol
+ * à bord doux), `vfx` (glows semi-transparents voulus), `ui` (panneaux opaques).
  */
 const CUTOUT_CATEGORIES = new Set([
   'props', 'structures', 'landmarks', 'npc', 'enemies', 'boss', 'pickups', 'weapons', 'player'
 ])
+
+/**
+ * Tailles de sprite reconnues. Sans cette liste, `_(\d+)` attrapait aussi les
+ * suffixes de VARIANTE (`tile_3`) et de frame (`couvreurA_7`), et exigeait d'une
+ * tuile 64×64 qu'elle soit multiple de 3 : 39 avertissements, tous faux.
+ */
+const SIZE_TOKENS = new Set([32, 64, 96, 128, 192, 256, 384, 512])
+
+/** Nom de fichier dans l'arborescence : snake_case, la catégorie venant du dossier. */
+const TREE_NAME_RE = /^[a-z0-9_]+\.png$/
 
 /** Forme minimale d'un PNG décodé (pngjs ne fournit pas de types résolvables ici). */
 interface DecodedPng { width: number; height: number; data: Uint8Array }
@@ -82,12 +139,28 @@ function listPngs(dir: string): string[] {
   for (const name of entries) {
     const full = join(dir, name)
     if (statSync(full).isDirectory()) {
+      if (IGNORED_DIRS.has(name)) { continue }
       out.push(...listPngs(full))
     } else if (name.toLowerCase().endsWith('.png')) {
       out.push(full)
     }
   }
   return out
+}
+
+/**
+ * Résout la catégorie d'un asset depuis son chemin, ou `null` si le chemin ne suit
+ * aucune structure connue (= le vrai signal de nommage).
+ *
+ * - `stage03/props/x.png` → `props` (dossier porteur)
+ * - `city/x.png`          → `structures` (pack partagé plat)
+ * - `terrain/routes/x.png`→ `routes` (sous-dossier de catégorie dans un pack)
+ */
+function categoryOf(dirs: readonly string[]): string | null {
+  const last = dirs[dirs.length - 1] ?? ''
+  if (last in CATEGORIES) { return last }
+  const pack = dirs[0] ?? ''
+  return SHARED_PACKS[pack] ?? null
 }
 
 /** Vérifie un asset et renvoie ses erreurs/avertissements. */
@@ -110,18 +183,44 @@ function check(path: string): Report {
     return { file, errors, warnings } // référence : pas de contrainte de nommage
   }
 
-  const matched = NAME_PATTERNS.find((p) => p.re.test(base))
-  if (matched === undefined) {
-    warnings.push('nommage hors conventions (manifest §6)')
-  } else if (matched.needsAlpha && !info.hasAlpha) {
-    errors.push(`transparence requise pour un asset « ${matched.kind} »`)
+  const dirs = file.split('/').slice(0, -1)
+  let category: string
+
+  if (dirs.length === 0) {
+    // Racine de `public/` : pas de dossier porteur, donc le préfixe plat fait foi.
+    const matched = NAME_PATTERNS.find((p) => p.re.test(base))
+    if (matched === undefined) {
+      warnings.push('nommage hors conventions : à la racine de public/, le préfixe est la seule catégorie (ui_/icon_/player_/vfx_…)')
+      category = ''
+    } else {
+      category = matched.kind === 'joueur' ? 'player' : ''
+      if (matched.needsAlpha && !info.hasAlpha) {
+        errors.push(`transparence requise pour un asset « ${matched.kind} »`)
+      }
+    }
+  } else {
+    const resolved = categoryOf(dirs)
+    if (resolved === null) {
+      warnings.push(`dossier « ${dirs.join('/')} » hors structure connue (attendu : stageNN/<catégorie>/ ou un pack partagé)`)
+      category = ''
+    } else {
+      category = resolved
+      if (!TREE_NAME_RE.test(base)) {
+        warnings.push('nom hors convention : snake_case minuscule attendu (la catégorie vient du dossier)')
+      }
+      if (CATEGORIES[resolved]?.needsAlpha === true && !info.hasAlpha) {
+        errors.push(`transparence requise pour un asset « ${resolved} »`)
+      }
+    }
   }
 
-  // Dimensions : si le nom finit par _<n>, attendre des multiples de n.
+  // Dimensions : un suffixe de TAILLE reconnu impose des dimensions multiples.
+  // Restreint à `SIZE_TOKENS` — sinon `tile_3` (variante 3) et `couvreurA_7`
+  // (frame 7) étaient lus comme des tailles et déclenchaient 39 faux positifs.
   const sizeTok = base.match(/_(\d+)\.png$/)
   if (sizeTok !== null) {
     const n = Number.parseInt(sizeTok[1] ?? '0', 10)
-    if (n > 0 && (info.width % n !== 0 || info.height % n !== 0)) {
+    if (SIZE_TOKENS.has(n) && (info.width % n !== 0 || info.height % n !== 0)) {
       warnings.push(`dimensions ${info.width}×${info.height} non multiples de ${n}`)
     }
   }
@@ -129,10 +228,6 @@ function check(path: string): Report {
   // Détourage : un asset « sprite » (perso/prop/engin/pickup/arme) ne doit PAS
   // avoir un fond opaque (4 coins pleins = boîte non détourée). Attrape le bug
   // « mal détouré » invisible au simple test `hasAlpha`.
-  const segs = file.split('/')
-  const category = segs.length >= 2
-    ? (segs[segs.length - 2] ?? '')
-    : (base.startsWith('player_') ? 'player' : '')
   if (CUTOUT_CATEGORIES.has(category)) {
     try {
       if (opaqueCorners(bytes) >= 4) {

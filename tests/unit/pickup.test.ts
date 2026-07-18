@@ -132,9 +132,9 @@ describe('pickupSystem', () => {
     const gem = world.spawn()
     world.add(gem, 'position', { x: COLLECT_X, y: 0 })
     world.add(gem, 'pickup', { type: 'coffre', value: 0 })
-    const chestCollectors: number[] = []
+    const chestCollectors: { playerId: number; isSuper: boolean }[] = []
     pickupSystem(world, 16, undefined, chestCollectors)
-    expect(chestCollectors).toEqual([2])
+    expect(chestCollectors).toEqual([{ playerId: 2, isSuper: false }])
   })
 
   it('un coffre par joueur dans la même frame → un entry par ramasseur, dans l’ordre de collecte', () => {
@@ -147,9 +147,9 @@ describe('pickupSystem', () => {
     const gem2 = world.spawn()
     world.add(gem2, 'position', { x: 1000 + COLLECT_X, y: 0 })
     world.add(gem2, 'pickup', { type: 'coffre', value: 0 })
-    const chestCollectors: number[] = []
+    const chestCollectors: { playerId: number; isSuper: boolean }[] = []
     pickupSystem(world, 16, undefined, chestCollectors)
-    expect(chestCollectors.sort()).toEqual([1, 2])
+    expect(chestCollectors.map((c) => c.playerId).sort()).toEqual([1, 2])
     expect(world.alive(p1)).toBe(true)
     expect(world.alive(p2)).toBe(true)
   })

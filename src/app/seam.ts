@@ -27,6 +27,8 @@ export interface GameSeam {
   restart(): void
   /** Bascule l'affichage de la mini-carte (équivalent touche M / bouton Back manette). */
   toggleMinimap(): void
+  /** Saute l'intro de run (consomme le gel cosmétique). */
+  skipIntro(): void
   chooseUpgrade(index: number): void
   events: EventTarget
   // --- helpers de debug (test-only : fast-forward pour Playwright/e2e) ---
@@ -63,6 +65,8 @@ export interface GameSeam {
    * un coéquipier vivant).
    */
   debugKillPlayer(playerId?: number): void
+  /** [Debug] Libère + enrage l'otage le plus proche du joueur (allié temporaire). */
+  debugEnragePrisoner(playerId?: number): void
   /** [Debug] Audition d'un SFX d'arme (procédural) par ID d'arme. */
   debugPlayWeaponSfx(id: string): void
   /**
@@ -86,11 +90,6 @@ export interface GameSeam {
    * la distance parcourue. Absente tant que la scène n'est pas montée.
    */
   debugDecorInfo?(): { loadedChunks: number; decorObjects: number }
-  /**
-   * [Debug/B4] Positions actuelles (monde) de chaque PNJ d'ambiance du stage courant.
-   * Absente en mode allégé ou tant que la scène n'est pas montée.
-   */
-  debugAmbientNpcs?(): { x: number; y: number }[]
   /**
    * [Debug/B4] Nombre de bulles de râlerie actuellement affichées (≤ MAX_AMBIENT_BUBBLES).
    * Absente en mode allégé ou tant que la scène n'est pas montée.
@@ -122,6 +121,31 @@ export interface GameSeam {
    * montée. Test/overlay only — n'affecte jamais la simulation.
    */
   debugPerfProfile?(): PerfSnapshot | null
+  /**
+   * [Debug/Carnage] Sonde DIRECTE du `CarnageRenderer` (posée par la GameScene).
+   *
+   * Elle existe parce que sans elle un test ne peut que DEVINER — et devinait faux
+   * sur les trois points à la fois :
+   *
+   * - `active` : `debugCarnage(on)` n'écrit que l'état de l'App ; le renderer ne
+   *   l'apprend qu'au prochain `update()` (rAF). Un test qui enchaîne le toggle et
+   *   un massacre SYNCHRONE (un `page.evaluate` ne laisse jamais passer de frame)
+   *   joue à pile ou face avec le tick rAF — d'où un test intermittent.
+   *   `active` rend l'attente OBSERVABLE au lieu d'espérée.
+   * - `alive` : le compteur perf `bloodPools` n'est publié qu'en fin d'`update()`,
+   *   il a donc toujours une frame de retard. Ici, c'est la valeur réelle.
+   * - `cap` : dépend de la plateforme (140 tactile / 320 desktop). Un test qui code
+   *   le chiffre en dur teste le mauvais plafond sur l'autre plateforme.
+   *
+   * `null` si la scène n'est pas montée ou en mode allégé (`lite` : pas d'assets
+   * de sang chargés, donc aucune flaque possible).
+   */
+  debugCarnageInfo?(): { active: boolean; alive: number; cap: number } | null
+  /**
+   * [Debug/T5] État courant du moteur cinématique d'intro.
+   * Absente tant que la scène n'est pas montée.
+   */
+  debugIntroInfo?(): { active: boolean; elapsedMs: number; actorCount: number; cameraZoom: number }
 }
 
 declare global {
@@ -169,6 +193,9 @@ export function createSeam(app: App): GameSeam {
     toggleMinimap: () => {
       app.toggleMinimap()
     },
+    skipIntro: () => {
+      app.skipIntro()
+    },
     chooseUpgrade: (index: number) => {
       app.chooseUpgrade(index)
     },
@@ -200,6 +227,9 @@ export function createSeam(app: App): GameSeam {
     },
     debugKillPlayer: (playerId?: number) => {
       app.debugKillPlayer(playerId)
+    },
+    debugEnragePrisoner: (playerId?: number) => {
+      app.debugEnragePrisoner(playerId)
     },
     debugPlayWeaponSfx: (id: string) => {
       app.debugPlayWeaponSfx(id)

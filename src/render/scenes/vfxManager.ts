@@ -126,6 +126,89 @@ export class VfxManager {
   }
 
   /**
+   * Explosion « CASINO » à l'ouverture d'un coffre (pic de dopamine) : gros flash
+   * blanc + onde dorée, puis une gerbe de PIÈCES pixel dorées qui giclent dans tous
+   * les sens (trajectoire PARABOLIQUE — gravité — + rotation). Un SUPER coffre ajoute
+   * des salves de FEUX D'ARTIFICE multicolores (accents de la palette DA). Rendu pur,
+   * tout s'auto-détruit en fin de tween (aucune fuite). `Math.random` = cosmétique.
+   */
+  spawnChestBurst(x: number, y: number, isSuper: boolean): void {
+    const coinCount = isSuper ? 48 : 26
+    const power = isSuper ? 360 : 260
+
+    // Gros flash blanc qui grossit et s'efface.
+    const flash = this.scene.add.circle(x, y, 26, 0xffffff, 0.92).setDepth(9)
+    this.scene.tweens.add({
+      targets: flash, scale: isSuper ? 15 : 9, alpha: 0,
+      duration: isSuper ? 340 : 220, ease: 'Quad.easeOut',
+      onComplete: () => flash.destroy()
+    })
+    // Onde dorée (anneau qui s'étend).
+    const ring = this.scene.add.circle(x, y, 20, 0x000000, 0)
+      .setStrokeStyle(4, PALETTE_HEX.jauneSecurite, 1).setDepth(8).setScale(0.2)
+    this.scene.tweens.add({
+      targets: ring, scale: isSuper ? 5 : 3.4, alpha: 0,
+      duration: isSuper ? 620 : 460, ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy()
+    })
+
+    // Pièces qui giclent : carrés dorés à contour sombre, parabole (gravité) + spin.
+    const G = 1200 // px/s²
+    for (let i = 0; i < coinCount; i++) {
+      const a = Math.random() * Math.PI * 2
+      const sp = 0.45 + Math.random() * 0.85
+      const vx = Math.cos(a) * power * sp
+      const vy = Math.sin(a) * power * sp - power * (0.55 + Math.random() * 0.5) // biais vers le haut
+      const durMs = 720 + Math.random() * 560
+      const spin = (Math.random() - 0.5) * 0.5
+      const coin = this.scene.add.rectangle(x, y, 7, 7, PALETTE_HEX.jauneSecurite)
+        .setStrokeStyle(1, PALETTE_HEX.contour).setDepth(8)
+      this.scene.tweens.addCounter({
+        from: 0, to: 1, duration: durMs, ease: 'Linear',
+        onUpdate: (tw: Phaser.Tweens.Tween) => {
+          const prog = tw.progress
+          const t = prog * (durMs / 1000)
+          coin.x = x + vx * t
+          coin.y = y + vy * t + 0.5 * G * t * t
+          coin.rotation += spin
+          coin.setAlpha(1 - prog * prog)
+        },
+        onComplete: () => coin.destroy()
+      })
+    }
+
+    if (!isSuper) {
+      return
+    }
+    // SUPER coffre : salves de feux d'artifice multicolores autour du joueur.
+    const accents = [PALETTE_HEX.jauneSecurite, PALETTE_HEX.orangeDanger, PALETTE_HEX.rougeAlerte, PALETTE_HEX.cyanAccent, PALETTE_HEX.vertBonus]
+    for (let s = 0; s < 6; s++) {
+      this.scene.time.delayedCall(120 + s * 160, () => {
+        const fx = x + (Math.random() - 0.5) * 220
+        const fy = y - 40 + (Math.random() - 0.5) * 160
+        this.firework(fx, fy, accents[s % accents.length] ?? PALETTE_HEX.jauneSecurite)
+      })
+    }
+  }
+
+  /** Une explosion pixel radiale (feu d'artifice) d'une couleur donnée. Rendu pur. */
+  private firework(x: number, y: number, color: number): void {
+    const n = 14
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2
+      const dist = 54 + Math.random() * 34
+      const spark = this.scene.add.rectangle(x, y, 5, 5, color).setDepth(9)
+      this.scene.tweens.add({
+        targets: spark,
+        x: x + Math.cos(a) * dist, y: y + Math.sin(a) * dist,
+        alpha: 0, scale: 0.3,
+        duration: 460 + Math.random() * 160, ease: 'Quad.easeOut',
+        onComplete: () => spark.destroy()
+      })
+    }
+  }
+
+  /**
    * Balayage du pied-de-biche : coup de barre à mine qui SE VOIT monter en
    * puissance avec le niveau. Effet PixelLab premium — un arc « swoosh »
    * (`vfx_slash`, A) tourné/agrandi comme un vrai coup balayé + un éclat

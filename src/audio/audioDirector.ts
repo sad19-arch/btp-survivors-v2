@@ -2,7 +2,7 @@ import type Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
 import type { WeaponFiredEvent, PickupCollectedEvent, BossSpawnedEvent, ChestOpenedEvent, DestructibleBrokenEvent } from '@core/events'
 import { destructibleDef } from '@content/destructibles'
-import { SFX, VOICE, voiceRunStart, musicForState, MUSIC, AMB, MUSIC_FILES_STAGE, type MusicKey } from './manifest'
+import { SFX, VOICE, voiceRunStart, musicForState, weaponFileGain, MUSIC, AMB, MUSIC_FILES_STAGE, type MusicKey } from './manifest'
 import { musicGain, sfxGain, duckedGain, type AudioLevels } from './settings'
 import { playZzfx } from './zzfx'
 import { weaponZzfx } from './weaponSfx'
@@ -69,8 +69,6 @@ const VOICE_LEVEL = 1.0 // la voix passe au volume plein du canal SFX (annonces 
 const MUSIC_DUCK = 0.28 // pendant une voix, la musique tombe à ~28 % (annonceur au-dessus)
 const AMB_DUCK = 0.15 // et l'ambiance quasi muette (~15 %) pour dégager la voix
 const WEAPON_THROTTLE_MS = 55 // délai min entre deux SFX d'une MÊME arme (anti-double)
-/** Gain des SFX d'armes en FICHIER (ex. cloueur ElevenLabs), avant le gain SFX utilisateur. */
-const WEAPON_FILE_VOLUME = 0.5
 /** Throttle dédié par arme (ms). La scie touche en continu → whir périodique discret (pas un drone). */
 const WEAPON_THROTTLE_OVERRIDE: Readonly<Record<string, number>> = { scie: 350 }
 /** Délai min entre deux dings de gemme XP (anti-saturation horde). */
@@ -124,12 +122,27 @@ export class AudioDirector {
   /** Contexte WebAudio partagé (celui de Phaser) pour les SFX procéduraux zzfx ; null si HTML5. */
   private readonly audioCtx: AudioContext | null
   /**
+   * Mode Carnage actif — miroir de `AppViewState.carnage`, rafraîchi à chaque
+   * `observe()`. Seule porte du cue `carnageGore` : un événement `enemyDied`
+   * arrivant hors Mode Carnage ne doit rien produire.
+   */
+  private carnageActive = false
+  /**
    * Garde anti-chevauchement : priorité de la voix déjà lancée dans ce tick.
    * Remis à 0 au début de chaque observe(). Toute nouvelle voix de priorité ≤ cette valeur
    * est droppée silencieusement. Les événements injectés HORS observe() (ex. bossSpawned
    * depuis le bus) obtiennent un tick propre dès que observe() tourne.
    */
   private voicePriorityThisTick = 0
+  /**
+   * Minuteur du « kling kling » de machine à sous (retour playtest) : tourne tant
+   * que la modale de coffre est affichée, arrêté dès qu'`observe()` constate que
+   * `state.chestOpen` est redevenu `null`. Décorrélé de l'overlay (pas de plomberie
+   * DOM→audio) : suit le MÊME état (`AppViewState.chestOpen`) que `musicForState`.
+   */
+  private chestKlingTimer: number | null = null
+  /** `chestOpen` observé à la frame précédente — détecte la transition true→false. */
+  private prevChestOpen = false
 
   constructor(sound: Phaser.Sound.BaseSoundManager, events: EventTarget, getSettings: () => AudioLevels) {
     this.sound = sound
@@ -153,6 +166,19 @@ export class AudioDirector {
       if (now - this.lastEnemyDownMs > 18000 && !this.voiceActive()) {
         this.lastEnemyDownMs = now
         this.playVoice(VOICE.enemyDown, 1)
+      }
+    })
+    // MODE CARNAGE — bruit de chair broyée, UNE mort = UN son (throttlé à 260 ms
+    // côté cue : une horde meurt en paquet). `enemyKilled` ne porterait pas la
+    // granularité (il ne transporte qu'un compteur agrégé par pas) : c'est
+    // `enemyDied`, comme pour le sang, qui donne une mort à la fois.
+    //
+    // Gardé par `carnageActive`, remis à jour depuis `observe()` : hors Mode
+    // Carnage, ce cue ne doit JAMAIS s'entendre. Le flag vit dans l'App (jamais
+    // dans la sim) — on l'observe, on ne le décide pas.
+    on('enemyDied', () => {
+      if (this.carnageActive) {
+        this.playCue('carnageGore')
       }
     })
     on('playerHurt', () => { this.playCue('playerHurt') })
@@ -179,19 +205,33 @@ export class AudioDirector {
       // Le boss final a une réplique dédiée (plus forte) — le mid-boss garde le pool générique.
       const role = (e as BossSpawnedEvent).role
       this.playVoice(role === 'final' ? VOICE.bossFinal : VOICE.boss, 2)
+      // Klaxon d'anticipation (juice #9) : RÉSERVÉ au boss final (retour playtest — le
+      // stinger générique sur chaque télégraphe de vague se déclenchait trop souvent).
+      if (role === 'final') {
+        this.playCue('waveIncoming')
+      }
     })
     // (Plus de SFX générique sur `auraPulse` : aura/sweep/strike/cône sonnent
     // désormais par ARME via `weaponFired`/zzfx. L'auraPulse reste pour les VFX.)
     on('prisonerFreed', () => { this.playCue('prisonerFreed'); this.playVoice(VOICE.thankyou, 2) })
     // B5 — Fanfare d'évolution (coffre ramassé + conditions réunies) : fanfare zzfx en accord
     // majeur + voix triomphante. Remplace le cue 'bonus' générique par une fanfare dédiée.
-    on('evolved', () => { this.playChestFanfare(); this.playCue('jackpotWin'); this.playVoice(VOICE.evolved, 4) })
+    on('evolved', () => { this.playVoice(VOICE.evolved, 4) })
     // Coffre ouvert (issues cartes/soin) : même récompense sonore « jackpot » que la
     // machine à sous. L'évolution a déjà sa fanfare complète via `evolved` → on ne double pas.
     on('chestOpened', (e) => {
-      if ((e as ChestOpenedEvent).kind !== 'evolution') { this.playCue('jackpotWin') }
+      // Fanfare d'ouverture (ElevenLabs) pour TOUT coffre ; super = plus épique.
+      // L'évolution ajoute sa voix triomphante via 'evolved' (pas de doublon fanfare).
+      this.playCue((e as ChestOpenedEvent).isSuper ? 'chestFanfareSuper' : 'chestFanfare')
+      // « Kling kling » machine à sous (retour playtest) : tic répété pendant le
+      // spectacle, arrêté dans `observe()` dès que `chestOpen` redevient null.
+      this.startChestKling()
     })
     on('upgradePick', () => { this.playCue('upgradePick') })
+    // Palier de kills (juice #8) : tampon « validé » à chaque tranche de 100 déblayés.
+    on('milestone', () => { this.playCue('victoryStamp') })
+    // Anticipation de vague (juice #9) : klaxon de chantier à l'apparition d'un télégraphe.
+    on('waveIncoming', () => { this.playCue('waveIncoming') })
     // Casse d'un destructible : son PAR MATÉRIAU (bois/métal/gravats), throttlé côté cue.
     on('destructibleBroken', (e) => {
       const def = destructibleDef((e as DestructibleBrokenEvent).typeId)
@@ -202,6 +242,24 @@ export class AudioDirector {
     on('menuMove', () => { this.playCue('menuMove') })
     on('menuConfirm', () => { this.playCue('menuConfirm') })
     on('menuBack', () => { this.playCue('menuBack') })
+  }
+
+  /**
+   * Joue un cue SFX nommé du manifeste (API publique). Utilisé par la cinématique
+   * d'intro (routée depuis `app.events` par `main.ts`) : le cue « clonk » de la
+   * pelle. No-op silencieux si le cue est inconnu ou l'audio verrouillé/muet.
+   */
+  playNamedCue(name: string): void {
+    this.playCue(name)
+  }
+
+  /**
+   * Joue une réplique d'annonceur par CLÉ de voix (API publique) — cinématique
+   * d'intro routée par `main.ts`. Priorité basse (1) : une annonce d'écran en
+   * cours n'est pas coupée par un cue cosmétique. No-op si la clé est absente.
+   */
+  playNamedVoice(key: string): void {
+    this.playVoice([key], 1)
   }
 
   /** `rateMul` : multiplicateur de hauteur additionnel (ex. varier une même cue par sorte d'arme). */
@@ -252,39 +310,16 @@ export class AudioDirector {
     // (garde marteau/court-circuit et les armes sans fichier sur le zzfx taillé main).
     const fileKey = `sfx_weapon_${id}`
     if (this.hasAudio(fileKey)) {
-      this.sound.play(fileKey, { volume: WEAPON_FILE_VOLUME * gain })
+      // `weaponFileGain` = gain commun de la famille × trim mesuré du fichier
+      // (cf. `WEAPON_FILE_TRIM` : un fichier livré 22 dB sous ses voisines ne
+      // s'entend pas, quel que soit le gain commun).
+      this.sound.play(fileKey, { volume: weaponFileGain(id) * gain })
       return
     }
     if (this.audioCtx === null) {
       return // le zzfx procédural nécessite WebAudio
     }
     playZzfx(this.audioCtx, gain, weaponZzfx(id))
-  }
-
-  /**
-   * B5 — Fanfare de coffre/évolution (zzfx procédural).
-   * Joue 3 notes en accord majeur ascendant décalées dans le temps (~40ms entre chaque).
-   * Inaudible si audio verrouillé, contexte nul, ou gain nul.
-   */
-  private playChestFanfare(): void {
-    if (this.audioCtx === null || this.isLocked()) {
-      return
-    }
-    const ctx = this.audioCtx
-    const gain = sfxGain(this.settings)
-    if (gain <= 0) {
-      return
-    }
-    CHEST_FANFARE_NOTES.forEach((note, i) => {
-      const delayMs = i * 90
-      if (delayMs === 0) {
-        playZzfx(ctx, gain, note)
-      } else {
-        window.setTimeout(() => {
-          playZzfx(ctx, gain, note)
-        }, delayMs)
-      }
-    })
   }
 
   /**
@@ -402,6 +437,14 @@ export class AudioDirector {
     }
     // Réinitialise la garde anti-chevauchement de voix au début de chaque frame.
     this.voicePriorityThisTick = 0
+    // Miroir du Mode Carnage : observé, jamais décidé ici (cf. `carnageActive`).
+    this.carnageActive = state.carnage
+    // Coupe le « kling kling » dès que la modale de coffre se ferme (transition true→false).
+    const chestOpenNow = state.chestOpen !== null
+    if (this.prevChestOpen && !chestOpenNow) {
+      this.stopChestKling()
+    }
+    this.prevChestOpen = chestOpenNow
     // Voix « AIL Entertainment presents » : jouée UNIQUEMENT pendant le splash studio
     // (fenêtre begin/endStudioPresents). On (re)tente ici tant que la fenêtre est ouverte
     // — couvre le cas « asset voix pas encore chargé » au boot. Jamais sur le titre.
@@ -422,7 +465,12 @@ export class AudioDirector {
     }
     // Musique de fond (boss prioritaire, rotation par phase).
     const bossPresent = boss !== undefined
-    const desired = musicForState({ screen: state.screen, stageId: state.stageId, bossPresent })
+    const desired = musicForState({
+      screen: state.screen,
+      stageId: state.stageId,
+      bossPresent,
+      chestOpen: chestOpenNow
+    })
     if (desired !== this.currentKey) {
       this.switchMusic(desired)
     }
@@ -443,6 +491,20 @@ export class AudioDirector {
     if (this.titleSlamTimer !== null) {
       window.clearTimeout(this.titleSlamTimer)
       this.titleSlamTimer = null
+    }
+  }
+
+  /** Démarre le tic répété du « kling kling » (anti-double-arm : un seul minuteur à la fois). */
+  private startChestKling(): void {
+    this.stopChestKling()
+    this.chestKlingTimer = window.setInterval(() => { this.playCue('chestKling') }, 140)
+  }
+
+  /** Coupe le tic dès que la modale de coffre se ferme (`observe()`, sur `chestOpen`). */
+  private stopChestKling(): void {
+    if (this.chestKlingTimer !== null) {
+      window.clearInterval(this.chestKlingTimer)
+      this.chestKlingTimer = null
     }
   }
 

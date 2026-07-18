@@ -21,15 +21,21 @@
  */
 
 import Phaser from 'phaser'
-import { buildSiteLayout } from '@core/siteLayout'
-import { buildSitePlan } from '@core/sitePlan'
-import type { PlanSeg } from '@core/sitePlan'
+import { buildSiteLayout, resolveSitePlan } from '@core/siteLayout'
+import type { PlanSeg, SitePlan } from '@core/sitePlan'
 import { CLUSTERS } from '@content/clusters'
 import type { ClusterElement } from '@content/clusters'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constantes de profondeur DA 16-bit
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Plaques de sol posées à l'éditeur — ENTRE le sol de base (-10, TileSprite
+ * global) et les décalques (-9) : une plaque recouvre le sol du stage, mais
+ * les traces et marquages restent visibles par-dessus.
+ */
+const DEPTH_GROUND_PATCH = -9.5
 
 /** Décalques au sol (route, traces) — sous les props. */
 const DEPTH_DECAL = -9
@@ -53,13 +59,22 @@ function roadStyleFor(stageId: string): RoadStyle {
 }
 
 /**
- * Retourne la profondeur d'affichage pour un élément de cluster selon son
- * assetKey et son collide. Règle :
- *   - assetKey contenant 'road' ou 'decal' → DEPTH_DECAL (-9)
- *   - collide !== 'none'                   → DEPTH_STRUCT (-5)
- *   - sinon                                → DEPTH_PROP   (-6)
+ * Retourne la profondeur d'affichage d'un élément de cluster.
+ *
+ * `elem.layer` fait foi quand il est présent. Sinon on retombe sur l'ancienne
+ * déduction par PRÉFIXE DE CLÉ, conservée pour le contenu hérité — mais c'est
+ * elle le bug d'origine : `piste_strip` est un décal qui ne commence ni par
+ * `road_` ni par `decal_`, et s'affichait donc à hauteur de prop. Tout nouvel
+ * asset plat DOIT porter `layer: 'decal'` plutôt que d'espérer le bon préfixe.
  */
 function depthFor(elem: ClusterElement): number {
+  switch (elem.layer) {
+    case 'ground': return DEPTH_GROUND_PATCH
+    case 'decal': return DEPTH_DECAL
+    case 'struct': return DEPTH_STRUCT
+    case 'prop': return DEPTH_PROP
+    default: break
+  }
   const k = elem.assetKey
   if (k.startsWith('road_') || k.startsWith('decal_')) {
     return DEPTH_DECAL
@@ -81,12 +96,19 @@ function depthFor(elem: ClusterElement): number {
  */
 export class SiteRenderer {
   /** Sprites des clusters posés — détruits et recréés à chaque `reset()`. */
-  private sprites: Array<Phaser.GameObjects.Image | Phaser.GameObjects.Sprite> = []
+  // TileSprite : plaques de sol (texture répétée). Tous partagent `destroy()`,
+  // seul usage qu'en fait `reset()`.
+  private sprites: Array<
+    Phaser.GameObjects.Image | Phaser.GameObjects.Sprite | Phaser.GameObjects.TileSprite
+  > = []
 
   /** Objets du plan masse (clôtures/pistes/terre excavée) — même cycle de vie. */
   private planObjects: Phaser.GameObjects.GameObject[] = []
 
   private siteOverlays: Phaser.GameObjects.GameObject[] = []
+
+  /** Textures absentes déjà signalées — un avertissement par clé, pas par élément/frame. */
+  private readonly warnedMissingTexture = new Set<string>()
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -115,8 +137,11 @@ export class SiteRenderer {
     this.siteOverlays = []
 
     // Plan masse (stages programmés) : terre excavée + pistes + panneaux de clôture.
-    // MÊME source déterministe que la sim (les obstacles viennent des mêmes segments).
-    const plan = buildSitePlan(seed, worldW, worldH, stageId)
+    // MÊME source déterministe QUE LA SIM, et surtout MÊME DÉCISION : on passe par
+    // `resolveSitePlan` (et non `buildSitePlan`) pour qu'une compo `keepSitePlan:false`
+    // supprime le décor ICI exactement quand elle supprime les obstacles LÀ-BAS.
+    // Appeler `buildSitePlan` directement rouvrirait la porte au décor traversable.
+    const plan = resolveSitePlan(seed, worldW, worldH, stageId)
     if (plan !== null) {
       this.drawPlan(plan, stageId)
     }
@@ -147,8 +172,15 @@ export class SiteRenderer {
       const ty = (vx: number, vy: number): number => (flip ? -vx : vx) * sin + vy * cos
 
       for (const elem of elements) {
-        // Vérifier que la texture est chargée (repli silencieux si absente).
+        // Vérifier que la texture est chargée (repli SILENCIEUX en prod — un asset
+        // manquant ne doit jamais planter le rendu — mais signalé une fois en dev,
+        // sinon un élément posé à l'éditeur peut disparaître en jeu sans AUCUNE trace
+        // — retour playtest : routes/bancs invisibles faute de préchargement).
         if (!this.scene.textures.exists(elem.assetKey)) {
+          if (import.meta.env.DEV && !this.warnedMissingTexture.has(elem.assetKey)) {
+            this.warnedMissingTexture.add(elem.assetKey)
+            console.warn(`[siteRenderer] texture absente, élément ignoré : ${elem.assetKey}`)
+          }
           continue
         }
 
@@ -156,6 +188,18 @@ export class SiteRenderer {
         const ay = placed.y + ty(elem.dx, elem.dy)
 
         const shape = elem.shape
+
+        // Plaque de sol : texture RÉPÉTÉE sur w×h (TileSprite), pas étirée.
+        // Une tuile 64×64 « agrandie » en image serait floue et unique ; répétée,
+        // elle refait un vrai sol.
+        if (elem.tile !== undefined) {
+          const sp = this.scene.add
+            .tileSprite(ax, ay, elem.tile.w, elem.tile.h, elem.assetKey)
+            .setDepth(depthFor(elem))
+            .setRotation(rot + (elem.rotation ?? 0))
+          this.sprites.push(sp)
+          continue
+        }
 
         // Segments (clôtures) : positionner au milieu et orienter selon le segment.
         if (shape !== undefined && shape.kind === 'segment') {
@@ -293,7 +337,7 @@ export class SiteRenderer {
    * roulage le long des chemins, panneaux de clôture le long des anneaux
    * (les ouvertures restent vides — les poteaux les encadrent).
    */
-  private drawPlan(plan: NonNullable<ReturnType<typeof buildSitePlan>>, stageId: string): void {
+  private drawPlan(plan: SitePlan, stageId: string): void {
     // 1. Terre excavée : patch sombre sous chaque zone d'excavation.
     for (const z of plan.zones) {
       if (z.role !== 'excavation') {

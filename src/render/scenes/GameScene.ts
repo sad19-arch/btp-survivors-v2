@@ -12,15 +12,15 @@ import { POOL_KEYS, SPLATTER_KEYS, DROP_CLUSTER_KEYS, type CarnageSize } from '@
 import { DESKTOP_ZOOM, type ViewportBus } from '@ui/viewport'
 import { WORLD } from '@content/config'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
-import { createGround } from '@render/ground'
-import { createLandmark, createStructures, phaseSalt, resolvePlacement, type ExclusionCircle } from '@render/props'
+import { createGround, groundTilesForLayout } from '@render/ground'
+import { createLandmark, createStructures, phaseSalt, type ExclusionCircle } from '@render/props'
 import { DecorStreamer, DEFAULT_CHUNK_SIZE } from '@render/decorStreamer'
 import { resolveComposedLayout } from '@content/runtimeLayouts'
-import { walkFrame } from '@render/sprites'
-import { ambientOffset } from '@render/ambientNpc'
-import { stageRender, type StageRender, FINAL_BOSS_SKIN, CONVOYEUR_SKIN, SHARED_WORKER_NPCS, CITY_BUILDINGS, CITY_PERIMETER } from '@render/stages'
+import { stageRender, type StageRender, FINAL_BOSS_SKIN, CONVOYEUR_SKIN, CAMION_SKIN, SHARED_WORKER_NPCS, CITY_BUILDINGS, CITY_PERIMETER } from '@render/stages'
+import { PALETTE_ASSETS } from '@content/paletteAssets'
 import { SpritePool } from '@render/spritePool'
 import { DamageNumberPool } from '@render/damageNumbers'
+import { CritTextRenderer } from '@render/scenes/critTextRenderer'
 import { VfxManager } from '@render/scenes/vfxManager'
 import { SpeechBubbleManager } from '@render/scenes/speechBubbleManager'
 import { CameraController } from '@render/scenes/cameraController'
@@ -30,13 +30,17 @@ import { TelegraphRenderer } from '@render/scenes/telegraphRenderer'
 import { SiteRenderer } from '@render/scenes/siteRenderer'
 import { SiteStructures, hasStructurePlan } from '@render/scenes/siteStructures'
 import { SiteWorkers } from '@render/scenes/siteWorkers'
+import { IntroSequencer } from '@render/scenes/introSequencer'
+import { CinemaStageImpl } from '@render/scenes/cinemaStageImpl'
+import { createCinemaDeps } from '@render/scenes/cinemaDeps'
 import { buildSiteLayout } from '@core/siteLayout'
-import { AuraPulseEvent, PrisonerFreedEvent, DestructibleBrokenEvent, EnemyDiedEvent } from '@core/events'
+import { AuraPulseEvent, PrisonerFreedEvent, PrisonerEnragedEvent, DestructibleBrokenEvent, EnemyDiedEvent, ChestOpenedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
 import { DestructibleRenderer } from '@render/scenes/destructibleRenderer'
 import { destructibleDef, destructiblesForStage, COIN_PICKUP } from '@content/destructibles'
 import { PALETTE_HEX } from '@ui/palette'
 import { PerfProbe, type PerfSnapshot } from '@render/perf/perfProbe'
+import { INTRO_SCRIPTS } from '@content/introScripts'
 
 /** Feuille PARTAGÉE (tous stages) : le joueur. Ennemis ET boss sont PAR STAGE (voir stages.ts). */
 const SHARED_SHEETS: ReadonlyArray<readonly [string, string, number]> = [['player', 'player_j1.png', 192]]
@@ -57,6 +61,21 @@ export interface GameSceneData {
 
 /** Clamp du delta réel pour éviter la spirale de la mort après un gel d'onglet. */
 const MAX_FRAME_MS = 100
+
+/** Durées de hitstop (juice #5) — RÉSERVÉ aux gros moments (pas la horde). */
+const HITSTOP_ELITE_MS = 45
+const HITSTOP_BOSS_MS = 90
+const HITSTOP_EVOLVE_MS = 70
+/** Verrou anti-strobe : délai mini entre deux gels d'impact. */
+const HITSTOP_COOLDOWN_MS = 160
+
+/** Amplitudes du zoom-punch (juice #10) — fraction de zoom ajoutée puis estompée. */
+const ZOOM_PUNCH_BOSS = 0.15
+const ZOOM_PUNCH_EVOLVE = 0.12
+const ZOOM_PUNCH_CHEST = 0.12
+
+/** Tranche de kills d'un palier (juice #8) — doit matcher `MILESTONE_STEP` de l'overlay. */
+const MILESTONE_KILLS = 100
 
 /**
  * Scène de jeu : couche RENDU. Elle observe `Simulation.getState()` et dessine ;
@@ -97,6 +116,22 @@ export class GameScene extends Phaser.Scene {
    */
   private damageNumbers!: DamageNumberPool
   /**
+   * Textes de coup critique flottants (rallume `CRITICAL_TEXTS`/`selectCriticalText`,
+   * jusqu'ici sans consommateur). Poolé, instance fraîche par scène.
+   */
+  private critText!: CritTextRenderer
+  /**
+   * HITSTOP (juice #5) — gel d'impact RENDER-only. Tant que `hitstopMsLeft > 0`,
+   * `update()` n'avance PAS la sim (le rendu reste figé un ou deux frames), ce qui
+   * donne le « claquement » d'un gros coup. `cooldown` empêche un enchaînement de
+   * gels sur des morts rapprochées (sinon effet strobe). Jamais actif en test/lite
+   * (le seam pilote le temps) → sim:check et e2e intacts.
+   */
+  private hitstopMsLeft = 0
+  private hitstopCooldownMsLeft = 0
+  /** Dernier palier de 100 kills franchi (juice #8) — émet un event `milestone` (son+rumble). −1 = non initialisé. */
+  private lastMilestone = -1
+  /**
    * Streamer de décor par chunks (décalques + props) : génère le décor autour
    * de la caméra et détruit celui qui s'éloigne. Coût constant quelle que soit
    * la taille du monde (~16 chunks actifs à la fois). Purement visuel.
@@ -113,14 +148,6 @@ export class GameScene extends Phaser.Scene {
    * détruit une et en recrée une autre) — jamais un singleton de module.
    */
   private pool!: SpritePool
-  /** PNJ(s) d'ambiance non-hostiles du stage — tableau (B1+). */
-  private ambientSprites: Array<{
-    sprite: Phaser.GameObjects.Sprite
-    anchor: { x: number; y: number }
-    seed: number
-    behavior: 'work' | 'patrol'
-    framePeriodMs: number
-  }> = []
   /** Bulles râleuses des PNJ d'ambiance (état + cooldowns) — extraites de GameScene. */
   private readonly bubbles = new SpeechBubbleManager(this)
   /** Rendu du télégraphe des formations (marqueur au sol + flèche de bord) — Task 10. */
@@ -132,6 +159,12 @@ export class GameScene extends Phaser.Scene {
   private siteStructures!: SiteStructures
   /** Ouvriers navetteurs (T6) — module dédié, GameScene délègue. */
   private siteWorkers!: SiteWorkers
+  /** Façade cinématique (T5) — implémentation Phaser des CinemaDeps, instance fraîche par scène. */
+  private cinemaStage!: CinemaStageImpl
+  /** Séquenceur d'intro (T5) — dispatche les IntroCommand vers cinemaStage. Instance fraîche par scène. */
+  private intro!: IntroSequencer
+  /** Suivi de la transition introActive (T6) — pour déclencher dispose() dès la fin de l'intro. */
+  private prevIntroActive = false
   /**
    * VFX des armes à impulsion (marteau/pied-de-biche/court-circuit), déclenché
    * par l'événement d'aura de la sim. Une forme dédiée par `kind` — pas de
@@ -181,11 +214,22 @@ export class GameScene extends Phaser.Scene {
     // Screen-shake léger — coup lourd mais pas nausée.
     this.cameras.main.shake(90, 0.004)
   }
-  /** Libération d'un prisonnier : étincelles + bulle « Merci ! » au-dessus de l'ouvrier. */
+  /** Otage qui remercie et s'en va (expiration de la rage / cap) : étincelles + bulle « Merci ! ». */
   private readonly onPrisonerFreed = (e: Event): void => {
     const p = e as PrisonerFreedEvent
     this.vfx.spawnVfx('vfx_sparkle', p.x, p.y, 0.5, 1.9, 450)
     this.vfx.spawnBubble(p.x, p.y)
+  }
+  /**
+   * Otage libéré qui devient ENRAGÉ : éclat d'étincelles + secousse (il entre en
+   * furie et va suivre le joueur en lançant des boules de feu). La bulle « Merci ! »
+   * viendra plus tard, à l'EXPIRATION (event `prisonerFreed`). NB : le rendu final
+   * de l'aura enragée + le sprite des boules de feu = passe DA PixelLab (à venir).
+   */
+  private readonly onPrisonerEnraged = (e: Event): void => {
+    const p = e as PrisonerEnragedEvent
+    this.vfx.spawnVfx('vfx_sparkle', p.x, p.y, 0.7, 2.4, 550)
+    this.cameras.main.shake(120, 0.005)
   }
   /**
    * Évolution d'arme (coffre ramassé + conditions réunies) : grand halo au sol
@@ -200,6 +244,9 @@ export class GameScene extends Phaser.Scene {
     if (p === undefined) {
       return
     }
+    // Hitstop (juice #5) + zoom-punch (juice #10) : l'évolution est un gros moment.
+    this.triggerHitstop(HITSTOP_EVOLVE_MS)
+    this.camera.addZoomPunch(ZOOM_PUNCH_EVOLVE)
     this.vfx.spawnVfx('vfx_levelup', p.x, p.y, 0.2, 2.8, 650)
     // Sparkle supplémentaire en anneau (6 points) pour bien marquer l'évolution.
     for (let i = 0; i < 6; i++) {
@@ -211,6 +258,30 @@ export class GameScene extends Phaser.Scene {
     }
     // Screen-shake plus fort que le marteau (événement majeur du run).
     this.cameras.main.shake(160, 0.007)
+  }
+  /**
+   * Ouverture de coffre — EXPLOSION CASINO dans le monde : gerbe de pièces qui
+   * giclent + flash + shake (feux d'artifice si SUPER). Positionné sur le joueur
+   * ramasseur (le coffre s'ouvre sur lui). La machine à sous DOM (overlay) révèle
+   * les issues en parallèle. Rendu pur, observer-only.
+   */
+  private readonly onChestOpened = (e: Event): void => {
+    const ev = e as ChestOpenedEvent
+    const p = this.app.getStateForFrame(this.app.frameId).players.find((pl) => pl.id === ev.playerId)
+    if (p === undefined) {
+      return
+    }
+    this.vfx.spawnChestBurst(p.x, p.y, ev.isSuper)
+    this.cameras.main.shake(ev.isSuper ? 420 : 240, ev.isSuper ? 0.009 : 0.006)
+    // Zoom-punch (juice #10) : réservé au SUPER-coffre (le gros moment casino).
+    if (ev.isSuper) {
+      this.camera.addZoomPunch(ZOOM_PUNCH_CHEST)
+    }
+  }
+
+  /** Spawn de boss (juice #10) : zoom-punch cinématique sur l'entrée du contremaître. */
+  private readonly onBossSpawned = (): void => {
+    this.camera.addZoomPunch(ZOOM_PUNCH_BOSS)
   }
   // Budget de VFX de casse PAR FRAME (perf) : au-delà, casse allégée (pas de burst
   // de fragments) ; le screen-shake est COALESCÉ (1 seul par frame, le 1er break).
@@ -254,10 +325,20 @@ export class GameScene extends Phaser.Scene {
    * et à lui seul, de trancher.
    */
   private readonly onEnemyDied = (e: Event): void => {
+    const ev = e as EnemyDiedEvent
+    // Texte de coup critique — INDÉPENDANT du Mode Carnage (marche en jeu normal).
+    // `Math.random` est autorisé au rendu : rien ici n'entre dans la simulation.
+    this.critText.spawn(ev.x, ev.y, { isElite: ev.isElite, bossRole: ev.bossRole }, Math.random())
+    // Hitstop (juice #5) sur les GROSSES morts seulement : boss > élite (pas la horde).
+    if (ev.bossRole !== undefined) {
+      this.triggerHitstop(HITSTOP_BOSS_MS)
+      this.camera.addZoomPunch(ZOOM_PUNCH_BOSS) // zoom-punch #10 sur la mort du boss
+    } else if (ev.isElite) {
+      this.triggerHitstop(HITSTOP_ELITE_MS)
+    }
     if (this.carnage === null) {
       return
     }
-    const ev = e as EnemyDiedEvent
     this.carnage.spawn({
       x: ev.x,
       y: ev.y,
@@ -287,9 +368,25 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Arme un hitstop (juice #5) : `update()` gèlera la sim pendant `ms`. No-op en
+   * test/lite (le seam pilote le temps → aucun effet sur e2e/sim:check) et pendant
+   * le cooldown (anti-strobe). `max` : deux déclencheurs la même frame ne s'additionnent pas.
+   */
+  private triggerHitstop(ms: number): void {
+    if (this.testMode || this.lite || this.hitstopCooldownMsLeft > 0) {
+      return
+    }
+    this.hitstopMsLeft = Math.max(this.hitstopMsLeft, ms)
+    this.hitstopCooldownMsLeft = ms + HITSTOP_COOLDOWN_MS
+  }
+
+  /**
    * Zoom caméra de BASE courant, tiré de la source de vérité responsive
-   * (ViewportBus, câblé par main.ts). Desktop : DESKTOP_ZOOM constant (parité
-   * PC) ; tactile : adaptatif à l'écran. Repli DESKTOP_ZOOM sans bus (harness).
+   * (ViewportBus, câblé par main.ts) — adaptatif à la TAILLE du viewport, pas
+   * au type d'entrée : un écran ≥ 1920×1080 retombe sur DESKTOP_ZOOM (1.2,
+   * parité PC historique) que ce soit tactile ou pointeur ; un petit écran
+   * (PC ou tactile) dé-zoome pour voir autant de terrain. Repli DESKTOP_ZOOM
+   * sans bus (harness).
    */
   private baseZoom(): number {
     return this.sceneData.viewport?.current().cameraZoom ?? DESKTOP_ZOOM
@@ -337,6 +434,12 @@ export class GameScene extends Phaser.Scene {
   preload(): void {
     // Assets PROPRES AU STAGE (sol, décalques, props, skins d'ennemis).
     for (const t of this.stage.ground) {
+      this.load.image(t.key, t.file)
+    }
+    // Sols d'AUTRES stages référencés par la compo (fond global `groundKey` ou
+    // plaques posées) : sans ce préchargement, la texture n'existe pas au moment
+    // du rendu et le sol choisi retomberait silencieusement sur celui du stage.
+    for (const t of groundTilesForLayout(resolveComposedLayout(this.loadedStageId))) {
       this.load.image(t.key, t.file)
     }
     for (const d of this.stage.decals) {
@@ -419,6 +522,13 @@ export class GameScene extends Phaser.Scene {
         frameWidth: CONVOYEUR_SKIN.frame,
         frameHeight: CONVOYEUR_SKIN.frame
       })
+      // Skin PARTAGÉ du camion benne des chemins camion, chargé une fois pour tous
+      // les stages : sans lui, un `truck_path` posé ailleurs qu'au stage 02 restait
+      // muet (le repli `prop_s2_truck` n'existe que là-bas).
+      this.load.spritesheet(CAMION_SKIN.key, CAMION_SKIN.file, {
+        frameWidth: CAMION_SKIN.frame,
+        frameHeight: CAMION_SKIN.frame
+      })
       // Feuilles dédiées des personnages (phase C) : NON préchargées ici. `preload`
       // s'exécute au boot (avant la sélection) puis seulement au changement de stage —
       // les joueurs (donc leurs persos) n'y sont pas encore connus. Et précharger tout
@@ -446,6 +556,8 @@ export class GameScene extends Phaser.Scene {
     this.load.image('proj_boulons', 'stage01/weapons/proj_boulons.png')
     this.load.image('proj_cle', 'stage01/weapons/proj_cle.png')
     this.load.image('proj_brouette', 'stage01/weapons/proj_brouette.png')
+    // Boule de feu de l'otage enragé (allié) — sprite partagé PixelLab.
+    this.load.image('proj_boule_feu', 'shared/boule_feu.png')
     // Piste C : nuage de mousse de l'extincteur (sprite PixelLab, rendu orienté).
     this.load.image('vfx_foam_cone', 'stage01/weapons/vfx_foam_cone.png')
     // Chalumeau / lance thermique : jets de flammes (PixelLab), orientés comme la mousse.
@@ -461,8 +573,14 @@ export class GameScene extends Phaser.Scene {
     this.load.image('pickup_health', 'stage01/pickups/health.png')
     this.load.image('pickup_magnet', 'stage01/pickups/magnet.png')
     this.load.image('pickup_crate', 'stage01/pickups/crate.png')
-    // État « entrouvert » du coffre (animation d'ouverture au spawn).
+    // État « entrouvert » de l'ancienne caisse XP (`chest`).
     this.load.image('pickup_crate_open', 'stage01/pickups/crate_open.png')
+    // Coffres PREMIUM (refonte casino) : doré normal + super doré giga-brillant,
+    // fermé + ouvert (jaillissement de lumière). Partagés par tous les stages.
+    this.load.image('chest_gold_closed', 'shared/chest/chest_gold_closed.png')
+    this.load.image('chest_gold_open', 'shared/chest/chest_gold_open.png')
+    this.load.image('chest_super_closed', 'shared/chest/chest_super_closed.png')
+    this.load.image('chest_super_open', 'shared/chest/chest_super_open.png')
     this.load.image('vfx_impact', 'stage01/vfx/impact.png')
     this.load.image('vfx_sparkle', 'stage01/vfx/sparkle.png')
     this.load.image('vfx_levelup', 'stage01/vfx/levelup.png')
@@ -492,6 +610,14 @@ export class GameScene extends Phaser.Scene {
     for (const b of CITY_BUILDINGS) {
       this.load.image(b.key, b.file)
     }
+    // Catalogue palette (retour playtest) : routes/bancs/mobilier/etc. posés à la
+    // main dans l'éditeur restaient INVISIBLES en jeu — cette liste n'était chargée
+    // QUE par l'éditeur. `siteRenderer` ignore silencieusement toute texture absente
+    // (`this.scene.textures.exists`) : sans ce préchargement, aucun élément placé via
+    // le catalogue palette ne pouvait jamais s'afficher, quelle que soit la compo.
+    for (const a of PALETTE_ASSETS) {
+      this.load.image(a.key, a.file)
+    }
   }
 
   /** Réinitialise l'état par-run (indispensable car `scene.restart` réutilise l'instance). */
@@ -500,7 +626,6 @@ export class GameScene extends Phaser.Scene {
     // damageFlash, lastMove, prisonniers, introStartMs/introDone) est porté par une
     // instance FRAÎCHE de PlayerRenderer recréée dans create() — rien à nettoyer ici.
     this.camera.reset()
-    this.ambientSprites = []
     this.bubbles.reset()
     this.decorStreamerFrame = 0
     // Nettoie les chunks streamés (si le streamer est déjà initialisé — pas au 1er appel).
@@ -518,6 +643,8 @@ export class GameScene extends Phaser.Scene {
     // Pool de chiffres de dégâts : instance fraîche par scene (les Text Phaser sont
     // détruits au shutdown ; un pool réutilisé les rendrait fantômes).
     this.damageNumbers = new DamageNumberPool(this)
+    // Textes de coup critique : instance fraîche par scène (Text détruits au shutdown).
+    this.critText = new CritTextRenderer(this)
     // Rendu de la horde : instance fraîche par scène (détient les Maps de sprites d'entités).
     this.horde = new HordeRenderer(this, this.pool, this.vfx, this.damageNumbers)
     // Rendu du joueur/prisonniers/intro : instance fraîche par scène (détient les Maps/état joueur).
@@ -533,15 +660,26 @@ export class GameScene extends Phaser.Scene {
     this.siteStructures = new SiteStructures(this)
     // Ouvriers navetteurs (T6) : instance fraîche par scène.
     this.siteWorkers = new SiteWorkers(this)
+    // Cinématique d'intro (T5) : façade Phaser + séquenceur. Instance fraîche par
+    // scène. La construction de la façade (câblage caméra/tweens + dispatch des
+    // cues bandeau/voix/SFX) vit dans `createCinemaDeps` — pas dans GameScene.
+    this.cinemaStage = new CinemaStageImpl(createCinemaDeps(this, this.camera, this.app.events))
+    this.intro = new IntroSequencer(this.cinemaStage)
+    this.intro.load(INTRO_SCRIPTS[this.loadedStageId] ?? [])
     // Sol : base tuilée (TileSprite, O(1)) + streamer de décalques/props par chunks.
     // La seed est SALÉE par la phase → décor disposé différemment d'un stage à l'autre.
     const stageSeed = (this.app.getState().seed ^ phaseSalt(this.loadedStageId)) >>> 0
     // Base du sol (TileSprite seul — décalques gérés par le DecorStreamer).
-    const groundAssets: { tileKeys: string[]; baseTileIndex?: number } = {
+    const groundAssets: { tileKeys: string[]; baseTileIndex?: number; overrideKey?: string } = {
       tileKeys: this.stage.ground.map((g) => g.key)
     }
     if (this.stage.baseTileIndex !== undefined) {
       groundAssets.baseTileIndex = this.stage.baseTileIndex
+    }
+    // Sol de fond choisi par la compo (éventuellement la tuile d'un AUTRE stage).
+    const composedGround = resolveComposedLayout(this.loadedStageId)?.groundKey
+    if (composedGround !== undefined) {
+      groundAssets.overrideKey = composedGround
     }
     createGround(this, WORLD.width, WORLD.height, groundAssets)
     // Streamer de décor : décalques + props streamés autour de la caméra par chunks de
@@ -647,73 +785,37 @@ export class GameScene extends Phaser.Scene {
       // Réseau bâti (tranchées/tuyaux/regards) — streamé par chunks autour de la caméra.
       this.siteStructures.setPlan(WORLD.width, WORLD.height, this.loadedStageId)
       // Ouvriers navetteurs (T6) : construits depuis le même layout que le siteRenderer.
-      // On passe les clés PNJ RÉELLEMENT chargées du stage (numérotées par stage) pour
-      // que _resolveKey matche une texture existante partout, pas seulement au stage 02.
-      const npcKeys = (this.stage.ambient ?? []).map((a) => a.key)
-      this.siteWorkers.reset(this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId, npcKeys)
-    }
-    // PNJ(s) d'ambiance non-hostiles (geste métier) — un sprite par entrée, placement seedé
-    // hors centre. Chaque PNJ reçoit un seed individuel dérivé de stageSeed + index, ce qui
-    // garantit un placement déterministe et hors-chevauchement même si le tableau grandit (B5+).
-    // T4 : geometry.ambientAngle cible le PREMIER PNJ (chef de file) ; les suivants tournent
-    // autour d'angles dérivés (+ 40° par PNJ) pour rester dans le même secteur.
-    const AMB_DIST_MIN = 420
-    const AMB_DIST_MAX = 520
-    // Les stages pilotés par le PLAN de chantier (sitePrograms) tirent leur vie
-    // des ouvriers navetteurs (SiteWorkers, purposeful) : on N'AJOUTE PAS en plus
-    // les PNJ errants Lissajous — c'était la double-population incohérente
-    // (tailles disparates + errance « dans tous les sens »). Les feuilles PNJ
-    // restent chargées (preload) car SiteWorkers les réutilise.
-    // NORMALISATION PNJ : le vieux système d'errance (ambientSprites Lissajous,
-    // tailles disparates) est DÉSACTIVÉ sur TOUS les stages — plus aucun « petit
-    // PNJ ». La vie du chantier vient exclusivement des SiteWorkers (échelle
-    // unique, déplacements utiles). Les feuilles `stage.ambient` restent
-    // préchargées (skins réutilisés par SiteWorkers). Liste forcée vide.
-    const ambientList = (this.stage.ambient ?? []).slice(0, 0)
-    for (const [npcIdx, amb] of ambientList.entries()) {
-      if (!this.textures.exists(amb.key)) { continue }
-      // Rayon forfaitaire du PNJ : demi-frame compact (64 px) × scale.
-      const ambRadius = Math.round(amb.scale * 64)
-      // Angle : le premier PNJ suit geometry.ambientAngle (ou formule seedée),
-      // les suivants sont décalés de 40° dans le même secteur.
-      const baseAngleDeg =
-        stageGeometry?.ambientAngle !== undefined
-          ? stageGeometry.ambientAngle
-          : (((stageSeed * 2654435761) >>> 0) % 1000) / 1000 * 360
-      const ambAngleDeg = (baseAngleDeg + npcIdx * 40) % 360
-      // Dart-throwing déterministe : sel unique par PNJ pour ne pas dépendre des
-      // autres placements (structures/landmark) ni des autres PNJs.
-      const npcSalt = (0xab7c1234 + npcIdx * 0x9e3779b9) >>> 0
-      const ambRng = (() => {
-        let t = ((stageSeed ^ npcSalt) >>> 0)
-        return () => {
-          t = (t + 0x6d2b79f5) >>> 0
-          let r = Math.imul(t ^ (t >>> 15), 1 | t)
-          r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) >>> 0
-          return ((r ^ (r >>> 14)) >>> 0) / 4294967296
-        }
-      })()
-      const pos = resolvePlacement(
-        ambAngleDeg,
-        AMB_DIST_MIN, AMB_DIST_MAX,
-        WORLD.width / 2, WORLD.height / 2,
-        WORLD.width, WORLD.height, 40,
-        exclusions, placed, ambRadius, ambRng
+      // On passe les FEUILLES (clé + behavior + kind), pas seulement leurs clés :
+      // SiteWorkers en tire un pool par rôle de marche. Avec les seules clés, il
+      // fallait deviner le rôle au nom de fichier — d'où 19 feuilles que personne
+      // ne demandait. `StageAmbientNpc` est un sur-ensemble de `WalkerSheet`.
+      const npcSheets = this.stage.ambient ?? []
+      // PNJ MÉTIER du stage (geste + objet) : on passe les feuilles `kind:'trade'`
+      // et le secteur d'ancrage ; SiteWorkers les rend comme postes fixes animés.
+      // Sans ça, ces feuilles n'étaient atteignables que via une compo sauvée —
+      // registre vide ⇒ zéro métier affiché sur les 10 stages.
+      const tradeNpcs = {
+        entries: (this.stage.ambient ?? [])
+          .filter((a) => a.kind === 'trade')
+          .map((a) => ({ key: a.key, scale: a.scale })),
+        baseAngleDeg: stageGeometry?.ambientAngle ?? 55
+      }
+      this.siteWorkers.reset(
+        this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId, npcSheets, tradeNpcs
       )
-      const sprite = this.add.sprite(pos.x, pos.y, amb.key).setScale(amb.scale).setDepth(1)
-      // Seed individuel dérivé de stageSeed + index → chaque PNJ a une errance et
-      // une réplique DISTINCTES même si le tableau contient plusieurs entrées (B3 fix).
-      const npcSeed = (stageSeed ^ (npcIdx * 0x9e3779b9)) >>> 0
-      this.ambientSprites.push({
-        sprite,
-        anchor: { x: pos.x, y: pos.y },
-        seed: npcSeed,
-        behavior: amb.behavior,
-        framePeriodMs: amb.framePeriodMs ?? 300
-      })
-      // Chaque PNJ devient une ancre (les props ne se poseront pas dessus).
-      placed.push({ x: pos.x, y: pos.y, r: ambRadius })
     }
+    // PNJ d'ambiance : UN SEUL système par plan de chantier — les SiteWorkers.
+    //
+    // Les feuilles `stage.ambient` sont préchargées puis rendues EXCLUSIVEMENT par
+    // SiteWorkers (ci-dessus) : navetteurs à l'échelle unique (WORKER_SCALE) pour
+    // les feuilles ouvrier, postes fixes animés pour les feuilles `kind:'trade'`.
+    //
+    // ⚠️ NE JAMAIS réintroduire ici un second système d'errance (ancien
+    // `ambientSprites` Lissajous) : faire coexister les deux recréait la
+    // double-population incohérente — tailles disparates (les `scale` de
+    // `stage.ambient` vont de 0.62 à 1.67, contre WORKER_SCALE=0.62 unique) et
+    // errance « dans tous les sens » par-dessus des ouvriers aux trajets utiles.
+    // Pour afficher une feuille de plus, la brancher sur SiteWorkers.
 
     // ── Streamer de décor (construit ici, ancres = tout ce qui a été posé) ───────
     // Les props streamés évitent désormais structures + landmark + PNJ (anti-chevauchement)
@@ -773,19 +875,26 @@ export class GameScene extends Phaser.Scene {
     // Onde de choc du marteau + libération de prisonnier + évolution d'arme : la sim émet, l'App relaie.
     this.app.events.addEventListener('auraPulse', this.onAuraPulse)
     this.app.events.addEventListener('prisonerFreed', this.onPrisonerFreed)
+    this.app.events.addEventListener('prisonerEnraged', this.onPrisonerEnraged)
     this.app.events.addEventListener('evolved', this.onEvolved)
+    this.app.events.addEventListener('chestOpened', this.onChestOpened)
     this.app.events.addEventListener('destructibleBroken', this.onDestructibleBroken)
     this.app.events.addEventListener('enemyDied', this.onEnemyDied)
+    this.app.events.addEventListener('bossSpawned', this.onBossSpawned)
     this.events.once('shutdown', () => {
       this.app.events.removeEventListener('auraPulse', this.onAuraPulse)
       this.app.events.removeEventListener('prisonerFreed', this.onPrisonerFreed)
+      this.app.events.removeEventListener('prisonerEnraged', this.onPrisonerEnraged)
       this.app.events.removeEventListener('evolved', this.onEvolved)
+      this.app.events.removeEventListener('chestOpened', this.onChestOpened)
       this.app.events.removeEventListener('destructibleBroken', this.onDestructibleBroken)
       this.app.events.removeEventListener('enemyDied', this.onEnemyDied)
+      this.app.events.removeEventListener('bossSpawned', this.onBossSpawned)
       this.telegraph.dispose()
       this.siteRenderer.dispose()
       this.siteStructures.dispose()
       this.siteWorkers.dispose()
+      this.intro.dispose()
       this.touchInput?.dispose()
       this.touchInput = null
     })
@@ -828,9 +937,7 @@ export class GameScene extends Phaser.Scene {
         loadedChunks: this.decorStreamer.loadedChunkCount,
         decorObjects: this.decorStreamer.decorObjectCount
       })
-      // B4 — Sondes PNJ d'ambiance (test-only) : positions actuelles et bulles actives.
-      this.seam.debugAmbientNpcs = (): { x: number; y: number }[] =>
-        this.ambientSprites.map((npc) => ({ x: npc.sprite.x, y: npc.sprite.y }))
+      // B4 — Sonde bulles d'ambiance (test-only).
       this.seam.debugActiveBubbles = (): number => this.bubbles.activeCount
       // T5 — Sonde clusters de terrain (test-only) : nombre de sprites actifs.
       this.seam.debugSiteInfo = (): { spriteCount: number } => ({
@@ -841,11 +948,24 @@ export class GameScene extends Phaser.Scene {
         count: number
         workers: { role: string; texture: string; x: number; y: number }[]
       } => this.siteWorkers.workerDebugInfo
+      // T5 — Sonde cinématique d'intro (test-only) : état actif + elapsed + actorCount + zoom.
+      this.seam.debugIntroInfo = (): { active: boolean; elapsedMs: number; actorCount: number; cameraZoom: number } => ({
+        active: this.app.getState().introActive,
+        elapsedMs: this.app.getState().introElapsedMs,
+        actorCount: this.cinemaStage.actorCount,
+        cameraZoom: this.cameras.main.zoom,
+      })
       this.seam.debugCameraOverview = (zoom: number, cx: number, cy: number): void => {
         this.camera.setOverview({ zoom, cx, cy })
       }
       // Sonde perf (test/overlay only) : snapshot du profileur de temps de frame.
       this.seam.debugPerfProfile = (): PerfSnapshot => this.perfSnapshot()
+      // Sonde Carnage (test-only) : état RÉEL du renderer — `active` (que le toggle
+      // ne propage qu'au prochain update()), `alive` et le plafond de la plateforme.
+      this.seam.debugCarnageInfo = (): { active: boolean; alive: number; cap: number } | null =>
+        this.carnage === null
+          ? null
+          : { active: this.carnage.isActive, alive: this.carnage.aliveCount, cap: this.carnage.cap }
     }
   }
 
@@ -859,12 +979,48 @@ export class GameScene extends Phaser.Scene {
       this.scene.restart(this.sceneData)
       return
     }
+    // Palier de kills (juice #8) : SON + rumble à chaque tranche de 100 (le VISUEL,
+    // bandeau + CADENCE, vit dans l'overlay). Auto-reset sur nouvelle run (score→0).
+    const milestone = Math.floor(st.score / MILESTONE_KILLS)
+    if (this.lastMilestone < 0 || milestone < this.lastMilestone) {
+      this.lastMilestone = milestone
+    } else if (milestone > this.lastMilestone) {
+      this.lastMilestone = milestone
+      this.app.events.dispatchEvent(new Event('milestone'))
+    }
     // Overlay tactile visible en jeu uniquement (inconditionnel, même en test → l'e2e l'observe).
     this.touchInput?.setVisible(st.screen === 'game' && !st.introActive)
     if (!this.testMode) {
       routeInput(this.app, this.readPlayerInputs(st.players.length))
-      this.perf.measure('sim', () => this.app.advanceTime(Math.min(delta, MAX_FRAME_MS)))
+      // Hitstop (juice #5) : le cooldown s'écoule toujours ; tant que le gel court, la
+      // sim N'AVANCE PAS (frame figée = « claquement » d'impact), sinon on avance normalement.
+      this.hitstopCooldownMsLeft = Math.max(0, this.hitstopCooldownMsLeft - delta)
+      if (this.hitstopMsLeft > 0) {
+        this.hitstopMsLeft -= delta
+      } else {
+        this.perf.measure('sim', () => this.app.advanceTime(Math.min(delta, MAX_FRAME_MS)))
+      }
     }
+    // Skip intro sur n'importe quelle entrée (non-test uniquement : en test le seam pilote).
+    if (st.introActive && !this.testMode) {
+      const inputs = this.readPlayerInputs(1)
+      const p1 = inputs.get(1)
+      if ((p1 !== undefined && (p1.pressed.length > 0 || p1.action || p1.move.x !== 0 || p1.move.y !== 0))) {
+        this.app.skipIntro()
+      }
+    }
+    // Séquenceur d'intro : dispatche les commandes cinématiques à la façade Phaser.
+    // Sauté en mode lite (pas de textures ni de sprites chargés).
+    if (st.introActive && !this.lite) {
+      this.intro.update(st.introElapsedMs)
+    }
+    // Transition introActive true→false : nettoyage immédiat des acteurs cosmétiques.
+    // Sans ce dispose(), les sprites spawné par le script restent dans la scène
+    // après skipIntro() (jusqu'au prochain shutdown de scène).
+    if (this.prevIntroActive && !st.introActive) {
+      this.intro.dispose()
+    }
+    this.prevIntroActive = st.introActive
     this.syncSprites()
     this.camera.update(st, this.players.sprites, this.baseZoom())
     // Streamer de décor : throttlé toutes les 4 frames pour éviter un scan de Map
@@ -928,12 +1084,6 @@ export class GameScene extends Phaser.Scene {
       this.siteWorkers.sync(state)
     }
 
-    // PNJ(s) d'ambiance : errance douce (B3) + animation de geste (boucle lente).
-    for (const npc of this.ambientSprites) {
-      const off = ambientOffset(npc.seed, this.time.now, npc.behavior)
-      npc.sprite.setPosition(npc.anchor.x + off.dx, npc.anchor.y + off.dy)
-      npc.sprite.setFrame(walkFrame(0, this.time.now, npc.framePeriodMs))
-    }
     // Bulles de dialogue (humour râleur rétro) sur les PNJ du chantier : métier
     // posé → 'job' (blasé, moqueur), ouvrier mobile → 'civilian' (panique). Un
     // ennemi à portée déclenche les répliques « monstre proche ». Priorité stage

@@ -1,5 +1,6 @@
 import { h, clear } from './h'
 import { injectStyles } from './styles'
+import { PALETTE } from './palette'
 import { formatTime, formatNumber } from './format'
 import { playerColor } from '@content/players'
 import { gamepadHudModel } from './gamepadHud'
@@ -11,7 +12,34 @@ import { readHiScore } from './hiscore'
 import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { WEAPONS } from '@content/weapons'
 import { STAR_SLOTS } from '@content/stars'
-import type { AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView } from '@/app/appState'
+import type { AchievementEntryView, AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView, ChestResultView } from '@/app/appState'
+
+// ── Timings de la machine à sous (coffre) — PARTAGÉS avec le gel côté app ──────
+// La partie est GELÉE pendant TOUTE la durée de la révélation (skippable avec A) ;
+// le `settle` long (+2 s vs l'ancienne version) laisse SAVOURER le gain (dopamine).
+const CHEST_ANTICIPATION_MS = 340
+const CHEST_SPIN_MS = 1180
+const CHEST_STAGGER_MS = 180
+const CHEST_SETTLE_TAIL_MS = 2500
+/** Durée totale de la machine à sous selon le nombre de rouleaux (= nombre d'issues). */
+export function chestRevealTotalMs(nReels: number): number {
+  return CHEST_ANTICIPATION_MS + Math.max(0, nReels - 1) * CHEST_STAGGER_MS + CHEST_SPIN_MS + CHEST_SETTLE_TAIL_MS
+}
+
+/** Durée d'affichage d'un trophée (ms). */
+export const TROPHY_VISIBLE_MS = 3000
+/** Battement entre deux trophées (ms) — sinon ils se lisent comme un seul. */
+export const TROPHY_GAP_MS = 200
+/** Plafond de la file d'attente (hors trophée affiché). */
+export const MAX_ACHIEVEMENT_QUEUE = 4
+
+/** Vue d'un succès pour le toast (sous-ensemble d'`AchievementDef`, sans le prédicat). */
+export interface AchievementToast {
+  readonly id: string
+  readonly label: string
+  readonly description: string
+  readonly icon?: string
+}
 
 /**
  * Punchlines arcade par personnage (couche UI, purement cosmétique). Une phrase
@@ -40,6 +68,43 @@ function sheetFile(sheet: string): string {
   return sheet === 'player' ? 'player_j1' : sheet
 }
 
+/** En dessous de cette fraction de PV, la vignette « alerte sécurité » bat (juice #3). */
+const LOW_HP_FRACTION = 0.3
+/** Durée du flash de dégât reçu (ms) — bref accent d'impact (juice #4). */
+const HURT_FLASH_MS = 150
+/** Opacité de crête du flash de dégât (fond it depuis là vers 0 sur `HURT_FLASH_MS`). */
+const HURT_FLASH_PEAK = 0.4
+/** Perte de PV minimale (≥) pour déclencher un flash — filtre le bruit numérique. */
+const HP_LOSS_EPS = 0.5
+
+/** Fenêtre glissante d'un enchaînement (juice #7) : sans kill pendant ce délai, la cadence retombe. */
+const COMBO_WINDOW_MS = 2000
+/** En dessous de ce compteur, la CADENCE ne s'affiche pas (on ne montre pas les mini-streaks). */
+const CADENCE_MIN = 5
+/** Paliers de couleur de la cadence (montée en intensité) — bornes basses. */
+const CADENCE_TIERS: ReadonlyArray<{ min: number; color: string }> = [
+  { min: 50, color: PALETTE.cyanAccent },
+  { min: 30, color: PALETTE.rougeAlerte },
+  { min: 15, color: PALETTE.orangeDanger },
+  { min: 0, color: PALETTE.jauneSecurite }
+]
+/** Palier de célébration (juice #8) : un bandeau tous les N kills. */
+const MILESTONE_STEP = 100
+/** Durée d'affichage du bandeau de palier (ms). */
+const MILESTONE_SHOW_MS = 1400
+
+/** Taille de base (px) du chiffre de CADENCE, avant croissance. */
+const CADENCE_FONT_BASE_PX = 26
+/** Croissance (px) par kill dans l'enchaînement — retour playtest : « de plus en plus gros ». */
+const CADENCE_FONT_GROWTH_PX = 0.5
+/** Taille max (px) — borne pour ne pas déborder le panneau `.cadence`. */
+const CADENCE_FONT_MAX_PX = 54
+
+/** Taille du chiffre de CADENCE pour un enchaînement donné. Fonction PURE → testable. */
+export function cadenceFontSizePx(comboCount: number): number {
+  return Math.min(CADENCE_FONT_MAX_PX, CADENCE_FONT_BASE_PX + comboCount * CADENCE_FONT_GROWTH_PX)
+}
+
 /**
  * Overlay DOM des écrans (Titre / Pause / Upgrade / Game Over) + HUD. Observe
  * l'état de l'App et se redessine ; il n'écrit jamais la logique (la navigation
@@ -65,6 +130,21 @@ export class Overlay {
   private bossBarFill: HTMLElement | null = null
   /** Couche du panneau jackpot (coffre d'évolution ramassé) — B5. */
   private readonly jackpotLayer: HTMLElement
+  /** Couche DÉDIÉE des trophées de succès — canal distinct des bandeaux boss/évolution. */
+  private readonly achievementLayer: HTMLElement
+  /**
+   * File FIFO des trophées EN ATTENTE (le trophée affiché n'y est plus).
+   * Une vraie file, pas un scalaire : plusieurs succès tombent dans la même frame.
+   */
+  private readonly achievementQueue: AchievementToast[] = []
+  /** Trophée actuellement à l'écran (null = voie libre). */
+  private achievementShowing: AchievementToast | null = null
+  /** Timer du trophée courant (affichage puis battement). */
+  private achievementTimer: number | null = null
+  /** Canal suspendu tant que l'écran de level-up (modal) est ouvert. */
+  private achievementSuspended = false
+  /** Ids déjà passés à l'écran — un succès ne se rejoue pas (double `commitRun`). */
+  private readonly achievementSeen = new Set<string>()
   /** Timers en cours pour l'animation jackpot (anticipation + flash + fermeture). */
   private jackpotTimers: number[] = []
   /** Handle rAF du défilement de la roulette jackpot (pour annulation au re-trigger). */
@@ -98,6 +178,8 @@ export class Overlay {
    * le flag). Réinitialisé quand `chestOpen` repasse à `null` (pas suivant).
    */
   private chestSlotShown = false
+  /** Dernier `chestSkipToken` vu : un changement pendant une révélation = SKIP (A). */
+  private lastChestSkipToken = 0
   /** Callback de sélection d'un item par index (clic souris) ; route vers l'App. */
   private readonly onSelect: ((index: number) => void) | undefined
   /**
@@ -142,6 +224,37 @@ export class Overlay {
    */
   private readonly coopLayer: HTMLElement
 
+  /** Feedback combat plein écran : vignette PV bas (persistante, juice #3). */
+  private readonly combatFxDanger: HTMLElement
+  /** Feedback combat plein écran : flash de dégât reçu (bref, juice #4). */
+  private readonly combatFxHurt: HTMLElement
+  /** PV mémorisés par joueur — détecte une PERTE (flash) sans event dédié. */
+  private readonly lastHp = new Map<number, number>()
+  /** Échéance (performance.now) du flash de dégât ; -1 = inactif. */
+  private hurtFlashUntil = -1
+
+  /** CADENCE (combo, juice #7) : panneau + chiffre + barre de fenêtre. */
+  private readonly cadenceEl: HTMLElement
+  private readonly cadenceLabelEl: HTMLElement
+  private readonly cadenceFillEl: HTMLElement
+  /** Bandeau de palier (juice #8). */
+  private readonly milestoneEl: HTMLElement
+  /** Score de la frame précédente — dérive l'enchaînement des deltas de kills (comme #3/#4). */
+  private prevScore = -1
+  /** Enchaînement courant + échéance de la fenêtre glissante. */
+  private comboCount = 0
+  private comboExpiresAt = -1
+  /** Dernier palier de 100 kills déjà célébré (0 = aucun), + échéance du bandeau. */
+  private celebratedMilestone = 0
+  private milestoneUntil = -1
+  /**
+   * Horloge virtuelle de la CADENCE (retour playtest) : n'avance QUE hors modale de
+   * coffre (`state.chestOpen`). `lastCadenceRealNow` = dernier `performance.now()` vu
+   * (calcule le dt réel à intégrer) ; -1 = non initialisée.
+   */
+  private cadenceClockMs = 0
+  private lastCadenceRealNow = -1
+
   constructor(
     root: HTMLElement,
     onSelect?: (index: number) => void,
@@ -160,10 +273,25 @@ export class Overlay {
     this.padLayer = h('div', { className: 'pads' })
     this.coopLayer = h('div', { className: 'phud-layer' })
     this.jackpotLayer = h('div')
+    this.achievementLayer = h('div', { className: 'trophy-layer' })
     this.minimap = new Minimap()
     this.minimap.setVisible(false)
+    // Feedback combat plein écran : vignette PV bas + flash de dégât. Attaché tôt
+    // (sous le HUD) pour ne pas obscurcir le texte. Piloté par `syncCombatFeedback`.
+    this.combatFxDanger = h('div', { className: 'combat-fx__danger' })
+    this.combatFxHurt = h('div', { className: 'combat-fx__hurt' })
+    // CADENCE (combo #7) + bandeau de palier (#8) : éléments dédiés, pilotés par sync.
+    this.cadenceLabelEl = h('span', { className: 'cadence__label' })
+    this.cadenceFillEl = h('div', { className: 'cadence__fill' })
+    this.cadenceEl = h('div', { className: 'cadence' },
+      this.cadenceLabelEl,
+      h('div', { className: 'cadence__bar' }, this.cadenceFillEl)
+    )
+    this.milestoneEl = h('div', { className: 'milestone' })
     // Cadre métal ouvragé (au fond) + couches UI + scanlines CRT (au-dessus). Décoratif.
     root.append(h('div', { className: 'frame' }))
+    root.append(h('div', { className: 'combat-fx' }, this.combatFxDanger, this.combatFxHurt))
+    root.append(this.cadenceEl, this.milestoneEl)
     root.append(
       this.hud,
       this.screenLayer,
@@ -174,6 +302,7 @@ export class Overlay {
       this.padLayer,
       this.coopLayer,
       this.jackpotLayer,
+      this.achievementLayer,
       this.minimap.el
     )
     root.append(h('div', { className: 'frame__scan' }))
@@ -192,7 +321,7 @@ export class Overlay {
     const splash = h('div', { className: 'splash' },
       h('div', { className: 'splash__gyro' }),
       h('div', { className: 'splash__flash' }),
-      h('img', { className: 'splash__helmet', attrs: { src: `${base}casque.png`, alt: '' } }),
+      h('img', { className: 'splash__helmet', attrs: { src: `${base}ui_casque.png`, alt: '' } }),
       h('div', { className: 'splash__name', text: 'AIL ENTERTAINMENT' }),
       h('div', { className: 'splash__tag', text: 'PRÉSENTE' }),
       h('div', { className: 'splash__hint', text: 'Appuie pour commencer' })
@@ -247,11 +376,15 @@ export class Overlay {
     this.syncHud(state, dtMs, now)
     this.syncScreen(state, now)
     this.syncBanner(state)
+    // Canal SÉPARÉ des bandeaux : un trophée ne doit ni tuer ni subir un bandeau boss.
+    this.syncAchievements(state)
     this.syncIntroCard(state)
     this.syncBossBar(state)
     this.syncInventory(state)
     this.syncGamepads(state)
     this.syncMinimap(state)
+    this.syncCombatFeedback(state, now)
+    this.syncCadence(state, now)
     // Machine à sous coffre : déclenchée UNE fois à chaque ouverture de coffre
     // (les 3 issues), via le one-shot `chestOpen`. Garde `chestSlotShown` pour ne
     // pas rejouer à chaque rAF tant que `chestOpen` reste non-null.
@@ -259,12 +392,27 @@ export class Overlay {
     if (chest !== null && !this.chestSlotShown) {
       this.chestSlotShown = true
       this.showSlotMachine(chest)
-      if (chest.kind === 'evolution' && chest.weaponName !== null) {
-        this.showEvolutionBanner(chest.weaponName)
+      const evo = chest.results.find((r) => r.kind === 'evolution')
+      if (evo !== undefined && evo.weaponName !== null) {
+        this.showEvolutionBanner(evo.weaponName)
       }
     } else if (chest === null) {
       this.chestSlotShown = false
     }
+    // SKIP (A) : le token a changé pendant une révélation → ferme la machine à sous
+    // immédiatement (la partie a déjà été dégelée côté app ; le résultat est appliqué).
+    if (state.chestSkipToken !== this.lastChestSkipToken) {
+      this.lastChestSkipToken = state.chestSkipToken
+      if (this.chestSlotShown) {
+        this.skipSlotMachine()
+      }
+    }
+  }
+
+  /** Ferme immédiatement la machine à sous (skip A) : coupe les timers + vide le panneau. */
+  private skipSlotMachine(): void {
+    this.clearJackpotTimers()
+    clear(this.jackpotLayer)
   }
 
   /**
@@ -292,6 +440,133 @@ export class Overlay {
       return
     }
     this.minimap.update(state)
+  }
+
+  /**
+   * Feedback combat plein écran (juice, observer-only) :
+   *  - vignette « alerte sécurité » PERSISTANTE tant qu'un joueur vivant est sous
+   *    `LOW_HP_FRACTION` (le plus bas des joueurs vivants pilote) ;
+   *  - flash de dégât BREF quand un joueur perd des PV entre deux frames.
+   *
+   * Piloté par les DELTAS de PV lus dans l'état (comme le flash de level-up),
+   * sans nouvel abonnement : la perte n'existe que pendant le jeu, jamais au reset
+   * (les PV mémorisés sont purgés hors run → pas de faux flash au (re)départ).
+   */
+  private syncCombatFeedback(state: AppViewState, now: number): void {
+    const inRun = state.screen === 'game' && !state.introActive
+    if (!inRun) {
+      this.lastHp.clear()
+      this.hurtFlashUntil = -1
+      this.combatFxDanger.classList.remove('combat-fx__danger--on')
+      this.combatFxHurt.style.opacity = '0'
+      return
+    }
+    let hurt = false
+    let minFrac = 1
+    for (const p of state.players) {
+      if (!p.alive) {
+        continue
+      }
+      const frac = p.maxHp > 0 ? p.hp / p.maxHp : 0
+      minFrac = Math.min(minFrac, frac)
+      const prev = this.lastHp.get(p.id)
+      if (prev !== undefined && p.hp <= prev - HP_LOSS_EPS) {
+        hurt = true
+      }
+      this.lastHp.set(p.id, p.hp)
+    }
+    if (hurt) {
+      this.hurtFlashUntil = now + HURT_FLASH_MS
+    }
+    // Vignette : anneau battant tant que le plus bas des vivants est en danger.
+    this.combatFxDanger.classList.toggle('combat-fx__danger--on', minFrac < LOW_HP_FRACTION)
+    // Flash : voile rouge dont l'opacité DÉCROÎT sur `HURT_FLASH_MS` (fondu par frame).
+    const remain = this.hurtFlashUntil - now
+    this.combatFxHurt.style.opacity =
+      remain > 0 ? String((HURT_FLASH_PEAK * Math.min(1, remain / HURT_FLASH_MS)).toFixed(3)) : '0'
+  }
+
+  /**
+   * CADENCE (combo, juice #7) + palier « N DÉBLAYÉS » (juice #8) — observer-only.
+   * Dérivé des DELTAS de `state.score` (= kills) en `sync()`, comme le flash de
+   * dégât (#4) : aucun event, aucune donnée de sim ajoutée. L'enchaînement grimpe
+   * à chaque kill et retombe après `COMBO_WINDOW_MS` sans kill ; tous les 100 kills,
+   * un bandeau doré célèbre le palier (le SON/rumble est géré côté GameScene).
+   */
+  private syncCadence(state: AppViewState, now: number): void {
+    const inRun = state.screen === 'game' && !state.introActive
+    if (!inRun) {
+      this.prevScore = -1
+      this.comboCount = 0
+      this.comboExpiresAt = -1
+      this.celebratedMilestone = 0
+      this.milestoneUntil = -1
+      this.lastCadenceRealNow = -1
+      this.cadenceClockMs = 0
+      this.cadenceEl.classList.remove('cadence--on')
+      this.milestoneEl.classList.remove('milestone--on')
+      return
+    }
+    // Horloge VIRTUELLE (retour playtest) : n'avance PAS tant qu'une modale de coffre
+    // est affichée (`state.chestOpen`) — sinon la fenêtre de combo/le bandeau de palier
+    // se vident en temps RÉEL pendant que le joueur regarde un spectacle où la partie
+    // est totalement gelée. Miroir de comment `chestRevealMsLeft` gèle la sim côté app.
+    // `lastCadenceRealNow` est INVALIDÉ (-1) tant qu'on est gelé : le premier appel
+    // suivant le dégel ne crédite PAS tout le temps réel écoulé PENDANT le gel (sinon
+    // la fenêtre saute d'un coup à la réouverture au lieu de reprendre son décompte).
+    const frozen = state.chestOpen !== null
+    if (frozen) {
+      this.lastCadenceRealNow = -1
+    } else {
+      if (this.lastCadenceRealNow >= 0) {
+        this.cadenceClockMs += Math.max(0, now - this.lastCadenceRealNow)
+      }
+      this.lastCadenceRealNow = now
+    }
+    const clock = this.cadenceClockMs
+
+    const score = state.score
+    // 1er passage de la run : mémorise sans dériver (pas de faux combo ni palier au (re)départ).
+    if (this.prevScore < 0) {
+      this.prevScore = score
+      this.celebratedMilestone = Math.floor(score / MILESTONE_STEP)
+    }
+    const delta = score - this.prevScore
+    if (delta > 0) {
+      this.comboCount += delta
+      this.comboExpiresAt = clock + COMBO_WINDOW_MS
+    } else if (clock >= this.comboExpiresAt) {
+      this.comboCount = 0
+    }
+    // Palier (#8) : franchissement d'un multiple de MILESTONE_STEP.
+    const reached = Math.floor(score / MILESTONE_STEP)
+    if (reached > this.celebratedMilestone) {
+      this.celebratedMilestone = reached
+      this.milestoneEl.textContent = `${reached * MILESTONE_STEP} DÉBLAYÉS`
+      this.milestoneEl.classList.remove('milestone--on')
+      void this.milestoneEl.offsetWidth // reflow → rejoue l'animation « pop »
+      this.milestoneEl.classList.add('milestone--on')
+      this.milestoneUntil = clock + MILESTONE_SHOW_MS
+    }
+    if (this.milestoneUntil > 0 && clock >= this.milestoneUntil) {
+      this.milestoneEl.classList.remove('milestone--on')
+      this.milestoneUntil = -1
+    }
+    // Rendu de la CADENCE : chiffre (taille croissante, bornée) + couleur de palier
+    // + barre de fenêtre restante.
+    if (this.comboCount >= CADENCE_MIN) {
+      const color = CADENCE_TIERS.find((t) => this.comboCount >= t.min)?.color ?? PALETTE.jauneSecurite
+      this.cadenceEl.classList.add('cadence--on')
+      this.cadenceLabelEl.textContent = `CADENCE ×${this.comboCount}`
+      this.cadenceLabelEl.style.color = color
+      this.cadenceLabelEl.style.fontSize = `${cadenceFontSizePx(this.comboCount)}px`
+      this.cadenceFillEl.style.backgroundColor = color
+      const remain = Math.max(0, Math.min(1, (this.comboExpiresAt - clock) / COMBO_WINDOW_MS))
+      this.cadenceFillEl.style.width = `${(remain * 100).toFixed(1)}%`
+    } else {
+      this.cadenceEl.classList.remove('cadence--on')
+    }
+    this.prevScore = score
   }
 
   /**
@@ -506,6 +781,15 @@ export class Overlay {
         case 'victory':
           this.screenLayer.append(this.reportPanel(state))
           break
+        case 'nameEntry':
+          this.screenLayer.append(this.nameEntryPanel(state))
+          break
+        case 'hiscores':
+          this.screenLayer.append(this.hiScoresPanel(state))
+          break
+        case 'achievements':
+          this.screenLayer.append(this.achievementsPanel(state))
+          break
         case 'upgrade':
           this.screenLayer.append(this.upgradePanel(state))
           break
@@ -575,7 +859,7 @@ export class Overlay {
     )
     // Décor titre tramé derrière le panneau (screen--title allège le voile sombre).
     return h('div', { className: 'screen screen--title' },
-      h('img', { className: 'title-bg', attrs: { src: `${base}bg_dusk.png`, alt: '' } }),
+      h('img', { className: 'title-bg', attrs: { src: `${base}ui_bg_dusk.png`, alt: '' } }),
       crew,
       arcbar,
       panel,
@@ -693,6 +977,15 @@ export class Overlay {
   }
 
   /**
+   * Carton titre d'une cinématique d'intro (ex. « TERRASSEMENT »). Appelé depuis
+   * `main.ts` sur l'événement `cinemaBanner` émis par la façade cinématique. Réutilise
+   * le bandeau 16-bit existant — aucune nouvelle couche ni style.
+   */
+  showCinemaBanner(text: string): void {
+    this.showBanner(text, 'banner')
+  }
+
+  /**
    * B5 — Panneau « jackpot » (machine à sous arcade) déclenché à la prise d'un
    * coffre d'évolution. Affiche une roulette pixel qui défile (~1.1s) et s'arrête
    * sur le nom de l'arme évoluée, avec un flash final.
@@ -732,40 +1025,39 @@ export class Overlay {
     const WINNER_INDEX = 13 // le gain arrive après 13 leurres (défilement franc)
     const BUFFER = 2 // cellules après le gain (couvre l'overshoot du cubic-bezier)
     const isSuper = outcome.isSuper
-    const nReels = isSuper ? 3 : 1
+    const results: ChestResultView[] = outcome.results.length > 0
+      ? outcome.results
+      : [{ kind: 'heal', weaponId: null, weaponName: null, level: null }]
+    const nReels = results.length
 
-    // Durées (ms) — total borné < 2,5 s (contrainte e2e).
-    const anticipationMs = 340
-    const spinMs = 1180
-    const staggerMs = 180
-    const settleTailMs = 500 // laisse le gain lisible (total super ≈ 2380 ms < 2,5 s e2e)
+    // Durées (ms) — partagées avec le gel côté app (`chestRevealTotalMs`). La partie
+    // est GELÉE pendant toute la durée (skippable avec A) → settle long = on savoure.
+    const anticipationMs = CHEST_ANTICIPATION_MS
+    const spinMs = CHEST_SPIN_MS
+    const staggerMs = CHEST_STAGGER_MS
+    const settleTailMs = CHEST_SETTLE_TAIL_MS
     const lastReelStart = anticipationMs + (nReels - 1) * staggerMs
     const flashAtMs = lastReelStart + spinMs
     const totalMs = flashAtMs + settleTailMs
 
-    // Titre + libellé de révélation selon l'issue (aucun emoji — DA + e2e).
-    const title = outcome.kind === 'evolution' ? 'ÉVOLUTION' : 'COFFRE'
-    const revealLabel =
-      outcome.kind === 'evolution'
-        ? (outcome.weaponName ?? 'Arme évoluée')
-        : outcome.kind === 'cards'
-          ? 'Choisis ta carte'
-          : 'Soin d\'urgence'
+    // Titre selon la rareté / l'issue (aucun emoji — DA + e2e).
+    const anyEvo = results.some((r) => r.kind === 'evolution')
+    const title = isSuper ? 'SUPER COFFRE' : anyEvo ? 'ÉVOLUTION' : 'COFFRE'
 
-    // Construit la cellule gagnante selon l'issue (icône d'arme / tuile ? / tuile +).
-    const winnerCell = (): HTMLElement => {
-      if (outcome.kind === 'evolution' && outcome.weaponId !== null) {
+    // Cellule gagnante d'un rouleau : icône de la VRAIE arme qui monte/évolue
+    // (fini la tuile « ? » : le coffre ne propose plus jamais de cartes) ; tuile
+    // « + » pour un soin de repli.
+    const winnerCell = (r: ChestResultView): HTMLElement => {
+      if (r.kind !== 'heal' && r.weaponId !== null) {
         const cell = h('div', { className: 'jackpot__cell jackpot__cell--winner' })
-        cell.append(icon(outcome.weaponId, outcome.weaponName ?? '', 'jackpot__icon', 'jackpot__icon-img', 'jackpot__icon-mono'))
+        cell.append(icon(r.weaponId, r.weaponName ?? '', 'jackpot__icon', 'jackpot__icon-img', 'jackpot__icon-mono'))
         return cell
       }
-      const glyph = outcome.kind === 'heal' ? '+' : '?'
-      const mod = outcome.kind === 'heal' ? 'jackpot__cell--heal' : 'jackpot__cell--mystery'
-      return h('div', { className: `jackpot__cell jackpot__cell--winner ${mod}` }, h('div', { className: 'jackpot__glyph', text: glyph }))
+      return h('div', { className: 'jackpot__cell jackpot__cell--winner jackpot__cell--heal' }, h('div', { className: 'jackpot__glyph', text: '+' }))
     }
 
     // Un rouleau : WINNER_INDEX leurres (icônes d'armes) + gain + BUFFER leurres.
-    const buildReel = (): HTMLElement => {
+    const buildReel = (r: ChestResultView): HTMLElement => {
       const reel = h('div', { className: 'jackpot__reel' })
       for (let i = 0; i < WINNER_INDEX; i++) {
         const filler = h('div', { className: 'jackpot__cell' })
@@ -773,7 +1065,7 @@ export class Overlay {
         filler.append(icon(id, id, 'jackpot__icon', 'jackpot__icon-img', 'jackpot__icon-mono'))
         reel.append(filler)
       }
-      reel.append(winnerCell())
+      reel.append(winnerCell(r))
       for (let i = 0; i < BUFFER; i++) {
         const filler = h('div', { className: 'jackpot__cell' })
         const id = SLOT_FILLER_ICONS[(WINNER_INDEX + i) % SLOT_FILLER_ICONS.length] ?? 'cloueur'
@@ -787,7 +1079,11 @@ export class Overlay {
     const reels: HTMLElement[] = []
     const reelsRow = h('div', { className: 'jackpot__reels' })
     for (let r = 0; r < nReels; r++) {
-      const reel = buildReel()
+      const res = results[r]
+      if (res === undefined) {
+        continue
+      }
+      const reel = buildReel(res)
       reels.push(reel)
       reelsRow.append(h('div', { className: 'jackpot__window' }, reel))
     }
@@ -828,22 +1124,20 @@ export class Overlay {
       }, anticipationMs + r * staggerMs))
     })
 
-    // Flash blanc→doré + révélation du gain quand le dernier rouleau se pose.
-    // Évolution : nom + description (WEAPONS) sous le médaillon ; butin (+OR / +SOIN) sous tout.
-    const desc = outcome.kind === 'evolution' && outcome.weaponId !== null
-      ? (WEAPONS[outcome.weaponId]?.description ?? '')
-      : ''
-    const lootText = outcome.kind === 'heal' ? '+ SOIN' : '+ OR'
+    // Flash blanc→doré + révélation quand le dernier rouleau se pose : UNE ligne par
+    // issue réelle (arme évoluée / arme montée de niveau / soin). Pas de « carte ».
     this.jackpotTimers.push(window.setTimeout(() => {
       if (!panel.isConnected) { return }
       panel.classList.add('jackpot--flash')
-      const reveal = h('div', { className: 'jackpot__reveal' },
-        h('div', { className: 'jackpot__reveal-name', text: revealLabel })
-      )
-      if (desc !== '') {
-        reveal.append(h('div', { className: 'jackpot__reveal-desc', text: desc }))
+      const reveal = h('div', { className: 'jackpot__reveal' })
+      for (const r of results) {
+        const label = r.kind === 'evolution'
+          ? `${r.weaponName ?? 'Arme'} — ÉVOLUTION`
+          : r.kind === 'weapon-up'
+            ? `${r.weaponName ?? 'Arme'} — Niv. ${r.level ?? ''}`
+            : 'Soin d\'urgence'
+        reveal.append(h('div', { className: 'jackpot__reveal-name', text: label }))
       }
-      reveal.append(h('div', { className: 'jackpot__loot', text: lootText }))
       panel.append(reveal)
     }, flashAtMs))
 
@@ -853,6 +1147,155 @@ export class Overlay {
       clear(this.jackpotLayer)
       onDone?.()
     }, totalMs))
+  }
+
+  /**
+   * Met un succès en FILE d'affichage (toast « trophée », coin haut-droit).
+   *
+   * ⚠️ POURQUOI UNE FILE, et pas le mécanisme `showBanner` : ce dernier est
+   * MONO-SLOT (il `clear()` sa couche avant d'insérer, et sa mémoire de
+   * suspension est un SCALAIRE). Deux succès tombant dans la MÊME frame —
+   * « 100 kills » + « premier boss », un cas NATUREL — n'en laisseraient qu'un
+   * seul visible. Ici les trophées se déroulent l'un APRÈS l'autre, sur une
+   * couche DÉDIÉE : un trophée ne tue pas un bandeau boss, ni l'inverse.
+   *
+   * Bornée à `MAX_ACHIEVEMENT_QUEUE` en attente (+1 affiché) : un déluge ne
+   * monopolise pas l'écran. Au-delà, le toast est écarté — mais TRACÉ (`warn`),
+   * jamais en silence, et le succès reste acquis dans le profil (il est
+   * consultable sur l'écran des succès).
+   *
+   * Idempotent par `id` : un succès déjà passé ne se rejoue pas (protège d'un
+   * double `commitRun`).
+   */
+  showAchievement(def: AchievementToast): void {
+    if (this.achievementSeen.has(def.id)) {
+      return
+    }
+    if (this.achievementQueue.length >= MAX_ACHIEVEMENT_QUEUE) {
+      // Troncature d'AFFICHAGE seulement : le succès reste débloqué côté profil.
+      console.warn(
+        `[succès] file d'affichage pleine (${MAX_ACHIEVEMENT_QUEUE} en attente) — ` +
+          `toast écarté pour « ${def.label} » (${def.id}). Le succès reste acquis.`
+      )
+      return
+    }
+    this.achievementSeen.add(def.id)
+    this.achievementQueue.push(def)
+    this.pumpAchievements()
+  }
+
+  /**
+   * Défile la file : affiche le trophée suivant si la voie est libre. Ne fait
+   * RIEN si un trophée est déjà à l'écran (il finira son temps) ou si le canal
+   * est suspendu (modale ouverte) — dans les deux cas, c'est l'expiration ou la
+   * levée de suspension qui relancera la pompe. Aucune perte possible.
+   */
+  private pumpAchievements(): void {
+    if (this.achievementSuspended || this.achievementShowing !== null) {
+      return
+    }
+    const next = this.achievementQueue.shift()
+    if (next === undefined) {
+      return
+    }
+    this.achievementShowing = next
+    clear(this.achievementLayer)
+    this.achievementLayer.append(this.trophyNode(next))
+    this.achievementTimer = window.setTimeout(() => {
+      clear(this.achievementLayer)
+      this.achievementShowing = null
+      // Battement inter-trophée : deux trophées collés se liraient comme un seul.
+      this.achievementTimer = window.setTimeout(() => {
+        this.achievementTimer = null
+        this.pumpAchievements()
+      }, TROPHY_GAP_MS)
+    }, TROPHY_VISIBLE_MS)
+  }
+
+  /**
+   * Suspend/reprend le canal des trophées — MIROIR de `syncBanner`, mais sur son
+   * PROPRE état : les deux canaux sont indépendants par construction.
+   *
+   * L'écran de level-up est modal et vit dans une couche INFÉRIEURE ; un toast
+   * par-dessus couvrirait les cartes (bug de z-index déjà survenu ici). Le
+   * trophée en cours est REMIS EN TÊTE de file et rejoué ENTIER à la fermeture —
+   * pas de trophée mangé à moitié.
+   *
+   * Volontairement limité à `upgrade` (comme `bannerSuspended`) : l'écran de fin
+   * de run doit, lui, pouvoir afficher les succès de la run qui vient de finir.
+   */
+  private syncAchievements(state: AppViewState): void {
+    const suspend = state.screen === 'upgrade'
+    if (suspend && !this.achievementSuspended) {
+      this.achievementSuspended = true
+      if (this.achievementShowing !== null) {
+        this.achievementQueue.unshift(this.achievementShowing)
+        this.achievementShowing = null
+      }
+      this.clearAchievementTimer()
+      clear(this.achievementLayer)
+    } else if (!suspend && this.achievementSuspended) {
+      this.achievementSuspended = false
+      this.pumpAchievements()
+    }
+  }
+
+  private clearAchievementTimer(): void {
+    if (this.achievementTimer !== null) {
+      window.clearTimeout(this.achievementTimer)
+      this.achievementTimer = null
+    }
+  }
+
+  /**
+   * Le trophée, façon plaque commémorative 16-bit : socle tramé + icône, plaque
+   * gravée « SUCCÈS DÉBLOQUÉ », nom, condition, et le trophée en sceau.
+   *
+   * Deux niveaux (`.trophy` positionne, `.trophy__panel` glisse) et ce n'est PAS
+   * cosmétique : `transform` n'est pas cumulatif. Le glissement est une
+   * animation `transform` ; si l'échelle mobile vivait sur le MÊME nœud,
+   * l'animation l'écraserait et le panneau se décentrerait (précédent `.bossbar`).
+   * Un nœud par transform = zéro collision.
+   */
+  private trophyNode(def: AchievementToast): HTMLElement {
+    const panel = h('div', { className: 'trophy__panel' })
+    panel.append(
+      this.trophyIcon(def),
+      h('div', { className: 'trophy__text' },
+        h('div', { className: 'trophy__label', text: 'SUCCÈS DÉBLOQUÉ' }),
+        h('div', { className: 'trophy__name', text: def.label }),
+        h('div', { className: 'trophy__desc', text: def.description })
+      ),
+      h('img', {
+        className: 'trophy__seal',
+        attrs: { src: `${import.meta.env.BASE_URL}ui_trophy.png`, alt: '' }
+      })
+    )
+    // La durée de vie CSS suit la constante JS : une seule source pour les deux.
+    panel.style.animationDuration = `${TROPHY_VISIBLE_MS}ms`
+    return h('div', { className: 'trophy' }, panel)
+  }
+
+  /**
+   * Icône du succès. `AchievementDef.icon` porte un chemin COMPLET relatif à
+   * `public/` (deux familles cohabitent : `ui_*.png` à la racine et
+   * `stage01/ui/icon_*_64.png`) — d'où `iconFromSrc` et non `icon()`, qui, lui,
+   * fabrique un chemin `stage01/ui/icon_<id>_64.png` et ne conviendrait qu'à une
+   * des deux familles. Pas d'icône déclarée = monogramme (aucun fichier inventé).
+   */
+  private trophyIcon(def: AchievementToast): HTMLElement {
+    if (def.icon === undefined) {
+      return h('div', { className: 'trophy__plinth' },
+        h('div', { className: 'trophy__mono', text: monogram(def.label) })
+      )
+    }
+    return iconFromSrc(
+      `${import.meta.env.BASE_URL}${def.icon}`,
+      def.label,
+      'trophy__plinth',
+      'trophy__img',
+      'trophy__mono'
+    )
   }
 
   private showBanner(text: string, className: string): void {
@@ -1005,6 +1448,151 @@ export class Overlay {
   }
 
   /**
+   * Saisie du prénom (fin de run, score qualifiant) — écran arcade.
+   *
+   * La grille de 8 cases EST le focus de cet écran : aucun item de menu n'est
+   * rendu (l'App n'en expose qu'un, invisible, pour porter la validation), et la
+   * case courante est mise en avant avec ses chevrons haut/bas. Tout se joue à la
+   * manette/au clavier — rien ici n'exige la souris (règle 8).
+   */
+  private nameEntryPanel(state: AppViewState): HTMLElement {
+    const entry = state.nameEntry
+    const grid = h('div', { className: 'namegrid' })
+    const cursor = entry?.cursor ?? 0
+    ;(entry?.chars ?? []).forEach((ch, i) => {
+      grid.append(
+        h('div', {
+          className: i === cursor ? 'namecell namecell--focus' : 'namecell',
+          // Case vide (espace) → tiret : une case blanche ne se verrait pas.
+          text: ch === ' ' ? '_' : ch
+        })
+      )
+    })
+    const panel = h(
+      'div',
+      { className: 'panel panel--name arc-metal' },
+      h('h1', { className: 'panel__title namepanel__title', text: 'TABLEAU D\'HONNEUR' }),
+      h('p', { className: 'panel__subtitle', text: `Tu entres au classement — ${entry?.stageTitle ?? ''}` }),
+      h('div', { className: 'namepanel__score', text: `SCORE ${formatNumber(entry?.score ?? 0)}` }),
+      grid,
+      h('p', { className: 'hint-line', text: state.menu?.items[0]?.hint ?? '' })
+    )
+    return h('div', { className: 'screen' }, panel)
+  }
+
+  /**
+   * Tableau des scores du stage (top 20), ligne du joueur en surbrillance.
+   *
+   * Les lignes sont CONSULTATIVES, pas des items de menu : seul « Retour » est
+   * focalisable. C'est ce qui permet de tout afficher sans scroll — le récap
+   * co-op avait déjà appris qu'un menu poussé sous l'écran devient inatteignable
+   * à la manette (cf. la doctrine de compacité dans `styles.ts`).
+   */
+  private hiScoresPanel(state: AppViewState): HTMLElement {
+    const view = state.hiScores
+    const entries = view?.entries ?? []
+    const rows = h('div', { className: 'hiscores__rows' })
+    entries.forEach((e, i) => {
+      const row = h('div', {
+        className: i === view?.rank ? 'hiscore-row hiscore-row--me' : 'hiscore-row'
+      })
+      row.append(
+        h('span', { className: 'hiscore-row__rank', text: String(i + 1).padStart(2, '0') }),
+        h('span', { className: 'hiscore-row__name', text: e.name }),
+        h('span', { className: 'hiscore-row__score', text: formatNumber(e.score) }),
+        h('span', {
+          className: 'hiscore-row__meta',
+          text: `${formatNumber(e.kills)} tués · Nv ${e.level} · ${formatTime(e.elapsedMs)}`
+        })
+      )
+      rows.append(row)
+    })
+    if (entries.length === 0) {
+      // Consultable depuis le titre AVANT toute run : sur un profil neuf, aucun
+      // stage n'a de score. Un panneau vide passerait pour un bug — on le dit.
+      rows.append(h('div', { className: 'hiscore-row hiscore-row--empty', text: 'Aucun score pour ce chantier' }))
+    }
+    const panel = h(
+      'div',
+      { className: 'panel panel--hiscores arc-metal' },
+      h('h1', { className: 'panel__title hiscores__title', text: 'TABLEAU DES SCORES' }),
+      h('p', { className: 'panel__subtitle', text: view?.stageTitle ?? '' }),
+      rows,
+      this.menuList(state)
+    )
+    return h('div', { className: 'screen' }, panel)
+  }
+
+  /**
+   * Écran des succès (consultation depuis le titre).
+   *
+   * Les succès VERROUILLÉS restent affichés, grisés : c'est la doctrine du repo
+   * (cf. `starRow` — « le joueur doit VOIR ce qu'il a raté, sinon la note
+   * n'incite à rien »). Cacher les succès non acquis ferait, sur un profil neuf,
+   * un écran VIDE — soit exactement l'inverse de l'incitation recherchée.
+   *
+   * Grille 2 colonnes : les ~10 lignes tiennent à l'écran, donc rien à scroller
+   * (même contrainte que le tableau des scores — le jeu est 100 % manette, et
+   * seul « Retour » est focalisable ici).
+   */
+  private achievementsPanel(state: AppViewState): HTMLElement {
+    const view = state.achievements
+    const entries = view?.entries ?? []
+    const grid = h('div', { className: 'ach__grid' })
+    for (const e of entries) {
+      const row = h('div', { className: e.unlocked ? 'ach-row ach-row--on' : 'ach-row' })
+      row.append(
+        this.achievementIcon(e),
+        h(
+          'div',
+          { className: 'ach__text' },
+          h('div', { className: 'ach__name', text: e.label }),
+          h('div', { className: 'ach__desc', text: e.description })
+        ),
+        // Étoile pleine/vide : le repère « acquis ou non » se lit d'un coup d'œil,
+        // sans dépendre de la seule nuance de gris (mêmes assets que `starRow`).
+        h('img', {
+          className: 'ach__star',
+          attrs: { src: e.unlocked ? 'ui_star_on.png' : 'ui_star_off.png', alt: '' }
+        })
+      )
+      grid.append(row)
+    }
+    const panel = h(
+      'div',
+      { className: 'panel panel--achievements arc-metal' },
+      h('h1', { className: 'panel__title achievements__title', text: 'SUCCÈS' }),
+      h('p', {
+        className: 'panel__subtitle',
+        text: `${view?.unlockedCount ?? 0} / ${entries.length} débloqués`
+      }),
+      grid,
+      this.menuList(state)
+    )
+    return h('div', { className: 'screen' }, panel)
+  }
+
+  /**
+   * Icône d'un succès : chemin COMPLET relatif à `public/` (deux familles
+   * cohabitent) → `iconFromSrc`, comme le trophée. Pas d'icône déclarée =
+   * monogramme, jamais un fichier inventé.
+   */
+  private achievementIcon(entry: AchievementEntryView): HTMLElement {
+    if (entry.icon === null) {
+      return h('div', { className: 'ach__plinth' },
+        h('div', { className: 'ach__mono', text: monogram(entry.label) })
+      )
+    }
+    return iconFromSrc(
+      `${import.meta.env.BASE_URL}${entry.icon}`,
+      entry.label,
+      'ach__plinth',
+      'ach__img',
+      'ach__mono'
+    )
+  }
+
+  /**
    * « Rapport de chantier » — écran de fin UNIQUE pour les deux issues.
    * Même structure (titre / phrase / barre / stats / récap joueurs), la variante
    * `report--victory` porte le ton festif (or + vert, rayons, drapeau atteint) et
@@ -1065,7 +1653,10 @@ export class Overlay {
       h('span', { text: `Temps : ${formatTime(report.elapsedMs)} / ${formatTime(report.stageDurationMs)}` }),
       h('span', { text: `Ennemis tués : ${formatNumber(report.kills)}` }),
       h('span', { text: `Or ramassé : ${formatNumber(report.coins)}` }),
-      h('span', { text: `Niveau atteint : ${report.level}` })
+      h('span', { text: `Niveau atteint : ${report.level}` }),
+      // Score de classement : c'est CE nombre qui est comparé au tableau des
+      // high scores — le joueur doit le voir avant qu'on lui demande son nom.
+      h('span', { className: 'report__score', text: `Score : ${formatNumber(report.runScore)}` })
     )
     // Seule info propre à la défaite : ce qu'il restait à tenir.
     if (!victory) {
@@ -1261,7 +1852,28 @@ export class Overlay {
       state.screen === 'characterSelect' && state.characterSelect !== null
         ? `p${state.characterSelect.player}/${state.characterSelect.total}`
         : ''
-    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}|${charSelectPart}`
+    // Saisie du prénom : la grille est un état HORS menu (l'écran n'a qu'un item).
+    // Le CURSEUR est indispensable ici : le déplacer ne change ni les lettres ni le
+    // libellé de l'item → sans lui, la signature serait identique et la case
+    // focalisée ne bougerait pas à l'écran alors que l'état, lui, a changé.
+    const nameEntryPart =
+      state.screen === 'nameEntry' && state.nameEntry !== null
+        ? `${state.nameEntry.chars.join('')}#${state.nameEntry.cursor}`
+        : ''
+    // Tableau des scores : les lignes sont consultatives (hors menu) → idem.
+    const hiScoresPart =
+      state.screen === 'hiscores' && state.hiScores !== null
+        ? `${state.hiScores.stageId}#${state.hiScores.rank}#${state.hiScores.entries.length}`
+        : ''
+    // Succès : la grille est un état HORS menu (l'écran n'a que « Retour ») → sans
+    // ça, le panneau ne se redessinerait pas. On signe les DRAPEAUX de déblocage,
+    // pas leur simple compte : deux profils à 3/10 sur des succès différents
+    // partageraient la même signature, et le second afficherait le premier.
+    const achievementsPart =
+      state.screen === 'achievements' && state.achievements !== null
+        ? state.achievements.entries.map((e) => (e.unlocked ? '1' : '0')).join('')
+        : ''
+    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}|${charSelectPart}|${nameEntryPart}|${hiScoresPart}|${achievementsPart}`
   }
 }
 
@@ -1294,11 +1906,23 @@ const SLOT_FILLER_ICONS = [
  * (inventaire HUD) — mêmes règles, classes CSS différentes selon le contexte.
  */
 function icon(id: string, label: string, boxClass: string, imgClass: string, monoClass: string): HTMLElement {
+  return iconFromSrc(
+    `${import.meta.env.BASE_URL}stage01/ui/icon_${id}_64.png`,
+    label, boxClass, imgClass, monoClass
+  )
+}
+
+/**
+ * Même repli que `icon()` (monogramme si le fichier manque) mais à partir d'un
+ * chemin COMPLET. Nécessaire aux succès, dont l'icône peut vivre à la racine
+ * (`ui_trophy.png`) comme dans `stage01/ui/` : `icon()` ne sait fabriquer que la
+ * seconde forme. La logique de repli reste ici, en un seul endroit.
+ */
+function iconFromSrc(
+  src: string, label: string, boxClass: string, imgClass: string, monoClass: string
+): HTMLElement {
   const box = h('div', { className: boxClass })
-  const img = h('img', {
-    className: imgClass,
-    attrs: { src: `${import.meta.env.BASE_URL}stage01/ui/icon_${id}_64.png`, alt: '' }
-  })
+  const img = h('img', { className: imgClass, attrs: { src, alt: '' } })
   img.addEventListener('error', () => {
     img.remove()
     box.append(h('div', { className: monoClass, text: monogram(label) }))

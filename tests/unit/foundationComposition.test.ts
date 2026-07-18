@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CLUSTERS } from '@content/clusters'
+import { CLUSTERS, liveEngineFor } from '@content/clusters'
 import type { ClusterDef, ClusterElement } from '@content/clusters'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
 import { buildSiteLayout } from '@core/siteLayout'
@@ -65,8 +65,18 @@ function zone(plan: SitePlan, id: string): PlacedZone {
   return z
 }
 
+/**
+ * Les éléments d'un cluster pour un asset, DÉSIGNÉ PAR SA CLÉ STATIQUE.
+ *
+ * Ces contrats parlent de sémantique de chantier (« la toupie est près de la
+ * pompe », « la coulure est près du béton ») : que la toupie soit posée statique
+ * ou sous sa variante ANIMÉE (`LIVE_ENGINES`, machines vivantes) n'y change rien.
+ * On résout donc la variante ici, une fois, pour que les tests continuent de
+ * nommer les engins par leur nom métier.
+ */
 function elements(def: ClusterDef, assetKey: string): ClusterElement[] {
-  return def.elements.filter((el) => el.assetKey === assetKey)
+  const posed = liveEngineFor(assetKey)?.workKey ?? assetKey
+  return def.elements.filter((el) => el.assetKey === posed)
 }
 
 function dist(a: ClusterElement, b: ClusterElement): number {
@@ -298,14 +308,15 @@ describe('stage 03 fondations - composition contract', () => {
       }
 
       for (const spill of elements(def, 'decal_stage03_spill')) {
-        const concreteTargets = def.elements.filter((el) =>
-          el.assetKey === 'landmark_stage03' ||
-          el.assetKey === 'struct_stage03_bay' ||
-          el.assetKey === 'prop_stage03_formwork' ||
-          el.assetKey === 'prop_stage03_concrete_mixer' ||
-          el.assetKey === 'struct_stage03_mixer' ||
-          el.assetKey === 'decal_stage03_crack'
-        )
+        // Clés statiques ; `elements()` résout la variante animée le cas échéant.
+        const concreteTargets = [
+          'landmark_stage03',
+          'struct_stage03_bay',
+          'prop_stage03_formwork',
+          'prop_stage03_concrete_mixer',
+          'struct_stage03_mixer',
+          'decal_stage03_crack'
+        ].flatMap((key) => elements(def, key))
         const nearest = Math.min(...concreteTargets.map((target) => dist(spill, target)))
         expect(nearest, `${def.id} has a spill too far from concrete work`).toBeLessThanOrEqual(250)
       }

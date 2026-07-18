@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { App } from '@/app/app'
+import { STEP_MS } from '@core/clock'
 import type { EvolvedEvent } from '@core/events'
 
 /** Avance (en ramassant les gemmes) jusqu'à l'écran d'upgrade. */
@@ -33,7 +34,7 @@ describe('App — écrans & navigation', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     const s = app.getState()
     expect(s.screen).toBe('title')
-    expect(s.menu?.items.map((i) => i.id)).toEqual(['jouer', 'players', 'stage', 'options', 'editeur'])
+    expect(s.menu?.items.map((i) => i.id)).toEqual(['jouer', 'players', 'stage', 'scores', 'succes', 'options', 'editeur'])
     expect(s.players.length).toBe(0)
   })
 
@@ -120,6 +121,39 @@ describe('App — écrans & navigation', () => {
     app.confirm() // valide le perso par défaut (solo, 1 seul joueur)
     expect(app.getState().screen).toBe('game')
     expect(app.getState().players.length).toBe(1)
+  })
+
+  it('« Scores » au titre ouvre le tableau du niveau sélectionné, et « B » revient au titre', () => {
+    localStorage.clear() // profil neuf : aucun stage n'a de score
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    // Atteint « Scores » UNIQUEMENT par nav() — aucune fonction n'exige la souris (règle 8).
+    app.nav('down') // players
+    app.nav('down') // stage
+    app.nav('down') // scores
+    expect(app.getState().menu?.index).toBe(3)
+    app.confirm()
+    const s = app.getState()
+    expect(s.screen).toBe('hiscores')
+    expect(s.hiScores?.stageId).toBe('terrain_vierge')
+    // Consultation, pas inscription : aucune ligne en surbrillance, et tableau vide.
+    expect(s.hiScores?.rank).toBe(-1)
+    expect(s.hiScores?.entries).toEqual([])
+    app.back()
+    expect(app.getState().screen).toBe('title')
+  })
+
+  it('« Scores » suit le sélecteur de niveau du titre (les classements sont par stage)', () => {
+    localStorage.clear()
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    app.nav('down') // players
+    app.nav('down') // stage
+    app.nav('right') // niveau suivant : terrassement
+    app.nav('down') // scores
+    app.confirm()
+    // C'est TOUT le pari de l'option (a) : pas de 2e sélecteur dans l'écran des
+    // scores, le niveau choisi au titre décide du tableau affiché.
+    expect(app.getState().hiScores?.stageId).toBe('terrassement')
+    expect(app.getState().hiScores?.stageTitle).toBe('Terrassement')
   })
 
   it('met en pause puis reprend', () => {
@@ -366,5 +400,51 @@ describe('App — delta lisible sur les cartes weapon-up', () => {
     for (const item of nonWeaponUp) {
       expect(item.delta).toBeUndefined()
     }
+  })
+})
+
+describe('App — gel « casino » à l\'ouverture de coffre', () => {
+  it('coffre ouvert → partie GELÉE le temps de la machine à sous ; A la skippe (dégèle)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugSpawnChestOnPlayer() // coffre spawné SUR le joueur → ramassé au 1er pas
+    app.advanceTime(STEP_MS)
+    const t0 = app.getState().elapsedMs
+    // Gelé : le temps de jeu n'avance plus tant que la machine à sous tourne.
+    app.advanceTime(1000)
+    expect(app.getState().elapsedMs).toBe(t0)
+    // A saute le spectacle : incrémente le token (→ overlay ferme) et dégèle.
+    const token0 = app.getState().chestSkipToken
+    app.confirm()
+    expect(app.getState().chestSkipToken).toBe(token0 + 1)
+    // Dégelé (après la grâce de skip, cf. `CHEST_SKIP_GRACE_MS` — 2 avances : la 1re
+    // consomme la grâce, la 2e fait effectivement repartir la sim).
+    app.advanceTime(100)
+    app.advanceTime(100)
+    expect(app.getState().elapsedMs).toBeGreaterThan(t0)
+  })
+
+  /**
+   * Fix course modale coffre (retour playtest) : `confirm()` NE remet PAS
+   * `chestRevealMsLeft` à 0 dans le même appel — sinon le `advanceTime()` de la
+   * MÊME frame (routeInput → confirm() → advanceTime, dans `GameScene.update()`)
+   * ferait déjà repartir la sim avant que la boucle DOM indépendante
+   * (`overlay.sync()`, sur son propre rAF dans `main.ts`) n'ait eu l'occasion de
+   * retirer le panneau `.jackpot`. Une grâce (`CHEST_SKIP_GRACE_MS`) garde le gel
+   * actif un instant de plus après le skip.
+   */
+  it('skip (A) laisse une grâce : le gel reste actif un instant de plus AVANT que la sim ne reprenne', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugSpawnChestOnPlayer()
+    app.advanceTime(STEP_MS)
+    const t0 = app.getState().elapsedMs
+    app.confirm() // skip
+    // Immédiatement après le skip, la sim est ENCORE gelée (grâce en cours).
+    expect(app.getState().elapsedMs).toBe(t0)
+    // Un premier advanceTime consomme la grâce restante — la sim n'avance PAS ENCORE.
+    app.advanceTime(100)
+    expect(app.getState().elapsedMs).toBe(t0)
+    // La grâce est épuisée : la sim reprend enfin.
+    app.advanceTime(100)
+    expect(app.getState().elapsedMs).toBeGreaterThan(t0)
   })
 })

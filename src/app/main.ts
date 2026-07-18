@@ -3,13 +3,17 @@ import { App } from './app'
 import { GameScene, type GameSceneData } from '@render/scenes/GameScene'
 import { BootScene } from '@render/scenes/BootScene'
 import { Overlay } from '@ui/overlay'
+import { wireAchievementToasts } from './achievementBridge'
 import { AudioDirector } from '@/audio/audioDirector'
+import { Rumbler } from '@input/rumble'
+import { RumbleDirector } from '@input/rumbleDirector'
 import { parseBootOptions, type BootOptions } from './bootOptions'
 import { applyUserLayouts } from './userLayoutBoot'
 import { phaseIdFromLevel } from '@content/phases'
 import { createSeam, installSeam } from './seam'
 import { PerfOverlay } from '@render/perf/perfOverlay'
 import { ViewportBus } from '@ui/viewport'
+import { CinemaBannerEvent, CinemaSfxEvent, CinemaVoiceEvent } from '@render/cinemaEvents'
 
 /**
  * Point d'entrée (couche rendu). Lit les options de boot, instancie l'App (qui
@@ -38,7 +42,8 @@ const app = new App({
   autostart: opts.autostart !== null,
   phaseId: phaseIdFromLevel(opts.level),
   // Intro cosmétique pour le vrai joueur ; jamais en test/e2e/capture (seam).
-  intro: !opts.test
+  // Exception : ?intro=1 force l'intro même en test (e2e de la plomberie cinéma).
+  intro: opts.intro || !opts.test
 })
 const seam = createSeam(app)
 
@@ -101,6 +106,14 @@ if (opts.test) {
 // AudioDirector : créé une fois, coupé en test/headless. Lit les niveaux via l'App.
 const audio = opts.test ? null : new AudioDirector(game.sound, app.events, () => app.getAudioLevels())
 
+// Rumble manette (juice #2) : créé une fois, inerte en test/headless. Le RumbleDirector
+// traduit les événements de jeu en secousses ; le toggle Options le (dés)active.
+const rumbler = opts.test ? null : new Rumbler(app.getVibrations())
+if (rumbler !== null) {
+  new RumbleDirector(rumbler, app.events)
+  app.events.addEventListener('inputSettings', () => rumbler.setEnabled(app.getVibrations()))
+}
+
 // Overlay DOM des écrans (HUD, menus) — observe l'état de l'App à chaque frame.
 const uiRoot = document.getElementById('ui-root')
 if (uiRoot !== null) {
@@ -115,6 +128,10 @@ if (uiRoot !== null) {
   // L'overlay CONSOMME la source de vérité responsive (émission immédiate à
   // l'abonnement → HUD correct dès le boot ; recalculs coalescés ensuite).
   viewport.subscribe((v) => overlay.applyResponsive(v))
+  // Succès → trophée. L'App émet un `achievementUnlocked` par id NOUVELLEMENT
+  // acquis (une fois par run, cf. sa garde one-shot) ; le pont résout le
+  // libellé/l'icône dans le catalogue et le passe à la file d'affichage.
+  wireAchievementToasts(app.events, overlay)
   // Overlay de diagnostic perf (`?perf=1`) : mesure sur vrai device, gated par le
   // flag seul (indépendant de l'audio, actif même en `?test=1&perf=1` pour l'e2e).
   const perfOverlay = opts.perf ? new PerfOverlay(uiRoot) : null
@@ -132,6 +149,19 @@ if (uiRoot !== null) {
   } else {
     window.setTimeout(dismissSplash, 3400)
   }
+  // Cinématique d'intro : la façade Phaser DISPATCHE ses cues cosmétiques sur
+  // `app.events` (elle ne connaît ni l'overlay ni l'audio) ; on les route ici.
+  // - bandeau → carton titre 16-bit de l'overlay ;
+  // - SFX/voix → AudioDirector (null en test → inerte, la sim reste intacte).
+  app.events.addEventListener('cinemaBanner', (e) => {
+    overlay.showCinemaBanner((e as CinemaBannerEvent).text)
+  })
+  app.events.addEventListener('cinemaSfx', (e) => {
+    audio?.playNamedCue((e as CinemaSfxEvent).cue)
+  })
+  app.events.addEventListener('cinemaVoice', (e) => {
+    audio?.playNamedVoice((e as CinemaVoiceEvent).key)
+  })
   // B5 — Jackpot coffre + bandeau d'évolution : câblés dans overlay.sync via
   // state.justEvolvedWeaponName (flag transitoire, one-shot). Plus d'event ad hoc ici.
   const tick = (): void => {

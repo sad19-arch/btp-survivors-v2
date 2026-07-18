@@ -33,12 +33,19 @@ import { test, expect } from '@playwright/test'
  * warm-up) avant de calculer médiane/p95.
  *
  * SEUIL : médiane < 33 ms (≥ 30 fps) comme indiqué par le brief — budget
- * volontairement indulgent. OBSERVÉ en local (3 runs, CI headless, WebGL
- * logiciel SwiftShader, mode lite, 500 ennemis, sim réellement avancée) :
- * médiane ≈ 16 ms, p95 ≈ 18.7-18.8 ms — très en dessous du budget, avec une
- * marge d'un ordre de grandeur. Une régression O(N²) sur 500 ennemis ferait
- * exploser ces chiffres de façon flagrante et resterait détectée même avec de
- * rares outliers isolés (filtrés par la médiane/p95, pas le max).
+ * volontairement indulgent. OBSERVÉ en local (WebGL logiciel SwiftShader, mode
+ * lite, 500 ennemis, sim réellement avancée) : médiane ≈ 16 ms, p95 ≈ 18-27 ms —
+ * très en dessous du budget, avec une marge d'un ordre de grandeur. Une régression
+ * O(N²) sur 500 ennemis ferait exploser ces chiffres de façon flagrante et
+ * resterait détectée même avec de rares outliers isolés (filtrés par la
+ * médiane/p95, pas le max). Chiffres reconfirmés le 2026-07-17 (cf. bloc de seuils
+ * en bas de fichier : l'« élévation » de 12d63ef ne se reproduit pas).
+ *
+ * CE QUE CE TEST NE MESURE PAS : les deltas d'un `setInterval` capturent le temps
+ * MAIN THREAD (sim + synchro + JS de rendu). Le coût GPU/compositeur (overdraw d'un
+ * overlay plein écran, fill-rate) n'y apparaît quasiment pas, et SwiftShader ne
+ * prédit de toute façon pas un GPU mobile. Ce gate est un garde ALGORITHMIQUE, pas
+ * un proxy de perf mobile — cette dernière se mesure sur device via `?perf=1`.
  */
 
 interface FrameSample {
@@ -95,16 +102,28 @@ test('stress horde: 500 ennemis ne font pas s\'effondrer le framerate (mode lite
 
   console.log(`[fps-horde] échantillons=${sample.count} médiane=${sample.median.toFixed(2)}ms p95=${sample.p95.toFixed(2)}ms`)
 
-  // Budget indulgent (WebGL LOGICIEL SwiftShader, suite en série) : ce test détecte
-  // une régression ALGORITHMIQUE (O(N²)) à 500 ennemis — PAS le matériel réel du
-  // joueur (qui vise 60 fps ; l'oracle perf réel = overlay `?perf=1`). La MÉDIANE est
-  // le vrai garde-fou : une régression quadratique la ferait exploser en centaines de
-  // ms. Mesuré en isolation : médiane ≈27 ms (contention full-suite ≈38 ms) → seuil 50.
-  expect(sample.median).toBeLessThan(50)
-  // p95 : sous SwiftShader logiciel, la queue de distribution (spikes GC/scheduling/
-  // upload de textures) est DOMINÉE par l'environnement, pas par le code — mesuré
-  // ≈108 ms en isolation. On garde un plafond de sécurité large plutôt qu'un seuil
-  // serré qui testerait le rasteriseur logiciel au lieu de la sim. (Élévation médiane
-  // vs baseline ≈16 ms signalée pour le suivi perf dédié, cf. plan perf-mobile.)
-  expect(sample.p95).toBeLessThan(175)
+  // Budget indulgent (WebGL LOGICIEL SwiftShader) : ce test détecte une régression
+  // ALGORITHMIQUE (O(N²)) à 500 ennemis — PAS le matériel réel du joueur (qui vise
+  // 60 fps ; l'oracle perf réel = overlay `?perf=1` sur device). La MÉDIANE est le vrai
+  // garde-fou : une régression quadratique la ferait exploser en centaines de ms.
+  //
+  // SEUILS RÉTABLIS (2026-07-17) aux valeurs d'origine 33/50. Le commit 12d63ef les
+  // avait relâchés à 50/175 sur la foi d'une « élévation » (médiane ≈27-38 ms,
+  // p95 ≈108 ms) attribuée aux scanlines CRT (74e9ed1). Cette élévation NE SE
+  // REPRODUIT PAS — re-mesurée le 2026-07-17, spec réelle inchangée :
+  //   · en isolation   : médiane 16,30 ms · p95 22,30 ms
+  //   · en suite pleine: médiane 16,20 ms · p95 22,70 ms (chromium)
+  //                      médiane 16,10 ms · p95 18,30 ms (mobile)
+  // A/B dans la même page (scanlines masquées, cadre masqué, overlay ENTIER masqué) :
+  // delta ≤ 0,2 ms sur la médiane = bruit. Les scanlines sont INNOCENTES ; les
+  // chiffres de 12d63ef étaient un artefact de charge machine, pas du code.
+  //
+  // Médiane < 33 (≥ 30 fps) : le plancher structurel est 16 ms (période du
+  // setInterval) → 2× de marge sur un signal mesuré stable à ±0,3 ms.
+  expect(sample.median).toBeLessThan(33)
+  // p95 < 50 : max observé 26,6 ms sur 19 mesures (isolation + suite pleine, 2 projets)
+  // → ~2× de marge. Ce seuil reste sensible à la charge machine (la queue capte GC/
+  // scheduling) ; s'il devient instable, c'est la MÉTHODE de mesure qu'il faut durcir,
+  // pas le seuil qu'il faut relâcher — un plafond à 175 ms ne gardait plus rien.
+  expect(sample.p95).toBeLessThan(50)
 })

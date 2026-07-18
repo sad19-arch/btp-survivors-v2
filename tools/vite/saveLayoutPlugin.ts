@@ -41,6 +41,38 @@ const HEADER = `/**
 import type { StageLayout } from './stageLayout'
 `
 
+/**
+ * ⚠️ N'APPELEZ PAS CECI DEPUIS UN HOOK `buildStart` / `watchChange`. La proposition
+ * revient naturellement — « regenerateRegistry() n'est appelé QUE depuis POST
+ * /__save-layout, donc un json qui bouge autrement (git pull, checkout) laisse le
+ * registre périmé ; un hook supprimerait la classe de bug ». Étudié et ÉCARTÉ le
+ * 2026-07-17, sur mesures :
+ *
+ * 1. LE HOOK SALIRAIT UN FICHIER SUIVI À CHAQUE DEV/BUILD. `regenerateRegistry`
+ *    scanne le DOSSIER (`readdirSync`), sans aucune notion de git. Or ce dépôt a un
+ *    `src/content/layouts/terrain_vierge.json` NON SUIVI (fichier de travail de
+ *    l'utilisateur), tandis que `composedLayouts.ts` EST suivi et committé VIDE (`{}`).
+ *    Mesuré : le hook y écrirait `{ terrain_vierge }`. À chaque `npm run dev` ET
+ *    chaque `npm run build` — or `build` est un gate, et le webServer Playwright
+ *    lance `dev`. Chaque gate salirait l'arbre, contre la routine documentée
+ *    (`git checkout -- composedLayouts.ts` avant `sim:check`), et rapprocherait d'un
+ *    commit accidentel d'un fichier explicitement interdit au commit.
+ * 2. IL CRÉERAIT UNE NOUVELLE CLASSE DE BUG : écrire un fichier source pendant le dev
+ *    déclenche un rechargement HMR complet → « Execution context was destroyed » en e2e.
+ * 3. IL NE FERMERAIT AUCUN CHEMIN SILENCIEUX — le seul argument qui le justifiait.
+ *    Le registre importe les json en STATIQUE (`import l0 from './layouts/x.json'`),
+ *    donc leur CONTENU n'est jamais périmé : seul l'ENSEMBLE DES CLÉS peut désyncher,
+ *    et ses deux sens crient déjà (vérifiés par mutation) :
+ *      · json SUPPRIMÉ, encore dans le registre → l'import statique casse le build
+ *        (tsc TS2307 « Cannot find module './layouts/json_disparu.json' »).
+ *      · json AJOUTÉ et absent du registre → ROUGE de la garde
+ *        `tests/unit/composedLayoutsRegistry.test.ts` (« Compo(s) suivie(s) par git
+ *        absente(s) du registre »), avec la marche à suivre.
+ *
+ * Un hook « corrigerait » donc en mutant l'arbre dans le dos du développeur ce que la
+ * garde signale déjà au bon moment (revue/CI). Committer une compo exige de committer
+ * le registre régénéré : c'est une décision humaine, pas un effet de bord de build.
+ */
 function regenerateRegistry(): void {
   const files = existsSync(LAYOUTS_DIR)
     ? readdirSync(LAYOUTS_DIR).filter((f) => f.endsWith('.json')).sort()

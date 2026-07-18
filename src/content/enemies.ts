@@ -33,9 +33,12 @@ export interface EnemyDef {
  *    (voir `difficultyScaleAt` dans spawnRamp) → la fin de run devient un mur.
  */
 type EnemyStats = Omit<EnemyDef, 'id' | 'name'>
-const BASE: EnemyStats = { hp: 18, speed: 150, contactDamage: 6, archetype: 'base', xpValue: 5 }
-const FAST: EnemyStats = { hp: 11, speed: 210, contactDamage: 5, archetype: 'fast', xpValue: 4 }
-const TANK: EnemyStats = { hp: 60, speed: 96, contactDamage: 11, archetype: 'tank', xpValue: 12 }
+// Retour playtest : le jeu est trop facile hors boss/mini-boss → PV des 3 archétypes
+// de base ×1.5 (flat, demande explicite ; pas de re-tuning sim:check — le user teste
+// lui-même). Boss/mini-boss (définitions séparées, hors ce fichier) non touchés.
+const BASE: EnemyStats = { hp: 27, speed: 150, contactDamage: 6, archetype: 'base', xpValue: 5 }
+const FAST: EnemyStats = { hp: 16.5, speed: 210, contactDamage: 5, archetype: 'fast', xpValue: 4 }
+const TANK: EnemyStats = { hp: 90, speed: 96, contactDamage: 11, archetype: 'tank', xpValue: 12 }
 const mk = (id: string, name: string, stats: EnemyStats): EnemyDef => ({ id, name, ...stats })
 
 export const ENEMIES: Record<string, EnemyDef> = {

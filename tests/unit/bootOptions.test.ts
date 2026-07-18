@@ -11,7 +11,8 @@ describe('parseBootOptions', () => {
       lite: false,
       editor: false,
       perf: false,
-      debug: false
+      debug: false,
+      intro: false
     })
   })
 
@@ -24,7 +25,8 @@ describe('parseBootOptions', () => {
       lite: false,
       editor: false,
       perf: false,
-      debug: false
+      debug: false,
+      intro: false
     })
   })
 
@@ -37,7 +39,8 @@ describe('parseBootOptions', () => {
       lite: false,
       editor: false,
       perf: false,
-      debug: false
+      debug: false,
+      intro: false
     })
   })
 
@@ -67,5 +70,10 @@ describe('parseBootOptions', () => {
   it('parse le flag debug', () => {
     expect(parseBootOptions('?debug=1').debug).toBe(true)
     expect(parseBootOptions('').debug).toBe(false)
+  })
+
+  it('parse le flag intro (force l\'intro même en test)', () => {
+    expect(parseBootOptions('?intro=1').intro).toBe(true)
+    expect(parseBootOptions('').intro).toBe(false)
   })
 })

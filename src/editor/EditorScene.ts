@@ -14,6 +14,7 @@ import { activeAssets, activeGroundKey, editorAsset, paletteEntry, setActiveStag
 import { EditorState } from './EditorState'
 import type { Vec2, MarkerType } from './StageLayoutSchema'
 import { ZONE_DEFS, isZoneType } from './zones'
+import { resolveWorkerSkin } from '@render/stages'
 
 /** Zoom de jeu réel (identique à CameraController.SOLO_ZOOM). */
 const GAME_ZOOM = 1.2
@@ -32,6 +33,20 @@ const DEPTH_SELECT = 45
 
 /** Échelle de rendu ÉDITEUR d'un PNJ (lisibilité, indépendante du scale de jeu). */
 const NPC_SCALE = 0.6
+
+/** Tolérance de clic sur un tracé de chemin (px monde) — un trait est fin. */
+const PATH_PICK_PX = 24
+
+/** Distance d'un point au SEGMENT [a,b] (et non à la droite qui le porte). */
+function distToSegment(p: Vec2, a: Vec2, b: Vec2): number {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const len2 = dx * dx + dy * dy
+  // Segment dégénéré (points confondus) : distance au point, pas de division par 0.
+  if (len2 < 0.0001) {return Math.hypot(p.x - a.x, p.y - a.y)}
+  const t = Math.min(1, Math.max(0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2))
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy))
+}
 
 interface InstanceView {
   container: Phaser.GameObjects.Container
@@ -70,6 +85,11 @@ export class EditorScene extends Phaser.Scene {
   private activeMarker: MarkerTool | null = null
   private pathDraft: Vec2[] = []
   private uiRefresh: (() => void) | null = null
+
+  /** Nombre de points du tracé en cours (l'overlay l'affiche dans l'indice). */
+  get pathDraftCount(): number {
+    return this.pathDraft.length
+  }
 
   private views = new Map<string, InstanceView>()
   private npcViews = new Map<string, NpcView>()
@@ -247,7 +267,7 @@ export class EditorScene extends Phaser.Scene {
     const cam = this.cameras.main
     const wx = cam.midPoint.x
     const wy = cam.midPoint.y
-    const p = this.state.applySnap(wx - OFFSET_X, wy - OFFSET_Y)
+    const p = this.state.applySnapFor(this.activePrefab, wx - OFFSET_X, wy - OFFSET_Y)
     const entry = paletteEntry(this.activePrefab)
     if (entry?.npcSkin !== undefined) {
       this.state.addNpc(entry.npcSkin, entry.npcKind ?? 'trade', OFFSET_X + p.x, OFFSET_Y + p.y)
@@ -341,7 +361,7 @@ export class EditorScene extends Phaser.Scene {
     // Prefab actif → poser. Une entrée PNJ (npcSkin défini) pose un LayoutNpc
     // AVANT la branche instance (les PNJ sont un système distinct du décor).
     if (this.activePrefab !== null) {
-      const s = this.state.applySnap(comp.x, comp.y)
+      const s = this.state.applySnapFor(this.activePrefab, comp.x, comp.y)
       const entry = paletteEntry(this.activePrefab)
       if (entry?.npcSkin !== undefined) {
         this.state.addNpc(entry.npcSkin, entry.npcKind ?? 'trade', OFFSET_X + s.x, OFFSET_Y + s.y)
@@ -376,7 +396,16 @@ export class EditorScene extends Phaser.Scene {
       if (obj !== undefined) {this.dragOffset = { x: comp.x - obj.x, y: comp.y - obj.y }}
       return
     }
-    // Macro-zone sous le curseur (aucune instance/PNJ touché) → sélection +
+    // Tracé de chemin sous le curseur → sélection (ouvre l'inspecteur de chemin).
+    // Testé APRÈS les objets (un chemin passe souvent sous du décor) et AVANT les
+    // macro-zones (qui couvrent de grandes surfaces et avaleraient tout clic).
+    const pathHit = this.pickPath(comp)
+    if (pathHit !== null) {
+      this.state.selectZone(null)
+      this.state.select(pathHit)
+      return
+    }
+    // Macro-zone sous le curseur (aucune instance/PNJ/chemin touché) → sélection +
     // glisser du corps de la zone. État SÉPARÉ de la sélection d'instances.
     const zoneHit = this.pickZone(comp)
     if (zoneHit !== null) {
@@ -461,6 +490,17 @@ export class EditorScene extends Phaser.Scene {
     if (this.dragId !== null && p.leftButtonDown()) {
       const w = this.worldPoint(p)
       const raw = { x: w.x - OFFSET_X - this.dragOffset.x, y: w.y - OFFSET_Y - this.dragOffset.y }
+      // Prefab à pas IMPOSÉ (tuile de route) : la grille EST l'alignement. On
+      // court-circuite `alignSnap` — son magnétisme de 22 px sur les bords des
+      // objets voisins décalerait la tuile hors du pas de 256, et le raccord
+      // sauterait sans que rien ne le signale.
+      const inst = this.dragIsNpc ? undefined : this.state.instances.find((i) => i.id === this.dragId)
+      const step = inst !== undefined ? this.state.snapStepFor(inst.prefab) : null
+      if (step !== null && inst !== undefined) {
+        const s = this.state.applySnapFor(inst.prefab, raw.x, raw.y)
+        this.state.moveInstance(this.dragId, s.x, s.y)
+        return
+      }
       const gridSnap = this.state.applySnap(raw.x, raw.y)
       const aligned = this.alignSnap(gridSnap.x, gridSnap.y, this.dragId)
       if (this.dragIsNpc) {
@@ -614,6 +654,11 @@ export class EditorScene extends Phaser.Scene {
       }
     }
     this.drawOverlays()
+    // `pathDraft` vit dans la SCÈNE, pas dans `EditorState` : poser un point
+    // n'émet donc aucun changement d'état et le DOM ne se redessinait pas — le
+    // compteur de points serait resté figé à 0, c'est-à-dire exactement le
+    // « il ne se passe rien » qu'on est en train de corriger.
+    this.refreshUi()
   }
 
   private pickInstance(world: Vec2): string | null {
@@ -626,6 +671,28 @@ export class EditorScene extends Phaser.Scene {
       if (view === undefined) {continue}
       const b = view.container.getBounds()
       if (b.contains(world.x, world.y)) {return inst.id}
+    }
+    return null
+  }
+
+  /**
+   * Chemin dont la POLYLIGNE passe à moins de PATH_PICK_PX du curseur, ou null.
+   *
+   * Sans ce test, un chemin n'était sélectionnable par AUCUN moyen (seuls les
+   * instances et les PNJ l'étaient) : l'inspecteur de chemin resterait du code
+   * mort et les réglages inatteignables.
+   */
+  private pickPath(comp: Vec2): string | null {
+    const list = this.state.paths
+    for (let i = list.length - 1; i >= 0; i--) {
+      const p = list[i]
+      if (p === undefined) {continue}
+      for (let s = 0; s + 1 < p.points.length; s++) {
+        const a = p.points[s]
+        const b = p.points[s + 1]
+        if (a === undefined || b === undefined) {continue}
+        if (distToSegment(comp, a, b) <= PATH_PICK_PX) {return p.id}
+      }
     }
     return null
   }
@@ -656,6 +723,8 @@ export class EditorScene extends Phaser.Scene {
     if (drafting && (e.key === 'Backspace' || e.key === 'Delete')) {
       this.pathDraft.pop()
       this.drawOverlays()
+      // Comme à la pose : le compteur de l'indice doit suivre le retrait.
+      this.refreshUi()
       e.preventDefault()
       return
     }
@@ -734,7 +803,14 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private buildChildren(
-    elements: ReadonlyArray<{ assetKey: string; dx: number; dy: number; scale: number; flipX?: boolean }>,
+    elements: ReadonlyArray<{
+      assetKey: string
+      dx: number
+      dy: number
+      scale: number
+      flipX?: boolean
+      tile?: { w: number; h: number }
+    }>,
     flipX: boolean
   ): Phaser.GameObjects.GameObject[] {
     const children: Phaser.GameObjects.GameObject[] = []
@@ -748,6 +824,12 @@ export class EditorScene extends Phaser.Scene {
         continue
       }
       const flip = flipX !== (el.flipX === true)
+      // Plaque de sol : texture répétée (comme en jeu), et non étirée — l'éditeur
+      // doit montrer ce que le jeu rendra, sinon la compo ment.
+      if (el.tile !== undefined) {
+        children.push(this.add.tileSprite(dx, el.dy, el.tile.w * el.scale, el.tile.h * el.scale, el.assetKey))
+        continue
+      }
       if (asset?.sheet === true) {
         const spr = this.add.sprite(dx, el.dy, el.assetKey, 0).setScale(el.scale).setFlipX(flip)
         children.push(spr)
@@ -807,10 +889,14 @@ export class EditorScene extends Phaser.Scene {
       seen.add(npc.id)
       const wx = OFFSET_X + npc.x
       const wy = OFFSET_Y + npc.y
+      // Alias : un brouillon d'avant le renommage pose `npc_ouvrier_a/b/c`.
+      // Sans résolution, `textures.exists` échoue et l'éditeur afficherait un
+      // placeholder à la place des 19 ouvriers déjà posés.
+      const skin = resolveWorkerSkin(npc.skin)
       let view = this.npcViews.get(npc.id)
-      if (view === undefined || view.skin !== npc.skin) {
+      if (view === undefined || view.skin !== skin) {
         view?.container.destroy()
-        view = { container: this.buildNpcView(npc.skin, npc.kind), skin: npc.skin }
+        view = { container: this.buildNpcView(skin, npc.kind), skin }
         this.npcViews.set(npc.id, view)
       }
       view.container.setPosition(wx, wy)
@@ -903,8 +989,20 @@ export class EditorScene extends Phaser.Scene {
     const pg = this.pathGfx
     pg.clear()
     for (const path of this.state.paths) {
-      pg.lineStyle(8, path.type === 'truck_path' ? 0xd98a3a : 0x4fa0d0, 0.8)
+      // Le chemin sélectionné est surligné : sans ça, rien ne relierait
+      // visuellement le tracé cliqué aux réglages affichés par l'inspecteur.
+      const isSel = this.state.selected === path.id
+      if (isSel) {
+        pg.lineStyle(14, 0xffffff, 0.55)
+        this.strokePolyline(pg, path.points)
+      }
+      pg.lineStyle(8, path.type === 'truck_path' ? 0xd98a3a : 0x4fa0d0, isSel ? 1 : 0.8)
       this.strokePolyline(pg, path.points)
+      // Extrémités : on doit voir OÙ un marcheur fait demi-tour / réapparaît.
+      const first = path.points[0]
+      const last = path.points[path.points.length - 1]
+      if (first !== undefined) {pg.fillStyle(0x9be564, 0.95).fillCircle(OFFSET_X + first.x, OFFSET_Y + first.y, isSel ? 10 : 7)}
+      if (last !== undefined && path.points.length > 1) {pg.fillStyle(0xe56464, 0.95).fillCircle(OFFSET_X + last.x, OFFSET_Y + last.y, isSel ? 10 : 7)}
     }
     if (this.pathDraft.length > 0) {
       pg.lineStyle(6, 0xffffff, 0.7)

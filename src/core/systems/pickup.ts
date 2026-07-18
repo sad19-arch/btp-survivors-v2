@@ -2,6 +2,12 @@ import type { World } from '../world'
 import type { EntityId, PickupComp, PickupKind, Vec2 } from '../types'
 import { HITBOX, PICKUP } from '@content/config'
 
+/** Un coffre ramassé ce pas : joueur ramasseur + rareté (super doré ou non). */
+export interface ChestCollector {
+  playerId: number
+  isSuper: boolean
+}
+
 /**
  * Pickups (gemmes d'XP) : aimantation vers le joueur le plus proche quand ils
  * entrent dans son rayon, puis collecte au contact (crédite la progression).
@@ -12,7 +18,7 @@ export function pickupSystem(
   world: World,
   dtMs: number,
   collected?: PickupKind[],
-  chestCollectors?: number[],
+  chestCollectors?: ChestCollector[],
   coinsOut?: number[]
 ): void {
   const dt = dtMs / 1000
@@ -55,7 +61,7 @@ export function pickupSystem(
       if (pickup.type === 'coffre') {
         const playerId = world.get(target.entity, 'player')?.playerId
         if (playerId !== undefined) {
-          chestCollectors?.push(playerId)
+          chestCollectors?.push({ playerId, isSuper: pickup.isSuper === true })
         }
       }
       world.despawn(gem)

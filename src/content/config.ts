@@ -61,7 +61,13 @@ export const PICKUP = {
    */
   gemLifeMs: 20000,
   /** Vitesse d'aspiration quand le power-up aimant est actif (px/s, > magnetSpeed). */
-  magnetPullSpeed: 900
+  magnetPullSpeed: 900,
+  /**
+   * Plafond de pickups de soin (`heal`) actifs simultanément sur la carte (retour
+   * playtest : sans lifeMs, ils s'accumulaient sans borne si non ramassés). Même
+   * patron que `CHEST.maxActive` (cf. `chestDirector.ts`).
+   */
+  healMaxActive: 5
 } as const
 
 /**
@@ -99,6 +105,12 @@ export const CHEST = {
   bearerCap: 1,
   /** Nombre maximum de coffres actifs simultanément (inclut le coffre mini-boss). */
   maxActive: 5,
+  /**
+   * Probabilité qu'un coffre (convoyeur OU mini-boss) soit un SUPER coffre doré
+   * giga-brillant (1/10). Un super coffre donne 3 issues (1 évo + 2 montées, ou 3
+   * montées) et un spectacle renforcé. Tiré au DROP (RNG isolé) → coffre au sol distinct.
+   */
+  superChance: 0.1,
   /**
    * Soin de repli si aucune évolution ET aucune carte éligible (tout maxé).
    * Fraction de maxHp rendue. Ex : 0.30 → +30 % des PV max, borné à maxHp.
@@ -274,6 +286,34 @@ export const RESCUE = {
 } as const
 
 /**
+ * Otage libéré ENRAGÉ (allié TEMPORAIRE). À la libération, l'otage suit le joueur
+ * pendant `durationMs` et lance une salve toutes les `salvoMs` : chaque salve est
+ * une PURGE DIRIGÉE qui tue `killFraction` des ennemis NORMAUX présents dans
+ * `screenRadius` (sélection déterministe, RNG dédié), et inflige `bossDamageFraction`
+ * × PVmax aux boss / élites / convoyeurs — JAMAIS de kill (dégât plafonné à hp-1).
+ * Puis il dit « Merci » et s'en va. Jusqu'à `maxAllies` alliés en parallèle.
+ *
+ * ÉQUILIBRAGE :
+ * - `screenRadius` réutilise l'anneau de spawn (`SPAWN.ringRadius`, figé/déterministe)
+ *   comme proxy « à l'écran » : le core ne connaît pas la caméra.
+ * - `allyKillXpFraction` BRIDE l'XP des kills de masse (défaut bas) : sans ça, tuer
+ *   la moitié de la horde inonderait le joueur d'XP (« AoE + XP-des-kills nourrissent
+ *   la puissance »). 0 = aucune gemme sur un kill d'allié, 1 = pleine XP.
+ */
+export const RAGE = {
+  durationMs: 20_000,
+  salvoMs: 1_200,
+  screenRadius: SPAWN.ringRadius,
+  killFraction: 0.5,
+  bossDamageFraction: 1 / 3,
+  followSpeed: 260,
+  boltSpeed: 900,
+  boltHitRadius: 28,
+  maxAllies: 5,
+  allyKillXpFraction: 0.25
+} as const
+
+/**
  * Relève co-op : un joueur à terre (hp<=0) peut être relevé par un coéquipier
  * VIVANT qui reste à proximité en maintenant l'action. Solo : aucun coéquipier
  * possible → no-op naturel (jamais relevé, game-over identique à aujourd'hui).
@@ -301,7 +341,13 @@ export const REVIVE = {
 /** Intro de run (micro-animation d'entrée du héros). Purement cosmétique. */
 export const INTRO = {
   /** Durée du préambule pendant lequel la sim est gelée, en ms. */
-  durationMs: 2000
+  durationMs: 2000,
+  /**
+   * Durée du gel quand une cinématique de stage joue, en ms.
+   * La cinématique de stage (render-only) s'exécute pendant ce laps ;
+   * la sim reste gelée et le joueur peut sauter via `skipIntro()`.
+   */
+  stageCinematicMs: 6500
 } as const
 
 /**

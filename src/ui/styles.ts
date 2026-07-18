@@ -4,13 +4,13 @@ import { PALETTE } from './palette'
  * Feuille de style de l'UI — refonte « 16-bit premium » (réf. Demon's Crest /
  * SNES / Mega Drive). Conserve TOUS les noms de classes de la version d'origine
  * pour se brancher sur `overlay.ts` sans changement de DOM. Le rendu premium
- * vient de : cadres métal brossé (texture `metal_v.png` + biseaux solides),
+ * vient de : cadres métal brossé (texture `ui_metal_v.png` + biseaux solides),
  * rivets en relief, titres/logos sculptés (extrusion en rampe), tramage
- * (`dither_light.png`) sur les états actifs, coins carrés, ombres portées
+ * (`ui_dither_light.png`) sur les états actifs, coins carrés, ombres portées
  * décalées — aucun gradient moderne / flou / glow / coin arrondi.
  *
  * ASSETS REQUIS dans `public/` (servis à la racine) :
- *   metal_v.png · dither_light.png · dither_dark.png · bg_dusk.png · casque.png
+ *   ui_metal_v.png · ui_dither_light.png · ui_dither_dark.png · ui_bg_dusk.png · ui_casque.png
  * FONTES (à charger dans index.html) : "Jersey 25" (titres) + "Pixelify Sans" (UI).
  *
  * Palette : source de vérité = palette.ts. Les quelques nuances dérivées
@@ -37,8 +37,8 @@ const CSS = `
   color: ${PALETTE.blanc};
   letter-spacing: 0.5px;
   user-select: none;
-  --tex: url('${import.meta.env.BASE_URL}metal_v.png');
-  --sheen: url('${import.meta.env.BASE_URL}dither_light.png');
+  --tex: url('${import.meta.env.BASE_URL}ui_metal_v.png');
+  --sheen: url('${import.meta.env.BASE_URL}ui_dither_light.png');
 }
 #ui-root img { image-rendering: pixelated; }
 
@@ -116,6 +116,45 @@ const CSS = `
 #ui-root .hud__pid { color: ${PALETTE.jauneSecurite}; font-weight: 700; }
 #ui-root .hud__php { color: ${PALETTE.vertBonus}; }
 #ui-root .hud__plvl { color: ${PALETTE.blanc}; }
+
+/* ── Feedback combat plein écran (juice) ──────────────────────────────── */
+/* Vignette « alerte sécurité » (PV bas) + flash de dégât reçu. Bordures pixel
+   SOLIDES (box-shadow inset sans flou), rouge alerte de la palette — pas de
+   glow/gradient/coin arrondi. Sous le HUD (z-index 4) : n'obscurcit pas le texte. */
+#ui-root .combat-fx { position: absolute; inset: 0; pointer-events: none; z-index: 4; overflow: hidden; }
+#ui-root .combat-fx__danger, #ui-root .combat-fx__hurt { position: absolute; inset: 0; opacity: 0; }
+/* Vignette PV bas : double anneau rouge/contour INTERNE qui bat comme un témoin d'alerte. */
+#ui-root .combat-fx__danger {
+  box-shadow: inset 0 0 0 14px ${PALETTE.rougeAlerte}, inset 0 0 0 19px ${PALETTE.contour};
+}
+#ui-root .combat-fx__danger--on { animation: danger-pulse 0.9s steps(10, end) infinite; }
+@keyframes danger-pulse { 0%,100% { opacity: 0.25; } 50% { opacity: 0.92; } }
+/* Flash de dégât : voile rouge bref (opacité pilotée en inline, fondu par frame). */
+#ui-root .combat-fx__hurt { background: ${PALETTE.rougeAlerte}; }
+
+/* ── CADENCE (combo, juice #7) + palier « N DÉBLAYÉS » (juice #8) ──────── */
+/* Panneau pixel compact ; couleur du chiffre + de la barre pilotée en inline
+   selon le palier de cadence. Barre qui se vide = fenêtre de combo restante. */
+#ui-root .cadence {
+  position: absolute; top: 90px; left: 50%; transform: translateX(-50%);
+  display: none; flex-direction: column; align-items: center; gap: 4px;
+  padding: 5px 14px; background: var(--tex); background-size: 60px 100%;
+  border: 4px solid ${PALETTE.contour}; box-shadow: 4px 4px 0 rgba(0,0,0,0.5);
+  z-index: 6; pointer-events: none;
+}
+#ui-root .cadence--on { display: flex; }
+#ui-root .cadence__label { font-weight: 700; font-size: 26px; letter-spacing: 1px; text-shadow: 2px 2px 0 ${PALETTE.contour}; }
+#ui-root .cadence__bar { width: 130px; height: 8px; background: #120E0A; border: 2px solid ${PALETTE.contour}; box-shadow: inset 1px 1px 0 #000; }
+#ui-root .cadence__fill { height: 100%; }
+/* Palier : bandeau doré bref, pop pixel (steps), coins carrés. */
+#ui-root .milestone {
+  position: absolute; top: 150px; left: 50%; transform: translateX(-50%);
+  display: none; padding: 8px 22px; background: ${PALETTE.jauneSecurite}; color: ${PALETTE.contour};
+  border: 4px solid ${PALETTE.contour}; box-shadow: 5px 5px 0 rgba(0,0,0,0.5);
+  font-weight: 700; font-size: 26px; letter-spacing: 2px; z-index: 7; pointer-events: none;
+}
+#ui-root .milestone--on { display: block; animation: milestone-pop 0.3s steps(3, end); }
+@keyframes milestone-pop { from { transform: translateX(-50%) scale(0.4); } to { transform: translateX(-50%) scale(1); } }
 
 /* ── Écran modal + panneau métal ──────────────────────────────────────── */
 #ui-root .screen {
@@ -335,6 +374,69 @@ const CSS = `
   text-shadow: none; animation: none;
 }
 
+/* ── Trophée de succès (toast) ────────────────────────────────────────────
+   Plaque commémorative qui glisse depuis le bord droit, façon trophée de
+   console — mais 16-bit : coins carrés, bordure noire, ombre portée à blur 0,
+   biseaux inset, glissement en steps() (jamais d'easing continu).
+   Placé SOUS le HUD manettes (.pads, top:26px) pour ne pas le recouvrir.
+   z-index 5 : au-dessus du HUD, sous le cadre (15) et le jackpot (20). */
+#ui-root .trophy-layer { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+/* Ce nœud POSITIONNE et ne porte AUCUN transform de base : c'est ce qui laisse
+   .ui-mobile y poser son scale sans entrer en collision avec l'animation de
+   glissement, qui vit sur .trophy__panel. La propriété transform n'est PAS
+   cumulative : un seul transform par nœud (cf. le décentrage de .bossbar). */
+#ui-root .trophy { position: absolute; top: 108px; right: 28px; }
+#ui-root .trophy__panel {
+  display: flex; align-items: center; gap: 14px;
+  max-width: 520px; padding: 12px 16px;
+  background: var(--tex); background-size: 60px 100%;
+  border: 5px solid ${PALETTE.contour};
+  box-shadow: 8px 8px 0 rgba(0,0,0,0.55),
+    inset 3px 3px 0 rgba(255,255,255,0.12), inset -4px -4px 0 rgba(0,0,0,0.5);
+  /* Liseré doré : la marque « c'est une récompense », sans glow. */
+  border-left: 8px solid ${PALETTE.jauneSecurite};
+  animation: trophy-life 3000ms steps(7, end) both;
+}
+/* Glissement depuis le bord droit, maintien, puis retrait. La DURÉE est posée en
+   inline par l'overlay (TROPHY_VISIBLE_MS) : une seule source pour le JS et le CSS. */
+@keyframes trophy-life {
+  0%   { transform: translateX(115%); }
+  12%  { transform: translateX(0); }
+  88%  { transform: translateX(0); }
+  100% { transform: translateX(115%); }
+}
+/* Socle tramé de l'icône (ui_dither_dark.png). */
+#ui-root .trophy__plinth {
+  width: 64px; height: 64px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: ${METAL_DARK} url('${import.meta.env.BASE_URL}ui_dither_dark.png');
+  border: 4px solid ${PALETTE.contour};
+  box-shadow: inset 2px 2px 0 rgba(255,255,255,0.10), inset -2px -2px 0 rgba(0,0,0,0.6);
+}
+#ui-root .trophy__img { width: 52px; height: 52px; image-rendering: pixelated; }
+#ui-root .trophy__mono {
+  font-family: 'Jersey 25', monospace; font-size: 30px;
+  color: ${PALETTE.jauneSecurite}; text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+#ui-root .trophy__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#ui-root .trophy__label {
+  font-family: 'Jersey 25', monospace; font-size: 20px; letter-spacing: 2px;
+  color: ${PALETTE.jauneSecurite}; text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+#ui-root .trophy__name {
+  font-family: 'Jersey 25', monospace; font-size: 34px; letter-spacing: 1px;
+  color: ${PALETTE.blanc}; text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+#ui-root .trophy__desc {
+  font-family: 'Pixelify Sans', monospace; font-size: 20px;
+  color: ${PALETTE.solSable}; text-shadow: 1px 1px 0 ${PALETTE.contour};
+}
+#ui-root .trophy__seal { width: 40px; height: 40px; flex-shrink: 0; image-rendering: pixelated; }
+/* Mouvement réduit : le trophée apparaît/disparaît sans glisser (il reste LU). */
+@media (prefers-reduced-motion: reduce) {
+  #ui-root .trophy__panel { animation: none; }
+}
+
 /* ── Barre de PV de boss ──────────────────────────────────────────────── */
 #ui-root .bossbar {
   position: absolute;
@@ -451,22 +553,22 @@ const CSS = `
   display: flex; flex-direction: column; align-items: center; gap: 12px;
   min-width: 380px; pointer-events: none; z-index: 20;
   animation: jackpot-in 0.18s ease-out;
+  /* Retour playtest : panneau x2. Propriété zoom (pas transform: scale) pour ne
+     pas entrer en conflit avec les transform: translate(...) des animations
+     ci-dessous (centrage + jackpot-in/rainbow) tout en gardant le pixel-art net. */
+  zoom: 2;
 }
 #ui-root .jackpot--super { border-color: ${PALETTE.blanc}; animation: jackpot-in 0.18s ease-out, jackpot-rainbow 0.72s steps(1, end) infinite; }
 #ui-root .jackpot__title, #ui-root .jackpot__chest, #ui-root .jackpot__reels, #ui-root .jackpot__reveal { position: relative; z-index: 2; }
-/* Coffre pixel qui rebondit puis se balance (flat colors + contour noir, DA-safe). */
+/* Coffre PREMIUM (sprite PixelLab doré, ouvert) qui rebondit puis se balance. Le
+   super coffre affiche sa variante giga-brillante. image-rendering: pixelated → DA. */
 #ui-root .jackpot__chest {
-  width: 60px; height: 42px; margin-top: 6px; background: ${PALETTE.jauneSecurite};
-  border: 4px solid ${PALETTE.contour}; box-shadow: inset 0 -12px 0 ${GOLD_DK};
+  width: 96px; height: 96px; margin-top: 0;
+  background: url('/shared/chest/chest_gold_open.png') center/contain no-repeat;
+  image-rendering: pixelated;
   animation: jackpot-chest-pop 0.5s cubic-bezier(0.68,-0.55,0.265,1.55), jackpot-chest-bob 1.1s ease-in-out 0.5s infinite;
 }
-#ui-root .jackpot__chest::before {
-  content:''; position:absolute; top:-16px; left:-4px; right:-4px; height:16px;
-  background:${GOLD_DK}; border:4px solid ${PALETTE.contour}; box-sizing:border-box;
-}
-#ui-root .jackpot__chest::after {
-  content:''; position:absolute; top:6px; left:50%; margin-left:-5px; width:10px; height:14px; background:${PALETTE.contour};
-}
+#ui-root .jackpot--super .jackpot__chest { background-image: url('/shared/chest/chest_super_open.png'); }
 #ui-root .jackpot__title {
   font-family: 'Jersey 25', monospace; color: ${PALETTE.jauneSecurite};
   font-size: 46px; letter-spacing: 4px;
@@ -690,7 +792,7 @@ const CSS = `
   background: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 2px, transparent 2px 4px);
 }
 /* Décor titre (backdrop tramé bg_dusk derrière le panneau du titre). Ajouter
-   <img class="title-bg" src=".../bg_dusk.png"> en 1er enfant du .screen du titre,
+   <img class="title-bg" src=".../ui_bg_dusk.png"> en 1er enfant du .screen du titre,
    et donner au .screen du titre la classe .screen--title. cf. overlay-patch.md */
 #ui-root .title-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
 #ui-root .screen--title { background: rgba(6,8,16,0.30); }
@@ -715,7 +817,7 @@ const CSS = `
 
 /* ── Splash studio (avant le titre) ───────────────────────────────────── */
 /* Overlay plein écran joué UNE fois puis retiré par JS (voir overlay-patch.md).
-   Ajoute <img class="splash__helmet" src=".../casque.png"> + le nom + PRÉSENTE. */
+   Ajoute <img class="splash__helmet" src=".../ui_casque.png"> + le nom + PRÉSENTE. */
 #ui-root .splash { position: absolute; inset: 0; z-index: 70; background: #08080d; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; }
 #ui-root .splash__gyro { position: absolute; top: -240px; left: 50%; width: 1000px; height: 1000px; margin-left: -500px; background: repeating-conic-gradient(from 0deg, rgba(232,111,31,0.07) 0deg 20deg, transparent 20deg 40deg); animation: sweep 9s linear infinite; pointer-events: none; }
 #ui-root .splash__flash { position: absolute; inset: 0; background: ${GOLD_HI}; opacity: 0; animation: splash-flash 3.4s steps(2) forwards; pointer-events: none; }
@@ -748,6 +850,13 @@ const CSS = `
 #ui-root.ui-mobile .banner { transform: scale(var(--ui-scale, 1)); transform-origin: top right; }
 #ui-root.ui-mobile .bossbar { transform: translateX(-50%) scale(var(--ui-scale, 1)); transform-origin: top center; }
 #ui-root.ui-mobile .banner--boss, #ui-root.ui-mobile .banner--boss-final, #ui-root.ui-mobile .banner--evolution { transform: translateX(-50%) scale(var(--ui-scale, 1)); transform-origin: top center; }
+/* Trophée : le scale se pose sur .trophy, qui n'a AUCUN transform de base — donc
+   rien à répéter ici (contrairement à .bossbar, dont le translateX doit être
+   redit sous peine de décentrage). Le glissement vit sur .trophy__panel, un
+   AUTRE nœud : les deux transforms ne se marchent jamais dessus. */
+#ui-root.ui-mobile .trophy { transform: scale(var(--ui-scale, 1)); transform-origin: top right; }
+/* Écran étroit : la plaque ne doit pas déborder ni écraser le HUD. */
+#ui-root.ui-mobile .trophy__panel { max-width: 380px; }
 #ui-root.ui-mobile .stagecard { transform: translateX(-50%) scale(var(--ui-scale, 1)); transform-origin: top center; }
 #ui-root.ui-mobile .panel { transform: scale(var(--ui-scale, 1)); transform-origin: center; min-width: 0; max-width: 96vw; }
 #ui-root.ui-mobile .jackpot { min-width: 0; max-width: 96vw; }
@@ -769,7 +878,7 @@ const CSS = `
   --arc-brun1: #2B2018; --arc-brun2: #241C16; --arc-brun3: #17120E;
   --arc-creme: #EAD9B8; --arc-creme2: #E8B27A;
 }
-#ui-root .arc-metal { background: url('metal_v.png') repeat, var(--arc-brun2); box-shadow: inset 0 2px 0 rgba(255,255,255,.14), inset 0 -3px 0 rgba(0,0,0,.5); }
+#ui-root .arc-metal { background: url('ui_metal_v.png') repeat, var(--arc-brun2); box-shadow: inset 0 2px 0 rgba(255,255,255,.14), inset 0 -3px 0 rgba(0,0,0,.5); }
 #ui-root .arc-crt { background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 2px, transparent 2px 4px); }
 @keyframes slamIn {
   0% { opacity: 0; transform: scale(5.2) translateY(-90px) rotate(-5deg); }
@@ -846,6 +955,136 @@ const CSS = `
 #ui-root .charsel-cell { position: relative; aspect-ratio: 1; overflow: hidden; background: var(--arc-brun3); border: 3px solid var(--arc-contour); filter: brightness(.62) saturate(.8); }
 #ui-root .charsel-cell--active { filter: none; border-color: var(--arc-jaune); box-shadow: 0 0 0 3px var(--arc-orange2), 0 0 14px rgba(255,210,74,.6); }
 #ui-root .charsel-cell__img { position: absolute; left: 0; top: 0; width: 400%; height: 400%; image-rendering: pixelated; }
+
+/* --- Saisie du prénom + tableau des scores (fin de run) -------------------
+   Largeur 720px en border-box : le padding box fait alors 704px, soit
+   EXACTEMENT ce qu'attend l'offset de rivet codé en dur (12 + 660 + 20 + 12)
+   dans .panel::before/::after — les 4 rivets retombent symétriques sans
+   toucher à la règle partagée. Toute autre largeur les décale (cf. .panel--charsel). */
+#ui-root .panel--name { box-sizing: border-box; width: min(720px, 94vw); gap: 12px; padding: 24px 24px; }
+/* Titre/sous-titre/indice resserrés : aux tailles par défaut du panneau (64/30/26 px)
+   le titre débordait des rivets et les deux lignes de texte passaient sur 2 lignes. */
+#ui-root .panel--name .panel__title { font-size: 42px; letter-spacing: 2px; }
+#ui-root .panel--name .panel__subtitle { font-size: 21px; }
+#ui-root .panel--name .hint-line { font-size: 17px; margin: 0; }
+#ui-root .namepanel__score {
+  font-family: 'Press Start 2P'; font-size: clamp(12px, 2vw, 20px);
+  color: ${PALETTE.vertBonus}; letter-spacing: 2px; text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+/* Marges verticales = la place des chevrons de la case focalisée (ils débordent
+   de ~36 px au-dessus et en dessous) : sans elles, le chevron bas chevauche la
+   ligne d'indice. */
+#ui-root .namegrid { display: flex; gap: 9px; justify-content: center; margin: 16px 0 26px; }
+#ui-root .namecell {
+  position: relative; box-sizing: border-box;
+  width: 62px; height: 76px;
+  display: flex; align-items: center; justify-content: center;
+  background: ${PALETTE.brunSombre};
+  border: 4px solid ${PALETTE.contour};
+  box-shadow: 4px 4px 0 rgba(0,0,0,0.5),
+    inset 3px 3px 0 rgba(255,255,255,0.12), inset -3px -3px 0 rgba(0,0,0,0.5);
+  font-family: 'Jersey 25', monospace; font-size: 50px; line-height: 1;
+  color: ${PALETTE.solSable}; text-shadow: 2px 2px 0 ${PALETTE.contour};
+}
+/* Case focalisée = le focus VISIBLE de cet écran (il n'y a aucun item de menu ici). */
+#ui-root .namecell--focus {
+  background: ${PALETTE.jauneSecurite}; color: #3A1E06; text-shadow: none;
+  box-shadow: 5px 5px 0 rgba(0,0,0,0.5),
+    inset 4px 4px 0 rgba(255,255,255,0.5), inset -4px -4px 0 rgba(160,90,10,0.55);
+}
+/* Chevrons haut/bas : disent que Haut/Bas font défiler la lettre. Triangles CSS — pas d'emoji. */
+#ui-root .namecell--focus::before, #ui-root .namecell--focus::after {
+  content: ''; position: absolute; left: 50%; margin-left: -11px;
+  width: 0; height: 0;
+  border-left: 11px solid transparent; border-right: 11px solid transparent;
+  filter: drop-shadow(1.5px 1.5px 0 ${PALETTE.contour});
+  animation: namecellbob 0.6s steps(2) infinite;
+}
+#ui-root .namecell--focus::before { top: -21px; border-bottom: 15px solid ${PALETTE.orangeDanger}; }
+#ui-root .namecell--focus::after { bottom: -21px; border-top: 15px solid ${PALETTE.orangeDanger}; }
+@keyframes namecellbob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+
+/* Tableau des scores : les 20 lignes DOIVENT tenir sans scroll (même doctrine que
+   la compacité du rapport plus haut — le jeu est 100 % manette, un menu poussé
+   hors écran est inatteignable). D'où les lignes serrées et l'unique plaque. */
+#ui-root .panel--hiscores { box-sizing: border-box; width: min(720px, 94vw); padding: 14px 24px; gap: 6px; }
+#ui-root .panel--hiscores .panel__title { font-size: 38px; }
+#ui-root .panel--hiscores .panel__subtitle { font-size: 20px; }
+#ui-root .panel--hiscores .menu { width: auto; }
+#ui-root .panel--hiscores .menu__item { font-size: 20px; padding: 8px 24px 8px 48px; }
+#ui-root .hiscores__rows { display: flex; flex-direction: column; gap: 1px; width: 100%; }
+#ui-root .hiscore-row {
+  display: grid; grid-template-columns: 34px 118px 88px 1fr; gap: 10px; align-items: baseline;
+  font-family: 'Pixelify Sans', monospace; font-size: 17px; line-height: 1.1;
+  color: ${PALETTE.solSable}; padding: 1px 6px;
+}
+#ui-root .hiscore-row__rank { color: ${PALETTE.orangeDanger}; font-weight: 700; }
+#ui-root .hiscore-row__name { color: #EAD9B8; letter-spacing: 1px; }
+#ui-root .hiscore-row__score { color: ${PALETTE.jauneSecurite}; font-weight: 700; text-align: right; }
+#ui-root .hiscore-row__meta { font-size: 14px; opacity: 0.75; }
+/* La ligne du joueur : c'est TOUT l'intérêt de l'écran → elle doit sauter aux yeux. */
+#ui-root .hiscore-row--me {
+  background: ${PALETTE.jauneSecurite}; color: #3A1E06;
+  box-shadow: inset 3px 3px 0 rgba(255,255,255,0.45), inset -3px -3px 0 rgba(160,90,10,0.5);
+  animation: hiscoremeblink 0.9s steps(2) infinite;
+}
+#ui-root .hiscore-row--me .hiscore-row__rank,
+#ui-root .hiscore-row--me .hiscore-row__name,
+#ui-root .hiscore-row--me .hiscore-row__score { color: #3A1E06; }
+#ui-root .hiscore-row--me .hiscore-row__meta { color: #5A3410; opacity: 1; }
+#ui-root .hiscore-row--empty { display: block; text-align: center; }
+@keyframes hiscoremeblink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.82; } }
+
+/* Écran des succès : le catalogue ENTIER doit tenir sans scroll (même doctrine
+   que le tableau des scores et le rapport — seul « Retour » est focalisable).
+   D'où la grille 2 colonnes : ~10 succès = 5 rangées, pas une de plus à l'écran. */
+#ui-root .panel--achievements { box-sizing: border-box; width: min(880px, 96vw); padding: 14px 24px; gap: 6px; }
+#ui-root .panel--achievements .panel__title { font-size: 38px; }
+#ui-root .panel--achievements .panel__subtitle { font-size: 20px; }
+#ui-root .panel--achievements .menu { width: auto; }
+#ui-root .panel--achievements .menu__item { font-size: 20px; padding: 8px 24px 8px 48px; }
+#ui-root .ach__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 14px; width: 100%; }
+#ui-root .ach-row {
+  display: grid; grid-template-columns: 40px 1fr 18px; gap: 8px; align-items: center;
+  padding: 4px 6px; border: 3px solid ${PALETTE.contour};
+  background: rgba(0,0,0,0.28);
+  /* Ombre portée DÉCALÉE, blur 0 (DA 16-bit) — jamais de halo. */
+  box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+}
+/* Verrouillé = l'état PAR DÉFAUT de la règle ci-dessus (grisé), débloqué = la
+   variante qui s'allume. Le succès acquis doit se distinguer, mais le raté doit
+   rester LISIBLE : c'est sa description qui dit quoi faire. */
+#ui-root .ach-row--on { background: rgba(61,220,132,0.10); border-color: ${PALETTE.contour}; }
+#ui-root .ach__plinth {
+  width: 40px; height: 40px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: ${METAL_DARK} url('${import.meta.env.BASE_URL}ui_dither_dark.png');
+  border: 3px solid ${PALETTE.contour}; box-sizing: border-box;
+}
+#ui-root .ach__img { width: 30px; height: 30px; image-rendering: pixelated; }
+#ui-root .ach__mono {
+  font-family: 'Pixelify Sans', monospace; font-size: 15px; font-weight: 700;
+  color: ${PALETTE.jauneSecurite};
+}
+/* Le verrou se lit en un coup d'œil : icône désaturée + texte en retrait. */
+#ui-root .ach-row:not(.ach-row--on) .ach__img { filter: grayscale(1) brightness(0.45); }
+#ui-root .ach-row:not(.ach-row--on) .ach__mono { color: ${PALETTE.solSable}; opacity: 0.5; }
+#ui-root .ach__text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+#ui-root .ach__name {
+  font-family: 'Pixelify Sans', monospace; font-size: 17px; font-weight: 700;
+  color: ${PALETTE.jauneSecurite}; line-height: 1.1;
+}
+#ui-root .ach__desc {
+  font-family: 'Pixelify Sans', monospace; font-size: 13px;
+  color: ${PALETTE.solSable}; opacity: 0.8; line-height: 1.1;
+}
+#ui-root .ach-row:not(.ach-row--on) .ach__name { color: ${PALETTE.solSable}; opacity: 0.55; }
+#ui-root .ach-row:not(.ach-row--on) .ach__desc { opacity: 0.5; }
+#ui-root .ach__star { width: 18px; height: 18px; image-rendering: pixelated; flex-shrink: 0; }
+@media (prefers-reduced-motion: reduce) {
+  #ui-root .hiscore-row--me,
+  #ui-root .namecell--focus::before, #ui-root .namecell--focus::after { animation: none; }
+}
 /* --- Invite « tourne l'appareil » (P6 : tactile + portrait) --------------- */
 /* --- HUD par joueur (co-op ≥2) : un bloc à chaque coin, façon borne ---------
    Solo : la couche reste vide et AUCUNE de ces règles ne s'applique (pas de .coop). */
@@ -885,6 +1124,9 @@ const CSS = `
    (Le HUD « Manettes » est masqué côté JS : son display est inline, cf. syncPads.) */
 #ui-root.coop .hud { left: 50%; transform: translateX(-50%); margin: 14px 0; }
 #ui-root.coop .bossbar { top: 104px; }
+/* Co-op : le bloc J2 occupe le coin haut-droit et la barre de boss descend à
+   104px — le trophée passe SOUS les deux (sinon il les chevauche). */
+#ui-root.coop .trophy { top: 200px; }
 #ui-root.coop .minimap { left: 50%; transform: translateX(-50%); bottom: 14px; }
 
 #ui-root .rotate-hint { display: none; position: fixed; inset: 0; z-index: 90; background: var(--arc-brun3, #17120E);

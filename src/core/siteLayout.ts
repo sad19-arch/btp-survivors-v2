@@ -20,6 +20,7 @@
 import { Rng } from '@core/rng'
 import { CLUSTERS, STAGE_CLUSTERS } from '@content/clusters'
 import type { ClusterDef, ClusterElement } from '@content/clusters'
+import { resolveSolidity, type Solidity } from '@content/assetSolidity'
 import { buildSitePlan } from '@core/sitePlan'
 import type { SitePlan, PlacedZone } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
@@ -104,6 +105,18 @@ export interface SiteLayout {
    * `buildSiteLayout`). Absent = aucun (les consommateurs lisent `?? []`).
    */
   destructibles?: DestructibleSpawn[]
+  /**
+   * Otages/prisonniers POSÉS dans la compo éditeur. DÉFINI (même vide) ⇒ la compo
+   * fait loi : la sim n'ajoute AUCUN prisonnier procédural. ABSENT ⇒ pas de compo →
+   * la sim place les prisonniers de façon procédurale (`Simulation.spawnPrisoners`).
+   */
+  prisoners?: PrisonerSpawn[]
+}
+
+/** Un otage/prisonnier à faire apparaître à une position monde (issu de l'éditeur). */
+export interface PrisonerSpawn {
+  x: number
+  y: number
 }
 
 /** Constante XOR pour dériver le RNG de dispersion des destructibles (isolé). */
@@ -237,11 +250,23 @@ function extractSurfaceSlowZones(
 
 /** Élément embarqué (compo/import) → ClusterElement (collision lossless). */
 function embeddedToClusterElement(e: EmbeddedElement): ClusterElement {
-  if (e.collide !== undefined && e.collide !== 'none') {
-    const shape = e.shape ?? { kind: 'circle', r: Math.max(16, e.scale * 40) }
-    return { assetKey: e.assetKey, dx: e.dx, dy: e.dy, scale: e.scale, flipX: e.flipX === true, collide: e.collide, shape }
+  // `layer` traverse sans être lu ici : c'est une donnée de RENDU (profondeur
+  // d'affichage). La sim n'en dépend pas — seuls `collide`/`shape` la concernent.
+  const base = { assetKey: e.assetKey, dx: e.dx, dy: e.dy, scale: e.scale, flipX: e.flipX === true }
+  const withLayer = e.layer === undefined ? base : { ...base, layer: e.layer }
+  const layered = e.tile === undefined ? withLayer : { ...withLayer, tile: e.tile }
+  const written: Solidity =
+    e.collide === undefined || e.collide === 'none'
+      ? { collide: 'none' }
+      : { collide: e.collide, shape: e.shape ?? { kind: 'circle', r: Math.max(16, e.scale * 40) } }
+  // La SOLIDITÉ DÉCLARÉE prime sur ce que le JSON transporte : une compo joueur
+  // exportée AVANT `assetSolidity` (pelleteuse `collide:'none'`) redevient
+  // correcte au chargement, sans migration de fichier.
+  const solid = resolveSolidity(e.assetKey, written)
+  if (solid.collide === 'none') {
+    return { ...layered, collide: 'none' }
   }
-  return { assetKey: e.assetKey, dx: e.dx, dy: e.dy, scale: e.scale, flipX: e.flipX === true, collide: 'none' }
+  return { ...layered, collide: solid.collide, shape: solid.shape }
 }
 
 /**
@@ -262,6 +287,7 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
   const obstacles: Obstacle[] = []
   const slowZones: SurfaceSlowZone[] = []
   const destructibles: DestructibleSpawn[] = []
+  const prisoners: PrisonerSpawn[] = []
 
   for (const inst of layout.instances) {
     const wx = offX + inst.x
@@ -269,8 +295,8 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
     const flip = inst.flipX
     const rot = inst.rotation
     if (inst.elements !== undefined && inst.elements.length > 0) {
-      // Les éléments DESTRUCTIBLES sont routés vers les entités destructibles
-      // (PV/casse), PAS vers le décor statique. Le reste est du décor/collision.
+      // Les éléments DESTRUCTIBLES / OTAGES sont routés vers leurs entités de sim
+      // (casse / libération), PAS vers le décor statique. Le reste est décor/collision.
       const rad = (rot * Math.PI) / 180
       const cos = Math.cos(rad)
       const sin = Math.sin(rad)
@@ -280,6 +306,12 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
           const lx = flip ? -e.dx : e.dx
           destructibles.push({
             typeId: e.destructible.typeId,
+            x: wx + lx * cos - e.dy * sin,
+            y: wy + lx * sin + e.dy * cos
+          })
+        } else if (e.prisoner !== undefined) {
+          const lx = flip ? -e.dx : e.dx
+          prisoners.push({
             x: wx + lx * cos - e.dy * sin,
             y: wy + lx * sin + e.dy * cos
           })
@@ -305,7 +337,9 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
     }
   }
 
-  return { clusters, obstacles, slowZones, destructibles }
+  // `prisoners` est TOUJOURS renvoyé (même vide) : c'est le signal « compo = loi »
+  // qui coupe le placement procédural côté sim (cf. `Simulation.reset`).
+  return { clusters, obstacles, slowZones, destructibles, prisoners }
 }
 
 /**
@@ -348,6 +382,41 @@ export function scatterDestructibles(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Plan de chantier effectif (décision PARTAGÉE sim ⇄ rendu)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Plan masse EFFECTIF du stage : `null` = aucun plan (ni obstacle, ni décor).
+ *
+ * POINT D'ENTRÉE UNIQUE de la sim ET du rendu. C'est volontaire : la question
+ * « ce stage a-t-il un plan procédural ? » ne doit avoir QU'UNE réponse. Si la
+ * sim et le rendu la calculaient chacun de leur côté, la moindre dérive donnerait
+ * un obstacle INVISIBLE (le joueur bute sur du vide) ou un décor TRAVERSABLE —
+ * deux bugs pénibles à diagnostiquer. Le rendu appelle donc cette fonction, pas
+ * `buildSitePlan` directement.
+ *
+ * Règle (cf. `StageLayout.keepSitePlan`) :
+ * - aucune compo               → plan présent (jeu génératif, comportement historique) ;
+ * - compo `keepSitePlan:false` → plan ABSENT (la compo se suffit à elle-même) ;
+ * - compo sans le champ / true → plan présent (non-régression des compos existantes).
+ *
+ * Stage sans `SITE_PROGRAMS` → `buildSitePlan` renvoie déjà `null` : le drapeau
+ * n'y change donc rien.
+ */
+export function resolveSitePlan(
+  seed: number,
+  worldW: number,
+  worldH: number,
+  stageId: string
+): SitePlan | null {
+  const composed = resolveComposedLayout(stageId)
+  if (composed !== null && composed.keepSitePlan === false) {
+    return null
+  }
+  return buildSitePlan(seed, worldW, worldH, stageId)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Fonction principale
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -380,6 +449,11 @@ export function buildSiteLayout(
   if (base.slowZones !== undefined) {
     result.slowZones = base.slowZones
   }
+  // Défini SEULEMENT via une compo (`computeBaseLayout` chemin composé) : sinon
+  // laissé absent → la sim place les prisonniers procéduralement (RNG dédié).
+  if (base.prisoners !== undefined) {
+    result.prisoners = base.prisoners
+  }
   return result
 }
 
@@ -395,16 +469,16 @@ function computeBaseLayout(
   const composed = resolveComposedLayout(stageId)
   if (composed !== null) {
     const site = composedToSiteLayout(composed)
-    // Backdrop procédural : pour un stage PROGRAMMÉ, le rendu dessine toujours les
+    // Backdrop procédural : quand le plan est CONSERVÉ, le rendu dessine les
     // panneaux de clôture des anneaux depuis le plan (siteRenderer.drawPlan). On
     // ré-injecte ici LEURS obstacles pour que la collision de la sim colle aux
-    // panneaux visibles (parité sim/rendu). Le déterminisme est préservé.
-    if (SITE_PROGRAMS[stageId] !== undefined) {
-      const plan = buildSitePlan(seed, worldW, worldH, stageId)
-      if (plan !== null) {
-        for (const f of plan.fences) {
-          site.obstacles.push({ kind: 'segment', x: f.x1, y: f.y1, x2: f.x2, y2: f.y2, thickness: 12, blocks: 'both' })
-        }
+    // panneaux visibles. `resolveSitePlan` (et NON `buildSitePlan`) : c'est la
+    // décision partagée avec le rendu qui garantit la parité — `keepSitePlan:false`
+    // ⇒ `null` ⇒ ni obstacle ici, ni décor là-bas. Déterminisme préservé.
+    const plan = resolveSitePlan(seed, worldW, worldH, stageId)
+    if (plan !== null) {
+      for (const f of plan.fences) {
+        site.obstacles.push({ kind: 'segment', x: f.x1, y: f.y1, x2: f.x2, y2: f.y2, thickness: 12, blocks: 'both' })
       }
     }
     return site

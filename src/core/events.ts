@@ -39,13 +39,30 @@ export class AuraPulseEvent extends Event {
   }
 }
 
-/** Émis quand un ouvrier prisonnier est libéré (pour étincelles + bulle « Merci ! »). */
+/**
+ * Émis quand un otage remercie et s'en va (expiration de la rage, OU libération
+ * « classique » au-delà du cap d'alliés) — pour les étincelles + bulle « Merci ! ».
+ */
 export class PrisonerFreedEvent extends Event {
   constructor(
     readonly x: number,
     readonly y: number
   ) {
     super('prisonerFreed')
+  }
+}
+
+/**
+ * Émis quand un otage libéré devient ENRAGÉ (allié temporaire). Pour le feedback
+ * « enragé » côté rendu (aura, éclat) et un éventuel SFX. `playerId` = sauveteur.
+ */
+export class PrisonerEnragedEvent extends Event {
+  constructor(
+    readonly x: number,
+    readonly y: number,
+    readonly playerId: number
+  ) {
+    super('prisonerEnraged')
   }
 }
 
@@ -136,7 +153,7 @@ export class EvolvedEvent extends Event {
  */
 export class ChestOpenedEvent extends Event {
   constructor(
-    readonly kind: 'evolution' | 'cards' | 'heal',
+    readonly kind: 'evolution' | 'weapon-up' | 'heal',
     readonly playerId: number,
     readonly isSuper: boolean
   ) {

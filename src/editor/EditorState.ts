@@ -10,17 +10,51 @@ import {
   parseLayout,
   serializeLayout,
   type EmbeddedElement,
-  type EmbeddedShape,
   type LayoutInstance,
   type LayoutMarker,
   type MarkerType,
   type LayoutNpc,
   type LayoutPath,
   type NpcKind,
+  type PathType,
   type StageLayout,
   type Vec2
 } from './StageLayoutSchema'
-import { editorAsset, paletteEntry } from './PrefabCatalog'
+import { PATH_LIMITS } from '@content/stageLayout'
+import { editorAsset, paletteEntry, type AssetRole } from './PrefabCatalog'
+import type { RenderLayer } from '@content/stageLayout'
+import { resolveSolidity, type Solidity } from '@content/assetSolidity'
+
+/**
+ * Rôle de palette → couche d'affichage en jeu. La correspondance est explicite
+ * pour que le rendu n'ait plus à deviner la profondeur depuis le préfixe de la
+ * clé d'asset (cf. `RenderLayer` : `piste_strip` s'affichait à hauteur de prop).
+ * `ground` et `worker` sont rendus par d'autres chemins → pas de couche ici.
+ */
+function layerForRole(role: AssetRole | undefined): RenderLayer | undefined {
+  switch (role) {
+    case 'ground': return 'ground'
+    case 'decal': return 'decal'
+    case 'landmark':
+    case 'structure':
+    case 'column': return 'struct'
+    case 'prop':
+    case 'destructible': return 'prop'
+    default: return undefined
+  }
+}
+/**
+ * REPLI de solidité pour un asset NON DÉCLARÉ dans `assetSolidity` : on rejoue
+ * exactement l'heuristique historique (un landmark/structure/poteau est un corps
+ * solide, cercle synthétisé depuis l'échelle). Ce n'est plus la règle — c'est le
+ * défaut sûr qui évite de faire traverser d'un coup ~200 assets non déclarés.
+ * Toute clé DÉCLARÉE ignore ce repli.
+ */
+function roleSolidityFallback(role: AssetRole | undefined, scale: number): Solidity | undefined {
+  const block = role === 'landmark' || role === 'structure' || role === 'column'
+  return block ? { collide: 'both', shape: { kind: 'circle', r: Math.max(16, scale * 40) } } : undefined
+}
+
 import { ZONE_DEFS, ZONE_BY_TYPE } from './zones'
 import { CLUSTERS } from '@content/clusters'
 import { destructibleDef } from '@content/destructibles'
@@ -313,12 +347,15 @@ export class EditorState {
   nudge(dx: number, dy: number): void {
     this.moveSelectionBy(dx, dy)
   }
-  /** Supprime TOUTE la sélection (instances + npcs). */
+  /** Supprime TOUTE la sélection (instances + npcs + chemins). */
   deleteSelected(): void {
     if (this.selectedIds.size === 0) {return}
     const ids = this.selectedIds
     this.layout.instances = this.layout.instances.filter((i) => !ids.has(i.id))
     this.layout.npcs = this.layout.npcs.filter((n) => !ids.has(n.id))
+    // Les chemins étaient absents de ce filtre : un tracé raté était impossible
+    // à retirer autrement qu'en repartant d'une compo vierge.
+    this.layout.paths = this.layout.paths.filter((p) => !ids.has(p.id))
     this.selectOnly(null)
     this.emit()
   }
@@ -435,6 +472,30 @@ export class EditorState {
     this.emit()
   }
 
+  // ── plan de chantier procédural ─────────────────────────────────────────────
+  /**
+   * `true` = le plan de chantier PROCÉDURAL (clôtures, pistes, terre excavée) se
+   * superpose à la compo. Champ ABSENT du layout = comportement historique =
+   * conservé, d'où le `!== false` (et non un `=== true`).
+   */
+  get keepSitePlan(): boolean {
+    return this.layout.keepSitePlan !== false
+  }
+  /**
+   * N'écrit le champ QUE lorsqu'il vaut `false` : « absent » EST déjà le défaut
+   * `true`. L'écrire en clair ferait diverger l'export de toutes les compos
+   * existantes — y compris des 8 stages qui n'ont aucun plan procédural — pour
+   * zéro changement de comportement.
+   */
+  setKeepSitePlan(keep: boolean): void {
+    if (keep) {
+      delete this.layout.keepSitePlan
+    } else {
+      this.layout.keepSitePlan = false
+    }
+    this.emit()
+  }
+
   // ── macro-zones (outil de conception : marqueurs ÉDITEUR-only, jamais exportés) ─
   private static readonly ZONE_MIN = 200
   private static readonly ZONE_MAX = 20000
@@ -516,8 +577,63 @@ export class EditorState {
   }
 
   // ── chemins ─────────────────────────────────────────────────────────────────
-  addPath(type: 'truck_path' | 'worker_path', points: Vec2[]): void {
-    this.layout.paths.push({ id: newId(type), type, points })
+  /**
+   * Ajoute un chemin ET le sélectionne : il s'ouvre aussitôt sur ses réglages.
+   * Sans la sélection, il faudrait re-cliquer le tracé pour le régler — un 2e
+   * obstacle après celui d'`Entrée`, qui est déjà la cause du problème rapporté.
+   */
+  addPath(type: PathType, points: Vec2[]): LayoutPath {
+    const p: LayoutPath = { id: newId(type), type, points }
+    this.layout.paths.push(p)
+    this.selectOnly(p.id)
+    this.emit()
+    return p
+  }
+
+  /** Chemin actuellement sélectionné (l'inspecteur s'y branche), ou null. */
+  selectedPath(): LayoutPath | null {
+    return this.layout.paths.find((p) => p.id === this.primaryId) ?? null
+  }
+
+  /**
+   * Modifie les RÉGLAGES d'un chemin (jamais ses points). Les valeurs sont
+   * CLAMPÉES ici aussi, et pas seulement au parse : l'inspecteur ne doit pas
+   * pouvoir produire une vitesse nulle (division par zéro dans `tTrajet`), ni un
+   * NaN — un `<input type="number">` vidé donne `Number('') = NaN`, ce qui ferait
+   * disparaître le marcheur.
+   */
+  updatePath(id: string, patch: Partial<Omit<LayoutPath, 'id' | 'points'>>): void {
+    const p = this.layout.paths.find((x) => x.id === id)
+    if (p === undefined) {return}
+    const clamp = (v: number, min: number, max: number): number => Math.min(max, Math.max(min, v))
+    if (patch.name !== undefined) {
+      // Nom vidé = pas de nom : on retombe sur le libellé de famille.
+      if (patch.name === '') {delete p.name} else {p.name = patch.name}
+    }
+    if (patch.skin !== undefined) {
+      // « (défaut) » = chaîne vide → EFFACER, pas figer : un skin '' ferait
+      // chercher une texture nommée '' et le marcheur disparaîtrait.
+      if (patch.skin === '') {delete p.skin} else {p.skin = patch.skin}
+    }
+    if (patch.oneWay !== undefined) {p.oneWay = patch.oneWay}
+    if (patch.count !== undefined && Number.isFinite(patch.count)) {
+      p.count = Math.round(clamp(patch.count, PATH_LIMITS.count.min, PATH_LIMITS.count.max))
+    }
+    if (patch.speed !== undefined && Number.isFinite(patch.speed)) {
+      p.speed = clamp(patch.speed, PATH_LIMITS.speed.min, PATH_LIMITS.speed.max)
+    }
+    if (patch.pauseMs !== undefined && Number.isFinite(patch.pauseMs)) {
+      p.pauseMs = clamp(patch.pauseMs, PATH_LIMITS.pauseMs.min, PATH_LIMITS.pauseMs.max)
+    }
+    this.emit()
+  }
+
+  /** Supprime un chemin par id. */
+  deletePath(id: string): void {
+    const before = this.layout.paths.length
+    this.layout.paths = this.layout.paths.filter((p) => p.id !== id)
+    if (this.layout.paths.length === before) {return}
+    if (this.primaryId === id) {this.selectOnly(null)}
     this.emit()
   }
 
@@ -535,6 +651,26 @@ export class EditorState {
     const g = this.gridSize
     return { x: Math.round(x / g) * g, y: Math.round(y / g) * g }
   }
+  /**
+   * Pas de grille EXIGÉ par un prefab, s'il en déclare un (`PaletteEntry.snap`).
+   * `null` = aucune exigence → le snap global (préférence utilisateur) s'applique.
+   */
+  snapStepFor(prefab: string): number | null {
+    return paletteEntry(prefab)?.snap ?? null
+  }
+  /**
+   * Snap pour la pose/le déplacement d'un PREFAB donné.
+   *
+   * Un prefab qui DÉCLARE un pas (tuile de route) est aligné MÊME si le snap
+   * global est désactivé : sans ça, deux tuiles 256 ne raccordent jamais — c'est
+   * une contrainte de l'asset, pas une préférence. Tout autre prefab garde le
+   * comportement d'avant, au bit près.
+   */
+  applySnapFor(prefab: string, x: number, y: number): Vec2 {
+    const step = this.snapStepFor(prefab)
+    if (step === null) {return this.applySnap(x, y)}
+    return { x: Math.round(x / step) * step, y: Math.round(y / step) * step }
+  }
 
   // ── import / export ───────────────────────────────────────────────────────
   exportJson(): string {
@@ -543,8 +679,8 @@ export class EditorState {
   /**
    * Layout « jeu » : chaque instance dont le prefab N'EST PAS un cluster connu
    * (`CLUSTERS`) reçoit ses `elements` RÉSOLUS (assetKey/dx/dy/scale/flipX +
-   * `collide` dérivé du rôle) → le cœur peut le consommer sans le catalogue.
-   * Les prefabs qui SONT des clusters gardent leur collision fine côté jeu.
+   * `collide` et `layer` dérivés du rôle) → le cœur peut le consommer sans le
+   * catalogue. Les prefabs qui SONT des clusters gardent leur collision fine.
    */
   exportGameJson(): string {
     const clone = JSON.parse(serializeLayout(this.layout)) as StageLayout
@@ -566,15 +702,41 @@ export class EditorState {
             : [{ assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide: 'none', destructible: { typeId: entry.destructibleTypeId } }]
         continue
       }
+      // Otage : un seul élément NON-BLOQUANT portant `prisoner:{}` → `composedToSiteLayout`
+      // le route vers les entités prisonniers de la sim (libération + soin + rage).
+      if (entry.prisoner === true) {
+        const el = entry.elements?.[0]
+        inst.elements =
+          el === undefined
+            ? []
+            : [{ assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide: 'none', prisoner: {} }]
+        continue
+      }
       if (entry.elements === undefined) {
         continue
       }
       inst.elements = entry.elements.map((el): EmbeddedElement => {
         const role = editorAsset(el.assetKey)?.role
-        const block = role === 'landmark' || role === 'structure' || role === 'column'
-        const e: EmbeddedElement = { assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide: block ? 'both' : 'none' }
-        if (block) {
-          e.shape = { kind: 'circle', r: Math.max(16, el.scale * 40) }
+        // La solidité est DÉCLARÉE (`assetSolidity`), plus déduite du rôle : le
+        // rôle ne survit qu'en REPLI, pour les assets non déclarés. C'est ce qui
+        // empêche l'éditeur de diverger des clusters écrits à la main — il se
+        // trompait sur 4 cas / 4 (pelleteuse traversable, portail scellé…).
+        const solid = resolveSolidity(el.assetKey, undefined, roleSolidityFallback(role, el.scale))
+        const e: EmbeddedElement = { assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide: solid.collide }
+        // Le rôle était consommé pour décider la collision puis JETÉ : le rendu
+        // devait ensuite redeviner la profondeur depuis le préfixe de la clé, et
+        // se trompait (cf. `RenderLayer`). On le transporte désormais.
+        const layer = layerForRole(role)
+        if (layer !== undefined) {
+          e.layer = layer
+        }
+        if (el.tile !== undefined) {
+          e.tile = { w: el.tile.w, h: el.tile.h }
+        }
+        // La forme DÉCLARÉE est transportée telle quelle — elle n'est plus
+        // fabriquée depuis l'échelle : une clôture reste un SEGMENT.
+        if (solid.collide !== 'none') {
+          e.shape = solid.shape
         }
         if (el.flipX === true) {
           e.flipX = true
@@ -592,6 +754,18 @@ export class EditorState {
         const scaled: EmbeddedElement = { ...e, scale: e.scale * s }
         if (scaled.shape?.kind === 'circle') {
           scaled.shape = { kind: 'circle', r: scaled.shape.r * s }
+        }
+        // Le SEGMENT suit l'échelle lui aussi : une clôture agrandie ×2 doit
+        // barrer ×2 plus large. La solidité déclarée exporte désormais de vrais
+        // segments (avant, tout était converti en cercle → jamais rencontré).
+        if (scaled.shape?.kind === 'segment') {
+          scaled.shape = { kind: 'segment', x2: scaled.shape.x2 * s, y2: scaled.shape.y2 * s, thickness: scaled.shape.thickness * s }
+        }
+        // Plaque de sol : agrandir couvre PLUS DE SURFACE, ça ne grossit pas le
+        // motif. L'échelle se cuit donc dans w/h, pas dans `scale` (que le rendu
+        // TileSprite ignore) — sinon redimensionner une plaque ne ferait rien.
+        if (scaled.tile !== undefined) {
+          scaled.tile = { w: scaled.tile.w * s, h: scaled.tile.h * s }
         }
         return scaled
       })
@@ -621,34 +795,31 @@ export class EditorState {
       }
       const elements: EmbeddedElement[] = def.elements.map((el): EmbeddedElement => {
         const role = editorAsset(el.assetKey)?.role
-        // Un engin/structure/landmark = corps solide → collision. On reconnaît le
-        // rôle via le catalogue actif OU, en repli, via la convention de nommage
-        // (les engins/landmarks sont préfixés `struct_`/`landmark`), pour couvrir
-        // les assets absents du catalogue courant.
+        // Repli pour les assets NON DÉCLARÉS : un structure/landmark décoratif est
+        // rendu bloquant (comportement historique). On reconnaît le rôle via le
+        // catalogue actif OU, à défaut, via la convention de nommage — les clés
+        // DÉCLARÉES, elles, n'ont besoin d'aucune de ces devinettes.
         const key = el.assetKey
         const isEngine =
           role === 'structure' ||
           role === 'landmark' ||
           key.startsWith('struct_') ||
           key.startsWith('landmark')
-        let collide: 'none' | 'both' | 'enemies' = el.collide
-        let shape: EmbeddedShape | undefined =
-          el.shape === undefined
-            ? undefined
-            : el.shape.kind === 'circle'
-              ? { kind: 'circle', r: el.shape.r }
-              : { kind: 'segment', x2: el.shape.x2, y2: el.shape.y2, thickness: el.shape.thickness }
-        // Engins/héros décoratifs → rendus BLOQUANTS (cercle).
-        if (isEngine && collide === 'none') {
-          collide = 'both'
-          shape = { kind: 'circle', r: Math.max(24, el.scale * 44) }
-        }
-        const e: EmbeddedElement = { assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide }
+        const written: Solidity =
+          el.collide === 'none'
+            ? { collide: 'none' }
+            : { collide: el.collide, shape: el.shape ?? { kind: 'circle', r: Math.max(16, el.scale * 40) } }
+        const fallback: Solidity | undefined = isEngine
+          ? { collide: 'both', shape: { kind: 'circle', r: Math.max(24, el.scale * 44) } }
+          : undefined
+        const solid = resolveSolidity(key, written, fallback)
+        const e: EmbeddedElement = { assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide: solid.collide }
         if (el.flipX === true) {
           e.flipX = true
         }
-        if (shape !== undefined) {
-          e.shape = shape
+        // Forme TRANSPORTÉE (segment de clôture inclus), jamais re-synthétisée.
+        if (solid.collide !== 'none') {
+          e.shape = solid.shape
         }
         return e
       })

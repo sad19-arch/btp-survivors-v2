@@ -115,9 +115,10 @@ export function tickChestBearer(
 
 /**
  * Lâche le coffre GARANTI d'un porteur mort (appelé depuis `simulation.ts` sur
- * les positions de mort des convoyeurs, avant leur reap). Pas de RNG : la
- * récompense est méritée par la mise à mort de l'élite.
+ * les positions de mort des convoyeurs, avant leur reap). `isSuper` est tiré côté
+ * sim (RNG isolé `chestRng`) → 1/10 = super coffre doré. La récompense elle-même
+ * est méritée par la mise à mort de l'élite (pas de RNG sur le drop garanti).
  */
-export function dropChestBearerLoot(world: World, pos: Vec2): void {
-  dropPickup(world, pos, 'coffre', 0)
+export function dropChestBearerLoot(world: World, pos: Vec2, isSuper = false): void {
+  dropPickup(world, pos, 'coffre', 0, isSuper)
 }
