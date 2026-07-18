@@ -68,6 +68,14 @@ const HITSTOP_EVOLVE_MS = 70
 /** Verrou anti-strobe : délai mini entre deux gels d'impact. */
 const HITSTOP_COOLDOWN_MS = 160
 
+/** Amplitudes du zoom-punch (juice #10) — fraction de zoom ajoutée puis estompée. */
+const ZOOM_PUNCH_BOSS = 0.15
+const ZOOM_PUNCH_EVOLVE = 0.12
+const ZOOM_PUNCH_CHEST = 0.12
+
+/** Tranche de kills d'un palier (juice #8) — doit matcher `MILESTONE_STEP` de l'overlay. */
+const MILESTONE_KILLS = 100
+
 /**
  * Scène de jeu : couche RENDU. Elle observe `Simulation.getState()` et dessine ;
  * elle n'abrite aucune logique de gameplay. En mode test, ni le clavier ni le
@@ -120,6 +128,10 @@ export class GameScene extends Phaser.Scene {
    */
   private hitstopMsLeft = 0
   private hitstopCooldownMsLeft = 0
+  /** Dernier palier de 100 kills franchi (juice #8) — émet un event `milestone` (son+rumble). −1 = non initialisé. */
+  private lastMilestone = -1
+  /** Une formation était télégraphiée à la frame précédente (juice #9 : stinger sur l'apparition). */
+  private prevHadFormation = false
   /**
    * Streamer de décor par chunks (décalques + props) : génère le décor autour
    * de la caméra et détruit celui qui s'éloigne. Coût constant quelle que soit
@@ -233,8 +245,9 @@ export class GameScene extends Phaser.Scene {
     if (p === undefined) {
       return
     }
-    // Hitstop (juice #5) : l'évolution est un gros moment → petit gel de célébration.
+    // Hitstop (juice #5) + zoom-punch (juice #10) : l'évolution est un gros moment.
     this.triggerHitstop(HITSTOP_EVOLVE_MS)
+    this.camera.addZoomPunch(ZOOM_PUNCH_EVOLVE)
     this.vfx.spawnVfx('vfx_levelup', p.x, p.y, 0.2, 2.8, 650)
     // Sparkle supplémentaire en anneau (6 points) pour bien marquer l'évolution.
     for (let i = 0; i < 6; i++) {
@@ -261,6 +274,15 @@ export class GameScene extends Phaser.Scene {
     }
     this.vfx.spawnChestBurst(p.x, p.y, ev.isSuper)
     this.cameras.main.shake(ev.isSuper ? 420 : 240, ev.isSuper ? 0.009 : 0.006)
+    // Zoom-punch (juice #10) : réservé au SUPER-coffre (le gros moment casino).
+    if (ev.isSuper) {
+      this.camera.addZoomPunch(ZOOM_PUNCH_CHEST)
+    }
+  }
+
+  /** Spawn de boss (juice #10) : zoom-punch cinématique sur l'entrée du contremaître. */
+  private readonly onBossSpawned = (): void => {
+    this.camera.addZoomPunch(ZOOM_PUNCH_BOSS)
   }
   // Budget de VFX de casse PAR FRAME (perf) : au-delà, casse allégée (pas de burst
   // de fragments) ; le screen-shake est COALESCÉ (1 seul par frame, le 1er break).
@@ -311,6 +333,7 @@ export class GameScene extends Phaser.Scene {
     // Hitstop (juice #5) sur les GROSSES morts seulement : boss > élite (pas la horde).
     if (ev.bossRole !== undefined) {
       this.triggerHitstop(HITSTOP_BOSS_MS)
+      this.camera.addZoomPunch(ZOOM_PUNCH_BOSS) // zoom-punch #10 sur la mort du boss
     } else if (ev.isElite) {
       this.triggerHitstop(HITSTOP_ELITE_MS)
     }
@@ -850,6 +873,7 @@ export class GameScene extends Phaser.Scene {
     this.app.events.addEventListener('chestOpened', this.onChestOpened)
     this.app.events.addEventListener('destructibleBroken', this.onDestructibleBroken)
     this.app.events.addEventListener('enemyDied', this.onEnemyDied)
+    this.app.events.addEventListener('bossSpawned', this.onBossSpawned)
     this.events.once('shutdown', () => {
       this.app.events.removeEventListener('auraPulse', this.onAuraPulse)
       this.app.events.removeEventListener('prisonerFreed', this.onPrisonerFreed)
@@ -858,6 +882,7 @@ export class GameScene extends Phaser.Scene {
       this.app.events.removeEventListener('chestOpened', this.onChestOpened)
       this.app.events.removeEventListener('destructibleBroken', this.onDestructibleBroken)
       this.app.events.removeEventListener('enemyDied', this.onEnemyDied)
+      this.app.events.removeEventListener('bossSpawned', this.onBossSpawned)
       this.telegraph.dispose()
       this.siteRenderer.dispose()
       this.siteStructures.dispose()
@@ -946,6 +971,15 @@ export class GameScene extends Phaser.Scene {
     if (st.screen !== 'title' && (st.stageId !== this.loadedStageId || st.runId !== this.loadedRunId)) {
       this.scene.restart(this.sceneData)
       return
+    }
+    // Palier de kills (juice #8) : SON + rumble à chaque tranche de 100 (le VISUEL,
+    // bandeau + CADENCE, vit dans l'overlay). Auto-reset sur nouvelle run (score→0).
+    const milestone = Math.floor(st.score / MILESTONE_KILLS)
+    if (this.lastMilestone < 0 || milestone < this.lastMilestone) {
+      this.lastMilestone = milestone
+    } else if (milestone > this.lastMilestone) {
+      this.lastMilestone = milestone
+      this.app.events.dispatchEvent(new Event('milestone'))
     }
     // Overlay tactile visible en jeu uniquement (inconditionnel, même en test → l'e2e l'observe).
     this.touchInput?.setVisible(st.screen === 'game' && !st.introActive)
@@ -1036,6 +1070,13 @@ export class GameScene extends Phaser.Scene {
 
     // Télégraphe des formations (Task 10) : marqueur au sol + flèche de bord d'écran.
     this.telegraph.sync(state, this.cameras.main)
+    // Stinger d'anticipation (juice #9) : klaxon quand un télégraphe APPARAÎT (0→≥1),
+    // une fois par vague (pas à chaque frame). Le cue no-op si l'asset n'est pas chargé.
+    const hasFormation = state.pendingFormations.length > 0
+    if (hasFormation && !this.prevHadFormation) {
+      this.app.events.dispatchEvent(new Event('waveIncoming'))
+    }
+    this.prevHadFormation = hasFormation
 
     // Clusters de terrain (T5) + ouvriers (T6) : rendu cosmétique, sauté en lite (cf. reset).
     if (!this.lite) {

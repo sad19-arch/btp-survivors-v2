@@ -26,5 +26,7 @@ export class RumbleDirector {
       const isSuper = (e as ChestOpenedEvent).isSuper
       this.rumbler.play(isSuper ? RUMBLE.chestSuper : RUMBLE.chest, true)
     })
+    // Palier de 100 kills (juice #8) : petite secousse de récompense.
+    events.addEventListener('milestone', () => this.rumbler.play(RUMBLE.milestone, true))
   }
 }

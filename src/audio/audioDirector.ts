@@ -211,6 +211,10 @@ export class AudioDirector {
       this.playCue((e as ChestOpenedEvent).isSuper ? 'chestFanfareSuper' : 'chestFanfare')
     })
     on('upgradePick', () => { this.playCue('upgradePick') })
+    // Palier de kills (juice #8) : tampon « validé » à chaque tranche de 100 déblayés.
+    on('milestone', () => { this.playCue('victoryStamp') })
+    // Anticipation de vague (juice #9) : klaxon de chantier à l'apparition d'un télégraphe.
+    on('waveIncoming', () => { this.playCue('waveIncoming') })
     // Casse d'un destructible : son PAR MATÉRIAU (bois/métal/gravats), throttlé côté cue.
     on('destructibleBroken', (e) => {
       const def = destructibleDef((e as DestructibleBrokenEvent).typeId)

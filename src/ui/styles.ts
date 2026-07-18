@@ -132,6 +132,30 @@ const CSS = `
 /* Flash de dégât : voile rouge bref (opacité pilotée en inline, fondu par frame). */
 #ui-root .combat-fx__hurt { background: ${PALETTE.rougeAlerte}; }
 
+/* ── CADENCE (combo, juice #7) + palier « N DÉBLAYÉS » (juice #8) ──────── */
+/* Panneau pixel compact ; couleur du chiffre + de la barre pilotée en inline
+   selon le palier de cadence. Barre qui se vide = fenêtre de combo restante. */
+#ui-root .cadence {
+  position: absolute; top: 90px; left: 50%; transform: translateX(-50%);
+  display: none; flex-direction: column; align-items: center; gap: 4px;
+  padding: 5px 14px; background: var(--tex); background-size: 60px 100%;
+  border: 4px solid ${PALETTE.contour}; box-shadow: 4px 4px 0 rgba(0,0,0,0.5);
+  z-index: 6; pointer-events: none;
+}
+#ui-root .cadence--on { display: flex; }
+#ui-root .cadence__label { font-weight: 700; font-size: 26px; letter-spacing: 1px; text-shadow: 2px 2px 0 ${PALETTE.contour}; }
+#ui-root .cadence__bar { width: 130px; height: 8px; background: #120E0A; border: 2px solid ${PALETTE.contour}; box-shadow: inset 1px 1px 0 #000; }
+#ui-root .cadence__fill { height: 100%; }
+/* Palier : bandeau doré bref, pop pixel (steps), coins carrés. */
+#ui-root .milestone {
+  position: absolute; top: 150px; left: 50%; transform: translateX(-50%);
+  display: none; padding: 8px 22px; background: ${PALETTE.jauneSecurite}; color: ${PALETTE.contour};
+  border: 4px solid ${PALETTE.contour}; box-shadow: 5px 5px 0 rgba(0,0,0,0.5);
+  font-weight: 700; font-size: 26px; letter-spacing: 2px; z-index: 7; pointer-events: none;
+}
+#ui-root .milestone--on { display: block; animation: milestone-pop 0.3s steps(3, end); }
+@keyframes milestone-pop { from { transform: translateX(-50%) scale(0.4); } to { transform: translateX(-50%) scale(1); } }
+
 /* ── Écran modal + panneau métal ──────────────────────────────────────── */
 #ui-root .screen {
   position: absolute;

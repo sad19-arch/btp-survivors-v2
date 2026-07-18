@@ -1,5 +1,6 @@
 import { h, clear } from './h'
 import { injectStyles } from './styles'
+import { PALETTE } from './palette'
 import { formatTime, formatNumber } from './format'
 import { playerColor } from '@content/players'
 import { gamepadHudModel } from './gamepadHud'
@@ -75,6 +76,22 @@ const HURT_FLASH_MS = 150
 const HURT_FLASH_PEAK = 0.4
 /** Perte de PV minimale (≥) pour déclencher un flash — filtre le bruit numérique. */
 const HP_LOSS_EPS = 0.5
+
+/** Fenêtre glissante d'un enchaînement (juice #7) : sans kill pendant ce délai, la cadence retombe. */
+const COMBO_WINDOW_MS = 2000
+/** En dessous de ce compteur, la CADENCE ne s'affiche pas (on ne montre pas les mini-streaks). */
+const CADENCE_MIN = 5
+/** Paliers de couleur de la cadence (montée en intensité) — bornes basses. */
+const CADENCE_TIERS: ReadonlyArray<{ min: number; color: string }> = [
+  { min: 50, color: PALETTE.cyanAccent },
+  { min: 30, color: PALETTE.rougeAlerte },
+  { min: 15, color: PALETTE.orangeDanger },
+  { min: 0, color: PALETTE.jauneSecurite }
+]
+/** Palier de célébration (juice #8) : un bandeau tous les N kills. */
+const MILESTONE_STEP = 100
+/** Durée d'affichage du bandeau de palier (ms). */
+const MILESTONE_SHOW_MS = 1400
 
 /**
  * Overlay DOM des écrans (Titre / Pause / Upgrade / Game Over) + HUD. Observe
@@ -204,6 +221,21 @@ export class Overlay {
   /** Échéance (performance.now) du flash de dégât ; -1 = inactif. */
   private hurtFlashUntil = -1
 
+  /** CADENCE (combo, juice #7) : panneau + chiffre + barre de fenêtre. */
+  private readonly cadenceEl: HTMLElement
+  private readonly cadenceLabelEl: HTMLElement
+  private readonly cadenceFillEl: HTMLElement
+  /** Bandeau de palier (juice #8). */
+  private readonly milestoneEl: HTMLElement
+  /** Score de la frame précédente — dérive l'enchaînement des deltas de kills (comme #3/#4). */
+  private prevScore = -1
+  /** Enchaînement courant + échéance de la fenêtre glissante. */
+  private comboCount = 0
+  private comboExpiresAt = -1
+  /** Dernier palier de 100 kills déjà célébré (0 = aucun), + échéance du bandeau. */
+  private celebratedMilestone = 0
+  private milestoneUntil = -1
+
   constructor(
     root: HTMLElement,
     onSelect?: (index: number) => void,
@@ -229,9 +261,18 @@ export class Overlay {
     // (sous le HUD) pour ne pas obscurcir le texte. Piloté par `syncCombatFeedback`.
     this.combatFxDanger = h('div', { className: 'combat-fx__danger' })
     this.combatFxHurt = h('div', { className: 'combat-fx__hurt' })
+    // CADENCE (combo #7) + bandeau de palier (#8) : éléments dédiés, pilotés par sync.
+    this.cadenceLabelEl = h('span', { className: 'cadence__label' })
+    this.cadenceFillEl = h('div', { className: 'cadence__fill' })
+    this.cadenceEl = h('div', { className: 'cadence' },
+      this.cadenceLabelEl,
+      h('div', { className: 'cadence__bar' }, this.cadenceFillEl)
+    )
+    this.milestoneEl = h('div', { className: 'milestone' })
     // Cadre métal ouvragé (au fond) + couches UI + scanlines CRT (au-dessus). Décoratif.
     root.append(h('div', { className: 'frame' }))
     root.append(h('div', { className: 'combat-fx' }, this.combatFxDanger, this.combatFxHurt))
+    root.append(this.cadenceEl, this.milestoneEl)
     root.append(
       this.hud,
       this.screenLayer,
@@ -324,6 +365,7 @@ export class Overlay {
     this.syncGamepads(state)
     this.syncMinimap(state)
     this.syncCombatFeedback(state, now)
+    this.syncCadence(state, now)
     // Machine à sous coffre : déclenchée UNE fois à chaque ouverture de coffre
     // (les 3 issues), via le one-shot `chestOpen`. Garde `chestSlotShown` pour ne
     // pas rejouer à chaque rAF tant que `chestOpen` reste non-null.
@@ -423,6 +465,67 @@ export class Overlay {
     const remain = this.hurtFlashUntil - now
     this.combatFxHurt.style.opacity =
       remain > 0 ? String((HURT_FLASH_PEAK * Math.min(1, remain / HURT_FLASH_MS)).toFixed(3)) : '0'
+  }
+
+  /**
+   * CADENCE (combo, juice #7) + palier « N DÉBLAYÉS » (juice #8) — observer-only.
+   * Dérivé des DELTAS de `state.score` (= kills) en `sync()`, comme le flash de
+   * dégât (#4) : aucun event, aucune donnée de sim ajoutée. L'enchaînement grimpe
+   * à chaque kill et retombe après `COMBO_WINDOW_MS` sans kill ; tous les 100 kills,
+   * un bandeau doré célèbre le palier (le SON/rumble est géré côté GameScene).
+   */
+  private syncCadence(state: AppViewState, now: number): void {
+    const inRun = state.screen === 'game' && !state.introActive
+    if (!inRun) {
+      this.prevScore = -1
+      this.comboCount = 0
+      this.comboExpiresAt = -1
+      this.celebratedMilestone = 0
+      this.milestoneUntil = -1
+      this.cadenceEl.classList.remove('cadence--on')
+      this.milestoneEl.classList.remove('milestone--on')
+      return
+    }
+    const score = state.score
+    // 1er passage de la run : mémorise sans dériver (pas de faux combo ni palier au (re)départ).
+    if (this.prevScore < 0) {
+      this.prevScore = score
+      this.celebratedMilestone = Math.floor(score / MILESTONE_STEP)
+    }
+    const delta = score - this.prevScore
+    if (delta > 0) {
+      this.comboCount += delta
+      this.comboExpiresAt = now + COMBO_WINDOW_MS
+    } else if (now >= this.comboExpiresAt) {
+      this.comboCount = 0
+    }
+    // Palier (#8) : franchissement d'un multiple de MILESTONE_STEP.
+    const reached = Math.floor(score / MILESTONE_STEP)
+    if (reached > this.celebratedMilestone) {
+      this.celebratedMilestone = reached
+      this.milestoneEl.textContent = `${reached * MILESTONE_STEP} DÉBLAYÉS`
+      this.milestoneEl.classList.remove('milestone--on')
+      void this.milestoneEl.offsetWidth // reflow → rejoue l'animation « pop »
+      this.milestoneEl.classList.add('milestone--on')
+      this.milestoneUntil = now + MILESTONE_SHOW_MS
+    }
+    if (this.milestoneUntil > 0 && now >= this.milestoneUntil) {
+      this.milestoneEl.classList.remove('milestone--on')
+      this.milestoneUntil = -1
+    }
+    // Rendu de la CADENCE : chiffre + couleur de palier + barre de fenêtre restante.
+    if (this.comboCount >= CADENCE_MIN) {
+      const color = CADENCE_TIERS.find((t) => this.comboCount >= t.min)?.color ?? PALETTE.jauneSecurite
+      this.cadenceEl.classList.add('cadence--on')
+      this.cadenceLabelEl.textContent = `CADENCE ×${this.comboCount}`
+      this.cadenceLabelEl.style.color = color
+      this.cadenceFillEl.style.backgroundColor = color
+      const remain = Math.max(0, Math.min(1, (this.comboExpiresAt - now) / COMBO_WINDOW_MS))
+      this.cadenceFillEl.style.width = `${(remain * 100).toFixed(1)}%`
+    } else {
+      this.cadenceEl.classList.remove('cadence--on')
+    }
+    this.prevScore = score
   }
 
   /**

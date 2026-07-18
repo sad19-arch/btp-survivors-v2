@@ -490,6 +490,45 @@ describe('Overlay — feedback combat (vignette PV bas + flash de dégât)', () 
   })
 })
 
+describe('Overlay — CADENCE (combo) + palier (juice #7/#8)', () => {
+  /** Un état de jeu au score (= kills) donné. */
+  function atScore(app: App, score: number): import('@/app/appState').AppViewState {
+    return { ...app.getState(), score }
+  }
+
+  it('CADENCE : cachée sous le seuil, affichée avec le chiffre au-delà', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(atScore(app, 0)) // établit prevScore (pas de combo au 1er passage)
+    expect(root.querySelector('.cadence')?.classList.contains('cadence--on')).toBe(false)
+    overlay.sync(atScore(app, 10)) // +10 kills d'un coup (AoE)
+    expect(root.querySelector('.cadence')?.classList.contains('cadence--on')).toBe(true)
+    expect(root.querySelector('.cadence__label')?.textContent).toContain('×10')
+  })
+
+  it('palier : bandeau « 100 DÉBLAYÉS » au franchissement de 100 kills', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(atScore(app, 0))
+    overlay.sync(atScore(app, 100))
+    const ms = root.querySelector('.milestone')
+    expect(ms?.classList.contains('milestone--on')).toBe(true)
+    expect(ms?.textContent).toContain('100 DÉBLAYÉS')
+  })
+
+  it('hors run (titre) : CADENCE et palier éteints', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(atScore(app, 0)) // établit prevScore
+    overlay.sync(atScore(app, 30)) // +30 → CADENCE visible
+    expect(root.querySelector('.cadence')?.classList.contains('cadence--on')).toBe(true)
+    const title = new App({ seed: 1, mode: 'solo', autostart: false })
+    overlay.sync(title.getState())
+    expect(root.querySelector('.cadence')?.classList.contains('cadence--on')).toBe(false)
+    expect(root.querySelector('.milestone')?.classList.contains('milestone--on')).toBe(false)
+  })
+})
+
 // ── Helpers pour les tests du Rapport de chantier ────────────────────────────
 
 function makeDeathReport(overrides: Partial<import('@/app/appState').RunReport> = {}): import('@/app/appState').RunReport {

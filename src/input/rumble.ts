@@ -25,7 +25,8 @@ export const RUMBLE = {
   boss: { strong: 0.8, weak: 0.6, ms: 320 },
   evolve: { strong: 0.7, weak: 0.5, ms: 260 },
   chest: { strong: 0.6, weak: 0.45, ms: 220 },
-  chestSuper: { strong: 0.95, weak: 0.75, ms: 520 }
+  chestSuper: { strong: 0.95, weak: 0.75, ms: 520 },
+  milestone: { strong: 0.5, weak: 0.55, ms: 200 }
 } as const satisfies Record<string, RumblePattern>
 
 /** Sous-ensemble de `GamepadHapticActuator` réellement utilisé (typage minimal, sans `any`). */

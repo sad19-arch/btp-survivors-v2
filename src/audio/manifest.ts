@@ -211,6 +211,8 @@ export const SFX_FILES: ReadonlyArray<readonly [string, string]> = [
   // Fanfares d'ouverture de coffre (ElevenLabs) : normale + super (plus épique).
   ['sfx_chest_fanfare', 'audio/sfx/chest_fanfare.mp3'],
   ['sfx_chest_fanfare_super', 'audio/sfx/chest_fanfare_super.mp3'],
+  // Stinger d'anticipation de vague (ElevenLabs) : klaxon/sirène de chantier qui monte.
+  ['sfx_wave_incoming', 'audio/sfx/wave_incoming.mp3'],
   // Mode Carnage (ElevenLabs) : 5 bruits de chair broyée, tirés au sort à la mort.
   // Volontairement courts (~0.7-0.8 s, ~7 Ko pièce) : ils jouent en rafale.
   ...CARNAGE_GORE_IDS.map((n) => [`sfx_gore_${n}`, `audio/sfx/carnage/gore_${n}.mp3`] as const),
@@ -287,6 +289,8 @@ export const SFX: Readonly<Record<string, SfxCue>> = {
   // Ouverture de coffre (ElevenLabs) : fanfare normale + super (plus forte/épique).
   chestFanfare: { keys: ['sfx_chest_fanfare'], volume: 0.8 },
   chestFanfareSuper: { keys: ['sfx_chest_fanfare_super'], volume: 1.0 },
+  // Anticipation de vague (juice #9) : throttlé pour éviter deux klaxons rapprochés.
+  waveIncoming: { keys: ['sfx_wave_incoming'], volume: 0.6, throttleMs: 3000 },
   gameOver: { keys: ['sfx_lose_1'], volume: 0.7 },
   stageClear: { keys: ['sfx_stage_clear'], volume: 0.7 },
   // Casse des destructibles, par matériau (throttlé : un AoE peut casser plusieurs objets/frame).

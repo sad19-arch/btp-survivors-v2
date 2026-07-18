@@ -22,6 +22,12 @@ const GROUP_ZOOM_TIERS: ReadonlyArray<{ maxSpread: number; zoom: number }> = [
 ]
 /** Zoom de repli si l'écartement dépasse tous les paliers ci-dessus. */
 const GROUP_ZOOM_FAR = 0.66
+/**
+ * Décroissance par frame du punch de zoom (juice #10). ~0.86 ⇒ le coup s'estompe
+ * en ~12-15 frames. Le punch est ADDITIF (multiplie le zoom de repos), il ne
+ * remplace jamais le zoom responsive.
+ */
+const ZOOM_PUNCH_DECAY = 0.86
 
 /**
  * Contrôleur de caméra extrait de GameScene : suivi solo (P1/dernier survivant)
@@ -33,6 +39,15 @@ export class CameraController {
   private following = false
   /** −1 = non initialisé (avant la première frame de jeu). */
   private lastTotalHp = -1
+  /**
+   * Zoom « de repos » lerpé (sans le punch) — le zoom affiché = ce zoom × (1 + punchΔ).
+   * −1 = non initialisé : au premier usage, on l'aligne sur le zoom COURANT de la caméra
+   * (posé par `create()` depuis la source responsive), pour ne pas ré-imposer un lerp
+   * depuis une valeur codée en dur (sinon la vue « zoome puis dézoome » au boot).
+   */
+  private baseZoomCurrent = -1
+  /** Punch de zoom courant (juice #10) : décroît chaque frame vers 0. */
+  private punchDelta = 0
   /** Mode overview (outil de revue visuelle) : caméra gelée sur un cadrage fixe. null = suivi normal. */
   private overview: CamPose | null = null
   /** Animation caméra en cours (mode overview animé). null = statique. */
@@ -56,7 +71,18 @@ export class CameraController {
     this.lastTotalHp = -1
     this.camAnim = null
     this.overview = null
+    this.baseZoomCurrent = -1
+    this.punchDelta = 0
     this.scene.cameras.main.stopFollow()
+  }
+
+  /**
+   * Ajoute un punch de zoom (juice #10) sur un gros moment (évolution, super-coffre,
+   * spawn/mort de boss). ADDITIF : `Math.max` pour ne pas empiler deux punchs, le
+   * zoom affiché devient `zoomDeRepos × (1 + punchΔ)` puis décroît. Render-only.
+   */
+  addZoomPunch(amount: number): void {
+    this.punchDelta = Math.max(this.punchDelta, amount)
   }
 
   /**
@@ -144,6 +170,9 @@ export class CameraController {
       return
     }
 
+    // Décroissance du punch de zoom (juice #10) — une fois par frame de jeu actif.
+    this.punchDelta = this.punchDelta > 0.0008 ? this.punchDelta * ZOOM_PUNCH_DECAY : 0
+
     // Screenshake : suivi des PV totaux, déclenche le shake natif Phaser sur dégât.
     const curTotalHp = this.totalHp(state)
     if (this.lastTotalHp >= 0) {
@@ -157,9 +186,14 @@ export class CameraController {
     const alive = state.players.filter((p) => p.alive)
 
     if (alive.length <= 1) {
-      // Solo / dernier survivant : lerp vers le zoom de base (desktop 1.2 ;
-      // tactile adaptatif — une rotation d'écran glisse en douceur vers la cible).
-      this.scene.cameras.main.zoom = Phaser.Math.Linear(this.scene.cameras.main.zoom, baseZoom, CAMERA_ZOOM_LERP)
+      // Solo / dernier survivant : le zoom de REPOS lerpe vers la base (desktop 1.2 ;
+      // tactile adaptatif). Le zoom AFFICHÉ = repos × (1 + punch) — le punch #10
+      // s'additionne puis s'estompe, sans jamais écraser le zoom responsive.
+      if (this.baseZoomCurrent < 0) {
+        this.baseZoomCurrent = this.scene.cameras.main.zoom
+      }
+      this.baseZoomCurrent = Phaser.Math.Linear(this.baseZoomCurrent, baseZoom, CAMERA_ZOOM_LERP)
+      this.scene.cameras.main.zoom = this.baseZoomCurrent * (1 + this.punchDelta)
       if (this.following) {
         return
       }
@@ -214,7 +248,12 @@ export class CameraController {
     const targetZoom = Math.min(baseZoom, tierZoom)
 
     const cam = this.scene.cameras.main
-    cam.zoom = Phaser.Math.Linear(cam.zoom, targetZoom, CAMERA_ZOOM_LERP)
+    // Zoom de repos lerpé, puis punch #10 additif (comme en solo).
+    if (this.baseZoomCurrent < 0) {
+      this.baseZoomCurrent = cam.zoom
+    }
+    this.baseZoomCurrent = Phaser.Math.Linear(this.baseZoomCurrent, targetZoom, CAMERA_ZOOM_LERP)
+    cam.zoom = this.baseZoomCurrent * (1 + this.punchDelta)
     const targetScrollX = cx - cam.width / 2 / cam.zoom
     const targetScrollY = cy - cam.height / 2 / cam.zoom
     cam.scrollX = Phaser.Math.Linear(cam.scrollX, targetScrollX, CAMERA_SCROLL_LERP)
