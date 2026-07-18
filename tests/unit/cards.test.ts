@@ -99,10 +99,10 @@ describe('cartes de level-up (pur)', () => {
       expect(cards.length).toBeLessThanOrEqual(eligible.length)
     })
   })
-  it('inventaire d\'armes vide → les cartes weapon-new couvrent exactement les 11 armes de base', () => {
+  it('inventaire d\'armes vide → les cartes weapon-new couvrent exactement les 12 armes de base', () => {
     const cards = eligibleCards(inv([], []))
     const newIds = cards.filter(c => c.kind === 'weapon-new').map(c => c.id).sort()
-    expect(newIds).toEqual(['boulons', 'brouette', 'chalumeau', 'cle_molette', 'cloueur', 'court_circuit', 'extincteur', 'goudron', 'marteau', 'pied_de_biche', 'scie'].sort())
+    expect(newIds).toEqual(['bonbonne_chantier', 'boulons', 'brouette', 'chalumeau', 'cle_molette', 'cloueur', 'court_circuit', 'extincteur', 'goudron', 'marteau', 'pied_de_biche', 'scie'].sort())
   })
 
   describe('Card enrichie (description / currentLevel / maxLevel)', () => {

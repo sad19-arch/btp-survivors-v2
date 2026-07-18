@@ -153,7 +153,7 @@ describe('recul physique central', () => {
 })
 
 describe('transmission du recul par les armes', () => {
-  it('conserve la table de forces validée pour les 19 armes', () => {
+  it('conserve la table de forces validée pour les 24 armes', () => {
     const expected = {
       cloueur: 170,
       scie: 90,
@@ -173,7 +173,12 @@ describe('transmission du recul par les armes', () => {
       cle_choc: 320,
       canon_mousse: 380,
       transpalette: 500,
-      lance_thermique: 180
+      lance_thermique: 180,
+      bonbonne_chantier: 300,
+      detonation_chaine: 380,
+      tronconneuse_chantier: 130,
+      brise_roche: 430,
+      barre_a_mine: 400
     }
     expect(Object.fromEntries(Object.entries(WEAPONS).map(([id, def]) => [id, def.knockback]))).toEqual(expected)
   })

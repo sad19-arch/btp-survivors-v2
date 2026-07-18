@@ -60,7 +60,7 @@ test('l’écran de pause s’affiche', async ({ page }) => {
   await page.waitForFunction(() => window.__GAME__?.ready === true)
   await page.evaluate(() => window.__GAME__?.pause())
   await expect(page.locator('.panel__title')).toHaveText('Pause')
-  await expect(page.locator('.menu__item')).toHaveCount(4)
+  await expect(page.locator('.menu__item')).toHaveCount(5)
 })
 
 test('sélectionner 2 joueurs au titre lance une coop (via la sélection de personnage séquentielle)', async ({

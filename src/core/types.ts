@@ -46,6 +46,14 @@ export interface PlayerComp {
    * champ ; absent ⇒ traité comme `DEFAULT_CHARACTER_ID` par `collectPlayers`.
    */
   characterId?: string
+  /**
+   * Dernière direction cardinale non-nulle de déplacement (snappée N/S/E/O),
+   * pour les armes à visée manuelle (ex. `bonbonne_chantier`). Écrite par
+   * `applyPlayerInputs` : PERSISTE quand le joueur s'arrête (jamais remise à
+   * zéro). Optionnel pour la même raison que `characterId` (fixtures de test
+   * existantes) ; absent ⇒ traité comme sud `{x:0,y:1}` par les lecteurs.
+   */
+  facing?: Vec2
 }
 
 /** Progression d'un joueur (XP / niveau). Par joueur → prêt-N-joueurs. */

@@ -45,6 +45,13 @@ export interface WeaponDef {
   /** Force de recul fixe, indépendante du niveau de l'arme. */
   knockback: number
   levels: WeaponLevel[]
+  /**
+   * Mode de visée (uniquement lu par `tickProjectile`). Absent ⇒ `'nearest'`
+   * (comportement de TOUTES les armes existantes, inchangé). `'facing'` = visée
+   * MANUELLE : tire dans `PlayerComp.facing` (dernière direction cardinale pressée,
+   * persiste à l'arrêt), sans recherche de cible, inconditionnellement sur cooldown.
+   */
+  aim?: 'nearest' | 'facing'
 }
 
 export function buildLevels(
@@ -173,9 +180,12 @@ export const WEAPONS: Record<string, WeaponDef> = {
   },
   extincteur: {
     id: 'extincteur', name: 'Extincteur', description: 'Cône de mousse qui ralentit les ennemis.', kind: 'cone', maxLevel: 8, knockback: 260,
+    // Retour playtest : portée trop courte, impact à peine visible. Portée relevée
+    // (base+croissance) — le VFX (proportionnel à `area`) grossit avec, et le shake
+    // d'impact est ajouté côté rendu (GameScene.onAuraPulse, toutes les armes cône).
     levels: buildLevels(
-      { damage: 8, cooldownMs: 1050, count: 1, area: 110, pierce: 99, slowMult: 0.5, slowMs: 700 },
-      { damage: 3, area: 7 }, 8
+      { damage: 8, cooldownMs: 1050, count: 1, area: 160, pierce: 99, slowMult: 0.5, slowMs: 700 },
+      { damage: 3, area: 11 }, 8
     )
   },
   brouette: {
@@ -187,11 +197,13 @@ export const WEAPONS: Record<string, WeaponDef> = {
   },
   chalumeau: {
     id: 'chalumeau', name: 'Chalumeau', description: 'Jet de flammes qui brûle devant toi.', kind: 'cone', maxLevel: 8, knockback: 120,
-    // Feel lance-flammes, opposé de l'extincteur : portée COURTE, cadence RAPIDE,
-    // gros dégâts, pas de slow. Jalons de cadence (niv 4/7) = progression ressentie.
+    // Feel lance-flammes : cadence RAPIDE, gros dégâts, pas de slow. Jalons de
+    // cadence (niv 4/7) = progression ressentie. Retour playtest : portée relevée
+    // (base+croissance) — trop courte/peu spectaculaire ; le VFX (proportionnel à
+    // `area`) grossit avec, shake d'impact ajouté côté rendu (GameScene.onAuraPulse).
     levels: buildLevels(
-      { damage: 7, cooldownMs: 520, count: 1, area: 85, pierce: 99 },
-      { damage: 2.5, area: 5 }, 8,
+      { damage: 7, cooldownMs: 520, count: 1, area: 130, pierce: 99 },
+      { damage: 2.5, area: 9 }, 8,
       { 4: { cooldownMs: 430 }, 7: { cooldownMs: 350 } }
     )
   },
@@ -225,7 +237,65 @@ export const WEAPONS: Record<string, WeaponDef> = {
   transpalette: { id: 'transpalette', name: 'Transpallette automatisée', description: 'Transpalette géant qui écrase tout sur son passage.', kind: 'projectile', maxLevel: 1, knockback: 500,
     levels: [{ damage: 110, cooldownMs: 1100, count: 1, area: 0, pierce: 99, projectileSpeed: 300, projectileRadius: 40, projectileLifeMs: 3200 }] },
   lance_thermique: { id: 'lance_thermique', name: 'Lance thermique', description: 'Lance de découpe industrielle qui fait fondre les rangs.', kind: 'cone', maxLevel: 1, knockback: 180,
-    levels: [{ damage: 42, cooldownMs: 300, count: 1, area: 150, pierce: 99 }] }
+    levels: [{ damage: 42, cooldownMs: 300, count: 1, area: 150, pierce: 99 }] },
+  // Visée MANUELLE (cf. WeaponDef.aim) — inspirée de l'otage enragé (boules de feu) :
+  // les ouvriers libérés donnent une bonbonne de gaz au joueur, lancée dans la
+  // dernière direction cardinale pressée (persiste à l'arrêt), transperce.
+  bonbonne_chantier: {
+    id: 'bonbonne_chantier',
+    name: 'Bonbonne de chantier',
+    description: 'Lance une bonbonne de gaz dans la direction visée — transperce et explose au contact, cadeau des ouvriers libérés.',
+    kind: 'projectile',
+    maxLevel: 8,
+    knockback: 300,
+    aim: 'facing',
+    levels: buildLevels(
+      { damage: 20, cooldownMs: 900, count: 1, area: 0, pierce: 2, projectileSpeed: 380, projectileRadius: 16, projectileLifeMs: 2200 },
+      { damage: 5 },
+      8,
+      { 3: { pierce: 3 }, 5: { pierce: 4, count: 2 }, 7: { pierce: 5 } }
+    )
+  },
+  detonation_chaine: {
+    id: 'detonation_chaine',
+    name: 'Détonation en chaîne',
+    description: 'Chaîne de bonbonnes qui détonent en cascade, transperçant tout le chantier.',
+    kind: 'projectile',
+    maxLevel: 1,
+    knockback: 380,
+    aim: 'facing',
+    levels: [{ damage: 62, cooldownMs: 480, count: 3, area: 0, pierce: 99, projectileSpeed: 340, projectileRadius: 22, projectileLifeMs: 2600 }]
+  },
+  // Scie orbitale maxée + disque diamant (lame plus affûtée) → tronçonneuse de chantier.
+  tronconneuse_chantier: {
+    id: 'tronconneuse_chantier',
+    name: 'Tronçonneuse de chantier',
+    description: 'Tempête de lames qui déchiquette tout ce qui approche.',
+    kind: 'orbital',
+    maxLevel: 1,
+    knockback: 130,
+    levels: [{ damage: 24, cooldownMs: 200, count: 6, area: 0, pierce: 99, orbitRadius: 128, orbitSpeed: 4.8, orbitHitRadius: 26 }]
+  },
+  // Marteau-piqueur maxé + compresseur pneumatique (air sous haute pression) → brise-roche.
+  brise_roche: {
+    id: 'brise_roche',
+    name: 'Brise-roche',
+    description: 'Onde de choc surpuissante qui pulvérise le sol autour de toi.',
+    kind: 'aura',
+    maxLevel: 1,
+    knockback: 430,
+    levels: [{ damage: 44, cooldownMs: 620, count: 1, area: 260, pierce: 99 }]
+  },
+  // Pied-de-biche maxé + chaussures de sécurité (appuis stables, swing plus large) → barre à mine.
+  barre_a_mine: {
+    id: 'barre_a_mine',
+    name: 'Barre à mine',
+    description: 'Frappe en arc massif qui envoie valser tout le chantier.',
+    kind: 'sweep',
+    maxLevel: 1,
+    knockback: 400,
+    levels: [{ damage: 58, cooldownMs: 480, count: 3, area: 190, pierce: 99 }]
+  }
 }
 
 const FALLBACK_LEVEL: WeaponLevel = { damage: 0, cooldownMs: 1000, count: 1, area: 0, pierce: 0 }

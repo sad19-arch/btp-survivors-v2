@@ -1081,6 +1081,19 @@ const CSS = `
 #ui-root .ach-row:not(.ach-row--on) .ach__name { color: ${PALETTE.solSable}; opacity: 0.55; }
 #ui-root .ach-row:not(.ach-row--on) .ach__desc { opacity: 0.5; }
 #ui-root .ach__star { width: 18px; height: 18px; image-rendering: pixelated; flex-shrink: 0; }
+
+/* Écran « Évolutions d'armes » (pause) : réutilise TOUT le look des succès
+   (.panel--achievements/.ach__*, mêmes classes appliquées en DOM) — seule la
+   ligne diffère, une PAIRE d'icônes (arme → catalyseur) au lieu d'une seule, donc
+   la 1re colonne de .ach-row s'élargit ICI, scopée à cet écran uniquement. */
+#ui-root .evo__grid .ach-row { grid-template-columns: 92px 1fr 18px; }
+#ui-root .evo__pair { display: flex; align-items: center; gap: 4px; }
+#ui-root .evo__pair .ach__plinth { width: 32px; height: 32px; }
+#ui-root .evo__pair .ach__img { width: 24px; height: 24px; }
+#ui-root .evo__arrow {
+  font-family: 'Pixelify Sans', monospace; font-size: 14px; font-weight: 700;
+  color: ${PALETTE.solSable}; flex-shrink: 0;
+}
 @media (prefers-reduced-motion: reduce) {
   #ui-root .hiscore-row--me,
   #ui-root .namecell--focus::before, #ui-root .namecell--focus::after { animation: none; }

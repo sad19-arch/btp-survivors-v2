@@ -40,7 +40,14 @@ export const WEAPON_ZZFX: Record<string, ZzfxParams> = {
   cle_choc: [0.44, 0.1, 280, 0, 0.03, 0.16, 2, 1, -0.28, 0, 0, 0, 0, 0.06], // double whoosh
   canon_mousse: [0.4, 0.15, 180, 0.02, 0.1, 0.16, 4, 1, 0, 0, 0, 0, 0, 0.95, 2], // souffle puissant
   transpalette: [0.55, 0.05, 70, 0.01, 0.05, 0.26, 0, 1, -0.05, 0, 0, 0, 0, 0.06], // impact énorme
-  lance_thermique: [0.44, 0.2, 120, 0.02, 0.12, 0.22, 4, 1, 0.08, 0, 0, 0, 0, 0.9, 4] // rugissement de découpe
+  lance_thermique: [0.44, 0.2, 120, 0.02, 0.12, 0.22, 4, 1, 0.08, 0, 0, 0, 0, 0.9, 4], // rugissement de découpe
+  // --- Visée manuelle (bonbonne de gaz) ---
+  bonbonne_chantier: [0.5, 0.15, 140, 0.005, 0.03, 0.2, 4, 1, -0.1, 0, 0, 0, 0, 0.7, 3], // souffle d'explosion sourd
+  detonation_chaine: [0.6, 0.2, 90, 0.005, 0.05, 0.3, 4, 1, -0.08, 0, 0, 0, 0.03, 0.8, 4], // cascade de détonations, plus grave/ample
+  // --- Évolutions des 3 armes MVP historiques ---
+  tronconneuse_chantier: [0.5, 0.1, 200, 0.01, 0.06, 0.12, 4, 1, 0.05, 0, 0, 0, 0, 0.6, 3], // scie qui mord, plus grosse/rêche
+  brise_roche: [0.65, 0.08, 110, 0, 0, 0.06, 0, 1, -0.15, 0, 0, 0, 0.05, 0.4], // rat-tat-tat plus lourd/grave
+  barre_a_mine: [0.55, 0.12, 200, 0, 0.01, 0.16, 2, 1, -0.35, 0, 0, 0, 0, 0.2] // whoosh massif
 }
 
 /** SFX d'une arme par ID (repli sur le défaut si absent — jamais de silence). */

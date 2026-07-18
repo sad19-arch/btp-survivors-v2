@@ -10,20 +10,33 @@ import { test, expect } from '@playwright/test'
  * survit (il distance le boss) et le grinde en ~5 min de sim. On modélise donc le
  * kite ici. La gagnabilité « en moyenne » du bot est couverte par le harness sim
  * (`tools/sim`, cible `KITE_MIN_WIN_PCT`, plancher bas assumé pour le mode hardcore).
+ *
+ * Inventaire SATURÉ à dessein (6/6 armes, 6/6 passifs — `INVENTORY` de
+ * `content/config`), tous au niveau max : au-delà de « build complet », ça évite
+ * qu'un level-up en cours de kite (les kills en font gagner) tire une carte
+ * `rollCards` — avec un inventaire plein/maxé, `eligibleCards` est vide et le
+ * tirage ne consomme AUCUN nombre du RNG seedé (`fisherYates([])` = no-op).
+ * Sans ça, le moindre ajout de contenu (arme/passif) ailleurs dans le jeu décale
+ * la composition du pool de cartes → décale la séquence de tirages RNG → décale
+ * TOUT le reste de la run (spawns d'ennemis compris) → peut faire basculer ce
+ * seed précis de victoire en défaite, sans aucun rapport avec la gagnabilité
+ * réelle du build. Un inventaire saturé rend ce test insensible à ce bruit.
  */
 test('build complet + KITE + boss final tué → scene "won" (jeu gagnable)', async ({ page }) => {
   await page.goto('/?autostart=solo&seed=1&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
 
   await page.evaluate(() => {
-    // Build offensif de FIN DE RUN : 4 armes niv max (cloueur + marteau AoE + chalumeau
-    // cône + court-circuit) + passifs dégâts/cadence poussés → ~230 DPS sur le boss.
+    // Build offensif de FIN DE RUN, inventaire SATURÉ (6 armes + 6 passifs, tous
+    // au niveau max) — cf. commentaire d'en-tête sur l'insensibilité au RNG.
     window.__GAME__?.debugGrant({
       weapons: [
         { id: 'cloueur', level: 8 },
         { id: 'marteau', level: 8 },
         { id: 'chalumeau', level: 8 },
         { id: 'court_circuit', level: 8 },
+        { id: 'boulons', level: 8 },
+        { id: 'cle_molette', level: 8 },
       ],
       passives: [
         { id: 'outillage_renforce', level: 5 },
@@ -31,6 +44,7 @@ test('build complet + KITE + boss final tué → scene "won" (jeu gagnable)', as
         { id: 'prime_rendement', level: 5 },
         { id: 'groupe_electrogene', level: 2 },
         { id: 'air_comprime', level: 5 },
+        { id: 'casque_homologue', level: 5 },
       ],
     })
     window.__GAME__?.debugSpawnBoss('final')

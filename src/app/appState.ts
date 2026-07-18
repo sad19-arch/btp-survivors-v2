@@ -127,6 +127,7 @@ export type Screen =
   | 'nameEntry'
   | 'hiscores'
   | 'achievements'
+  | 'evolutions'
 
 /**
  * Saisie du prénom en fin de run (écran `nameEntry`), résolue pour l'affichage :
@@ -191,6 +192,35 @@ export interface AchievementsView {
   entries: AchievementEntryView[]
   /** Succès débloqués (dénominateur = `entries.length`). */
   unlockedCount: number
+}
+
+/**
+ * Une ligne de l'écran « Évolutions d'armes » (pause), RÉSOLUE pour l'affichage :
+ * croise le catalogue `EVOLUTIONS` avec l'inventaire courant du/des joueurs.
+ * `weaponId`/`weaponName`/`weaponLevel` portent la forme ACTUELLEMENT possédée
+ * (arme de base tant que non évoluée, arme évoluée sinon) — `evolved` distingue
+ * les deux cas, comme l'étoile pleine/vide de l'écran des succès.
+ */
+export interface EvolutionEntryView {
+  weaponId: string
+  weaponName: string
+  weaponLevel: number
+  reqBaseLevel: number
+  evolvedName: string
+  passiveId: string
+  passiveName: string
+  evolved: boolean
+}
+
+/**
+ * Écran « Évolutions d'armes » (consultation depuis la PAUSE, en run — contrairement
+ * aux succès, surcouche du titre). Ne liste QUE les armes déjà acquises (pas un
+ * almanach complet : le jeu n'a pas de méta-progression, cf. CLAUDE.md).
+ */
+export interface EvolutionsView {
+  entries: EvolutionEntryView[]
+  /** Évolutions déjà obtenues cette run (dénominateur = `entries.length`). */
+  evolvedCount: number
 }
 
 /** Une entrée d'inventaire résolue : id + nom lisible + niveau courant. */
@@ -289,6 +319,8 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   hiScores: HiScoresView | null
   /** Écran des succès ouvert (consultation depuis le titre) ; `null` hors de ce flux. */
   achievements: AchievementsView | null
+  /** Écran « Évolutions d'armes » ouvert (consultation depuis la pause) ; `null` hors de ce flux. */
+  evolutions: EvolutionsView | null
   /** Mini-carte affichée (bas-gauche) — bascule clavier M / manette Back/Select. */
   minimapVisible: boolean
   /**

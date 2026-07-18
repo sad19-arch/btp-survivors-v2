@@ -109,6 +109,18 @@ function tickProjectile(
   if (slot.cooldownLeftMs > 0) {
     return
   }
+  if (def.aim === 'facing') {
+    // Visée MANUELLE (ex. bonbonne_chantier) : pas de recherche de cible, tir
+    // INCONDITIONNEL sur cooldown — contrairement à l'auto-aim, ne dépend pas de la
+    // présence d'un ennemi (le joueur contrôle la direction, il doit pouvoir tirer
+    // « à vide » pour se repositionner). Cible virtuelle loin dans `player.facing` :
+    // réutilise `fireProjectiles` tel quel (le fan-spread ne connaît qu'un angle).
+    const dir = player.facing ?? { x: 0, y: 1 }
+    const virtualTarget: Vec2 = { x: pos.x + dir.x * 1000, y: pos.y + dir.y * 1000 }
+    fireProjectiles(world, pos, virtualTarget, def, eff, player.playerId)
+    slot.cooldownLeftMs = eff.cooldownMs
+    return
+  }
   const target = findNearestEnemy(world, pos, Infinity)
   if (target === null) {
     slot.cooldownLeftMs = 0 // prêt à tirer dès qu'une cible entre en portée

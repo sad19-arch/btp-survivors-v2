@@ -32,6 +32,10 @@ export const PASSIVES: Record<string, PassiveDef> = {
   aimant_chantier:     { id: 'aimant_chantier', name: 'Aimant de chantier', description: '+7 % de rayon d\'aimantation.', maxLevel: 5, perLevel: { magnet: 0.07 } },
   batterie_18v:        { id: 'batterie_18v', name: 'Batterie 18V', description: '+12 % de durée des effets.', maxLevel: 5, perLevel: { duration: 0.12 } },
   prime_rendement:     { id: 'prime_rendement', name: 'Prime de rendement', description: '+5 % d\'XP gagnée.', maxLevel: 5, perLevel: { growth: 0.05 } },
+  surcharge_gaz:       { id: 'surcharge_gaz', name: 'Surcharge de gaz', description: '+8 % de dégâts (pression accumulée dans les bonbonnes).', maxLevel: 5, perLevel: { might: 0.08 } },
+  // Catalyseurs des évolutions scie/marteau/pied-de-biche (armes MVP historiques).
+  disque_diamant:          { id: 'disque_diamant', name: 'Disque diamant', description: '+9 % de dégâts (lame affûtée).', maxLevel: 5, perLevel: { might: 0.09 } },
+  compresseur_pneumatique: { id: 'compresseur_pneumatique', name: 'Compresseur pneumatique', description: '−8 % de temps de recharge.', maxLevel: 5, perLevel: { cooldown: -0.08 } },
 }
 
 export function aggregatePassives(owned: ReadonlyArray<{ id: string; level: number }>): PlayerStats {
