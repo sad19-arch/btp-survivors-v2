@@ -99,11 +99,19 @@ export interface RunReportPodium {
  * Issue de l'ouverture d'un coffre (one-shot), enrichie pour la machine à sous.
  * `weaponId`/`weaponName` renseignés seulement pour `kind === 'evolution'`.
  */
-export interface ChestOpenView {
-  kind: 'evolution' | 'cards' | 'heal'
+/** Une issue révélée par un rouleau de la machine à sous (arme montée/évoluée, ou soin). */
+export interface ChestResultView {
+  kind: 'evolution' | 'weapon-up' | 'heal'
   weaponId: string | null
   weaponName: string | null
+  /** Niveau résultant (montée : nouveau niveau ; évolution : 1). null pour un soin. */
+  level: number | null
+}
+
+export interface ChestOpenView {
   isSuper: boolean
+  /** 1 issue (coffre normal) ou jusqu'à 3 (super coffre). */
+  results: ChestResultView[]
 }
 
 /** Écran applicatif courant (dérivé de l'état de la simulation + surcouches). */
@@ -283,6 +291,12 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   achievements: AchievementsView | null
   /** Mini-carte affichée (bas-gauche) — bascule clavier M / manette Back/Select. */
   minimapVisible: boolean
+  /**
+   * Compteur de SKIP de coffre : incrémenté quand le joueur presse A pendant la
+   * machine à sous. L'overlay compare sa dernière valeur vue → ferme la révélation
+   * immédiatement (découplage : pas d'appel direct app→overlay).
+   */
+  chestSkipToken: number
   /**
    * Transitoire (one-shot) : nom lisible de l'arme évoluée ce pas (résolu via WEAPONS
    * dans `App.getState()`), ou `null`. Miroir de `GameState.justEvolved` enrichi du

@@ -105,6 +105,18 @@ export interface SiteLayout {
    * `buildSiteLayout`). Absent = aucun (les consommateurs lisent `?? []`).
    */
   destructibles?: DestructibleSpawn[]
+  /**
+   * Otages/prisonniers POSÉS dans la compo éditeur. DÉFINI (même vide) ⇒ la compo
+   * fait loi : la sim n'ajoute AUCUN prisonnier procédural. ABSENT ⇒ pas de compo →
+   * la sim place les prisonniers de façon procédurale (`Simulation.spawnPrisoners`).
+   */
+  prisoners?: PrisonerSpawn[]
+}
+
+/** Un otage/prisonnier à faire apparaître à une position monde (issu de l'éditeur). */
+export interface PrisonerSpawn {
+  x: number
+  y: number
 }
 
 /** Constante XOR pour dériver le RNG de dispersion des destructibles (isolé). */
@@ -275,6 +287,7 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
   const obstacles: Obstacle[] = []
   const slowZones: SurfaceSlowZone[] = []
   const destructibles: DestructibleSpawn[] = []
+  const prisoners: PrisonerSpawn[] = []
 
   for (const inst of layout.instances) {
     const wx = offX + inst.x
@@ -282,8 +295,8 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
     const flip = inst.flipX
     const rot = inst.rotation
     if (inst.elements !== undefined && inst.elements.length > 0) {
-      // Les éléments DESTRUCTIBLES sont routés vers les entités destructibles
-      // (PV/casse), PAS vers le décor statique. Le reste est du décor/collision.
+      // Les éléments DESTRUCTIBLES / OTAGES sont routés vers leurs entités de sim
+      // (casse / libération), PAS vers le décor statique. Le reste est décor/collision.
       const rad = (rot * Math.PI) / 180
       const cos = Math.cos(rad)
       const sin = Math.sin(rad)
@@ -293,6 +306,12 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
           const lx = flip ? -e.dx : e.dx
           destructibles.push({
             typeId: e.destructible.typeId,
+            x: wx + lx * cos - e.dy * sin,
+            y: wy + lx * sin + e.dy * cos
+          })
+        } else if (e.prisoner !== undefined) {
+          const lx = flip ? -e.dx : e.dx
+          prisoners.push({
             x: wx + lx * cos - e.dy * sin,
             y: wy + lx * sin + e.dy * cos
           })
@@ -318,7 +337,9 @@ export function composedToSiteLayout(layout: StageLayout): SiteLayout {
     }
   }
 
-  return { clusters, obstacles, slowZones, destructibles }
+  // `prisoners` est TOUJOURS renvoyé (même vide) : c'est le signal « compo = loi »
+  // qui coupe le placement procédural côté sim (cf. `Simulation.reset`).
+  return { clusters, obstacles, slowZones, destructibles, prisoners }
 }
 
 /**
@@ -427,6 +448,11 @@ export function buildSiteLayout(
   }
   if (base.slowZones !== undefined) {
     result.slowZones = base.slowZones
+  }
+  // Défini SEULEMENT via une compo (`computeBaseLayout` chemin composé) : sinon
+  // laissé absent → la sim place les prisonniers procéduralement (RNG dédié).
+  if (base.prisoners !== undefined) {
+    result.prisoners = base.prisoners
   }
   return result
 }

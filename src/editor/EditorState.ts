@@ -702,6 +702,16 @@ export class EditorState {
             : [{ assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide: 'none', destructible: { typeId: entry.destructibleTypeId } }]
         continue
       }
+      // Otage : un seul élément NON-BLOQUANT portant `prisoner:{}` → `composedToSiteLayout`
+      // le route vers les entités prisonniers de la sim (libération + soin + rage).
+      if (entry.prisoner === true) {
+        const el = entry.elements?.[0]
+        inst.elements =
+          el === undefined
+            ? []
+            : [{ assetKey: el.assetKey, dx: el.dx, dy: el.dy, scale: el.scale, collide: 'none', prisoner: {} }]
+        continue
+      }
       if (entry.elements === undefined) {
         continue
       }

@@ -39,6 +39,9 @@ function deadApp(): App {
 }
 
 function reachGameOver(app: App): void {
+  // Une machine à sous de coffre peut être en cours → la partie est GELÉE (le joueur
+  // ne peut pas mourir). A saute le spectacle et dégèle, sinon le game-over ne vient jamais.
+  app.confirm()
   app.debugKillPlayer()
   let tries = 0
   while (app.getState().screen !== 'gameover' && tries < 50) {

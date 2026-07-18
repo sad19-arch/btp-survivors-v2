@@ -11,7 +11,19 @@ import { readHiScore } from './hiscore'
 import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { WEAPONS } from '@content/weapons'
 import { STAR_SLOTS } from '@content/stars'
-import type { AchievementEntryView, AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView } from '@/app/appState'
+import type { AchievementEntryView, AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView, ChestResultView } from '@/app/appState'
+
+// ── Timings de la machine à sous (coffre) — PARTAGÉS avec le gel côté app ──────
+// La partie est GELÉE pendant TOUTE la durée de la révélation (skippable avec A) ;
+// le `settle` long (+2 s vs l'ancienne version) laisse SAVOURER le gain (dopamine).
+const CHEST_ANTICIPATION_MS = 340
+const CHEST_SPIN_MS = 1180
+const CHEST_STAGGER_MS = 180
+const CHEST_SETTLE_TAIL_MS = 2500
+/** Durée totale de la machine à sous selon le nombre de rouleaux (= nombre d'issues). */
+export function chestRevealTotalMs(nReels: number): number {
+  return CHEST_ANTICIPATION_MS + Math.max(0, nReels - 1) * CHEST_STAGGER_MS + CHEST_SPIN_MS + CHEST_SETTLE_TAIL_MS
+}
 
 /** Durée d'affichage d'un trophée (ms). */
 export const TROPHY_VISIBLE_MS = 3000
@@ -54,6 +66,15 @@ const PUNCHLINES: Readonly<Record<string, string>> = {
 function sheetFile(sheet: string): string {
   return sheet === 'player' ? 'player_j1' : sheet
 }
+
+/** En dessous de cette fraction de PV, la vignette « alerte sécurité » bat (juice #3). */
+const LOW_HP_FRACTION = 0.3
+/** Durée du flash de dégât reçu (ms) — bref accent d'impact (juice #4). */
+const HURT_FLASH_MS = 150
+/** Opacité de crête du flash de dégât (fond it depuis là vers 0 sur `HURT_FLASH_MS`). */
+const HURT_FLASH_PEAK = 0.4
+/** Perte de PV minimale (≥) pour déclencher un flash — filtre le bruit numérique. */
+const HP_LOSS_EPS = 0.5
 
 /**
  * Overlay DOM des écrans (Titre / Pause / Upgrade / Game Over) + HUD. Observe
@@ -128,6 +149,8 @@ export class Overlay {
    * le flag). Réinitialisé quand `chestOpen` repasse à `null` (pas suivant).
    */
   private chestSlotShown = false
+  /** Dernier `chestSkipToken` vu : un changement pendant une révélation = SKIP (A). */
+  private lastChestSkipToken = 0
   /** Callback de sélection d'un item par index (clic souris) ; route vers l'App. */
   private readonly onSelect: ((index: number) => void) | undefined
   /**
@@ -172,6 +195,15 @@ export class Overlay {
    */
   private readonly coopLayer: HTMLElement
 
+  /** Feedback combat plein écran : vignette PV bas (persistante, juice #3). */
+  private readonly combatFxDanger: HTMLElement
+  /** Feedback combat plein écran : flash de dégât reçu (bref, juice #4). */
+  private readonly combatFxHurt: HTMLElement
+  /** PV mémorisés par joueur — détecte une PERTE (flash) sans event dédié. */
+  private readonly lastHp = new Map<number, number>()
+  /** Échéance (performance.now) du flash de dégât ; -1 = inactif. */
+  private hurtFlashUntil = -1
+
   constructor(
     root: HTMLElement,
     onSelect?: (index: number) => void,
@@ -193,8 +225,13 @@ export class Overlay {
     this.achievementLayer = h('div', { className: 'trophy-layer' })
     this.minimap = new Minimap()
     this.minimap.setVisible(false)
+    // Feedback combat plein écran : vignette PV bas + flash de dégât. Attaché tôt
+    // (sous le HUD) pour ne pas obscurcir le texte. Piloté par `syncCombatFeedback`.
+    this.combatFxDanger = h('div', { className: 'combat-fx__danger' })
+    this.combatFxHurt = h('div', { className: 'combat-fx__hurt' })
     // Cadre métal ouvragé (au fond) + couches UI + scanlines CRT (au-dessus). Décoratif.
     root.append(h('div', { className: 'frame' }))
+    root.append(h('div', { className: 'combat-fx' }, this.combatFxDanger, this.combatFxHurt))
     root.append(
       this.hud,
       this.screenLayer,
@@ -286,6 +323,7 @@ export class Overlay {
     this.syncInventory(state)
     this.syncGamepads(state)
     this.syncMinimap(state)
+    this.syncCombatFeedback(state, now)
     // Machine à sous coffre : déclenchée UNE fois à chaque ouverture de coffre
     // (les 3 issues), via le one-shot `chestOpen`. Garde `chestSlotShown` pour ne
     // pas rejouer à chaque rAF tant que `chestOpen` reste non-null.
@@ -293,12 +331,27 @@ export class Overlay {
     if (chest !== null && !this.chestSlotShown) {
       this.chestSlotShown = true
       this.showSlotMachine(chest)
-      if (chest.kind === 'evolution' && chest.weaponName !== null) {
-        this.showEvolutionBanner(chest.weaponName)
+      const evo = chest.results.find((r) => r.kind === 'evolution')
+      if (evo !== undefined && evo.weaponName !== null) {
+        this.showEvolutionBanner(evo.weaponName)
       }
     } else if (chest === null) {
       this.chestSlotShown = false
     }
+    // SKIP (A) : le token a changé pendant une révélation → ferme la machine à sous
+    // immédiatement (la partie a déjà été dégelée côté app ; le résultat est appliqué).
+    if (state.chestSkipToken !== this.lastChestSkipToken) {
+      this.lastChestSkipToken = state.chestSkipToken
+      if (this.chestSlotShown) {
+        this.skipSlotMachine()
+      }
+    }
+  }
+
+  /** Ferme immédiatement la machine à sous (skip A) : coupe les timers + vide le panneau. */
+  private skipSlotMachine(): void {
+    this.clearJackpotTimers()
+    clear(this.jackpotLayer)
   }
 
   /**
@@ -326,6 +379,50 @@ export class Overlay {
       return
     }
     this.minimap.update(state)
+  }
+
+  /**
+   * Feedback combat plein écran (juice, observer-only) :
+   *  - vignette « alerte sécurité » PERSISTANTE tant qu'un joueur vivant est sous
+   *    `LOW_HP_FRACTION` (le plus bas des joueurs vivants pilote) ;
+   *  - flash de dégât BREF quand un joueur perd des PV entre deux frames.
+   *
+   * Piloté par les DELTAS de PV lus dans l'état (comme le flash de level-up),
+   * sans nouvel abonnement : la perte n'existe que pendant le jeu, jamais au reset
+   * (les PV mémorisés sont purgés hors run → pas de faux flash au (re)départ).
+   */
+  private syncCombatFeedback(state: AppViewState, now: number): void {
+    const inRun = state.screen === 'game' && !state.introActive
+    if (!inRun) {
+      this.lastHp.clear()
+      this.hurtFlashUntil = -1
+      this.combatFxDanger.classList.remove('combat-fx__danger--on')
+      this.combatFxHurt.style.opacity = '0'
+      return
+    }
+    let hurt = false
+    let minFrac = 1
+    for (const p of state.players) {
+      if (!p.alive) {
+        continue
+      }
+      const frac = p.maxHp > 0 ? p.hp / p.maxHp : 0
+      minFrac = Math.min(minFrac, frac)
+      const prev = this.lastHp.get(p.id)
+      if (prev !== undefined && p.hp <= prev - HP_LOSS_EPS) {
+        hurt = true
+      }
+      this.lastHp.set(p.id, p.hp)
+    }
+    if (hurt) {
+      this.hurtFlashUntil = now + HURT_FLASH_MS
+    }
+    // Vignette : anneau battant tant que le plus bas des vivants est en danger.
+    this.combatFxDanger.classList.toggle('combat-fx__danger--on', minFrac < LOW_HP_FRACTION)
+    // Flash : voile rouge dont l'opacité DÉCROÎT sur `HURT_FLASH_MS` (fondu par frame).
+    const remain = this.hurtFlashUntil - now
+    this.combatFxHurt.style.opacity =
+      remain > 0 ? String((HURT_FLASH_PEAK * Math.min(1, remain / HURT_FLASH_MS)).toFixed(3)) : '0'
   }
 
   /**
@@ -784,40 +881,39 @@ export class Overlay {
     const WINNER_INDEX = 13 // le gain arrive après 13 leurres (défilement franc)
     const BUFFER = 2 // cellules après le gain (couvre l'overshoot du cubic-bezier)
     const isSuper = outcome.isSuper
-    const nReels = isSuper ? 3 : 1
+    const results: ChestResultView[] = outcome.results.length > 0
+      ? outcome.results
+      : [{ kind: 'heal', weaponId: null, weaponName: null, level: null }]
+    const nReels = results.length
 
-    // Durées (ms) — total borné < 2,5 s (contrainte e2e).
-    const anticipationMs = 340
-    const spinMs = 1180
-    const staggerMs = 180
-    const settleTailMs = 500 // laisse le gain lisible (total super ≈ 2380 ms < 2,5 s e2e)
+    // Durées (ms) — partagées avec le gel côté app (`chestRevealTotalMs`). La partie
+    // est GELÉE pendant toute la durée (skippable avec A) → settle long = on savoure.
+    const anticipationMs = CHEST_ANTICIPATION_MS
+    const spinMs = CHEST_SPIN_MS
+    const staggerMs = CHEST_STAGGER_MS
+    const settleTailMs = CHEST_SETTLE_TAIL_MS
     const lastReelStart = anticipationMs + (nReels - 1) * staggerMs
     const flashAtMs = lastReelStart + spinMs
     const totalMs = flashAtMs + settleTailMs
 
-    // Titre + libellé de révélation selon l'issue (aucun emoji — DA + e2e).
-    const title = outcome.kind === 'evolution' ? 'ÉVOLUTION' : 'COFFRE'
-    const revealLabel =
-      outcome.kind === 'evolution'
-        ? (outcome.weaponName ?? 'Arme évoluée')
-        : outcome.kind === 'cards'
-          ? 'Choisis ta carte'
-          : 'Soin d\'urgence'
+    // Titre selon la rareté / l'issue (aucun emoji — DA + e2e).
+    const anyEvo = results.some((r) => r.kind === 'evolution')
+    const title = isSuper ? 'SUPER COFFRE' : anyEvo ? 'ÉVOLUTION' : 'COFFRE'
 
-    // Construit la cellule gagnante selon l'issue (icône d'arme / tuile ? / tuile +).
-    const winnerCell = (): HTMLElement => {
-      if (outcome.kind === 'evolution' && outcome.weaponId !== null) {
+    // Cellule gagnante d'un rouleau : icône de la VRAIE arme qui monte/évolue
+    // (fini la tuile « ? » : le coffre ne propose plus jamais de cartes) ; tuile
+    // « + » pour un soin de repli.
+    const winnerCell = (r: ChestResultView): HTMLElement => {
+      if (r.kind !== 'heal' && r.weaponId !== null) {
         const cell = h('div', { className: 'jackpot__cell jackpot__cell--winner' })
-        cell.append(icon(outcome.weaponId, outcome.weaponName ?? '', 'jackpot__icon', 'jackpot__icon-img', 'jackpot__icon-mono'))
+        cell.append(icon(r.weaponId, r.weaponName ?? '', 'jackpot__icon', 'jackpot__icon-img', 'jackpot__icon-mono'))
         return cell
       }
-      const glyph = outcome.kind === 'heal' ? '+' : '?'
-      const mod = outcome.kind === 'heal' ? 'jackpot__cell--heal' : 'jackpot__cell--mystery'
-      return h('div', { className: `jackpot__cell jackpot__cell--winner ${mod}` }, h('div', { className: 'jackpot__glyph', text: glyph }))
+      return h('div', { className: 'jackpot__cell jackpot__cell--winner jackpot__cell--heal' }, h('div', { className: 'jackpot__glyph', text: '+' }))
     }
 
     // Un rouleau : WINNER_INDEX leurres (icônes d'armes) + gain + BUFFER leurres.
-    const buildReel = (): HTMLElement => {
+    const buildReel = (r: ChestResultView): HTMLElement => {
       const reel = h('div', { className: 'jackpot__reel' })
       for (let i = 0; i < WINNER_INDEX; i++) {
         const filler = h('div', { className: 'jackpot__cell' })
@@ -825,7 +921,7 @@ export class Overlay {
         filler.append(icon(id, id, 'jackpot__icon', 'jackpot__icon-img', 'jackpot__icon-mono'))
         reel.append(filler)
       }
-      reel.append(winnerCell())
+      reel.append(winnerCell(r))
       for (let i = 0; i < BUFFER; i++) {
         const filler = h('div', { className: 'jackpot__cell' })
         const id = SLOT_FILLER_ICONS[(WINNER_INDEX + i) % SLOT_FILLER_ICONS.length] ?? 'cloueur'
@@ -839,7 +935,11 @@ export class Overlay {
     const reels: HTMLElement[] = []
     const reelsRow = h('div', { className: 'jackpot__reels' })
     for (let r = 0; r < nReels; r++) {
-      const reel = buildReel()
+      const res = results[r]
+      if (res === undefined) {
+        continue
+      }
+      const reel = buildReel(res)
       reels.push(reel)
       reelsRow.append(h('div', { className: 'jackpot__window' }, reel))
     }
@@ -880,22 +980,20 @@ export class Overlay {
       }, anticipationMs + r * staggerMs))
     })
 
-    // Flash blanc→doré + révélation du gain quand le dernier rouleau se pose.
-    // Évolution : nom + description (WEAPONS) sous le médaillon ; butin (+OR / +SOIN) sous tout.
-    const desc = outcome.kind === 'evolution' && outcome.weaponId !== null
-      ? (WEAPONS[outcome.weaponId]?.description ?? '')
-      : ''
-    const lootText = outcome.kind === 'heal' ? '+ SOIN' : '+ OR'
+    // Flash blanc→doré + révélation quand le dernier rouleau se pose : UNE ligne par
+    // issue réelle (arme évoluée / arme montée de niveau / soin). Pas de « carte ».
     this.jackpotTimers.push(window.setTimeout(() => {
       if (!panel.isConnected) { return }
       panel.classList.add('jackpot--flash')
-      const reveal = h('div', { className: 'jackpot__reveal' },
-        h('div', { className: 'jackpot__reveal-name', text: revealLabel })
-      )
-      if (desc !== '') {
-        reveal.append(h('div', { className: 'jackpot__reveal-desc', text: desc }))
+      const reveal = h('div', { className: 'jackpot__reveal' })
+      for (const r of results) {
+        const label = r.kind === 'evolution'
+          ? `${r.weaponName ?? 'Arme'} — ÉVOLUTION`
+          : r.kind === 'weapon-up'
+            ? `${r.weaponName ?? 'Arme'} — Niv. ${r.level ?? ''}`
+            : 'Soin d\'urgence'
+        reveal.append(h('div', { className: 'jackpot__reveal-name', text: label }))
       }
-      reveal.append(h('div', { className: 'jackpot__loot', text: lootText }))
       panel.append(reveal)
     }, flashAtMs))
 

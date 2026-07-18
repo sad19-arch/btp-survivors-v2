@@ -140,11 +140,20 @@ describe('PNJ d’ambiance — atteignabilité réelle (mondes construits)', () 
    *
    * Si ce test rougit, l'élargissement a créé des jobs : la conclusion sur le
    * cull tombe et il faut la refaire, pas mettre ces nombres à jour par réflexe.
+   *
+   * EXCEPTION assumée : `npc_stage08` (plaquiste) et `npc_stage10` (inspecteur)
+   * sont des feuilles *_work de la famille métier dont le flag `kind:'trade'`
+   * avait été oublié — elles étaient donc servies comme ouvrières de marche au
+   * lieu de postes métier fixes, comme leurs 8 homologues. Flag ajouté + échelle
+   * réalignée sur la famille (0.78, jugement DA validé à l'œil, cf.
+   * autoTradeNpcs.test.ts) : elles sortent du pool de marche et reçoivent un poste
+   * auto-placé, +1 job fixe chacune → second_oeuvre 33→34, livraison_audit 34→35.
+   * Ce n'est PAS le pool qui crée des jobs, c'est une réaffectation marcheur→métier.
    */
   const JOBS_BEFORE: Record<string, number> = {
     terrain_vierge: 1, terrassement: 36, fondations: 33, reseaux_enterres: 34,
-    gros_oeuvre: 34, echafaudages: 34, charpente_toiture: 34, second_oeuvre: 33,
-    finitions: 34, livraison_audit: 34
+    gros_oeuvre: 34, echafaudages: 34, charpente_toiture: 34, second_oeuvre: 34,
+    finitions: 34, livraison_audit: 35
   }
 
   for (const [stageId, expected] of Object.entries(JOBS_BEFORE)) {

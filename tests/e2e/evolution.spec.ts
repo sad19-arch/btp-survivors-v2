@@ -30,16 +30,16 @@ test("coffre d'evolution ramasse -> arme evoluee + bandeau .banner--evolution", 
 })
 
 /**
- * B — Machine a sous : a la prise d'un coffre d'evolution, le panneau `.jackpot`
- * apparait, ses rouleaux (3 en mode super) tournent puis revelent le nom de
- * l'arme evoluee (`.jackpot__reveal`), et il disparait automatiquement (< ~2,4s).
- * Le jeu reste navigable pendant l'anim.
+ * B — Machine a sous : a la prise d'un coffre NORMAL avec evolution disponible, le
+ * panneau `.jackpot` apparait, son rouleau UNIQUE tourne puis revele le nom de
+ * l'arme evoluee (`.jackpot__reveal`), et il disparait automatiquement (~4 s ; la
+ * partie est GELEE pendant l'anim). Le super coffre (3 rouleaux) est le rare 1/10.
  */
 test("B -- machine a sous : panneau .jackpot + reveal apres coffre d'evolution, disparait ensuite", async ({ page }) => {
   await page.goto('/?autostart=solo&seed=1&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
 
-  // Preparer les conditions d'evolution et ramasser un coffre.
+  // Preparer les conditions d'evolution et ramasser un coffre (normal).
   await page.evaluate(() => {
     window.__GAME__?.debugGrant({
       weapons: [{ id: 'cloueur', level: 8 }],
@@ -49,11 +49,10 @@ test("B -- machine a sous : panneau .jackpot + reveal apres coffre d'evolution, 
     window.__GAME__?.advanceTime(200)
   })
 
-  // Le panneau apparait immediatement ; l'evolution => variante super (3 rouleaux).
+  // Le panneau apparait immediatement ; coffre NORMAL => 1 rouleau (le super = 1/10).
   const jackpot = page.locator('.jackpot')
   await expect(jackpot).toBeVisible({ timeout: 1000 })
-  await expect(page.locator('.jackpot--super')).toBeVisible()
-  expect(await page.locator('.jackpot__reel').count()).toBe(3)
+  expect(await page.locator('.jackpot__reel').count()).toBe(1)
 
   // A la fin de la roulette, le gain revele le nom de l'arme evoluee.
   await expect(page.locator('.jackpot__reveal')).toContainText('Mitrailleuse', { timeout: 3000 })
@@ -61,12 +60,12 @@ test("B -- machine a sous : panneau .jackpot + reveal apres coffre d'evolution, 
   // Capture DA (regression visuelle) une fois le gain revele.
   await page.screenshot({ path: 'test-results/jackpot-chest.png', fullPage: false })
 
-  // L'etat du jeu reste accessible (pas de gel par l'animation).
+  // L'evolution est bien appliquee (resolue dans la sim AVANT le gel du spectacle).
   const state = await page.evaluate(() => window.__GAME__?.getState())
   expect(state?.players[0]?.weapons).toContain('mitrailleuse_clous')
 
-  // Le panneau disparait automatiquement.
-  await expect(jackpot).not.toBeVisible({ timeout: 3200 })
+  // Le panneau disparait automatiquement (~4 s de spectacle, partie gelee).
+  await expect(jackpot).not.toBeVisible({ timeout: 5000 })
 })
 
 /**

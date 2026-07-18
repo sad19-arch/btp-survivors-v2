@@ -76,6 +76,12 @@ export interface EmbeddedElement {
    * `typeId` référence `DESTRUCTIBLES` (src/content/destructibles.ts).
    */
   destructible?: { typeId: string }
+  /**
+   * Otage/prisonnier À LIBÉRER : si présent, cet élément est routé vers les
+   * entités « prisonnier » de la sim (`composedToSiteLayout` → `SiteLayout.prisoners`),
+   * PAS vers le décor. Sentinelle sans donnée — il n'existe qu'un seul type d'otage.
+   */
+  prisoner?: Record<string, never>
 }
 
 /** Une scène/prefab posée dans le monde. */

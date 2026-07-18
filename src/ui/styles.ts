@@ -117,6 +117,21 @@ const CSS = `
 #ui-root .hud__php { color: ${PALETTE.vertBonus}; }
 #ui-root .hud__plvl { color: ${PALETTE.blanc}; }
 
+/* ── Feedback combat plein écran (juice) ──────────────────────────────── */
+/* Vignette « alerte sécurité » (PV bas) + flash de dégât reçu. Bordures pixel
+   SOLIDES (box-shadow inset sans flou), rouge alerte de la palette — pas de
+   glow/gradient/coin arrondi. Sous le HUD (z-index 4) : n'obscurcit pas le texte. */
+#ui-root .combat-fx { position: absolute; inset: 0; pointer-events: none; z-index: 4; overflow: hidden; }
+#ui-root .combat-fx__danger, #ui-root .combat-fx__hurt { position: absolute; inset: 0; opacity: 0; }
+/* Vignette PV bas : double anneau rouge/contour INTERNE qui bat comme un témoin d'alerte. */
+#ui-root .combat-fx__danger {
+  box-shadow: inset 0 0 0 14px ${PALETTE.rougeAlerte}, inset 0 0 0 19px ${PALETTE.contour};
+}
+#ui-root .combat-fx__danger--on { animation: danger-pulse 0.9s steps(10, end) infinite; }
+@keyframes danger-pulse { 0%,100% { opacity: 0.25; } 50% { opacity: 0.92; } }
+/* Flash de dégât : voile rouge bref (opacité pilotée en inline, fondu par frame). */
+#ui-root .combat-fx__hurt { background: ${PALETTE.rougeAlerte}; }
+
 /* ── Écran modal + panneau métal ──────────────────────────────────────── */
 #ui-root .screen {
   position: absolute;
@@ -517,19 +532,15 @@ const CSS = `
 }
 #ui-root .jackpot--super { border-color: ${PALETTE.blanc}; animation: jackpot-in 0.18s ease-out, jackpot-rainbow 0.72s steps(1, end) infinite; }
 #ui-root .jackpot__title, #ui-root .jackpot__chest, #ui-root .jackpot__reels, #ui-root .jackpot__reveal { position: relative; z-index: 2; }
-/* Coffre pixel qui rebondit puis se balance (flat colors + contour noir, DA-safe). */
+/* Coffre PREMIUM (sprite PixelLab doré, ouvert) qui rebondit puis se balance. Le
+   super coffre affiche sa variante giga-brillante. image-rendering: pixelated → DA. */
 #ui-root .jackpot__chest {
-  width: 60px; height: 42px; margin-top: 6px; background: ${PALETTE.jauneSecurite};
-  border: 4px solid ${PALETTE.contour}; box-shadow: inset 0 -12px 0 ${GOLD_DK};
+  width: 96px; height: 96px; margin-top: 0;
+  background: url('/shared/chest/chest_gold_open.png') center/contain no-repeat;
+  image-rendering: pixelated;
   animation: jackpot-chest-pop 0.5s cubic-bezier(0.68,-0.55,0.265,1.55), jackpot-chest-bob 1.1s ease-in-out 0.5s infinite;
 }
-#ui-root .jackpot__chest::before {
-  content:''; position:absolute; top:-16px; left:-4px; right:-4px; height:16px;
-  background:${GOLD_DK}; border:4px solid ${PALETTE.contour}; box-sizing:border-box;
-}
-#ui-root .jackpot__chest::after {
-  content:''; position:absolute; top:6px; left:50%; margin-left:-5px; width:10px; height:14px; background:${PALETTE.contour};
-}
+#ui-root .jackpot--super .jackpot__chest { background-image: url('/shared/chest/chest_super_open.png'); }
 #ui-root .jackpot__title {
   font-family: 'Jersey 25', monospace; color: ${PALETTE.jauneSecurite};
   font-size: 46px; letter-spacing: 4px;

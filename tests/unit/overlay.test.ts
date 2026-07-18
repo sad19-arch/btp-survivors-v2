@@ -366,9 +366,17 @@ describe('Overlay — machine à sous (coffre)', () => {
   beforeEach(() => { vi.useFakeTimers() })
   afterEach(() => { vi.useRealTimers() })
 
-  const evo: ChestOpenView = { kind: 'evolution', weaponId: 'lance_thermique', weaponName: 'Lance thermique', isSuper: true }
-  const heal: ChestOpenView = { kind: 'heal', weaponId: null, weaponName: null, isSuper: false }
-  const cards: ChestOpenView = { kind: 'cards', weaponId: null, weaponName: null, isSuper: false }
+  // Super coffre = 3 issues (1 évo + 2 montées) → 3 rouleaux. Normal = 1 issue → 1 rouleau.
+  const evo: ChestOpenView = { isSuper: true, results: [
+    { kind: 'evolution', weaponId: 'lance_thermique', weaponName: 'Lance thermique', level: 1 },
+    { kind: 'weapon-up', weaponId: 'cloueur', weaponName: 'Cloueur', level: 3 },
+    { kind: 'weapon-up', weaponId: 'scie', weaponName: 'Scie', level: 2 }
+  ] }
+  const normalEvo: ChestOpenView = { isSuper: false, results: [
+    { kind: 'evolution', weaponId: 'lance_thermique', weaponName: 'Lance thermique', level: 1 }
+  ] }
+  const heal: ChestOpenView = { isSuper: false, results: [{ kind: 'heal', weaponId: null, weaponName: null, level: null }] }
+  const weaponUp: ChestOpenView = { isSuper: false, results: [{ kind: 'weapon-up', weaponId: 'cloueur', weaponName: 'Cloueur', level: 3 }] }
 
   it('applique jackpot--charging IMMÉDIATEMENT (avant la roulette)', () => {
     const { root, overlay } = mount()
@@ -400,19 +408,19 @@ describe('Overlay — machine à sous (coffre)', () => {
 
   it('révèle le nom de l\'arme évoluée au flash + titre sans emoji', () => {
     const { root, overlay } = mount()
-    overlay.showSlotMachine(evo)
+    overlay.showSlotMachine(normalEvo)
     expect(root.querySelector('.jackpot__cell--winner')).not.toBeNull()
     // Le libellé de révélation apparaît quand le dernier rouleau se pose (flash).
     vi.advanceTimersByTime(1880)
-    expect(root.querySelector('.jackpot__reveal-name')?.textContent).toBe('Lance thermique')
-    // Titre exact (donc sans emoji — interdit DA/e2e).
+    expect(root.querySelector('.jackpot__reveal-name')?.textContent).toContain('Lance thermique')
+    // Titre exact (donc sans emoji — interdit DA/e2e). Coffre normal avec évo → 'ÉVOLUTION'.
     expect(root.querySelector('.jackpot__title')?.textContent).toBe('ÉVOLUTION')
   })
 
-  it('le panneau disparaît après totalMs (issue simple = 340+1180+500 = 2020 ms)', () => {
+  it('le panneau disparaît après totalMs (issue simple = 340+1180+2500 = 4020 ms)', () => {
     const { root, overlay } = mount()
     overlay.showSlotMachine(heal)
-    vi.advanceTimersByTime(2019)
+    vi.advanceTimersByTime(4019)
     expect(root.querySelector('.jackpot')).not.toBeNull()
     vi.advanceTimersByTime(1)
     expect(root.querySelector('.jackpot')).toBeNull()
@@ -422,12 +430,63 @@ describe('Overlay — machine à sous (coffre)', () => {
     const { root, overlay } = mount()
     const cb1 = vi.fn()
     const cb2 = vi.fn()
-    overlay.showSlotMachine(cards, cb1)
+    overlay.showSlotMachine(weaponUp, cb1)
     overlay.showSlotMachine(heal, cb2)
-    vi.advanceTimersByTime(2300)
+    vi.advanceTimersByTime(4100)
     expect(cb1).not.toHaveBeenCalled()
     expect(cb2).toHaveBeenCalledTimes(1)
     expect(root.querySelector('.jackpot')).toBeNull()
+  })
+})
+
+describe('Overlay — feedback combat (vignette PV bas + flash de dégât)', () => {
+  /** Un état de jeu où les PV de J1 valent `hpFrac` de son max (le reste inchangé). */
+  function atHp(app: App, hpFrac: number): import('@/app/appState').AppViewState {
+    const base = app.getState()
+    return {
+      ...base,
+      players: base.players.map((p, i) => (i === 0 ? { ...p, hp: p.maxHp * hpFrac } : p))
+    }
+  }
+
+  it('vignette : OFF à pleine vie, ON sous le seuil (30 %)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState()) // plein → établit lastHp
+    const danger = root.querySelector('.combat-fx__danger')
+    expect(danger?.classList.contains('combat-fx__danger--on')).toBe(false)
+    overlay.sync(atHp(app, 0.2))
+    expect(danger?.classList.contains('combat-fx__danger--on')).toBe(true)
+  })
+
+  it('flash : opacité > 0 juste après une PERTE de PV', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState()) // plein
+    const hurt = root.querySelector<HTMLElement>('.combat-fx__hurt')
+    expect(Number(hurt?.style.opacity ?? '0')).toBe(0)
+    overlay.sync(atHp(app, 0.5)) // PV en baisse → flash
+    expect(Number(hurt?.style.opacity ?? '0')).toBeGreaterThan(0)
+  })
+
+  it('un SOIN (PV qui montent) ne déclenche PAS de flash', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(atHp(app, 0.3)) // établit lastHp bas (1er sync = pas de flash)
+    overlay.sync(atHp(app, 0.9)) // remonte → aucun flash
+    const hurt = root.querySelector<HTMLElement>('.combat-fx__hurt')
+    expect(Number(hurt?.style.opacity ?? '0')).toBe(0)
+  })
+
+  it('hors run (retour titre) : vignette et flash éteints, lastHp purgé', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const { root, overlay } = mount()
+    overlay.sync(atHp(app, 0.2)) // en jeu, danger ON
+    expect(root.querySelector('.combat-fx__danger')?.classList.contains('combat-fx__danger--on')).toBe(true)
+    const title = new App({ seed: 1, mode: 'solo', autostart: false })
+    overlay.sync(title.getState()) // titre
+    expect(root.querySelector('.combat-fx__danger')?.classList.contains('combat-fx__danger--on')).toBe(false)
+    expect(Number(root.querySelector<HTMLElement>('.combat-fx__hurt')?.style.opacity ?? '0')).toBe(0)
   })
 })
 

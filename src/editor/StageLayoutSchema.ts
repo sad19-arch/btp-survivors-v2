@@ -72,6 +72,11 @@ function parseElements(v: unknown): EmbeddedElement[] | undefined {
       const d = o.destructible as Record<string, unknown>
       if (typeof d.typeId === 'string') {e.destructible = { typeId: d.typeId }}
     }
+    // Otage : préserver le routage vers les entités prisonniers (sim). Sans ça, un
+    // layout joueur réinjecté au boot perdrait ses otages (même bug que destructible).
+    if (typeof o.prisoner === 'object' && o.prisoner !== null) {
+      e.prisoner = {}
+    }
     out.push(e)
   }
   return out.length > 0 ? out : undefined

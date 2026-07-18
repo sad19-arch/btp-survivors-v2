@@ -202,11 +202,13 @@ export class AudioDirector {
     on('prisonerFreed', () => { this.playCue('prisonerFreed'); this.playVoice(VOICE.thankyou, 2) })
     // B5 — Fanfare d'évolution (coffre ramassé + conditions réunies) : fanfare zzfx en accord
     // majeur + voix triomphante. Remplace le cue 'bonus' générique par une fanfare dédiée.
-    on('evolved', () => { this.playChestFanfare(); this.playCue('jackpotWin'); this.playVoice(VOICE.evolved, 4) })
+    on('evolved', () => { this.playVoice(VOICE.evolved, 4) })
     // Coffre ouvert (issues cartes/soin) : même récompense sonore « jackpot » que la
     // machine à sous. L'évolution a déjà sa fanfare complète via `evolved` → on ne double pas.
     on('chestOpened', (e) => {
-      if ((e as ChestOpenedEvent).kind !== 'evolution') { this.playCue('jackpotWin') }
+      // Fanfare d'ouverture (ElevenLabs) pour TOUT coffre ; super = plus épique.
+      // L'évolution ajoute sa voix triomphante via 'evolved' (pas de doublon fanfare).
+      this.playCue((e as ChestOpenedEvent).isSuper ? 'chestFanfareSuper' : 'chestFanfare')
     })
     on('upgradePick', () => { this.playCue('upgradePick') })
     // Casse d'un destructible : son PAR MATÉRIAU (bois/métal/gravats), throttlé côté cue.
@@ -297,32 +299,6 @@ export class AudioDirector {
       return // le zzfx procédural nécessite WebAudio
     }
     playZzfx(this.audioCtx, gain, weaponZzfx(id))
-  }
-
-  /**
-   * B5 — Fanfare de coffre/évolution (zzfx procédural).
-   * Joue 3 notes en accord majeur ascendant décalées dans le temps (~40ms entre chaque).
-   * Inaudible si audio verrouillé, contexte nul, ou gain nul.
-   */
-  private playChestFanfare(): void {
-    if (this.audioCtx === null || this.isLocked()) {
-      return
-    }
-    const ctx = this.audioCtx
-    const gain = sfxGain(this.settings)
-    if (gain <= 0) {
-      return
-    }
-    CHEST_FANFARE_NOTES.forEach((note, i) => {
-      const delayMs = i * 90
-      if (delayMs === 0) {
-        playZzfx(ctx, gain, note)
-      } else {
-        window.setTimeout(() => {
-          playZzfx(ctx, gain, note)
-        }, delayMs)
-      }
-    })
   }
 
   /**

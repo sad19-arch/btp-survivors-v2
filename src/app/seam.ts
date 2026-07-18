@@ -65,6 +65,8 @@ export interface GameSeam {
    * un coéquipier vivant).
    */
   debugKillPlayer(playerId?: number): void
+  /** [Debug] Libère + enrage l'otage le plus proche du joueur (allié temporaire). */
+  debugEnragePrisoner(playerId?: number): void
   /** [Debug] Audition d'un SFX d'arme (procédural) par ID d'arme. */
   debugPlayWeaponSfx(id: string): void
   /**
@@ -225,6 +227,9 @@ export function createSeam(app: App): GameSeam {
     },
     debugKillPlayer: (playerId?: number) => {
       app.debugKillPlayer(playerId)
+    },
+    debugEnragePrisoner: (playerId?: number) => {
+      app.debugEnragePrisoner(playerId)
     },
     debugPlayWeaponSfx: (id: string) => {
       app.debugPlayWeaponSfx(id)

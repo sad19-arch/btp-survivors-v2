@@ -1,7 +1,7 @@
 import type { World } from '../world'
 import type { Rng } from '../rng'
-import type { PickupKind, Vec2 } from '../types'
-import { PICKUP, PICKUP_DROPS } from '@content/config'
+import type { PickupComp, PickupKind, Vec2 } from '../types'
+import { CHEST, PICKUP, PICKUP_DROPS, RAGE } from '@content/config'
 
 /**
  * Résultat de `reapDeadEnemies` : nombre total tués + kills attribués par joueur.
@@ -69,11 +69,20 @@ export function reapDeadEnemies(world: World, lootRng?: Rng, died?: DiedEnemy[])
       if (ecomp.bossRole !== undefined) {
         bossKills++
       }
-      dropPickup(world, epos, 'xp', ecomp.xpValue)
+      // Kill d'ALLIÉ enragé : gemme d'XP bridée (`RAGE.allyKillXpFraction`) pour ne
+      // pas inonder le joueur en tuant la moitié de la horde. Sinon, gemme pleine.
+      if (ecomp.allyKill === true) {
+        const xpVal = Math.round(ecomp.xpValue * RAGE.allyKillXpFraction)
+        if (xpVal > 0) {
+          dropPickup(world, epos, 'xp', xpVal)
+        }
+      } else {
+        dropPickup(world, epos, 'xp', ecomp.xpValue)
+      }
       if (ecomp.bossRole === 'mid') {
-        // Boss de mi-parcours : lâche un coffre d'évolution (rend une évolution
-        // atteignable EN RUN, avant le boss final — cf. Plan B1 split de boss).
-        dropPickup(world, epos, 'coffre', 0)
+        // Boss de mi-parcours : lâche un coffre (rend une évolution atteignable EN
+        // RUN). 1/10 = super coffre doré (RNG loot isolé → déterminisme préservé).
+        dropPickup(world, epos, 'coffre', 0, lootRng?.chance(CHEST.superChance) ?? false)
       }
       if (lootRng !== undefined) {
         maybeDropBonus(world, lootRng, epos)
@@ -119,8 +128,12 @@ function maybeDropBonus(world: World, rng: Rng, pos: Vec2): void {
  * doivent s'effacer si personne ne les ramasse. `coffre`/`heal`/`magnet`/`chest`
  * restent persistants (pas de `lifeMs`).
  */
-export function dropPickup(world: World, pos: Vec2, type: PickupKind, value: number): void {
+export function dropPickup(world: World, pos: Vec2, type: PickupKind, value: number, isSuper = false): void {
   const gem = world.spawn()
   world.add(gem, 'position', { x: pos.x, y: pos.y })
-  world.add(gem, 'pickup', type === 'xp' ? { type, value, lifeMs: PICKUP.gemLifeMs } : { type, value })
+  const comp: PickupComp = type === 'xp' ? { type, value, lifeMs: PICKUP.gemLifeMs } : { type, value }
+  if (isSuper) {
+    comp.isSuper = true // super coffre doré (rareté 1/10) → spectacle renforcé
+  }
+  world.add(gem, 'pickup', comp)
 }

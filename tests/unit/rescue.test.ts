@@ -1,9 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { Simulation } from '@core/simulation'
 import { RESCUE, WORLD } from '@content/config'
+import { ConstructionPhaseId } from '@content/phases'
 
+// On teste le placement PROCÉDURAL des prisonniers → il faut un stage SANS compo
+// sauvée. `terrain_vierge` a désormais une compo committée : ses prisonniers sont
+// « posés en éditeur » (0 par défaut, cf. siteLayoutPrisoners.test.ts). Le scatter
+// procédural (5 otages) ne s'exerce donc que sur les stages non composés.
 function bootSim(seed = 42): Simulation {
-  return new Simulation({ mode: 'solo', seed })
+  return new Simulation({ mode: 'solo', seed, phaseId: ConstructionPhaseId.TERRASSEMENT })
 }
 
 describe('prisonniers ×5', () => {

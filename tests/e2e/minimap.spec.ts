@@ -8,9 +8,13 @@ import { test, expect } from '@playwright/test'
  * - 5 marqueurs prisonniers (`.minimap__dot--prisoner`) au départ (RESCUE.count) ;
  * - le toggle (`window.__GAME__.toggleMinimap()`, câblé sur M / bouton Back manette)
  *   masque le panneau.
+ *
+ * NB : on démarre sur `level=2` (terrassement) et non `level=1` (terrain_vierge) :
+ * ce dernier a désormais une compo committée → ses otages sont « posés en éditeur »
+ * (0 par défaut). Les 5 otages procéduraux ne s'exercent que sur un stage non composé.
  */
 test('mini-carte : présente, togglable, marqueurs prisonniers', async ({ page }) => {
-  await page.goto('/?autostart=solo&level=1&seed=7&test=1')
+  await page.goto('/?autostart=solo&level=2&seed=7&test=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true, { timeout: 15000 })
 
   const map = page.locator('.minimap')

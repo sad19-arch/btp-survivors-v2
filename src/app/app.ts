@@ -38,7 +38,9 @@ import { PASSIVES, aggregatePassives } from '@content/passives'
 import { describeWeaponLevelDelta } from '@content/weaponDelta'
 import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
+import { loadHaptics, saveHaptics } from './hapticsSettings'
 import { evolutionStatuses } from '@core/systems/evolution'
+import { chestRevealTotalMs } from '@ui/overlay'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
 import type { AchievementsView, AppViewState, RunReport, HiScoresView, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen } from './appState'
 import { selectDeathQuote } from '@content/deathQuotes'
@@ -143,6 +145,18 @@ export class App {
   private totalIntroMs = 0
   /** Temps restant de gel pour l'intro de run, en ms (0 = pas d'intro en cours). */
   private introMsLeft = 0
+  /**
+   * Gel « casino » : temps restant (ms) pendant lequel la partie est FIGÉE le temps
+   * de la machine à sous d'ouverture de coffre (comme `introMsLeft` pour l'intro).
+   * Posé à l'ouverture d'un coffre, décrémenté dans `advanceTime` ; A le remet à 0
+   * (skip). > 0 ⇒ la sim n'avance pas (le joueur ne peut pas se faire toucher).
+   */
+  private chestRevealMsLeft = 0
+  /**
+   * Compteur incrémenté à chaque SKIP de coffre (A). Exposé dans l'état ; l'overlay
+   * le compare pour fermer immédiatement la machine à sous (pas de couplage direct).
+   */
+  private chestSkipToken = 0
   /** Écran Options ouvert (surcouche au-dessus du titre / pause). */
   private optionsOpen = false
   /** Sélection de personnage en cours (ouverte par « Jouer » au titre, avant le lancement de la partie). */
@@ -155,6 +169,8 @@ export class App {
   private charCursor = 0
   /** Niveaux audio (possédés ici pour l'UI Options ; l'AudioDirector les lit). */
   private audioLevels: AudioLevels = loadAudioSettings()
+  /** Vibrations manette activées (juice #2) ; lues par le Rumbler via `getVibrations()`. */
+  private vibrationsEnabled: boolean = loadHaptics()
   /** Compteur de frame, bumpé en fin d'`advanceTime` — clé du cache `getStateForFrame`. */
   private frame = 0
   /** Cache du dernier `AppViewState` calculé, partagé par rendu/overlay/audio sur une frame. */
@@ -301,6 +317,8 @@ export class App {
     this.sim.events.addEventListener('chestOpened', (e) => {
       const ev = e as ChestOpenedEvent
       this.runChestsOpened++ // idem — les 3 issues de coffre comptent comme « ouvert »
+      // GÈLE la partie le temps de la machine à sous (super = 3 rouleaux → plus long).
+      this.chestRevealMsLeft = chestRevealTotalMs(ev.isSuper ? 3 : 1)
       this.events.dispatchEvent(new ChestOpenedEvent(ev.kind, ev.playerId, ev.isSuper))
     })
     this.sim.events.addEventListener('destructibleBroken', (e) => {
@@ -344,6 +362,14 @@ export class App {
     // Intro de run : on consomme le temps SANS faire avancer la sim (gel cosmétique).
     if (this.introMsLeft > 0) {
       this.introMsLeft = Math.max(0, this.introMsLeft - ms)
+      this.refreshFocus()
+      this.bumpState()
+      return
+    }
+    // Ouverture de coffre : la partie est GELÉE le temps de la machine à sous (le
+    // joueur regarde le spectacle sans risque). Skippable avec A (`skipChestReveal`).
+    if (this.chestRevealMsLeft > 0) {
+      this.chestRevealMsLeft = Math.max(0, this.chestRevealMsLeft - ms)
       this.refreshFocus()
       this.bumpState()
       return
@@ -447,6 +473,13 @@ export class App {
    */
   confirm(byPlayers?: ReadonlySet<number>): void {
     this.bumpState()
+    // Ouverture de coffre en cours : A SAUTE le spectacle (dégèle + ferme la machine à
+    // sous). Consommé ici → ne déclenche rien d'autre. Le résultat est déjà appliqué.
+    if (this.chestRevealMsLeft > 0) {
+      this.chestRevealMsLeft = 0
+      this.chestSkipToken++
+      return
+    }
     // Au titre, la touche « valider » peut compléter le code Konami : on la consomme alors.
     if (this.recordCombo('confirm')) {
       return
@@ -670,6 +703,16 @@ export class App {
     this.sim?.debugKillPlayer(playerId)
   }
 
+  /**
+   * [Debug/seam] Libère + enrage l'otage le plus proche du joueur (le téléporte au
+   * joueur). Indispensable pour tester la mécanique d'allié en headless (les otages
+   * spawnent loin). Réservé aux tests et au seam — jamais en jeu normal.
+   */
+  debugEnragePrisoner(playerId = 1): void {
+    this.bumpState()
+    this.sim?.debugEnragePrisoner(playerId)
+  }
+
   // --- état exposé ----------------------------------------------------------
 
   /**
@@ -841,6 +884,7 @@ export class App {
           ? null
           : { ...this.achievementsView, entries: [...this.achievementsView.entries] },
       minimapVisible: this.minimapVisible,
+      chestSkipToken: this.chestSkipToken,
       justEvolvedWeaponName:
         base.justEvolved !== null
           ? (WEAPONS[base.justEvolved]?.name ?? base.justEvolved)
@@ -848,13 +892,13 @@ export class App {
       chestOpen:
         base.chestOpened !== null
           ? {
-              kind: base.chestOpened.kind,
-              weaponId: base.chestOpened.kind === 'evolution' ? base.chestOpened.weaponId : null,
-              weaponName:
-                base.chestOpened.kind === 'evolution'
-                  ? (WEAPONS[base.chestOpened.weaponId]?.name ?? base.chestOpened.weaponId)
-                  : null,
-              isSuper: base.chestOpened.isSuper
+              isSuper: base.chestOpened.isSuper,
+              results: base.chestOpened.results.map((r) => ({
+                kind: r.kind,
+                weaponId: r.weaponId !== '' ? r.weaponId : null,
+                weaponName: r.weaponId !== '' ? (WEAPONS[r.weaponId]?.name ?? r.weaponId) : null,
+                level: r.level ?? null
+              }))
             }
           : null,
       runReport: screen === 'gameover' || screen === 'victory' ? this._runReport : null
@@ -983,8 +1027,14 @@ export class App {
       { id: 'vol_music', label: `◄ Musique : ${pct(a.music)} ►`, hint: 'Gauche/Droite pour régler' },
       { id: 'vol_sfx', label: `◄ Effets : ${pct(a.sfx)} ►`, hint: 'Gauche/Droite pour régler' },
       { id: 'mute', label: `Son : ${a.muted ? 'COUPÉ' : 'activé'}`, hint: 'Valider pour basculer' },
+      { id: 'vibrations', label: `Vibrations : ${this.vibrationsEnabled ? 'activées' : 'désactivées'}`, hint: 'Valider pour basculer' },
       { id: 'retour', label: 'Retour', hint: null }
     ]
+  }
+
+  /** Réglage vibrations courant (lu par le Rumbler, câblé dans main.ts). */
+  getVibrations(): boolean {
+    return this.vibrationsEnabled
   }
 
   /** Niveaux audio courants (lus par l'AudioDirector). */
@@ -1272,6 +1322,11 @@ export class App {
         this.audioLevels = { ...this.audioLevels, muted: !this.audioLevels.muted }
         saveAudioSettings(this.audioLevels)
         this.events.dispatchEvent(new Event('audioSettings'))
+      } else if (id === 'vibrations') {
+        this.vibrationsEnabled = !this.vibrationsEnabled
+        saveHaptics(this.vibrationsEnabled)
+        // Le Rumbler (câblé dans main.ts) écoute cet événement et se (dés)active.
+        this.events.dispatchEvent(new Event('inputSettings'))
       } else if (id === 'retour') {
         this.optionsOpen = false
       }
@@ -1406,6 +1461,7 @@ function emptyState(seed: number, stageId: ConstructionPhaseId): GameState {
     projectiles: [],
     pickups: [],
     prisoners: [],
+    allies: [],
     rescue: { total: 0, rescued: 0 },
     hazards: [],
     pendingLevelUp: null,

@@ -100,6 +100,12 @@ export const CHEST = {
   /** Nombre maximum de coffres actifs simultanément (inclut le coffre mini-boss). */
   maxActive: 5,
   /**
+   * Probabilité qu'un coffre (convoyeur OU mini-boss) soit un SUPER coffre doré
+   * giga-brillant (1/10). Un super coffre donne 3 issues (1 évo + 2 montées, ou 3
+   * montées) et un spectacle renforcé. Tiré au DROP (RNG isolé) → coffre au sol distinct.
+   */
+  superChance: 0.1,
+  /**
    * Soin de repli si aucune évolution ET aucune carte éligible (tout maxé).
    * Fraction de maxHp rendue. Ex : 0.30 → +30 % des PV max, borné à maxHp.
    */
@@ -271,6 +277,34 @@ export const RESCUE = {
   distMax: 2800,
   /** Vitesse de fuite (px/s) de l'ouvrier libéré (part vers le bas hors écran). */
   fleeSpeed: 260
+} as const
+
+/**
+ * Otage libéré ENRAGÉ (allié TEMPORAIRE). À la libération, l'otage suit le joueur
+ * pendant `durationMs` et lance une salve toutes les `salvoMs` : chaque salve est
+ * une PURGE DIRIGÉE qui tue `killFraction` des ennemis NORMAUX présents dans
+ * `screenRadius` (sélection déterministe, RNG dédié), et inflige `bossDamageFraction`
+ * × PVmax aux boss / élites / convoyeurs — JAMAIS de kill (dégât plafonné à hp-1).
+ * Puis il dit « Merci » et s'en va. Jusqu'à `maxAllies` alliés en parallèle.
+ *
+ * ÉQUILIBRAGE :
+ * - `screenRadius` réutilise l'anneau de spawn (`SPAWN.ringRadius`, figé/déterministe)
+ *   comme proxy « à l'écran » : le core ne connaît pas la caméra.
+ * - `allyKillXpFraction` BRIDE l'XP des kills de masse (défaut bas) : sans ça, tuer
+ *   la moitié de la horde inonderait le joueur d'XP (« AoE + XP-des-kills nourrissent
+ *   la puissance »). 0 = aucune gemme sur un kill d'allié, 1 = pleine XP.
+ */
+export const RAGE = {
+  durationMs: 20_000,
+  salvoMs: 1_200,
+  screenRadius: SPAWN.ringRadius,
+  killFraction: 0.5,
+  bossDamageFraction: 1 / 3,
+  followSpeed: 260,
+  boltSpeed: 900,
+  boltHitRadius: 28,
+  maxAllies: 5,
+  allyKillXpFraction: 0.25
 } as const
 
 /**

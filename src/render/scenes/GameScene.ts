@@ -19,6 +19,7 @@ import { resolveComposedLayout } from '@content/runtimeLayouts'
 import { stageRender, type StageRender, FINAL_BOSS_SKIN, CONVOYEUR_SKIN, CAMION_SKIN, SHARED_WORKER_NPCS, CITY_BUILDINGS, CITY_PERIMETER } from '@render/stages'
 import { SpritePool } from '@render/spritePool'
 import { DamageNumberPool } from '@render/damageNumbers'
+import { CritTextRenderer } from '@render/scenes/critTextRenderer'
 import { VfxManager } from '@render/scenes/vfxManager'
 import { SpeechBubbleManager } from '@render/scenes/speechBubbleManager'
 import { CameraController } from '@render/scenes/cameraController'
@@ -32,7 +33,7 @@ import { IntroSequencer } from '@render/scenes/introSequencer'
 import { CinemaStageImpl } from '@render/scenes/cinemaStageImpl'
 import { createCinemaDeps } from '@render/scenes/cinemaDeps'
 import { buildSiteLayout } from '@core/siteLayout'
-import { AuraPulseEvent, PrisonerFreedEvent, DestructibleBrokenEvent, EnemyDiedEvent } from '@core/events'
+import { AuraPulseEvent, PrisonerFreedEvent, PrisonerEnragedEvent, DestructibleBrokenEvent, EnemyDiedEvent, ChestOpenedEvent } from '@core/events'
 import type { EvolvedEvent } from '@core/events'
 import { DestructibleRenderer } from '@render/scenes/destructibleRenderer'
 import { destructibleDef, destructiblesForStage, COIN_PICKUP } from '@content/destructibles'
@@ -59,6 +60,13 @@ export interface GameSceneData {
 
 /** Clamp du delta réel pour éviter la spirale de la mort après un gel d'onglet. */
 const MAX_FRAME_MS = 100
+
+/** Durées de hitstop (juice #5) — RÉSERVÉ aux gros moments (pas la horde). */
+const HITSTOP_ELITE_MS = 45
+const HITSTOP_BOSS_MS = 90
+const HITSTOP_EVOLVE_MS = 70
+/** Verrou anti-strobe : délai mini entre deux gels d'impact. */
+const HITSTOP_COOLDOWN_MS = 160
 
 /**
  * Scène de jeu : couche RENDU. Elle observe `Simulation.getState()` et dessine ;
@@ -98,6 +106,20 @@ export class GameScene extends Phaser.Scene {
    * Initialisé dans `create()`, instance fraîche par scène.
    */
   private damageNumbers!: DamageNumberPool
+  /**
+   * Textes de coup critique flottants (rallume `CRITICAL_TEXTS`/`selectCriticalText`,
+   * jusqu'ici sans consommateur). Poolé, instance fraîche par scène.
+   */
+  private critText!: CritTextRenderer
+  /**
+   * HITSTOP (juice #5) — gel d'impact RENDER-only. Tant que `hitstopMsLeft > 0`,
+   * `update()` n'avance PAS la sim (le rendu reste figé un ou deux frames), ce qui
+   * donne le « claquement » d'un gros coup. `cooldown` empêche un enchaînement de
+   * gels sur des morts rapprochées (sinon effet strobe). Jamais actif en test/lite
+   * (le seam pilote le temps) → sim:check et e2e intacts.
+   */
+  private hitstopMsLeft = 0
+  private hitstopCooldownMsLeft = 0
   /**
    * Streamer de décor par chunks (décalques + props) : génère le décor autour
    * de la caméra et détruit celui qui s'éloigne. Coût constant quelle que soit
@@ -181,11 +203,22 @@ export class GameScene extends Phaser.Scene {
     // Screen-shake léger — coup lourd mais pas nausée.
     this.cameras.main.shake(90, 0.004)
   }
-  /** Libération d'un prisonnier : étincelles + bulle « Merci ! » au-dessus de l'ouvrier. */
+  /** Otage qui remercie et s'en va (expiration de la rage / cap) : étincelles + bulle « Merci ! ». */
   private readonly onPrisonerFreed = (e: Event): void => {
     const p = e as PrisonerFreedEvent
     this.vfx.spawnVfx('vfx_sparkle', p.x, p.y, 0.5, 1.9, 450)
     this.vfx.spawnBubble(p.x, p.y)
+  }
+  /**
+   * Otage libéré qui devient ENRAGÉ : éclat d'étincelles + secousse (il entre en
+   * furie et va suivre le joueur en lançant des boules de feu). La bulle « Merci ! »
+   * viendra plus tard, à l'EXPIRATION (event `prisonerFreed`). NB : le rendu final
+   * de l'aura enragée + le sprite des boules de feu = passe DA PixelLab (à venir).
+   */
+  private readonly onPrisonerEnraged = (e: Event): void => {
+    const p = e as PrisonerEnragedEvent
+    this.vfx.spawnVfx('vfx_sparkle', p.x, p.y, 0.7, 2.4, 550)
+    this.cameras.main.shake(120, 0.005)
   }
   /**
    * Évolution d'arme (coffre ramassé + conditions réunies) : grand halo au sol
@@ -200,6 +233,8 @@ export class GameScene extends Phaser.Scene {
     if (p === undefined) {
       return
     }
+    // Hitstop (juice #5) : l'évolution est un gros moment → petit gel de célébration.
+    this.triggerHitstop(HITSTOP_EVOLVE_MS)
     this.vfx.spawnVfx('vfx_levelup', p.x, p.y, 0.2, 2.8, 650)
     // Sparkle supplémentaire en anneau (6 points) pour bien marquer l'évolution.
     for (let i = 0; i < 6; i++) {
@@ -211,6 +246,21 @@ export class GameScene extends Phaser.Scene {
     }
     // Screen-shake plus fort que le marteau (événement majeur du run).
     this.cameras.main.shake(160, 0.007)
+  }
+  /**
+   * Ouverture de coffre — EXPLOSION CASINO dans le monde : gerbe de pièces qui
+   * giclent + flash + shake (feux d'artifice si SUPER). Positionné sur le joueur
+   * ramasseur (le coffre s'ouvre sur lui). La machine à sous DOM (overlay) révèle
+   * les issues en parallèle. Rendu pur, observer-only.
+   */
+  private readonly onChestOpened = (e: Event): void => {
+    const ev = e as ChestOpenedEvent
+    const p = this.app.getStateForFrame(this.app.frameId).players.find((pl) => pl.id === ev.playerId)
+    if (p === undefined) {
+      return
+    }
+    this.vfx.spawnChestBurst(p.x, p.y, ev.isSuper)
+    this.cameras.main.shake(ev.isSuper ? 420 : 240, ev.isSuper ? 0.009 : 0.006)
   }
   // Budget de VFX de casse PAR FRAME (perf) : au-delà, casse allégée (pas de burst
   // de fragments) ; le screen-shake est COALESCÉ (1 seul par frame, le 1er break).
@@ -254,10 +304,19 @@ export class GameScene extends Phaser.Scene {
    * et à lui seul, de trancher.
    */
   private readonly onEnemyDied = (e: Event): void => {
+    const ev = e as EnemyDiedEvent
+    // Texte de coup critique — INDÉPENDANT du Mode Carnage (marche en jeu normal).
+    // `Math.random` est autorisé au rendu : rien ici n'entre dans la simulation.
+    this.critText.spawn(ev.x, ev.y, { isElite: ev.isElite, bossRole: ev.bossRole }, Math.random())
+    // Hitstop (juice #5) sur les GROSSES morts seulement : boss > élite (pas la horde).
+    if (ev.bossRole !== undefined) {
+      this.triggerHitstop(HITSTOP_BOSS_MS)
+    } else if (ev.isElite) {
+      this.triggerHitstop(HITSTOP_ELITE_MS)
+    }
     if (this.carnage === null) {
       return
     }
-    const ev = e as EnemyDiedEvent
     this.carnage.spawn({
       x: ev.x,
       y: ev.y,
@@ -284,6 +343,19 @@ export class GameScene extends Phaser.Scene {
     // ou sans skin → petit.
     const skinScale = this.stage.enemies[ev.enemyType]?.scale
     return skinScale !== undefined && skinScale >= CARNAGE_REF_SCALE ? 'medium' : 'small'
+  }
+
+  /**
+   * Arme un hitstop (juice #5) : `update()` gèlera la sim pendant `ms`. No-op en
+   * test/lite (le seam pilote le temps → aucun effet sur e2e/sim:check) et pendant
+   * le cooldown (anti-strobe). `max` : deux déclencheurs la même frame ne s'additionnent pas.
+   */
+  private triggerHitstop(ms: number): void {
+    if (this.testMode || this.lite || this.hitstopCooldownMsLeft > 0) {
+      return
+    }
+    this.hitstopMsLeft = Math.max(this.hitstopMsLeft, ms)
+    this.hitstopCooldownMsLeft = ms + HITSTOP_COOLDOWN_MS
   }
 
   /**
@@ -462,6 +534,8 @@ export class GameScene extends Phaser.Scene {
     this.load.image('proj_boulons', 'stage01/weapons/proj_boulons.png')
     this.load.image('proj_cle', 'stage01/weapons/proj_cle.png')
     this.load.image('proj_brouette', 'stage01/weapons/proj_brouette.png')
+    // Boule de feu de l'otage enragé (allié) — sprite partagé PixelLab.
+    this.load.image('proj_boule_feu', 'shared/boule_feu.png')
     // Piste C : nuage de mousse de l'extincteur (sprite PixelLab, rendu orienté).
     this.load.image('vfx_foam_cone', 'stage01/weapons/vfx_foam_cone.png')
     // Chalumeau / lance thermique : jets de flammes (PixelLab), orientés comme la mousse.
@@ -477,8 +551,14 @@ export class GameScene extends Phaser.Scene {
     this.load.image('pickup_health', 'stage01/pickups/health.png')
     this.load.image('pickup_magnet', 'stage01/pickups/magnet.png')
     this.load.image('pickup_crate', 'stage01/pickups/crate.png')
-    // État « entrouvert » du coffre (animation d'ouverture au spawn).
+    // État « entrouvert » de l'ancienne caisse XP (`chest`).
     this.load.image('pickup_crate_open', 'stage01/pickups/crate_open.png')
+    // Coffres PREMIUM (refonte casino) : doré normal + super doré giga-brillant,
+    // fermé + ouvert (jaillissement de lumière). Partagés par tous les stages.
+    this.load.image('chest_gold_closed', 'shared/chest/chest_gold_closed.png')
+    this.load.image('chest_gold_open', 'shared/chest/chest_gold_open.png')
+    this.load.image('chest_super_closed', 'shared/chest/chest_super_closed.png')
+    this.load.image('chest_super_open', 'shared/chest/chest_super_open.png')
     this.load.image('vfx_impact', 'stage01/vfx/impact.png')
     this.load.image('vfx_sparkle', 'stage01/vfx/sparkle.png')
     this.load.image('vfx_levelup', 'stage01/vfx/levelup.png')
@@ -533,6 +613,8 @@ export class GameScene extends Phaser.Scene {
     // Pool de chiffres de dégâts : instance fraîche par scene (les Text Phaser sont
     // détruits au shutdown ; un pool réutilisé les rendrait fantômes).
     this.damageNumbers = new DamageNumberPool(this)
+    // Textes de coup critique : instance fraîche par scène (Text détruits au shutdown).
+    this.critText = new CritTextRenderer(this)
     // Rendu de la horde : instance fraîche par scène (détient les Maps de sprites d'entités).
     this.horde = new HordeRenderer(this, this.pool, this.vfx, this.damageNumbers)
     // Rendu du joueur/prisonniers/intro : instance fraîche par scène (détient les Maps/état joueur).
@@ -763,13 +845,17 @@ export class GameScene extends Phaser.Scene {
     // Onde de choc du marteau + libération de prisonnier + évolution d'arme : la sim émet, l'App relaie.
     this.app.events.addEventListener('auraPulse', this.onAuraPulse)
     this.app.events.addEventListener('prisonerFreed', this.onPrisonerFreed)
+    this.app.events.addEventListener('prisonerEnraged', this.onPrisonerEnraged)
     this.app.events.addEventListener('evolved', this.onEvolved)
+    this.app.events.addEventListener('chestOpened', this.onChestOpened)
     this.app.events.addEventListener('destructibleBroken', this.onDestructibleBroken)
     this.app.events.addEventListener('enemyDied', this.onEnemyDied)
     this.events.once('shutdown', () => {
       this.app.events.removeEventListener('auraPulse', this.onAuraPulse)
       this.app.events.removeEventListener('prisonerFreed', this.onPrisonerFreed)
+      this.app.events.removeEventListener('prisonerEnraged', this.onPrisonerEnraged)
       this.app.events.removeEventListener('evolved', this.onEvolved)
+      this.app.events.removeEventListener('chestOpened', this.onChestOpened)
       this.app.events.removeEventListener('destructibleBroken', this.onDestructibleBroken)
       this.app.events.removeEventListener('enemyDied', this.onEnemyDied)
       this.telegraph.dispose()
@@ -865,7 +951,14 @@ export class GameScene extends Phaser.Scene {
     this.touchInput?.setVisible(st.screen === 'game' && !st.introActive)
     if (!this.testMode) {
       routeInput(this.app, this.readPlayerInputs(st.players.length))
-      this.perf.measure('sim', () => this.app.advanceTime(Math.min(delta, MAX_FRAME_MS)))
+      // Hitstop (juice #5) : le cooldown s'écoule toujours ; tant que le gel court, la
+      // sim N'AVANCE PAS (frame figée = « claquement » d'impact), sinon on avance normalement.
+      this.hitstopCooldownMsLeft = Math.max(0, this.hitstopCooldownMsLeft - delta)
+      if (this.hitstopMsLeft > 0) {
+        this.hitstopMsLeft -= delta
+      } else {
+        this.perf.measure('sim', () => this.app.advanceTime(Math.min(delta, MAX_FRAME_MS)))
+      }
     }
     // Skip intro sur n'importe quelle entrée (non-test uniquement : en test le seam pilote).
     if (st.introActive && !this.testMode) {

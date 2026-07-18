@@ -32,6 +32,8 @@ const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; f
   // a une orientation propre : la faire pivoter vers la vitesse la rendrait de travers).
   brouette: { key: 'proj_brouette', scale: 0.62, spin: false, faceVel: false },
   transpalette: { key: 'proj_brouette', scale: 0.82, spin: false, faceVel: false },
+  // Boule de feu de l'otage enragé (allié) : sprite PixelLab dédié (flamme qui vrille).
+  boule_feu: { key: 'proj_boule_feu', scale: 0.9, spin: true, faceVel: false },
 }
 /**
  * Sprites de pickups par type. Typé `Record<PickupKind, …>` : le compilateur
@@ -47,15 +49,25 @@ const PICKUP_SPRITE: Record<PickupKind, { key: string; scale: number }> = {
   heal: { key: 'pickup_health', scale: 0.72 },
   magnet: { key: 'pickup_magnet', scale: 0.9 },
   chest: { key: 'pickup_crate', scale: 0.6 },
-  // Coffre d'évolution (boss mi-parcours) : réutilise la caisse, un cran plus
-  // gros que `chest` pour marquer le moment d'évolution.
-  coffre: { key: 'pickup_crate', scale: 0.72 },
+  // Coffre au sol : sprite premium PixelLab (coffre doré). Le SUPER coffre (1/10)
+  // est distingué à l'affichage (chest_super_closed) via `pk.isSuper`.
+  coffre: { key: 'chest_gold_closed', scale: 0.45 },
   // Pièce d'or (destructibles) : petite, aimantée comme les gemmes.
   coin: { key: 'pickup_coin', scale: 0.7 },
 }
 
 const ENEMY_COLOR = 0xe74c3c
 const ENEMY_RADIUS = 12
+/**
+ * Recul + squash de coup (juice #6) — 100 % RENDER : le sprite se décale et
+ * s'aplatit brièvement, la POSITION SIM ne bouge pas (déterminisme intact).
+ */
+const HIT_PUNCH_MS = 130
+/** Décalage max du recul (px), depuis la direction opposée au joueur le plus proche. */
+const HIT_KNOCK_PX = 7
+/** Étirement horizontal / écrasement vertical de crête (fraction de l'échelle de base). */
+const HIT_SQUASH_X = 0.18
+const HIT_SQUASH_Y = 0.12
 const PROJECTILE_COLOR = 0xf5c542
 const PROJECTILE_RADIUS = 5
 const PICKUP_COLOR = 0x3ddc84
@@ -101,16 +113,14 @@ export class HordeRenderer {
    * détruite dès que l'ennemi disparaît de l'état. Pas d'aura sur les non-élites.
    */
   private readonly eliteAuras = new Map<number, Phaser.GameObjects.Arc>()
-  /**
-   * Marqueur « porteur de coffre » (petit coffre doré flottant au-dessus de la
-   * tête) sur les élites `convoyeur` — signal « tue-moi pour libérer le coffre ».
-   * Même cycle de vie que `enemySprites`.
-   */
-  private readonly bearerMarkers = new Map<number, Phaser.GameObjects.Image>()
   /** HP de l'ennemi à la frame précédente (diff → feedback de coup). */
   private readonly prevEnemyHp = new Map<number, number>()
   /** Fin de la fenêtre de flash blanc par ennemi touché. */
   private readonly enemyFlashUntil = new Map<number, number>()
+  /** Échelle de base par ennemi (skin ou 1 pour le cercle de repli) — pour le squash de coup. */
+  private readonly enemyBaseScale = new Map<number, number>()
+  /** Recul de coup par ennemi (juice #6) : échéance + direction unitaire du recul. */
+  private readonly enemyPunch = new Map<number, { until: number; kx: number; ky: number }>()
   /** Niveaux d'arme de la frame précédente (par playerId) → détecte les montées d'arme (flourish). */
   private readonly prevWeaponLevels = new Map<number, number[]>()
   // Ensembles « vus cette frame » réutilisés (culling), vidés au lieu d'être recréés.
@@ -212,8 +222,10 @@ export class HordeRenderer {
         if (key !== undefined && this.scene.textures.exists(key)) {
           sprite = this.pool.acquire(key, en.x, en.y)
           sprite.setScale(scale)
+          this.enemyBaseScale.set(en.id, scale)
         } else {
           sprite = this.scene.add.circle(en.x, en.y, ENEMY_RADIUS, ENEMY_COLOR)
+          this.enemyBaseScale.set(en.id, 1)
         }
         this.enemySprites.set(en.id, sprite)
         // Arrivée de boss : téléporteur façon Mega Man (rendu seul, boss actif).
@@ -221,7 +233,20 @@ export class HordeRenderer {
           this.vfx.playBossTeleport(sprite, en.x, en.y)
         }
       }
-      sprite.setPosition(en.x, en.y)
+      // ── Recul + squash de coup (juice #6) : décale/aplatit le SPRITE, jamais la sim ──
+      const base = this.enemyBaseScale.get(en.id) ?? DEFAULT_CHAR_SCALE
+      const punch = this.enemyPunch.get(en.id)
+      if (punch !== undefined && this.scene.time.now < punch.until) {
+        const t = (punch.until - this.scene.time.now) / HIT_PUNCH_MS // 1 (impact) → 0 (retour)
+        sprite.setPosition(en.x + punch.kx * HIT_KNOCK_PX * t, en.y + punch.ky * HIT_KNOCK_PX * t)
+        sprite.setScale(base * (1 + HIT_SQUASH_X * t), base * (1 - HIT_SQUASH_Y * t))
+      } else {
+        if (punch !== undefined) {
+          this.enemyPunch.delete(en.id)
+        }
+        sprite.setPosition(en.x, en.y)
+        sprite.setScale(base, base)
+      }
       // ── Aura argentée (élite) : anneau pixel net derrière le sprite ──
       if (en.isElite) {
         let aura = this.eliteAuras.get(en.id)
@@ -240,18 +265,9 @@ export class HordeRenderer {
         aura.setAlpha(0.55 + 0.3 * pulse)
         aura.setRadius(20 + 4 * pulse)
       }
-      // ── Marqueur « porteur de coffre » : coffre doré flottant + oscillation ──
-      // Signal « tue-moi pour libérer le coffre » sur l'élite convoyeur.
-      if (en.chestBearer === true && this.scene.textures.exists('pickup_crate')) {
-        let marker = this.bearerMarkers.get(en.id)
-        if (marker === undefined) {
-          marker = this.scene.add.image(en.x, en.y, 'pickup_crate').setScale(0.5)
-          this.bearerMarkers.set(en.id, marker)
-        }
-        const bob = Math.sin(this.scene.time.now / 260 + en.id) * 5
-        marker.setPosition(en.x, en.y - 68 + bob)
-        marker.setDepth(sprite.depth + 2)
-      }
+      // Note : l'élite convoyeur porte DÉJÀ un coffre dans son dos (spritesheet
+      // `convoyeur_walk`) + une aura argentée d'élite → pas de marqueur flottant
+      // (l'ancien coffre doré au-dessus de la tête faisait un DOUBLON de coffre).
       if (sprite instanceof Phaser.GameObjects.Sprite) {
         // L'ennemi poursuit le joueur → il regarde vers lui (pas de vx/vy exposé).
         const row = leader !== undefined ? dirRow(leader.x - en.x, leader.y - en.y) : 0
@@ -264,6 +280,14 @@ export class HordeRenderer {
         const until = hitFlashUntil(this.scene.time.now, hitAmount, 60)
         if (until !== undefined) {
           this.enemyFlashUntil.set(en.id, until)
+        }
+        // Recul (juice #6) : direction opposée au joueur (le coup vient de lui). NON capé
+        // (juste une écriture de Map) — le squash/décalage est appliqué au rendu ci-dessus.
+        if (leader !== undefined) {
+          const dx = en.x - leader.x
+          const dy = en.y - leader.y
+          const d = Math.hypot(dx, dy) || 1
+          this.enemyPunch.set(en.id, { until: this.scene.time.now + HIT_PUNCH_MS, kx: dx / d, ky: dy / d })
         }
         // Chiffre + pop : CAPÉS à FEEDBACK_MAX_PER_FRAME (bruit + pic d'alloc en horde).
         if (feedbackEmittedThisFrame < FEEDBACK_MAX_PER_FRAME) {
@@ -325,17 +349,13 @@ export class HordeRenderer {
         // Nettoie les ids disparus pour éviter les fuites mémoire.
         this.prevEnemyHp.delete(id)
         this.enemyFlashUntil.delete(id)
+        this.enemyBaseScale.delete(id)
+        this.enemyPunch.delete(id)
         // Aura argentée élite : détruite avec le sprite (jamais de fuite).
         const deadAura = this.eliteAuras.get(id)
         if (deadAura !== undefined) {
           deadAura.destroy()
           this.eliteAuras.delete(id)
-        }
-        // Marqueur porteur de coffre : détruit avec le sprite.
-        const deadMarker = this.bearerMarkers.get(id)
-        if (deadMarker !== undefined) {
-          deadMarker.destroy()
-          this.bearerMarkers.delete(id)
         }
       }
     }
@@ -383,7 +403,10 @@ export class HordeRenderer {
     for (const pk of state.pickups) {
       seenPickup.add(pk.id)
       let sprite = this.pickupSprites.get(pk.id)
-      const cfg = PICKUP_SPRITE[pk.type]
+      // Super coffre doré (1/10) : sprite au sol distinct (chest_super_closed).
+      const cfg = pk.type === 'coffre' && pk.isSuper === true
+        ? { key: 'chest_super_closed', scale: 0.45 }
+        : PICKUP_SPRITE[pk.type]
       if (sprite === undefined) {
         if (this.scene.textures.exists(cfg.key)) {
           sprite = this.pool.acquire(cfg.key, pk.x, pk.y)
@@ -417,10 +440,14 @@ export class HordeRenderer {
         }
         sprite.setScale(cfg.scale * scaleMul)
 
-        // Le coffre s'ENTROUVRE une fois posé (swap vers l'état entrouvert + étincelle).
-        if (!anim.opened && age > POP_MS * 0.85 && this.scene.textures.exists('pickup_crate_open')) {
+        // Le coffre s'ENTROUVRE une fois posé (swap vers l'état ouvert + étincelle).
+        // Coffre doré premium (gold/super) ; l'ancienne caisse XP (`chest`) garde son sprite.
+        const openKey = pk.type === 'chest'
+          ? 'pickup_crate_open'
+          : pk.isSuper === true ? 'chest_super_open' : 'chest_gold_open'
+        if (!anim.opened && age > POP_MS * 0.85 && this.scene.textures.exists(openKey)) {
           anim.opened = true
-          sprite.setTexture('pickup_crate_open')
+          sprite.setTexture(openKey)
           this.vfx.spawnVfx('vfx_sparkle', pk.x, pk.y, 0.5, 1.6, 260)
         }
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { App } from '@/app/app'
+import { STEP_MS } from '@core/clock'
 import type { EvolvedEvent } from '@core/events'
 
 /** Avance (en ramassant les gemmes) jusqu'à l'écran d'upgrade. */
@@ -399,5 +400,24 @@ describe('App — delta lisible sur les cartes weapon-up', () => {
     for (const item of nonWeaponUp) {
       expect(item.delta).toBeUndefined()
     }
+  })
+})
+
+describe('App — gel « casino » à l\'ouverture de coffre', () => {
+  it('coffre ouvert → partie GELÉE le temps de la machine à sous ; A la skippe (dégèle)', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    app.debugSpawnChestOnPlayer() // coffre spawné SUR le joueur → ramassé au 1er pas
+    app.advanceTime(STEP_MS)
+    const t0 = app.getState().elapsedMs
+    // Gelé : le temps de jeu n'avance plus tant que la machine à sous tourne.
+    app.advanceTime(1000)
+    expect(app.getState().elapsedMs).toBe(t0)
+    // A saute le spectacle : incrémente le token (→ overlay ferme) et dégèle.
+    const token0 = app.getState().chestSkipToken
+    app.confirm()
+    expect(app.getState().chestSkipToken).toBe(token0 + 1)
+    // Dégelé : le temps de jeu repart.
+    app.advanceTime(100)
+    expect(app.getState().elapsedMs).toBeGreaterThan(t0)
   })
 })

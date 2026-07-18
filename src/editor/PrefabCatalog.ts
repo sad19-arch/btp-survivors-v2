@@ -47,6 +47,8 @@ export interface PaletteEntry {
   npcKind?: 'trade' | 'worker'
   /** Type de destructible posé par cette entrée (catégorie `destructibles`). */
   destructibleTypeId?: string
+  /** Otage/prisonnier posé par cette entrée (catégorie `prisoners`). Un seul type. */
+  prisoner?: boolean
   /**
    * Pas de grille IMPOSÉ à la pose, en px (défaut : `EditorState.gridSize`, et
    * seulement si le snap global est actif).
@@ -110,6 +112,7 @@ export const CATEGORIES: Category[] = [
   { id: 'npc_metier', label: 'PNJ métier (fixe)' },
   { id: 'npc_ouvrier', label: 'PNJ ouvrier (mobile)' },
   { id: 'destructibles', label: 'Destructibles (cassables)' },
+  { id: 'prisoners', label: 'Otages (prisonniers)' },
   { id: 'topo', label: 'Implantation & topographie' },
   { id: 'marking', label: 'Marquage au sol' },
   { id: 'entrance', label: 'Entrée & signalétique' },
@@ -494,6 +497,10 @@ function buildStageAssets(stageId: string): { assets: EditorAsset[]; groundKey: 
   for (const d of destructiblesForStage(stageId)) {
     add({ key: d.assetKey, file: d.file, label: d.name, role: 'destructible' })
   }
+  // Otage posable (feuille du prisonnier, sosie du joueur — partagée par tous les
+  // stages) : ajouté comme asset pour que `EditorScene.preload` charge sa texture ;
+  // la palette (`prisonerEntries`) s'appuie sur cette clé.
+  add({ key: 'prisoner', file: 'stage01/npc/prisoner_walk.png', sheet: true, frame: 192, label: 'Otage', role: 'worker' })
   // Décor PARTAGÉ (clôtures/portail/routes) — sur tous les stages (catégorie « Divers »).
   for (const a of SHARED_DECOR_ASSETS) {
     add({ key: a.key, file: a.file, label: a.label, role: a.role })
@@ -603,6 +610,25 @@ function destructibleEntries(stageId: string): PaletteEntry[] {
     destructibleTypeId: d.id,
     elements: [{ assetKey: d.assetKey, dx: 0, dy: 0, scale: d.scale }]
   }))
+}
+
+/**
+ * Entrée de palette pour poser un OTAGE (section « Otages »). Poser une entrée
+ * ajoute une `LayoutInstance` qui rend la feuille du prisonnier ;
+ * `EditorState.exportGameJson` la convertit en `EmbeddedElement.prisoner {}`
+ * (non-bloquant) routé par `composedToSiteLayout` vers `SiteLayout.prisoners`.
+ * Un seul type d'otage → une seule entrée (partagée par tous les stages).
+ */
+function prisonerEntries(): PaletteEntry[] {
+  return [{
+    id: 'otage',
+    label: 'Otage',
+    category: 'prisoners',
+    kind: 'objet',
+    size: 'moyenne',
+    prisoner: true,
+    elements: [{ assetKey: 'prisoner', dx: 0, dy: 0, scale: 0.62 }]
+  }]
 }
 
 /** 2 gabarits auto (poste de travail + stock) pour les stages non authorés. */
@@ -758,7 +784,7 @@ export function getStageCatalog(stageId: string): StageCatalog {
   const authored = authoredScenes(stageId)
   const fromClusters = authored.length > 0 ? authored : clusterScenes(stageId)
   const scenes = fromClusters.length > 0 ? fromClusters : autoScenes(stageId, assets)
-  const entries = [...scenes, ...destructibleEntries(stageId), ...npcEntries(sr), ...objectEntries(assets), ...MARKERS]
+  const entries = [...scenes, ...destructibleEntries(stageId), ...prisonerEntries(), ...npcEntries(sr), ...objectEntries(assets), ...MARKERS]
   const cat: StageCatalog = { stageId, assets, entries, groundKey }
   cache.set(stageId, cat)
   return cat

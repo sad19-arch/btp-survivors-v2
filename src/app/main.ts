@@ -5,6 +5,8 @@ import { BootScene } from '@render/scenes/BootScene'
 import { Overlay } from '@ui/overlay'
 import { wireAchievementToasts } from './achievementBridge'
 import { AudioDirector } from '@/audio/audioDirector'
+import { Rumbler } from '@input/rumble'
+import { RumbleDirector } from '@input/rumbleDirector'
 import { parseBootOptions, type BootOptions } from './bootOptions'
 import { applyUserLayouts } from './userLayoutBoot'
 import { phaseIdFromLevel } from '@content/phases'
@@ -103,6 +105,14 @@ if (opts.test) {
 
 // AudioDirector : créé une fois, coupé en test/headless. Lit les niveaux via l'App.
 const audio = opts.test ? null : new AudioDirector(game.sound, app.events, () => app.getAudioLevels())
+
+// Rumble manette (juice #2) : créé une fois, inerte en test/headless. Le RumbleDirector
+// traduit les événements de jeu en secousses ; le toggle Options le (dés)active.
+const rumbler = opts.test ? null : new Rumbler(app.getVibrations())
+if (rumbler !== null) {
+  new RumbleDirector(rumbler, app.events)
+  app.events.addEventListener('inputSettings', () => rumbler.setEnabled(app.getVibrations()))
+}
 
 // Overlay DOM des écrans (HUD, menus) — observe l'état de l'App à chaque frame.
 const uiRoot = document.getElementById('ui-root')
