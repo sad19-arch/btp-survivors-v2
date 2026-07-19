@@ -22,7 +22,9 @@
     "perf:check": "tsx tools/perf/check.ts",
     "site:plan": "tsx tools/site-plan-ascii.ts",
     "assets:qa": "tsx tools/assets/qa.ts",
-    "audio:qa": "tsx tools/audio/qa.ts"
+    "audio:qa": "tsx tools/audio/qa.ts",
+    "content:reachability": "tsx tools/content/reachability.ts",
+    "branch:health": "tsx tools/branch-health.ts"
   },
   "dependencies": {
     "phaser": "^3.87.0"

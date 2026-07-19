@@ -13,6 +13,7 @@ export default tseslint.config(
       '.claude/**',
       'golden-batch-review/**',
       'tools/assets/*.mjs',
+      'tools/content/*.mjs',
       '*.config.js',
       '*.config.ts'
     ]

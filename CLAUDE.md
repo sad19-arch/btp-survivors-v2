@@ -86,6 +86,8 @@ Screenshots/vision : réservés à la **régression visuelle** (le HUD est là, 
 
 Ne déclare jamais « ça marche » sans avoir lancé l'une de ces commandes et constaté le résultat.
 
+🔴 **Des gates préexistants verts ne prouvent rien sur le code neuf** — ils testaient ce qui existait avant. Une feature n'est « complète » (dans un rapport, un ledger, une mémoire) que si elle a été **jouée sur son propre chemin neuf**, pas seulement « la suite passe toujours ». (Incident vécu : une branche de cinématiques cataloguée « feature complète », gates tous verts — parce qu'ils prouvaient la plomberie, jamais le jeu. Restée non jouée ~10 jours à 146 commits de retard sur `main`, elle contenait 2 bugs bloquants visibles en 2 secondes de jeu réel.) `npm run branch:health` signale les branches qui dérivent trop de `main` avant que la résolution de merge ne devienne coûteuse.
+
 ## Workflow assets (DA = pilier produit)
 
 Process complet : **`docs/asset-manifest.md`** + **skill `assets`** (`.claude/skills/assets/`). Le suivre **avant toute création/génération/intégration d'asset visuel**.
@@ -117,6 +119,19 @@ npm run assets:qa    # QA des assets (dimensions/transparence/nommage)
 - Alias d'import : `@/*`, `@core/*`, `@content/*`, `@render/*`, `@input/*`, `@ui/*`, `@platform/*`.
 - Temps : **ms** partout sauf le temps écoulé exposé en secondes.
 - Pas de commit/push sans demande explicite ; brancher avant de committer sur `main`.
+
+## Discipline multi-agents (git, gates, dette) — apprise à la dure
+
+Ce dépôt est régulièrement travaillé par plusieurs agents en parallèle (session courante ou futures, même IA ou non). Ces règles évitent des pièges déjà rencontrés — coûteux à re-découvrir :
+
+- **`git add <fichier>` prend TOUT le fichier, pas juste tes lignes.** Dans un arbre partagé, un autre agent peut avoir des changements non commités dans ce même fichier. **Toujours lire `git diff --cached` avant de committer** pour vérifier que l'index ne contient que ton propre travail. Ne jamais `git add -A` ni `git add .` : stager par chemin explicite.
+- **Jamais de `git stash` dans un arbre partagé.** Un `stash pop` qui échoue peut effacer définitivement le travail non commité d'un autre agent.
+- **Un gate (Vitest/Playwright/build) n'a de valeur que sur un arbre gelé.** Le lancer pendant que d'autres agents écrivent encore produit un résultat qui ne prouve rien, ni vert ni rouge. Vérifier `git status` avant de gater.
+- **Playwright sans `CI=1` peut mentir** : `playwright.config.ts` a `reuseExistingServer: !process.env.CI`, donc sans `CI=1` il réutilise en silence un serveur déjà lancé (potentiellement du code périmé). Toujours `CI=1 npx playwright test` pour un gate qui doit faire foi.
+- **Si tu tues le serveur LAN de l'utilisateur pour obtenir un gate propre, relance-le après** et redonne l'URL complète — il teste en direct depuis son téléphone tout au long de la session.
+- **Une règle « ce fichier généré doit toujours être committé vide » peut cacher un vrai bug**, pas garantir la propreté d'un gate : vérifier qu'elle n'efface pas silencieusement du travail réel (ex. un niveau construit dans l'éditeur) avant de l'appliquer mécaniquement.
+- **Un seuil de gate relâché « pour débloquer » sans cause identifiée reste une dette non résolue**, pas un fait acquis — le revérifier avant de le citer comme référence (la cause est parfois la charge de la machine au moment de la mesure, pas le code).
+- **Un agent délégué a le droit de répondre « rien à corriger » ou « je refuse de deviner, voilà pourquoi ».** Le dire explicitement dans le brief évite des corrections fabriquées pour justifier la tâche.
 
 ## Périmètre MVP (PRD)
 

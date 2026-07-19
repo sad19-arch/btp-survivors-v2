@@ -7,6 +7,8 @@ description: Use BEFORE claiming any gameplay task is done — validate by "play
 
 Une tâche de gameplay n'est **terminée** que lorsqu'elle est validée *en jouant*, preuve à l'appui. Jamais de « ça devrait marcher ».
 
+🔴 **Des gates préexistants qui restent verts ne prouvent RIEN sur le code neuf** — ils testaient ce qui existait AVANT. Une feature n'est « complète » (dans un ledger, une mémoire, un rapport à l'utilisateur) que si elle a été **exercée sur SON PROPRE chemin neuf** : un sim/e2e qui touche spécifiquement le code ajouté, pas juste « la suite passe toujours ». (Incident vécu : `feat/stage-intro-cinematics` cataloguée « feature complète, 7 commits », gates tous verts — parce qu'ils prouvaient la plomberie (le séquenceur, le typage), jamais le jeu. Restée non jouée ~10 jours, elle contenait 2 bugs bloquants visibles en 2 secondes de jeu réel.)
+
 ## Choisir l'outil selon ce qui a changé
 
 ```
@@ -58,3 +60,4 @@ Règles : attendre des **marqueurs** (`ready`, events) jamais des `sleep` ; asse
 - ❌ « J'ai changé la formule de dégâts, ça devrait équilibrer. » → ✅ `npm run sim` avant/après, comparer le DPS/survie.
 - ❌ Modifier le rendu et ne lancer que les tests unitaires. → ✅ Playwright voit le vrai canvas/HUD.
 - ❌ Bug non reproductible « parfois ». → ✅ Trouver la seed qui le déclenche, l'ajouter en test de régression.
+- ❌ Cataloguer une branche « feature complète » parce que ses gates sont verts. → ✅ La jouer (sim/e2e sur son chemin neuf) avant de la déclarer prête à merger — surtout si elle attend depuis plusieurs jours (`npm run branch:health` la signalera si elle dérive trop de `main`).
