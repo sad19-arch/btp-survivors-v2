@@ -23,7 +23,10 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    host: true
+    host: true,
+    // Autorise les liens de playtest via tunnel Cloudflare (sous-domaine
+    // aleatoire a chaque partage, ex. xxxx.trycloudflare.com).
+    allowedHosts: ['.trycloudflare.com']
   },
   build: {
     target: 'es2022',

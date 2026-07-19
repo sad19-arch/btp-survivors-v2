@@ -24,7 +24,8 @@
     "assets:qa": "tsx tools/assets/qa.ts",
     "audio:qa": "tsx tools/audio/qa.ts",
     "content:reachability": "tsx tools/content/reachability.ts",
-    "branch:health": "tsx tools/branch-health.ts"
+    "branch:health": "tsx tools/branch-health.ts",
+    "control": "node tools/local/control-server.mjs"
   },
   "dependencies": {
     "phaser": "^3.87.0"

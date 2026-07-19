@@ -19,3 +19,10 @@ golden-batch-review/
 .codex/
 # Pages/planches de validation visuelle servies en dev (previews jetables)
 public/_gate/
+# Fichiers personnels/de référence à ne jamais committer (design brut, notes)
+.claude/launch.json
+/*.zip
+Écran de mort.docx
+docs/narrative/
+# Scripts personnels (raccourcis desktop) — locaux à cette machine
+tools/local/
