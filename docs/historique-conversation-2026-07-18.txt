@@ -1,0 +1,422 @@
+========================================================================
+HISTORIQUE DE CONVERSATION — BTP CARNAGE (btp-survivors-v2)
+Session du 2026-07-17 / 2026-07-18
+========================================================================
+
+NOTE DE PORTÉE (à lire avant tout)
+-----------------------------------
+Ce fichier est un historique RECONSTITUÉ, pas un export brut du journal
+technique interne (JSONL). Pour tout ce qui suit la reprise de session
+(à partir de « précision : tous les engins devront avoir des collisions »),
+la fidélité est complète — j'ai reconstitué chaque échange dans l'ordre.
+Pour la partie ANTÉRIEURE (tout le travail des jours précédents, du
+2026-06-30 au 2026-07-17), je ne dispose que d'un RÉSUMÉ compacté, pas
+du dialogue mot à mot — je le restitue donc en synthèse, pas en détail.
+
+
+========================================================================
+PARTIE 1 — CONTEXTE DU PROJET (résumé du travail antérieur, 30/06 → 17/07)
+========================================================================
+
+BTP Carnage est un jeu web type Vampire Survivors, univers chantier BTP,
+reconstruction propre d'un prototype précédent (design bon, code mauvais).
+Règles d'architecture strictes (voir CLAUDE.md) : séparation sim/rendu,
+déterminisme (RNG seedé, FixedClock), ECS-lite data-oriented, N-joueurs
+prêt dès le départ, data-driven, typage strict, UI componentisée, contrôle
+100% manette+clavier, DA 16-bit stricte via palette unique.
+
+Grandes étapes déjà livrées avant cette session (résumé) :
+- Boucle de jeu complète (titre → game over), 3 armes, mini-boss, 10 stages
+  avec identité visuelle propre (landmarks, PNJ métier, sols dédiés).
+- Système d'armes façon Vampire Survivors : niveaux, passifs, cartes,
+  évolutions via coffres.
+- Coopération 2-4 joueurs, caméra centroïde, revive, scaling difficulté.
+- IA ennemis à 5 comportements + directeur de vagues chorégraphié.
+- Monde ×10 par streaming de décor en chunks.
+- Mode Carnage secret (Konami), destructibles, économie de coffres/casino.
+- Refonte arcade (P0-P7) : logo, écrans, mobile.
+- Stage Composer Editor (éditeur de niveaux in-game) avec multi-sélection,
+  copier/coller, palette d'assets.
+- Pipeline d'assets PixelLab (golden batch → production stage par stage)
+  et audio (musiques, SFX zzfx puis ElevenLabs, ducking voix).
+- ~1600-2300 tests Vitest, ~175-185 tests Playwright, harness de
+  simulation headless déterministe (`npm run sim` / `sim:check`).
+
+Un fait central acquis pendant cette période : mes briefs de contrôleur
+se sont trompés à de très nombreuses reprises (23 fois recensées à un
+moment donné) — presque toujours rattrapés par des agents dispatchés à
+qui j'avais explicitement demandé de « signaler tout écart, ne pas
+appliquer mécaniquement ». Cette consigne est devenue le principe
+directeur de toute la méthode de travail.
+
+État au moment de la reprise : branche `feat/editor-palette`, ~75 commits
+d'avance sur `main`, arbre en cours de travail par plusieurs agents en
+parallèle (chantier ouvert sur les engins de chantier, les PNJ métier,
+le camion, l'audio, les cinématiques).
+
+
+========================================================================
+PARTIE 2 — CHRONOLOGIE DÉTAILLÉE DE LA SESSION (fidélité complète)
+========================================================================
+
+--- 2.1 — Reprise : collisions + validation DA ---
+
+User : « précision : tous les engins devront avoir des collisions »
+User (précision) : « tous les engins ET barrières du jeu devront avoir
+des collisions »
+User : « le gate DA est OK. Le bras bouge un peu quand l'engin roule
+mais ça passe » — validation de l'animation de l'excavatrice malgré
+une dérive légère du bras (hors brief initial), jugée acceptable.
+
+--- 2.2 — Trois nouvelles demandes + lancement du « solde de tout compte » ---
+
+User : « ok commit et push, je ferais un test tout à l'heure » + trois
+demandes :
+  1. Vérifier qu'un niveau sauvegardé dans l'éditeur remplace bien le
+     niveau de base (garder l'ancien en stock, restaurable).
+  2. Tableau de high scores persistant, prénom ≤ 8 caractères, top 20,
+     kills + score.
+  3. Tableau de succès simple, esthétique façon PS5, à compléter plus
+     tard.
+
+Décisions prises via questions à choix (AskUserQuestion), verbatim :
+  - Portail : reste ouvert.
+  - Scores : un tableau PAR STAGE (pas un tableau global).
+  - Saisie du nom : sélecteur de lettres arcade (8 cases).
+  - Succès : le système + ~10 succès sûrs qui ne bougeront pas.
+  - Formule de score : kills + temps + niveau + or.
+  - Restauration du niveau de base : bouton dans l'éditeur.
+
+User (plus tard, question ouverte) : « Et comment ça se fait qu'on a
+aussi peu de PNJ métier et animé ? Il y a dix stages mais que neuf PNG
+métiers. Je m'attendais à en avoir au moins deux par stage bien animés
+avec un objet ! »
+User : « je veux surtout TOUS les retrouver dans l'editeur dans le bon
+stage »
+User : « est-ce qu'on a bien deux pnj métiers minimum par stage ? » —
+re-confirmation de la cible après que je l'avais silencieusement réduite
+à 1 par stage.
+
+User : « tu vas faire toutes les tâches jamais complétées, tu as mon
+accord. Fais toi un plan mais fais TOUT. je ne veux plus de tâche qui
+traine ou incomplète. »
+User : « fais tout sur pixelabs, je paie un abonnement on le rentabilise
+au maximum, peu importe le temps que ça prend ! je ne veux pas de point,
+fais toutes les tàches, fais toi des plans, vérifie... tu as mon accord
+donc ne me sollicite pas pour rien »
+
+→ Plan écrit : docs/superpowers/plans/2026-07-17-solde-de-tout-compte.md
+→ Mandat resserré ensuite : « ok fais tout sauf mes taches et les sim
+  check et les taches abandonnées »
+
+--- 2.3 — Vague de dispatchs d'agents (le cœur de la journée) ---
+
+Cinq à sept agents dispatchés en parallèle/série sur la journée. Résultats
+majeurs, dans l'ordre où ils sont revenus :
+
+1) ENGINS DE CHANTIER — 10 engins animés allumés sur 34 instances / 6
+   stages (avant : UN SEUL asset animé dans tout le jeu). Cause racine :
+   les 3 feuilles du stage 02 portaient déjà leur animation mais étaient
+   câblées dans des clusters (`cluster_excavation`/`cluster_plant`) que
+   `buildSiteLayout` ne plaçait plus sur aucun stage depuis qu'un
+   SITE_PROGRAM avait pris le relais. Preuve : 10 mondes construits → 0
+   instance. Mon brief se trompait de diagnostic ET de remède. La toupie
+   animée a été rejetée (régression de silhouette confirmée par mesure :
+   L/H passe de 1,20 à 1,71) — la statique reste.
+   Commit : 969571c.
+
+2) T6 CAMION — Premier agent bloqué : le personnage camion généré (via
+   create_character v3 + référence) n'avait AUCUNE vue de face sur ses
+   8 rotations — irrécupérable, régénération complète nécessaire.
+   Deuxième tentative (autorisée explicitement par l'user, quota
+   PixelLab) : régénéré vue par vue (create_map_object), bbox mesurées
+   et validées, planche 768×768 packée. 3 correctifs de câblage
+   appliqués dans SiteWorkers. L'agent n'a jamais VU le camion rouler
+   (Playwright exclu de son mandat) — oracle réservé au gametest user.
+   Commit : ee6c7e2 (fusionné avec le lot métiers).
+
+3) MIX AUDIO — 5 sons objectivement morts trouvés et corrigés :
+   weapon_goudron (-50,3 LUFS), weapon_coulee_bitume (-58,2 LUFS),
+   gore_2 (-34,1 vs -15…-11 pour ses sœurs), et surtout le cue
+   `carnageGore` (5 fichiers livrés, cue complet, ZÉRO site d'appel —
+   jamais joué). Cause racine nommée : le critère de recette était
+   « le fichier se télécharge », pas « le fichier s'entend ». Nouvel
+   outil `npm run audio:qa` (mesure LUFS) livré. Régénération des 3
+   fichiers morts réussie du premier coup (commit a8b0f01). Restes
+   signalés à l'oreille de l'utilisateur : ambiance à 5% du volume
+   musique (visait 50%), 21 dB d'écart armes/kills.
+   Commits : 61404a9, a8b0f01.
+
+4) PNJ MÉTIER — Découverte majeure : ~40% de l'art PNJ (terrassier,
+   couvreur, peintre, échafaudeur...) était généré, packé, QA-verte,
+   déclaré — et JAMAIS RENDU. Deux causes cumulées : un `slice(0,0)`
+   dans GameScene coupait le chemin d'ambiance (mort mais avec une
+   VRAIE raison : parade à un doublon de systèmes PNJ, retiré
+   franchement une fois la raison vérifiée) ; et le registre
+   `composedLayouts.ts` étant vide, le chemin `kind:'trade'` ne
+   s'exécutait sur aucun stage. Deux agents ont d'abord rapporté des
+   comptes contradictoires (28/50 vs 50/50 orphelins) — tous deux
+   faux, la vraie mesure était 29/50 puis 48/50 après correction.
+   GameScene allégé de 1000 à 925 lignes (code mort retiré).
+   Commits : beae7ad, a123c48.
+
+5) CINÉMATIQUES D'INTRO — Branche `feat/stage-intro-cinematics` (7
+   commits, datée du 08/07) fusionnée dans `feat/editor-palette` après
+   avoir été retrouvée à 146 COMMITS DE RETARD sur la base attendue.
+   Une résolution de merge antérieure (`tmp/cine-merge-test`, ciblant
+   `main`) était devenue caduque et a dû être entièrement refaite contre
+   la bonne base. `banner` et `sfx` étaient des no-ops, câblés ce jour ;
+   `voice` reste plombé mais sans contenu (aucun script ne l'appelle
+   encore) ; seul le stage terrassement a une cinématique, les 9 autres
+   ont un gel intelligent raccourci (2s) pour ne pas figer sur un écran
+   vide.
+   Commit de merge : 61bba8c.
+
+--- 2.4 — Découverte et correction : le niveau du joueur s'effaçait ---
+
+User : « pour le stage 1 j'aimerai avoir le stage que j'ai construit
+dans l'editeur, donc trouve une solution pour que ce soit le cas. a
+chaque fois tu me dis que tu l'utilise pour faire des tests donc
+corrige cette fois »
+
+Diagnostic : ma propre routine `sim:check` faisait `git checkout --
+composedLayouts.ts` avant chaque run, remettant le registre à vide et
+effaçant SILENCIEUSEMENT le vrai niveau du joueur (347 instances,
+construit dans l'éditeur, sauvegardé depuis la veille). Le registre
+n'était régénéré qu'au clic « Sauver au repo », jamais restauré.
+Correctif : `terrain_vierge.json` et `composedLayouts.ts` COMMITTÉS
+ENSEMBLE et rendus PERMANENTS (l'ancienne règle « ne jamais les
+committer » devenait elle-même le bug). Preuve : `buildSiteLayout`
+rend 118 obstacles issus de la compo contre 6 pour un stage nu.
+Commit : 12a6d4f.
+
+--- 2.5 — Gates finaux + merge sur main ---
+
+User : « ok tout est fait ?si oui on merge » + « j'espere que l'editeur
+est parfait ! »
+
+Réponse honnête donnée : je ne pouvais pas certifier « parfait » (le
+navigateur intégré ne peint pas le canvas, seul un vrai gametest humain
+en juge). Arbre gelé, gates relancés :
+  - tsc, eslint : 0
+  - Vitest : 2429/2429
+  - assets:qa : 658 assets, 0 erreur
+  - Playwright (CI=1, serveur frais) : 185 passed, 4 échecs
+    world-streaming PROUVÉS pré-existants (git log montre le spec, le
+    code testé et la sonde debugDecorInfo inchangés depuis `main`).
+
+Merge --no-ff : `feat/editor-palette` → `main`, commit a57d3fc (75
+commits). NON poussé (le push reste une décision séparée, jamais prise
+par défaut).
+
+Défauts connus non résolus, signalés explicitement à l'utilisateur :
+  - Mixer stage 03 upscalé ×1,81 (pixels visiblement plus gros).
+  - Deux géomètres côte à côte sur le stage 01 (sprites différents).
+  - Ennemis qui spawnent visibles sur écran 2560×1440 (pré-existant,
+    corriger = zoomer davantage les grands écrans — décision de design).
+  - sim:check à re-baseliner (le niveau permanent change ce que la sim
+    voit).
+
+--- 2.6 — Question sur la portabilité (autre compte / autre IA) ---
+
+User (via /model switch à Sonnet 5, hors-sujet, non traité comme
+instruction) puis : « Est-ce qu'il y a des fonctionnalités de Claude
+que je n'utilise pas assez alors qu'elle pourrait être d'un grand
+secours pour mon projet ? »
+
+Réponse : isolation par worktree git pour les agents parallèles (aurait
+évité les collisions du jour sur GameScene.ts/siteWorkers.ts), un hook
+qui applique mécaniquement les règles git plutôt que de les répéter dans
+chaque brief, une skill de dispatch pour éviter de retaper le même socle
+de contraintes, la liste de tâches devenue un historique plutôt qu'un
+plan actif, et /code-review ultra pour une revue multi-agent des 75
+commits qui venaient de fusionner.
+
+User : « oui les deux » (hook + skill).
+
+Résultat :
+  - Skill `.claude/skills/dispatch-brief/SKILL.md` créée directement.
+  - Script `.claude/hooks/git-safety-check.sh` écrit et testé (6/6 cas :
+    bloque git stash sous toutes ses formes et git add -A/./--all, sans
+    faux positif). jq absent de la machine → basculé sur Node.
+  - Écriture de `.claude/settings.json` (le fichier qui active le hook)
+    BLOQUÉE par le classificateur de sécurité de l'harnais : « oui les
+    deux » jugé insuffisamment explicite pour une auto-modification de
+    la config qui pilote l'agent. Confirmation explicite redemandée via
+    AskUserQuestion → « Oui, active-le ».
+  - Hook testé EN CONDITIONS RÉELLES : `git stash list` (commande
+    inoffensive) bloqué avec le message prévu ; `git status` passe
+    normalement.
+
+--- 2.7 — Audit des pertes de tokens depuis le début du projet ---
+
+User : « Quelles sont les tâches où nous avons eu une grosse perte de
+tokens qui n'étaient pas nécessaires. Est-ce qu'on peut créer des
+garde-fous par rapport à ça. » (reformulé ensuite : « depuis le début
+du projet »)
+
+Un agent Explore a balayé ~60 fichiers mémoire + git log + le journal
+`.superpowers/sdd/progress.md` (214 Ko). 13 incidents identifiés, sourcés
+par citation. Cause dominante (8 des 13) : « fini » défini comme « QA
+statique verte, fichier présent », jamais comme « construit l'état réel
+du jeu et compté ce qui apparaît ». Deuxième motif (2 incidents) :
+feature finie laissée non fusionnée pendant que main dérive.
+
+Cinq garde-fous proposés, choix de l'utilisateur via AskUserQuestion :
+  1. RETENU — npm run content:reachability (audit généralisé PNJ/
+     engins/tuiles de sol/cues audio, dispatché en agent).
+  2. RETENU — vérif de complétude des vues avant animation, ajoutée
+     directement à `.claude/skills/assets/SKILL.md`.
+  3. NON retenu — sim:check immunisé contre `| tail`.
+  4. RETENU — `npm run branch:health`, écrit et testé : reproduit
+     EXACTEMENT l'incident cinématiques (146 commits de retard, flag
+     automatique). Bug de guillemetage Windows (cmd.exe ne retire pas
+     les quotes) trouvé et corrigé en cours de route.
+  5. RETENU — critère de « fini » renforcé dans CLAUDE.md et la skill
+     play-to-validate (« des gates verts ne prouvent rien sur le code
+     neuf, il faut avoir JOUÉ le chemin neuf »).
+
+Gates finaux sur ces ajouts : tsc et lint verts (en excluant le
+répertoire de travail temporaire de l'agent content:reachability,
+alors encore actif).
+
+--- 2.8 — Cowork vs Code, forfait, Codex ---
+
+User : « Est-ce que tu penses que pour mon projet, Claude Cowork est
+plus adapté ou Claude Code est plus adapté ? […] Quel forfait aurait le
+meilleur rapport qualité prix ? Est-ce que z code ou codex serait plus
+adaptés sur mon projet ? »
+
+Recherches web effectuées (voir sources citées dans la conversation) :
+  - Cowork = outil desktop pour le travail de bureau non-technique ;
+    Code = terminal/IDE pour développeurs. Pas un dilemme pour ce
+    projet (3 semaines d'infrastructure Claude-Code-spécifique : skills,
+    hooks, mémoire, MCP).
+  - Tarifs actuels : Pro 20$/mois, Max 5x 100$/mois, Max 20x 200$/mois.
+    Usage réel observé ce jour (agents dispatchés à 150-330k tokens
+    chacun, une quinzaine dans la journée) cohérent avec Max 20x, pas
+    un usage occasionnel.
+  - Conflit d'intérêt signalé explicitement sur la comparaison Codex
+    (OpenAI) : pas de comparaison neutre possible depuis Claude,
+    recommandation de sources indépendantes.
+  - « z code » clarifié par l'utilisateur : zcode.z.ai, l'outil de
+    Z.ai basé sur GLM-5.2.
+
+--- 2.9 — GLM-5.2 / Z Code : comparaison chiffrée ---
+
+User a fourni un lien (zcode.z.ai) et affirmé des performances proches
+avec un meilleur rapport qualité-prix. Vérifié plutôt que réfuté par
+réflexe :
+  - Tarifs Z Code : Lite 16,20$, Pro 64,80$, Max 144$ — réellement
+    moins cher (jusqu'à 35% sur le palier comparable à Max 5x).
+  - Benchmarks INDÉPENDANTS (Artificial Analysis, pas les chiffres du
+    vendeur) : quasi-parité sur MCP-Atlas (77,0 vs 77,8), FrontierSWE
+    (74,4 vs 75,1), écart de 4 points sur Terminal-Bench 2.1. MAIS écart
+    de 7 points sur SWE-bench Pro (corrections de dépôt les plus dures)
+    — 69,2 (Claude Opus 4.8) vs 62,1 (GLM-5.2). Cette catégorie
+    correspond exactement au type de travail de la journée (chaînes
+    causales multi-fichiers, résolution de merge à 146 commits).
+  - Deux inconnues signalées franchement : compatibilité MCP réelle
+    avec PixelLab/ElevenLabs (non vérifiée indépendamment), qualité du
+    français (modèle chinois, pas de donnée indépendante).
+  - Recommandation : un essai borné sur ce repo plutôt qu'un verdict
+    tranché depuis des moyennes de benchmark.
+
+--- 2.10 — Portabilité du compte (correction d'une affirmation) ---
+
+User : « Ok, donc on est bien d'accord. Que là si je me connecte avec
+un autre compte, je ne vais perdre ni mes MCP ni ma configuration de
+Claude ni mes artefacts ni rien du tout sauf une partie de l'historique ? »
+
+Réponse : PAS tout à fait d'accord — correction explicite plutôt que
+validation de complaisance. Vérifié via recherche web :
+  - Survit (fichiers locaux, indépendants du compte) : CLAUDE.md,
+    mémoire, skills, hooks, settings.json, historique git, progress.md.
+  - NE SURVIT PAS : les artefacts. Confirmé par recherche indépendante :
+    sur les plans Pro/Max, un artefact reste privé au compte créateur ;
+    seule échappatoire = un lien public sauvegardé ailleurs, en lecture
+    seule, non ré-appropriable par le nouveau compte.
+  - Deux nuances non garanties à 100% : certains connecteurs MCP
+    pourraient être liés au compte (cloud) plutôt qu'à la machine ; le
+    palier du nouveau compte pourrait ne pas donner accès au même
+    modèle (Opus).
+
+--- 2.11 — Historique demandé, puis rendu permanent ---
+
+User : « Est-ce que tu peux créer une sorte de fichier point txt ? dans
+lequel on retrouverait tout l'historique de notre conversation. »
+→ Premier jet écrit dans le scratchpad de session (temporaire).
+
+User : « il doit être permanent, je le veux dans le dossier du projet »
+→ Ce document, déplacé dans `docs/` et complété avec le résultat de
+  l'audit content:reachability (voir 2.12) qui est arrivé entre les
+  deux demandes.
+
+--- 2.12 — Résultat de l'audit content:reachability (garde-fou n°1) ---
+
+L'outil dispatché en 2.7 (garde-fou n°1) a rendu son verdict, construit
+sur l'état réel du jeu (pas une lecture statique de données) :
+
+  Catégorie                    Total  Atteignables  Orphelins  Verdict
+  PNJ ambient/métier             50        48            2      VERT
+    (les 2 = stage 01, compo committée, posables à l'éditeur — voulu)
+  Engins animés                  10        10            0      VERT
+    (la correction du matin tient, vérifiée par un outil indépendant)
+  Tuiles de sol                  60        10           50      ROUGE
+    (incident CONNU et NON corrigé — signalé, pas réparé : hors mandat
+    de cet outil, `ground.ts` n'a pas été touché)
+  Cues audio (SFX)                29        25            4      WARN
+    (non bloquant : un call-site peut être indirect, risque de faux
+    négatif assumé plutôt que de fausse accusation)
+  SFX d'armes en fichier          22        22            0      VERT
+
+Découverte notable : parmi les 4 cues audio orphelins, `jackpotWin` —
+le commentaire du code prétend qu'il est branché sur l'événement
+`evolved`, mais le handler réel ne joue que la voix, jamais ce cue.
+C'est exactement le même type de bug que `carnageGore` (2.3, point 3),
+détecté cette fois par le garde-fou lui-même plutôt que par une
+investigation manuelle. Preuve que le garde-fou marche.
+
+Gates : tsc 0, eslint 0, vitest 2544/2544 (dont 11 nouveaux tests de
+mutation), exit code de l'outil = 1 (les tuiles de sol le font échouer,
+comme attendu — un gate qui ne dirait rien serait cassé).
+
+Rien committé (aucune demande explicite à ce stade).
+
+
+========================================================================
+PARTIE 3 — ÉTAT TECHNIQUE AU MOMENT DE L'ÉCRITURE DE CE FICHIER
+========================================================================
+
+Branche : main (mergée depuis feat/editor-palette, commit a57d3fc).
+Poussé sur origin : NON.
+
+Non committé au moment de l'écriture (tout vérifié, gates verts,
+aucune demande explicite de commit reçue) :
+  - .claude/skills/assets/SKILL.md (vérif vue-de-face)
+  - .claude/skills/play-to-validate/SKILL.md (critère de « fini »)
+  - .claude/skills/dispatch-brief/SKILL.md (nouvelle skill)
+  - .claude/hooks/git-safety-check.sh (testé en conditions réelles)
+  - .claude/settings.json (active le hook)
+  - CLAUDE.md (section « Discipline multi-agents » + critère de « fini »)
+  - package.json (scripts branch:health et content:reachability)
+  - tools/branch-health.ts
+  - tools/content/reachability.ts + reachabilityChecks.ts + phaserStub.ts
+    + phaserLoader.mjs
+  - tests/unit/contentReachability.test.ts
+  - eslint.config.js (ignore de tools/content/*.mjs)
+  - docs/historique-conversation-2026-07-18.txt (ce fichier)
+
+Tous les cinq garde-fous choisis par l'utilisateur (2.7) sont construits
+et testés. Le seul rouge actif est un incident CONNU (tuiles de sol),
+volontairement non corrigé car hors mandat des tâches en cours.
+
+Décisions explicitement en attente de l'utilisateur (jamais prises par
+défaut) : push vers origin, commit du lot d'outillage ci-dessus, essai
+comparatif Z Code / GLM-5.2, sauvegarde des liens d'artefacts avant tout
+changement de compte, et — nouveau — correction ou non des 50 tuiles de
+sol orphelines révélées par le garde-fou.
+
+========================================================================
+FIN DU DOCUMENT
+========================================================================
