@@ -2571,7 +2571,7 @@
     },
     {
       "id": "finitions_zone_b",
-      "type": "zone_main_work",
+      "type": "zone_access",
       "x": -1500,
       "y": -280,
       "w": 900,
@@ -2579,7 +2579,7 @@
     },
     {
       "id": "finitions_zone_c",
-      "type": "zone_logistics",
+      "type": "zone_storage",
       "x": -450,
       "y": 550,
       "w": 900,
@@ -2587,8 +2587,8 @@
     },
     {
       "id": "finitions_zone_d",
-      "type": "zone_main_work",
-      "x": -410,
+      "type": "zone_secondary",
+      "x": -310,
       "y": -1400,
       "w": 820,
       "h": 700
@@ -2656,6 +2656,6 @@
       "y": -700
     }
   ],
-  "keepSitePlan": false,
-  "groundKey": "ground_stage09_3"
+  "groundKey": "ground_stage09_3",
+  "keepSitePlan": false
 }

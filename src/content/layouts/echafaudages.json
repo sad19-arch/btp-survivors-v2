@@ -15,60 +15,10 @@
   },
   "instances": [
     {
-      "id": "instance_mryvc2o8_1",
-      "prefab": "obj_continuity_stage05_shell",
-      "x": 400.00008523464385,
-      "y": -381.2499322276549,
-      "flipX": false,
-      "variant": 0,
-      "rotation": 0,
-      "scale": 1,
-      "locked": false,
-      "elements": [
-        {
-          "assetKey": "continuity_stage05_shell",
-          "dx": 0,
-          "dy": 0,
-          "scale": 1,
-          "collide": "both",
-          "layer": "struct",
-          "shape": {
-            "kind": "circle",
-            "r": 40
-          }
-        }
-      ]
-    },
-    {
-      "id": "instance_mrywedva_1",
-      "prefab": "obj_continuity_stage05_shell",
-      "x": 400.00008523464385,
-      "y": -374.9999320879565,
-      "flipX": false,
-      "variant": 0,
-      "rotation": 0,
-      "scale": 1,
-      "locked": false,
-      "elements": [
-        {
-          "assetKey": "continuity_stage05_shell",
-          "dx": 0,
-          "dy": 0,
-          "scale": 1,
-          "collide": "both",
-          "layer": "struct",
-          "shape": {
-            "kind": "circle",
-            "r": 40
-          }
-        }
-      ]
-    },
-    {
       "id": "instance_mryvdf0g_2",
       "prefab": "cluster_work_echafaudages",
-      "x": 350,
-      "y": -374.9999320879565,
+      "x": 680,
+      "y": -100,
       "flipX": false,
       "variant": 0,
       "rotation": 0,
@@ -2848,6 +2798,31 @@
           "collide": "none"
         }
       ]
+    },
+    {
+      "id": "instance_mryvc2o8_1",
+      "prefab": "obj_continuity_stage05_shell",
+      "x": 350.00008411705676,
+      "y": 143.75007950700956,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "continuity_stage05_shell",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "layer": "struct",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
     }
   ],
   "markers": [
@@ -2862,7 +2837,7 @@
     {
       "id": "echafaudages_zone_b",
       "type": "zone_access",
-      "x": 700,
+      "x": 800,
       "y": -630,
       "w": 900,
       "h": 760

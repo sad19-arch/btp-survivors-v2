@@ -2566,15 +2566,15 @@
     },
     {
       "id": "livraison_audit_zone_b",
-      "type": "zone_main_work",
-      "x": -450,
+      "type": "zone_access",
+      "x": -250,
       "y": -1430,
       "w": 900,
       "h": 760
     },
     {
       "id": "livraison_audit_zone_c",
-      "type": "zone_logistics",
+      "type": "zone_storage",
       "x": -1250,
       "y": -350,
       "w": 900,
@@ -2582,7 +2582,7 @@
     },
     {
       "id": "livraison_audit_zone_d",
-      "type": "zone_main_work",
+      "type": "zone_secondary",
       "x": -410,
       "y": 400,
       "w": 820,
@@ -2699,6 +2699,6 @@
       "y": -700
     }
   ],
-  "keepSitePlan": false,
-  "groundKey": "ground_stage10_2"
+  "groundKey": "ground_stage10_2",
+  "keepSitePlan": false
 }

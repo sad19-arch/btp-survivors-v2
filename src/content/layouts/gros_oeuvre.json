@@ -2654,6 +2654,13 @@
       "kind": "trade",
       "x": -900,
       "y": -700
+    },
+    {
+      "id": "npc_stage05_grutier_trade_restored",
+      "skin": "npc_stage05_grutier_trade",
+      "kind": "trade",
+      "x": -450,
+      "y": 250
     }
   ],
   "groundKey": "ground_stage05_0",

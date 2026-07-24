@@ -2650,7 +2650,7 @@
     },
     {
       "id": "second_oeuvre_zone_b",
-      "type": "zone_main_work",
+      "type": "zone_access",
       "x": -450,
       "y": 520,
       "w": 900,
@@ -2658,7 +2658,7 @@
     },
     {
       "id": "second_oeuvre_zone_c",
-      "type": "zone_logistics",
+      "type": "zone_storage",
       "x": 700,
       "y": -600,
       "w": 900,
@@ -2666,7 +2666,7 @@
     },
     {
       "id": "second_oeuvre_zone_d",
-      "type": "zone_main_work",
+      "type": "zone_secondary",
       "x": -1510,
       "y": -300,
       "w": 820,
@@ -2675,8 +2675,8 @@
     {
       "id": "second_oeuvre_zone_e",
       "type": "zone_atmosphere",
-      "x": -410,
-      "y": -1250,
+      "x": -310,
+      "y": -1150,
       "w": 820,
       "h": 700
     }
@@ -2764,6 +2764,6 @@
       "y": -700
     }
   ],
-  "keepSitePlan": false,
-  "groundKey": "ground_stage08_2"
+  "groundKey": "ground_stage08_2",
+  "keepSitePlan": false
 }

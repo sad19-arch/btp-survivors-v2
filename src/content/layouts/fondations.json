@@ -2361,7 +2361,7 @@
       "locked": false,
       "elements": [
         {
-          "assetKey": "struct_stage03_mixer",
+          "assetKey": "struct_stage03_mixer_work",
           "dx": -160,
           "dy": 0,
           "scale": 1,
@@ -2658,7 +2658,7 @@
     {
       "id": "fondations_zone_d",
       "type": "zone_secondary",
-      "x": 640,
+      "x": 740,
       "y": -900,
       "w": 820,
       "h": 700
@@ -2666,7 +2666,7 @@
     {
       "id": "fondations_zone_e",
       "type": "zone_atmosphere",
-      "x": 490,
+      "x": 590,
       "y": 350,
       "w": 820,
       "h": 700
@@ -2739,6 +2739,13 @@
       "kind": "trade",
       "x": -900,
       "y": -700
+    },
+    {
+      "id": "npc_stage03_betonnier_restored",
+      "skin": "npc_stage03_betonnier",
+      "kind": "trade",
+      "x": 760,
+      "y": 420
     }
   ],
   "groundKey": "ground_stage03_0",

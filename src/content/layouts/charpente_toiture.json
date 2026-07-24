@@ -2079,31 +2079,6 @@
       ]
     },
     {
-      "id": "charpente_toiture_instance_001",
-      "prefab": "obj_continuity_stage05_shell",
-      "x": 0,
-      "y": -850,
-      "flipX": false,
-      "variant": 0,
-      "rotation": 0,
-      "scale": 1,
-      "locked": false,
-      "elements": [
-        {
-          "assetKey": "continuity_stage05_shell",
-          "dx": 0,
-          "dy": 0,
-          "scale": 1.9,
-          "collide": "both",
-          "layer": "struct",
-          "shape": {
-            "kind": "circle",
-            "r": 76
-          }
-        }
-      ]
-    },
-    {
       "id": "charpente_toiture_instance_002",
       "prefab": "obj_landmark_stage07",
       "x": -390,
@@ -2728,31 +2703,6 @@
       ]
     },
     {
-      "id": "instance_mryvus5y_2",
-      "prefab": "obj_continuity_stage05_shell",
-      "x": 400.00008523464385,
-      "y": -381.2499322276549,
-      "flipX": false,
-      "variant": 0,
-      "rotation": 0,
-      "scale": 1,
-      "locked": false,
-      "elements": [
-        {
-          "assetKey": "continuity_stage05_shell",
-          "dx": 0,
-          "dy": 0,
-          "scale": 1,
-          "collide": "both",
-          "layer": "struct",
-          "shape": {
-            "kind": "circle",
-            "r": 40
-          }
-        }
-      ]
-    },
-    {
       "id": "instance_mryvx1oi_5",
       "prefab": "cluster_work_charpente",
       "x": 500.00008746981985,
@@ -2925,10 +2875,10 @@
       ]
     },
     {
-      "id": "instance_mrywgs7h_1",
+      "id": "charpente_toiture_instance_001",
       "prefab": "obj_continuity_stage05_shell",
-      "x": 400.00008523464385,
-      "y": -374.9999320879565,
+      "x": 350.00008411705676,
+      "y": 143.75007950700956,
       "flipX": false,
       "variant": 0,
       "rotation": 0,
@@ -2944,7 +2894,7 @@
           "layer": "struct",
           "shape": {
             "kind": "circle",
-            "r": 40
+            "r": 76
           }
         }
       ]
@@ -3068,5 +3018,6 @@
       "y": -700
     }
   ],
-  "groundKey": "ground_stage07_1"
+  "groundKey": "ground_stage07_1",
+  "keepSitePlan": false
 }
