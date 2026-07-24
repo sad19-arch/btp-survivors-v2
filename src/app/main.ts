@@ -50,7 +50,10 @@ const app = new App({
   phaseId: phaseIdFromLevel(opts.level),
   // Intro cosmétique pour le vrai joueur ; jamais en test/e2e/capture (seam).
   // Exception : ?intro=1 force l'intro même en test (e2e de la plomberie cinéma).
-  intro: opts.intro || !opts.test
+  intro: opts.intro || !opts.test,
+  // Les URLs d'automatisation ?test=1 peuvent parcourir les stages isolément ; le
+  // jeu normal (même en dev/autostart) respecte toujours la progression persistée.
+  bypassStageLocks: opts.test
 })
 const seam = createSeam(app)
 

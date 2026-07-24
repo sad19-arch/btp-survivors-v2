@@ -177,7 +177,14 @@ describe('Clin d’œil — intro de run', () => {
     // Stage AVEC script de montage (terrassement) → gel long `stageCinematicMs` ;
     // un stage sans script retomberait sur le préambule court `durationMs`
     // (cf. `introDurationFor`) et cette durée-ci ne s'appliquerait pas.
-    const app = new App({ seed: 1, mode: 'solo', autostart: true, intro: true, phaseId: ConstructionPhaseId.TERRASSEMENT })
+    const app = new App({
+      seed: 1,
+      mode: 'solo',
+      autostart: true,
+      intro: true,
+      phaseId: ConstructionPhaseId.TERRASSEMENT,
+      bypassStageLocks: true
+    })
     expect(app.getState().introActive).toBe(true)
 
     app.advanceTime(INTRO.stageCinematicMs - 200)

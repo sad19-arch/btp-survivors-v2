@@ -23,7 +23,7 @@ export interface StarInputs {
  * - 3 ★ : terminé, une arme évoluée **et** les 5 prisonniers libérés
  *
  * Conséquence assumée : finir avec les 5 prisonniers mais sans aucune évolution
- * donne 2 ★, pas 3 — l'évolution reste un prérequis du sans-faute.
+ * donne 1 ★, pas 3 — l'évolution reste un prérequis du sans-faute.
  *
  * Prend un booléen `victory` plutôt que le `RunOutcome` de la couche App : le
  * flux de dépendances va `app → content`, jamais l'inverse.

@@ -852,6 +852,40 @@ export class Overlay {
     )
   }
 
+  /** Récapitulatif de progression du stage sélectionné, entièrement résolu par l'App. */
+  private stageProgressPanel(state: AppViewState): HTMLElement {
+    const progress = state.stageProgress
+    const stage = progress.stages.find((entry) => entry.id === progress.selectedStageId)
+    const stars = h('div', { className: 'stage-progress__stars', attrs: { 'aria-label': `${stage?.bestStars ?? 0} étoile(s) sur ${STAR_SLOTS}` } })
+    for (let index = 0; index < STAR_SLOTS; index++) {
+      const earned = index < (stage?.bestStars ?? 0)
+      stars.append(h('img', {
+        className: earned ? 'stage-progress__star stage-progress__star--on' : 'stage-progress__star',
+        attrs: { src: earned ? 'ui_star_on.png' : 'ui_star_off.png', alt: '' }
+      }))
+    }
+    const panel = h('div', { className: stage?.unlocked === false ? 'stage-progress stage-progress--locked' : 'stage-progress' },
+      h('span', { className: 'stage-progress__count', text: `${progress.unlockedCount}/10 niveaux débloqués` }),
+      stars
+    )
+    if (stage?.unlocked === false && stage.lockHint !== null && progress.notification !== stage.lockHint) {
+      panel.append(h('p', {
+        className: 'stage-progress__requirement',
+        text: stage.lockHint
+      }))
+    }
+    if (progress.notification !== null) {
+      panel.append(h('p', { className: 'stage-progress__notice', text: progress.notification }))
+    }
+    if (progress.newlyUnlockedStage !== null) {
+      panel.append(h('p', {
+        className: 'stage-progress__unlocked',
+        text: `Nouveau niveau débloqué : ${progress.newlyUnlockedStage.title}`
+      }))
+    }
+    return panel
+  }
+
   /** Panneau de sélection simultanée : un carrousel isolé par joueur. */
   private characterSelectPanel(state: AppViewState): HTMLElement {
     const sel = state.characterSelect
@@ -1652,10 +1686,11 @@ export class Overlay {
     }
     const victory = report.outcome === 'victory'
     const hasNext = (state.menu?.items ?? []).some((it) => it.id === 'stage_suivant')
+    const isFinalStage = state.stageProgress.stages.some((stage) => stage.id === report.stageId && stage.order === 10)
 
     const title = h('h1', {
       className: 'report__title',
-      text: victory ? (hasNext ? 'CHANTIER LIVRÉ !' : 'TOUS LES CHANTIERS LIVRÉS !') : 'CHANTIER INTERROMPU'
+      text: victory ? (isFinalStage ? 'TOUS LES CHANTIERS LIVRÉS !' : 'CHANTIER LIVRÉ !') : 'CHANTIER INTERROMPU'
     })
 
     // Défaite : emphase « culte » si mort après 80 % du chantier. Victoire : ton festif.
@@ -1710,6 +1745,17 @@ export class Overlay {
       panel.append(h('div', { className: 'report__rays', attrs: { 'aria-hidden': 'true' } }))
     }
     panel.append(title, this.starRow(report.stars), quoteEl, bar, stats)
+    if (victory && state.stageProgress.newlyUnlockedStage !== null) {
+      panel.append(h('p', {
+        className: 'report__progress-note report__progress-note--unlocked',
+        text: `Nouveau niveau débloqué : ${state.stageProgress.newlyUnlockedStage.title}`
+      }))
+    } else if (victory && !hasNext && !isFinalStage) {
+      panel.append(h('p', {
+        className: 'report__progress-note',
+        text: 'Obtiens 3 étoiles pour débloquer le stage suivant.'
+      }))
+    }
     // Co-op : récap par joueur (avant, le détail par joueur n'existait sur AUCUN écran).
     if (report.perPlayer.length > 1) {
       const rows = h('div', { className: 'report__players' })
@@ -1866,13 +1912,19 @@ export class Overlay {
     const items = state.menu?.items ?? []
     const index = state.menu?.index ?? 0
     items.forEach((item, i) => {
-      list.append(
-        h('div', {
-          className: i === index ? 'menu__item menu__item--focus' : 'menu__item',
-          text: item.label,
-          onClick: this.onSelect === undefined ? undefined : () => { this.onSelect?.(i) }
-        })
-      )
+      const isStageSelector = state.screen === 'title' && item.id === 'stage'
+      const entry = h('div', {
+        className: `${i === index ? 'menu__item menu__item--focus' : 'menu__item'}${isStageSelector ? ' menu__item--stage' : ''}`,
+        onClick: this.onSelect === undefined ? undefined : () => { this.onSelect?.(i) }
+      })
+      entry.append(h('span', {
+        className: isStageSelector ? 'menu__stage-label' : '',
+        text: item.label
+      }))
+      if (isStageSelector) {
+        entry.append(this.stageProgressPanel(state))
+      }
+      list.append(entry)
     })
     return list
   }
@@ -1915,7 +1967,11 @@ export class Overlay {
       state.screen === 'achievements' && state.achievements !== null
         ? state.achievements.entries.map((e) => (e.unlocked ? '1' : '0')).join('')
         : ''
-    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}|${charSelectPart}|${nameEntryPart}|${hiScoresPart}|${achievementsPart}`
+    const progressionPart =
+      state.screen === 'title' || state.screen === 'victory'
+        ? `${state.stageProgress.selectedStageId}:${state.stageProgress.unlockedCount}:${state.stageProgress.stages.map((stage) => `${stage.bestStars}${stage.unlocked ? 'u' : 'l'}`).join('')}:${state.stageProgress.notification ?? ''}:${state.stageProgress.newlyUnlockedStage?.id ?? ''}`
+        : ''
+    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}|${charSelectPart}|${nameEntryPart}|${hiScoresPart}|${achievementsPart}|${progressionPart}`
   }
 }
 

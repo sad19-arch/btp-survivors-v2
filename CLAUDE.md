@@ -69,7 +69,7 @@ window.__GAME__ = {
 `scene`, `seed`, `elapsedMs`, `wave`, `score`, `coordSystem` (documenté : `origin top-left, +x right, +y down`), `players[]` (id, x, y, vx, vy, hp, maxHp, vigilance, **level, xp, nextThreshold**, alive, weapons), `enemies[]` (id, type, x, y, hp, isElite, isBoss), `projectiles[]` (les lames de scie y figurent), `pickups[]` (id, x, y, type, value), `pendingLevelUp` ({ playerId, choices[] }), **`screen`** (`title|game|paused|upgrade|gameover`) et **`menu`** (`{ screen, items[{id,label,hint}], index }` ou `null` en jeu). Le temps est **gelé** tant que `pendingLevelUp` est non nul (le seam choisit la carte) ou hors écran de jeu.
 
 Règles non négociables liées au seam :
-- **Boot direct par URL** : `?autostart=solo&level=1&seed=123` saute les menus, démarre la partie, émet `ready`. (`?test=1` active aussi le seam.)
+- **Boot direct par URL** : `?autostart=solo&level=1&seed=123` saute les menus, démarre la partie, émet `ready`. Les verrous de stages restent actifs ; **seul** `?test=1` active aussi le seam et le bypass explicite des verrous pour l'automatisation.
 - **Gating** : activer le seam via `import.meta.env.DEV` ou `?test=1`. **Jamais** `process.env.NODE_ENV` (undefined dans un bundle Vite → hooks morts).
 - **Input par API**, pas par coordonnées/synthèse de touches : `setInput(1, { move:{x:0,y:-1}, attack:true })`.
 - **État renvoyé, pas seulement loggé** : `getState()` retourne un objet ; pas de `console.log` comme seule vérité.

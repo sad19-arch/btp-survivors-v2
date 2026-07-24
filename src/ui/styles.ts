@@ -262,6 +262,21 @@ const CSS = `
 #ui-root .cone::before { content:''; position:absolute; left:1px; bottom:9px; width:0; height:0; border-left:19px solid transparent; border-right:19px solid transparent; border-bottom:30px solid ${PALETTE.orangeDanger}; filter: drop-shadow(1px 1px 0 ${PALETTE.contour}); }
 #ui-root .cone::after { content:''; position:absolute; left:-1px; bottom:2px; width:42px; height:10px; background:${PALETTE.brunSombre}; border:2px solid ${PALETTE.contour}; box-sizing:border-box; }
 
+/* ── Progression des stages : intégrée au sélecteur, sans agrandir le titre ── */
+#ui-root .menu__item--stage { display: flex; align-items: center; gap: 12px; min-height: 62px; padding-top: 7px; padding-bottom: 7px; font-size: 24px; }
+#ui-root .menu__stage-label { flex: 1 1 auto; min-width: 0; }
+#ui-root .stage-progress { flex: 0 0 250px; display: flex; flex-direction: column; align-items: center; gap: 1px; pointer-events: none; font-family: 'Pixelify Sans', monospace; }
+#ui-root .stage-progress__count { color: ${PALETTE.jauneSecurite}; font-size: 14px; font-weight: 700; line-height: 1; text-shadow: 1px 1px 0 ${PALETTE.contour}; }
+#ui-root .stage-progress__stars { display: flex; justify-content: center; gap: 4px; }
+#ui-root .stage-progress__star { width: 18px; height: 18px; image-rendering: pixelated; }
+#ui-root .stage-progress--locked { filter: grayscale(0.65); }
+#ui-root .stage-progress__requirement, #ui-root .stage-progress__notice, #ui-root .stage-progress__unlocked { margin: 0; text-align: center; font-size: 14px; font-weight: 700; line-height: 1.05; }
+#ui-root .stage-progress__requirement, #ui-root .stage-progress__notice { color: ${PALETTE.orangeDanger}; }
+#ui-root .stage-progress__unlocked { color: ${PALETTE.vertBonus}; }
+#ui-root .menu__item--focus .stage-progress__count, #ui-root .menu__item--focus .stage-progress__requirement, #ui-root .menu__item--focus .stage-progress__notice { color: #3A1E06; text-shadow: none; }
+#ui-root .report__progress-note { margin: 8px 0 0; color: ${PALETTE.orangeDanger}; font-family: 'Pixelify Sans', monospace; font-size: 20px; font-weight: 700; text-align: center; }
+#ui-root .report__progress-note--unlocked { color: ${PALETTE.vertBonus}; }
+
 /* ── Cartes d'amélioration (level-up) ─────────────────────────────────── */
 /* Co-op : plaque ENTIÈRE à la couleur sombre du joueur, bordure noire commune.
    La variable vient de playerColor(owner). En solo, écran historique inchangé. */

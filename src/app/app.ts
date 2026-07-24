@@ -42,11 +42,19 @@ import { loadHaptics, saveHaptics } from './hapticsSettings'
 import { evolutionStatuses } from '@core/systems/evolution'
 import { chestRevealTotalMs } from '@ui/overlay'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
-import type { AchievementsView, AppViewState, RunReport, HiScoresView, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen, EvolutionEntryView, EvolutionsView } from './appState'
+import type { AchievementsView, AppViewState, RunReport, HiScoresView, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen, EvolutionEntryView, EvolutionsView, StageProgressView } from './appState'
 import { selectDeathQuote } from '@content/deathQuotes'
 import { selectVictoryQuote } from '@content/victoryQuotes'
 import { EVOLUTIONS } from '@content/evolutions'
 import { computeStars } from '@content/stars'
+import {
+  commitStageStars,
+  isStageUnlocked,
+  nextUnlockedStage,
+  unlockedStageCount,
+  readStageProgress,
+  type StageProgress
+} from '@ui/stageProgress'
 import { selectPodium } from '@content/podium'
 import { selectPraiseQuote, selectMockQuote } from '@content/podiumQuotes'
 
@@ -58,6 +66,8 @@ export interface AppOptions {
   phaseId?: ConstructionPhaseId
   /** Joue l'intro de run (préambule cosmétique). Défaut : false (tests/e2e/capture). */
   intro?: boolean
+  /** Exception de test explicite : ignore les verrous de stage, jamais activée par le jeu normal. */
+  bypassStageLocks?: boolean
 }
 
 /** Action prise en compte par le code secret (directions + valider/annuler). */
@@ -134,6 +144,14 @@ export class App {
   private mode: GameMode
   /** Phase sélectionnée au titre (départ : URL `?level=` ou terrain vierge). */
   private selectedPhase: ConstructionPhaseId
+  /** Profil de progression chargé une fois au boot, puis fusionné à chaque rapport terminal. */
+  private stageProgress: StageProgress
+  /** Bypass réservé aux tests URL `?test=1`, transmis explicitement par le bootstrap. */
+  private readonly bypassStageLocks: boolean
+  /** Retour joueur du dernier lancement refusé. */
+  private stageLockMessage: string | null = null
+  /** Stage ouvert par le dernier rapport terminal, affiché une seule fois. */
+  private newlyUnlockedStage: ConstructionPhaseId | null = null
   /** Nombre de joueurs sélectionné au titre (départ : dérivé du mode de boot, ex. `?autostart=coop4`). */
   private selectedPlayers: number
   private started = false
@@ -244,6 +262,8 @@ export class App {
    * Même patron que `_coinsBanked` / `_scoreHandled` — remis à `false` par `start()`.
    */
   private _achievementsBanked = false
+  /** Garde one-shot : la note du rapport terminal a déjà été fusionnée au profil de stages. */
+  private _stageProgressCommitted = false
   /**
    * Coffres ouverts sur la run courante (`ChestOpenedEvent`, non plafonné).
    * Compté ici faute de compteur dans `GameState` — l'événement est le seul
@@ -261,6 +281,8 @@ export class App {
     this.seed = opts.seed
     this.mode = opts.mode
     this.selectedPhase = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
+    this.stageProgress = readStageProgress()
+    this.bypassStageLocks = opts.bypassStageLocks === true
     this.selectedPlayers = MODE_PLAYER_COUNT[opts.mode] ?? 1
     this.introEnabled = opts.intro ?? false
     if (opts.autostart) {
@@ -277,6 +299,14 @@ export class App {
    */
   start(mode: GameMode = this.mode, characters: readonly string[] = this.selectedCharacters): void {
     this.bumpState()
+    // Garde centrale : seam, restart, autostart URL, sélection de personnages et
+    // changement de seed passent tous par `start()`. Le bypass n'existe qu'en test.
+    if (!this.canLaunchStage(this.selectedPhase)) {
+      this.started = false
+      this.charSelectOpen = false
+      this.refreshFocus()
+      return
+    }
     this._runReport = null
     this._coinsBanked = false
     // Flux high-scores : une nouvelle run = un nouveau score à inscrire, et aucun
@@ -288,6 +318,9 @@ export class App {
     // compteurs d'événements repartant de zéro (sinon la run suivante hériterait
     // des coffres/évolutions de la précédente et les compterait deux fois).
     this._achievementsBanked = false
+    this._stageProgressCommitted = false
+    this.newlyUnlockedStage = null
+    this.stageLockMessage = null
     this.runChestsOpened = 0
     this.runEvolutions = 0
     // L'écran des succès est une surcouche du TITRE : lancer une partie le ferme
@@ -821,6 +854,7 @@ export class App {
       const podiumPick = selectPodium(base.players.map((p) => ({ id: p.id, kills: p.kills })))
       this._runReport = {
         outcome: victory ? 'victory' : 'defeat',
+        stageId: phase?.id ?? this.selectedPhase,
         stageTitle: phase?.title ?? '—',
         elapsedMs,
         stageDurationMs,
@@ -881,6 +915,16 @@ export class App {
         writeHiScore(this._runReport.runScore)
       }
     }
+    // Progression de stage : la note est figée dans le rapport, puis fusionnée UNE
+    // SEULE FOIS. `getState()` est appelé à chaque frame : sans cette garde, une
+    // mutation future non-idempotente de la persistance serait dupliquée.
+    if ((screen === 'gameover' || screen === 'victory') && !this._stageProgressCommitted && this._runReport !== null) {
+      this._stageProgressCommitted = true
+      const previousNext = nextUnlockedStage(this.stageProgress, this._runReport.stageId)
+      this.stageProgress = commitStageStars(this._runReport.stageId, this._runReport.stars, this.stageProgress)
+      const unlockedNext = nextUnlockedStage(this.stageProgress, this._runReport.stageId)
+      this.newlyUnlockedStage = unlockedNext !== null && unlockedNext !== previousNext ? unlockedNext : null
+    }
     // Succès : verse les compteurs de la run au profil, UNE SEULE FOIS (cf.
     // `_achievementsBanked` — `commitRun` n'est pas idempotent et `getState`
     // tourne à 60 Hz). Les ids nouvellement débloqués partent en ÉVÉNEMENT, pas
@@ -913,6 +957,7 @@ export class App {
       stageTitle: phase?.title ?? '—',
       stageSubtitle: phase?.subtitle ?? '',
       stageOrder: phase?.order ?? 0,
+      stageProgress: this.stageProgressView(),
       characterSelect: this.charSelectOpen
         ? {
             total: this.selectedPlayers,
@@ -982,13 +1027,17 @@ export class App {
 
   renderToText(): string {
     const s = this.getState()
+    const selected = s.stageProgress.stages.find((stage) => stage.id === s.stageProgress.selectedStageId)
+    const progression = selected === undefined
+      ? ''
+      : `\nprogression=${s.stageProgress.unlockedCount}/10; stage=${selected.title}; étoiles=${selected.bestStars}/3; ${selected.unlocked ? 'déverrouillé' : 'verrouillé'}${s.stageProgress.notification === null ? '' : `; ${s.stageProgress.notification}`}${s.stageProgress.newlyUnlockedStage === null ? '' : `; Nouveau niveau débloqué : ${s.stageProgress.newlyUnlockedStage.title}`}`
     if (s.menu !== null) {
       const items = s.menu.items
         .map((it, i) => (i === s.menu?.index ? `[${it.label}]` : it.label))
         .join('  ')
-      return `écran=${s.screen}\n${items}`
+      return `écran=${s.screen}\n${items}${progression}`
     }
-    return this.sim?.renderToText() ?? `écran=${s.screen}`
+    return `${this.sim?.renderToText() ?? `écran=${s.screen}`}${progression}`
   }
 
   // --- interne --------------------------------------------------------------
@@ -1125,10 +1174,10 @@ export class App {
 
   /** Écran de victoire : passer au stage suivant (sauf dernier) ou revenir au titre. */
   private victoryItems(): MenuItemView[] {
-    const i = ORDERED_PHASES.findIndex((p) => p.id === this.selectedPhase)
-    const hasNext = i >= 0 && i < ORDERED_PHASES.length - 1
+    const stageId = this._runReport?.stageId ?? this.selectedPhase
+    const next = nextUnlockedStage(this.stageProgress, stageId)
     const items: MenuItemView[] = []
-    if (hasNext) {
+    if (next !== null) {
       items.push({ id: 'stage_suivant', label: 'Stage suivant', hint: null })
     }
     items.push({ id: 'titre', label: 'Menu titre', hint: null })
@@ -1138,10 +1187,16 @@ export class App {
   /** Items du titre : Jouer, sélecteur de joueurs (◄/►), sélecteur de niveau (◄/►), Scores, Options. */
   private titleItems(): MenuItemView[] {
     const phase = ORDERED_PHASES.find((p) => p.id === this.selectedPhase)
+    const lockHint = this.stageLockHint(this.selectedPhase)
+    const unlocked = this.bypassStageLocks || isStageUnlocked(this.stageProgress, this.selectedPhase)
     return [
-      { id: 'jouer', label: 'Jouer', hint: null },
+      { id: 'jouer', label: 'Jouer', hint: unlocked ? null : lockHint },
       { id: 'players', label: `◄ Joueurs : ${this.selectedPlayers} ►`, hint: 'Gauche/Droite pour changer' },
-      { id: 'stage', label: `◄ Niveau ${phase?.order ?? 1}/10 : ${phase?.title ?? '—'} ►`, hint: 'Gauche/Droite pour changer' },
+      {
+        id: 'stage',
+        label: `◄ Niveau ${phase?.order ?? 1}/10 : ${phase?.title ?? '—'}${unlocked ? '' : ' — VERROUILLÉ'} ►`,
+        hint: unlocked ? 'Gauche/Droite pour changer' : lockHint
+      },
       // Placé JUSTE SOUS le sélecteur de niveau : le tableau affiché est celui du
       // niveau sélectionné ci-dessus (les classements sont par stage). L'adjacence
       // porte le lien — c'est ce qui dispense l'écran `hiscores` d'un 2e sélecteur.
@@ -1350,12 +1405,54 @@ export class App {
     }
   }
 
+  /** Texte de prérequis résolu ici : l'overlay affiche, il ne connaît pas les règles de chaîne. */
+  private stageLockHint(stageId: ConstructionPhaseId): string | null {
+    const index = ORDERED_PHASES.findIndex((phase) => phase.id === stageId)
+    const previous = index > 0 ? ORDERED_PHASES[index - 1] : undefined
+    return previous === undefined ? null : `Niveau verrouillé — obtiens 3 étoiles sur ${previous.title}.`
+  }
+
+  /** Garde d'accès unique utilisée avant TOUT lancement de stage. */
+  private canLaunchStage(stageId: ConstructionPhaseId): boolean {
+    if (this.bypassStageLocks || isStageUnlocked(this.stageProgress, stageId)) {
+      return true
+    }
+    this.stageLockMessage = this.stageLockHint(stageId) ?? 'Niveau verrouillé.'
+    return false
+  }
+
+  /** Vue résolue pour le seam et l'overlay, sans laisser l'UI relire localStorage. */
+  private stageProgressView(): StageProgressView {
+    const stages = ORDERED_PHASES.map((phase) => {
+      const unlocked = isStageUnlocked(this.stageProgress, phase.id)
+      return {
+        id: phase.id,
+        title: phase.title,
+        order: phase.order,
+        bestStars: this.stageProgress[phase.id] ?? 0,
+        unlocked,
+        lockHint: unlocked ? null : this.stageLockHint(phase.id)
+      }
+    })
+    const newlyUnlockedStage = this.newlyUnlockedStage === null
+      ? null
+      : stages.find((stage) => stage.id === this.newlyUnlockedStage) ?? null
+    return {
+      stages,
+      selectedStageId: this.selectedPhase,
+      unlockedCount: unlockedStageCount(this.stageProgress),
+      notification: this.stageLockMessage,
+      newlyUnlockedStage
+    }
+  }
+
   /** Décale la phase sélectionnée de `step` (cycle) — sélecteur de niveau du titre. */
   private cycleStage(step = 1): void {
     const n = ORDERED_PHASES.length
     const i = ORDERED_PHASES.findIndex((p) => p.id === this.selectedPhase)
     const next = (((i + step) % n) + n) % n
     this.selectedPhase = ORDERED_PHASES[next]?.id ?? this.selectedPhase
+    this.stageLockMessage = null
     this.refreshFocus()
   }
 
@@ -1396,7 +1493,7 @@ export class App {
 
   /** Stage de la run qui vient de finir (le classement est PAR stage). */
   private runStageId(): string {
-    return this.sim?.getState().stageId ?? this.selectedPhase
+    return this._runReport?.stageId ?? this.sim?.getState().stageId ?? this.selectedPhase
   }
 
   /**
@@ -1472,7 +1569,7 @@ export class App {
   /** Recale le modèle de focus quand l'identité du menu change. */
   private refreshFocus(): void {
     const items = this.menuItems()
-    const key = this.screen === 'upgrade' ? `upgrade:${items.map((i) => i.id).join(',')}` : this.screen
+    const key = `${this.screen}:${items.map((item) => item.id).join(',')}`
     if (key !== this.focusKey) {
       this.focus.setItems(items.map((i) => i.id))
       this.focusKey = key
@@ -1515,6 +1612,12 @@ export class App {
     }
     if (screen === 'title') {
       if (id === 'jouer') {
+        // Même garde que `start()` : ne jamais ouvrir une sélection de personnage
+        // qui finirait forcément refusée, et garder le focus titre utilisable.
+        if (!this.canLaunchStage(this.selectedPhase)) {
+          this.refreshFocus()
+          return
+        }
         this.charSelectOpen = true
         this.selectedCharacters = Array.from({ length: this.selectedPlayers }, () => DEFAULT_CHARACTER_ID)
         this.charCursors = Array.from({ length: this.selectedPlayers }, () => 0)
@@ -1586,12 +1689,12 @@ export class App {
         return
       }
       if (id === 'stage_suivant') {
-        const i = ORDERED_PHASES.findIndex((p) => p.id === this.selectedPhase)
-        const next = ORDERED_PHASES[i + 1]
-        if (next !== undefined) {
-          this.selectedPhase = next.id
+        const stageId = this._runReport?.stageId ?? this.selectedPhase
+        const next = nextUnlockedStage(this.stageProgress, stageId)
+        if (next !== null) {
+          this.selectedPhase = next
+          this.start(this.mode)
         }
-        this.start(this.mode)
       } else if (id === 'titre') {
         this.started = false
       }

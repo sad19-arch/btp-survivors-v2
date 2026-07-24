@@ -34,4 +34,16 @@ describe('seam — helpers de debug exposés', () => {
     seam.debugSpawnEnemies(10)
     expect(seam.getState().enemies.length).toBeGreaterThanOrEqual(before + 10)
   })
+
+  it('expose les dix stages et leur progression JSON-safe', () => {
+    localStorage.clear()
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    const seam = createSeam(app)
+
+    const progress = seam.getState().stageProgress
+    expect(progress.stages).toHaveLength(10)
+    expect(progress.unlockedCount).toBe(1)
+    expect(progress.stages[0]).toMatchObject({ id: 'terrain_vierge', unlocked: true, bestStars: 0 })
+    expect(progress.stages[1]).toMatchObject({ id: 'terrassement', unlocked: false, bestStars: 0 })
+  })
 })

@@ -1,6 +1,8 @@
 import type { GameState, PlayerState } from '@core/types'
 import type { CardKind } from '@core/systems/cards'
 import type { HiScoreEntry } from '@ui/hiscores'
+import type { ConstructionPhaseId } from '@content/phases'
+import type { StarRating } from '@content/stars'
 
 /** Issue d'une run terminée : chantier interrompu (mort) ou livré (boss final tué). */
 export type RunOutcome = 'defeat' | 'victory'
@@ -25,6 +27,8 @@ export interface RunReportPlayer {
  */
 export interface RunReport {
   outcome: RunOutcome
+  /** Identifiant réel du stage joué, figé avec le rapport (jamais la sélection courante). */
+  stageId: ConstructionPhaseId
   /** Libellé de la phase jouée (ex. « Terrain vierge »). */
   stageTitle: string
   /** Temps écoulé à la fin de la run (ms). */
@@ -55,7 +59,7 @@ export interface RunReport {
   /** Phrase sélectionnée une seule fois (moquerie en défaite, félicitation en victoire). */
   quote: string
   /** Note de fin de stage, 0 à 3 étoiles (cumulatives strictes — cf. `computeStars`). */
-  stars: number
+  stars: StarRating
   /** Au moins une arme évoluée pendant la run (n'importe quel joueur en co-op). */
   evolvedAny: boolean
   /** Prisonniers libérés (compteur d'ÉQUIPE : les étoiles sont une note collective). */
@@ -296,6 +300,28 @@ export interface MenuView {
   playerId?: number
 }
 
+/** Vue JSON-safe d'un stage dans la chaîne de progression persistée. */
+export interface StageProgressEntryView {
+  id: ConstructionPhaseId
+  title: string
+  order: number
+  bestStars: StarRating
+  unlocked: boolean
+  /** Prérequis français résolu par l'App, ou `null` quand ce stage est accessible. */
+  lockHint: string | null
+}
+
+/** Progression de stage résolue par l'App (aucun accès localStorage dans l'UI). */
+export interface StageProgressView {
+  stages: StageProgressEntryView[]
+  selectedStageId: ConstructionPhaseId
+  unlockedCount: number
+  /** Explication persistante du dernier lancement refusé, ou `null`. */
+  notification: string | null
+  /** Stage ouvert par le dernier résultat terminal, ou `null`. */
+  newlyUnlockedStage: StageProgressEntryView | null
+}
+
 /** Vue complète exposée par l'App (état du jeu + couche écrans/menus). */
 export interface AppViewState extends Omit<GameState, 'players'> {
   players: AppPlayerState[]
@@ -328,6 +354,8 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   stageSubtitle: string
   /** Numéro de phase dans le cycle (1..10). */
   stageOrder: number
+  /** Profil de progression complet, exposé au seam et consommé par l'overlay. */
+  stageProgress: StageProgressView
   /** Sélection simultanée : curseur et verrouillage indépendants pour chaque joueur. */
   characterSelect: CharacterSelectView | null
   /** Saisie du prénom en cours (fin de run, score qualifiant) ; `null` hors de ce flux. */

@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { App } from '@/app/app'
 import { Overlay, cadenceFontSizePx } from '@ui/overlay'
 import type { ChestOpenView } from '@/app/appState'
+import { ConstructionPhaseId } from '@content/phases'
+import { commitStageStars } from '@ui/stageProgress'
 
 describe('cadenceFontSizePx — taille du chiffre de CADENCE (pure)', () => {
   it('croît avec le compteur', () => {
@@ -31,6 +33,52 @@ describe('Overlay (DOM)', () => {
     expect(items.length).toBe(7) // Jouer, Joueurs (sélecteur), Niveau (sélecteur), Scores, Succès, Options, Éditeur
     expect(root.querySelectorAll('.menu__item--focus').length).toBe(1)
     expect(items[0]?.classList.contains('menu__item--focus')).toBe(true)
+  })
+
+  it('affiche les trois étoiles de progression et le compteur sur le titre', () => {
+    localStorage.clear()
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+
+    expect(root.querySelectorAll('.stage-progress__star').length).toBe(3)
+    expect(root.querySelectorAll('.stage-progress__star--on').length).toBe(0)
+    expect(root.textContent).toContain('1/10 niveaux débloqués')
+  })
+
+  it('rend le niveau verrouillé, son prérequis français et la meilleure note', () => {
+    localStorage.clear()
+    commitStageStars(ConstructionPhaseId.TERRAIN_VIERGE, 3)
+    commitStageStars(ConstructionPhaseId.TERRASSEMENT, 2)
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    app.nav('down')
+    app.nav('down')
+    app.nav('right') // terrassement, déverrouillé avec un historique de 2 étoiles
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+
+    expect(root.querySelectorAll('.stage-progress__star--on').length).toBe(2)
+    app.nav('right') // fondations, verrouillé
+    overlay.sync(app.getState())
+    expect(root.querySelector('.stage-progress--locked')).not.toBeNull()
+    expect(root.textContent).toContain('Niveau verrouillé')
+    expect(root.textContent).toContain('3 étoiles sur Terrassement')
+  })
+
+  it('affiche le retour de lancement refusé', () => {
+    localStorage.clear()
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    app.nav('down')
+    app.nav('down')
+    app.nav('right')
+    app.nav('up')
+    app.nav('up')
+    app.confirm()
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+
+    expect(root.querySelector('.stage-progress__notice')?.textContent).toContain('Niveau verrouillé')
+    expect(root.querySelectorAll('.stage-progress__requirement, .stage-progress__notice')).toHaveLength(1)
   })
 
   it('déplace la classe de focus après navigation', () => {
@@ -604,6 +652,7 @@ describe('Overlay — CADENCE : pause (pas reset) pendant la modale de coffre (r
 function makeDeathReport(overrides: Partial<import('@/app/appState').RunReport> = {}): import('@/app/appState').RunReport {
   return {
     outcome: 'defeat',
+    stageId: ConstructionPhaseId.TERRAIN_VIERGE,
     stageTitle: 'Terrain vierge',
     elapsedMs: 300_000,   // 5:00
     kills: 1248,
@@ -747,7 +796,7 @@ describe('Overlay — Rapport de chantier (victoire)', () => {
     overlay.sync(state)
 
     // Même ossature que la défaite — c'était tout le point de la normalisation.
-    expect(root.querySelector('.report__title')?.textContent).toContain('LIVRÉ')
+    expect(root.querySelector('.report__title')?.textContent).toBe('CHANTIER LIVRÉ !')
     expect(root.querySelector('.report__quote')).not.toBeNull()
     expect(root.querySelector('.report__bar')).not.toBeNull()
     // Variante festive + infos qui manquaient totalement à la victoire.
@@ -759,6 +808,33 @@ describe('Overlay — Rapport de chantier (victoire)', () => {
     expect(stats).toContain('Or ramassé')
     // Pas de « avant validation » en victoire : le chantier EST validé.
     expect(stats).not.toContain('avant validation')
+  })
+
+  it('annonce le nouveau niveau débloqué sur le rapport de victoire', () => {
+    const state = makeGameoverState(makeDeathReport({ outcome: 'victory', stars: 3 }))
+    state.stageProgress = {
+      ...state.stageProgress,
+      newlyUnlockedStage: {
+        id: ConstructionPhaseId.TERRASSEMENT,
+        title: 'Terrassement',
+        order: 2,
+        bestStars: 0,
+        unlocked: true,
+        lockHint: null
+      }
+    }
+    state.menu = {
+      screen: 'victory',
+      items: [
+        { id: 'stage_suivant', label: 'Stage suivant', hint: null },
+        { id: 'titre', label: 'Menu titre', hint: null }
+      ],
+      index: 0
+    }
+    const { root, overlay } = mount()
+    overlay.sync(state)
+
+    expect(root.querySelector('.report__progress-note--unlocked')?.textContent).toBe('Nouveau niveau débloqué : Terrassement')
   })
 
   it('co-op : le rapport liste un récap par joueur (kills + niveau)', () => {

@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { App } from '@/app/app'
 import { STEP_MS } from '@core/clock'
 import type { EvolvedEvent } from '@core/events'
+import { ConstructionPhaseId } from '@content/phases'
+import { commitStageStars } from '@ui/stageProgress'
 
 /** Avance (en ramassant les gemmes) jusqu'à l'écran d'upgrade. */
 function advanceToUpgrade(app: App, maxMs: number): void {
@@ -49,23 +51,59 @@ describe('App — écrans & navigation', () => {
     expect(app.getState().screen).toBe('title') // l'App reste au titre ; le boot éditeur est géré par main.ts
   })
 
-  it('le sélecteur « Niveau » cycle les phases et lance le stage choisi', () => {
+  it('le sélecteur conserve les stages visibles mais refuse un lancement verrouillé', () => {
+    localStorage.clear()
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     const item = () => app.getState().menu?.items[2]
-    expect(item()?.id).toBe('stage')
-    expect(item()?.label).toContain('Terrain vierge')
-    app.nav('down') // focus « players » (index 1)
-    app.nav('down') // focus le sélecteur de niveau (index 2)
-    app.confirm() // cycle → phase suivante
+    app.nav('down') // joueurs
+    app.nav('down') // niveau
+    app.confirm() // terrassement, toujours consultable
     expect(item()?.label).toContain('Terrassement')
-    expect(app.getState().screen).toBe('title') // toujours au titre, pas de partie lancée
+    expect(item()?.label).toContain('VERROUILLÉ')
+    expect(item()?.hint).toContain('Niveau verrouillé')
+    expect(app.getState().stageProgress.stages).toHaveLength(10)
+
     app.nav('up')
-    app.nav('up') // focus « Jouer »
-    app.confirm() // ouvre la sélection de personnage (solo → 1 joueur)
-    expect(app.getState().screen).toBe('characterSelect')
-    app.confirm() // valide le perso par défaut du carrousel → lance la partie
+    app.nav('up') // Jouer
+    app.confirm()
+    expect(app.getState().screen).toBe('title')
+    expect(app.getState().stageProgress.notification).toContain('3 étoiles')
+  })
+
+  it('lance un stage déverrouillé après trois étoiles sur son prédécesseur', () => {
+    localStorage.clear()
+    commitStageStars(ConstructionPhaseId.TERRAIN_VIERGE, 3)
+    const app = new App({
+      seed: 1,
+      mode: 'solo',
+      autostart: true,
+      phaseId: ConstructionPhaseId.TERRASSEMENT
+    })
+
     expect(app.getState().screen).toBe('game')
-    expect(app.getState().stageId).toBe('terrassement') // le stage choisi est bien lancé
+    expect(app.getState().stageId).toBe(ConstructionPhaseId.TERRASSEMENT)
+  })
+
+  it('protège l’autostart verrouillé sauf bypass explicite de test', () => {
+    localStorage.clear()
+    const locked = new App({
+      seed: 1,
+      mode: 'solo',
+      autostart: true,
+      phaseId: ConstructionPhaseId.TERRASSEMENT
+    })
+    expect(locked.getState().screen).toBe('title')
+    expect(locked.getState().stageProgress.notification).toContain('Niveau verrouillé')
+
+    const bypassed = new App({
+      seed: 1,
+      mode: 'solo',
+      autostart: true,
+      phaseId: ConstructionPhaseId.TERRASSEMENT,
+      bypassStageLocks: true
+    })
+    expect(bypassed.getState().stageId).toBe(ConstructionPhaseId.TERRASSEMENT)
+    expect(bypassed.getState().screen).toBe('game')
   })
 
   it('le sélecteur « Joueurs » cycle le nombre borné [1,4] et lance la coop choisie', () => {

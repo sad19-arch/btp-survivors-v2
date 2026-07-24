@@ -8,9 +8,11 @@
  * - Après `restart()` : `runReport` revient à null hors game-over.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { App } from '@/app/app'
 import { FINAL_BOSS } from '@content/config'
+import { ConstructionPhaseId } from '@content/phases'
+import { STAGE_PROGRESS_STORAGE_KEY } from '@ui/stageProgress'
 
 /** Lance une partie solo (seed fixe) et renvoie l'app déjà en jeu. */
 function makeApp(seed = 42): App {
@@ -50,6 +52,32 @@ describe('runReport — exposition dans AppViewState', () => {
     expect(app.getState().screen).toBe('gameover')
     const report = app.getState().runReport
     expect(report).not.toBeNull()
+  })
+
+  it('porte l’identifiant réel du stage joué', () => {
+    const app = new App({
+      seed: 42,
+      mode: 'solo',
+      autostart: true,
+      phaseId: ConstructionPhaseId.TERRASSEMENT,
+      bypassStageLocks: true
+    })
+    reachGameOver(app)
+
+    expect(app.getState().runReport?.stageId).toBe(ConstructionPhaseId.TERRASSEMENT)
+  })
+
+  it('ne persiste pas une défaite terminale à zéro étoile malgré plusieurs getState()', () => {
+    localStorage.clear()
+    const setItem = vi.spyOn(localStorage, 'setItem')
+    const app = makeApp()
+    reachGameOver(app)
+    app.getState()
+    app.getState()
+
+    expect(app.getState().runReport?.stars).toBe(0)
+    expect(setItem.mock.calls.filter(([key]) => key === STAGE_PROGRESS_STORAGE_KEY)).toHaveLength(0)
+    setItem.mockRestore()
   })
 
   it('est figé : deux appels successifs à getState() retournent la même référence de rapport', () => {
