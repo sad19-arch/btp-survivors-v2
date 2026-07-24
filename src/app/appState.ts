@@ -114,6 +114,17 @@ export interface ChestOpenView {
   results: ChestResultView[]
 }
 
+export interface CharacterSelectPlayerView {
+  playerId: number
+  charId: string
+  ready: boolean
+}
+
+export interface CharacterSelectView {
+  total: number
+  players: CharacterSelectPlayerView[]
+}
+
 /** Écran applicatif courant (dérivé de l'état de la simulation + surcouches). */
 export type Screen =
   | 'title'
@@ -290,6 +301,12 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   players: AppPlayerState[]
   screen: Screen
   menu: MenuView | null
+  /**
+   * Nombre de canaux joueur que la couche input doit lire cette frame.
+   * Avant la partie, les écrans partagés écoutent les 4 pads ; pendant la
+   * sélection, seuls les joueurs inscrits sont lus ; en run, suit `players`.
+   */
+  inputPlayerCount: number
   /** Skin doré débloqué — cosmétique, session. Son déclencheur est en attente
    *  (le Konami active désormais le Mode Carnage). */
   goldSkin: boolean
@@ -311,8 +328,8 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   stageSubtitle: string
   /** Numéro de phase dans le cycle (1..10). */
   stageOrder: number
-  /** Sélection de personnage en cours (joueur actif / total + perso courant) ; `null` hors de ce flux. */
-  characterSelect: { player: number; total: number; charId: string } | null
+  /** Sélection simultanée : curseur et verrouillage indépendants pour chaque joueur. */
+  characterSelect: CharacterSelectView | null
   /** Saisie du prénom en cours (fin de run, score qualifiant) ; `null` hors de ce flux. */
   nameEntry: NameEntryView | null
   /** Tableau des scores affiché (après inscription du nom) ; `null` hors de ce flux. */

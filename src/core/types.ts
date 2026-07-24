@@ -67,6 +67,7 @@ export interface ProgressComp {
 
 /** Comportements d'IA disponibles pour les ennemis. */
 export type EnemyBehavior = 'chase' | 'zigzag' | 'circler' | 'sweep' | 'charger' | 'boss'
+export type EnemySpawnRole = 'swarm' | 'base' | 'fast' | 'tank' | 'charger'
 
 /**
  * Placement d'un ennemi dans un groupe de vague (directeur de vagues).
@@ -78,6 +79,8 @@ export interface WavePlacement {
   radius: number
   behavior: EnemyBehavior
   bAngle?: number
+  /** Rôle imposé par une recette de rencontre ; absent = pool complet historique. */
+  role?: EnemySpawnRole
 }
 
 /** Données propres à une entité ennemie. */
@@ -420,6 +423,8 @@ export interface EnemyState {
    * Absent hors phase de charge / pour les non-boss. Cosmétique (render-only).
    */
   bossCharge?: 'telegraph' | 'charge'
+  /** Phase de charge d'un ennemi spécial ordinaire. */
+  chargePhase?: 'telegraph' | 'charge'
 }
 
 export interface ProjectileState {
@@ -507,6 +512,8 @@ export interface GameState {
   /** Phase/stage courant (id, ex. 'terrain_vierge'). Pilote le thème + les assets. */
   stageId: string
   elapsedMs: number
+  /** Pulsation macro de la run, exposée au HUD et au seam. */
+  runBeat: 'pressure' | 'breather' | 'boss'
   wave: number
   score: number
   /**

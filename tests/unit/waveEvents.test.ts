@@ -1040,24 +1040,26 @@ describe('eventPoolForPhase', () => {
   })
 
   // ---------------------------------------------------------------------------
-  // Lock d'équilibrage (garde-fou sim:check)
+  // Identité du Stage 1 : cinq rôles introduits progressivement
   // ---------------------------------------------------------------------------
 
-  it('TERRAIN_VIERGE est content-identique à EVENT_POOL_DEFAULT (garde-fou sim)', () => {
+  it('TERRAIN_VIERGE possède une recette dédiée pour chaque rôle de combat', () => {
     const pool = eventPoolForPhase(ConstructionPhaseId.TERRAIN_VIERGE)
-    expect(pool).toHaveLength(EVENT_POOL_DEFAULT.length)
-    for (let i = 0; i < EVENT_POOL_DEFAULT.length; i++) {
-      const expected = EVENT_POOL_DEFAULT[i]
-      const actual = pool[i]
-      if (expected === undefined || actual === undefined) {
-        throw new Error(`entrée manquante à l'index ${i}`)
-      }
-      expect(actual.kind).toBe(expected.kind)
-      expect(actual.weight).toBe(expected.weight)
-      expect(actual.countMin).toBe(expected.countMin)
-      expect(actual.countMax).toBe(expected.countMax)
-      expect(actual.allowedFromSec).toBe(expected.allowedFromSec)
-    }
+    expect(pool.map((entry) => entry.role).filter((role) => role !== undefined)).toEqual([
+      'base', 'swarm', 'fast', 'tank', 'charger'
+    ])
+    expect(pool.find((entry) => entry.role === 'swarm')?.threatCost).toBe(0.25)
+    expect(pool.find((entry) => entry.role === 'tank')?.threatCost).toBe(4)
+    expect(pool.find((entry) => entry.role === 'charger')?.allowedFromSec).toBe(150)
+  })
+
+  it('TERRASSEMENT orchestre boue, percées de foreurs et barrages rocheux', () => {
+    const pool = eventPoolForPhase(ConstructionPhaseId.TERRASSEMENT)
+    expect(pool[0]).toMatchObject({ kind: 'converge', role: 'base', allowedFromSec: 0 })
+    expect(pool.some((entry) => entry.kind === 'columns' && entry.role === 'fast')).toBe(true)
+    expect(pool.some((entry) => entry.role === 'tank' && entry.threatCost === 4)).toBe(true)
+    expect(pool.some((entry) => entry.kind === 'sweep' && entry.rolePattern?.join('/') === 'tank/base/fast')).toBe(true)
+    expect(pool.some((entry) => entry.kind === 'concentric' && entry.allowedFromSec === 250)).toBe(true)
   })
 
   // ---------------------------------------------------------------------------

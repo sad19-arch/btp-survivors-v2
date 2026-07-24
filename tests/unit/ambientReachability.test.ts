@@ -130,30 +130,13 @@ describe('PNJ d’ambiance — atteignabilité réelle (mondes construits)', () 
   })
 
   /**
-   * Nombre de jobs planifiés par stage, MESURÉ avant l'élargissement des rôles.
-   *
-   * C'est l'argument « le cull ne mange rien » rendu EXÉCUTABLE. `_reselect` ne
-   * garde que les `WORKER_COUNT` (10) jobs les plus proches du joueur : rendre
-   * des feuilles atteignables en AJOUTANT des jobs les mettrait en concurrence
-   * pour ces 10 places, et l'art resterait invisible. Le pool ne touche qu'à la
-   * TEXTURE de jobs qui existaient déjà — donc ces nombres ne doivent pas bouger.
-   *
-   * Si ce test rougit, l'élargissement a créé des jobs : la conclusion sur le
-   * cull tombe et il faut la refaire, pas mettre ces nombres à jour par réflexe.
-   *
-   * EXCEPTION assumée : `npc_stage08` (plaquiste) et `npc_stage10` (inspecteur)
-   * sont des feuilles *_work de la famille métier dont le flag `kind:'trade'`
-   * avait été oublié — elles étaient donc servies comme ouvrières de marche au
-   * lieu de postes métier fixes, comme leurs 8 homologues. Flag ajouté + échelle
-   * réalignée sur la famille (0.78, jugement DA validé à l'œil, cf.
-   * autoTradeNpcs.test.ts) : elles sortent du pool de marche et reçoivent un poste
-   * auto-placé, +1 job fixe chacune → second_oeuvre 33→34, livraison_audit 34→35.
-   * Ce n'est PAS le pool qui crée des jobs, c'est une réaffectation marcheur→métier.
+   * Population métier explicitement placée dans chaque composition.
+   * Ce verrou empêche tout peuplement procédural de se superposer à l'éditeur.
    */
   const JOBS_BEFORE: Record<string, number> = {
-    terrain_vierge: 1, terrassement: 36, fondations: 33, reseaux_enterres: 34,
-    gros_oeuvre: 34, echafaudages: 34, charpente_toiture: 34, second_oeuvre: 34,
-    finitions: 34, livraison_audit: 35
+    terrain_vierge: 1, terrassement: 5, fondations: 5, reseaux_enterres: 5,
+    gros_oeuvre: 5, echafaudages: 5, charpente_toiture: 5, second_oeuvre: 6,
+    finitions: 5, livraison_audit: 6
   }
 
   for (const [stageId, expected] of Object.entries(JOBS_BEFORE)) {

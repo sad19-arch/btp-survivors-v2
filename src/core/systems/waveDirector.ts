@@ -58,6 +58,8 @@ export interface UpcomingFormation {
   count: number
   behaviorOverride: WaveEventDef['behaviorOverride']
   spreadOverride: WaveEventDef['spreadOverride']
+  role: WaveEventDef['role']
+  rolePattern: WaveEventDef['rolePattern']
 }
 
 /** État interne du directeur de vagues (mutable, passé par référence). */
@@ -136,6 +138,8 @@ export interface WaveDirectorInput {
   ringRadius: number
   /** RNG déterministe dédié aux vagues. */
   rng: Rng
+  /** 0 pendant une respiration ; réduit pendant un boss. Défaut 1. */
+  spawnRateMultiplier?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -153,10 +157,21 @@ export function stepWaveDirector(
   input: WaveDirectorInput
 ): WavePlacement[] {
   const { dtMs, elapsedMs, ramp, events, ringRadius, rng } = input
+  const spawnRate = input.spawnRateMultiplier ?? 1
+
+  // Respiration franche : aucun spawn, aucun télégraphe ne mûrit et surtout aucun
+  // budget n'est accumulé pour créer une rafale punitive à la reprise.
+  if (spawnRate <= 0) {
+    state.nextEventMs += dtMs
+    if (state.upcoming !== null) {
+      state.upcoming.triggersAtMs += dtMs
+    }
+    return []
+  }
 
   // 1. Accumulation du budget au rythme de la rampe plate.
   const { intervalMs, countPerWave } = spawnParamsAt(ramp, elapsedMs)
-  state.budgetAcc += (dtMs / intervalMs) * countPerWave
+  state.budgetAcc += (dtMs / intervalMs) * countPerWave * spawnRate
 
   // Décrément du cooldown anti-camping (no-op en T8, utilisé en T9).
   if (state.camperCooldownMs > 0) {
@@ -170,7 +185,7 @@ export function stepWaveDirector(
   if (state.upcoming !== null && elapsedMs >= state.upcoming.triggersAtMs) {
     const u = state.upcoming
     state.upcoming = null
-    const placements = placeEvent(u.kind, u.count, u.radius, rng, u.behaviorOverride, u.spreadOverride)
+    const placements = placeEvent(u.kind, u.count, u.radius, rng, u.behaviorOverride, u.spreadOverride, u.role, u.rolePattern)
     return placements
   }
 
@@ -265,7 +280,8 @@ function triggerEvent(
 
   // Count borné par le budget disponible — tiré maintenant (déterministe).
   const rawCount = rng.int(chosen.countMin, chosen.countMax)
-  const count = Math.min(rawCount, Math.floor(state.budgetAcc))
+  const threatCost = chosen.threatCost ?? 1
+  const count = Math.min(rawCount, Math.floor(state.budgetAcc / threatCost))
 
   if (count <= 0) {
     return []
@@ -279,7 +295,7 @@ function triggerEvent(
   const angle = rng.float(0, 2 * Math.PI)
 
   // Consomme le budget immédiatement (le budget reste conservé dans le temps).
-  state.budgetAcc -= count
+  state.budgetAcc -= count * threatCost
 
   // ANNONCER la formation (télégraphe) : stockage dans `upcoming`.
   // `placeEvent` sera appelé UNIQUEMENT quand `elapsedMs >= triggersAtMs`
@@ -293,7 +309,9 @@ function triggerEvent(
     triggersAtMs: elapsedMs + TELEGRAPH_LEAD_MS,
     count,
     behaviorOverride: chosen.behaviorOverride,
-    spreadOverride: chosen.spreadOverride
+    spreadOverride: chosen.spreadOverride,
+    role: chosen.role,
+    rolePattern: chosen.rolePattern
   }
 
   // Ce pas-ci : aucun placement (la formation est annoncée, pas encore spawnée).

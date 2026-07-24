@@ -1057,7 +1057,9 @@ const RAW_CLUSTERS: Record<string, ClusterDef> = {
   // ─────────────────────────────────────────────────────────────────────────
   ...Object.fromEntries([
     workCluster('cluster_work_charpente', 'landmark_stage07', 'struct_stage07_load', 'prop_stage07_beam', 'prop_stage07_tile_pile'),
-    storageCluster('cluster_storage_charpente', ['prop_stage07_beam', 'prop_stage07_tile_pile', 'prop_stage07_insul']),
+    // Stock de charpente/toiture : isolant posé dans une opération distincte,
+    // jamais mêlé au dépôt de poutres et de tuiles.
+    storageCluster('cluster_storage_charpente', ['prop_stage07_beam', 'prop_stage07_tile_pile', 'prop_stage07_tile_pile']),
     plantCluster('cluster_plant_charpente', ['prop_stage07_gutter', 'struct_stage07_truss'])
   ].map((c) => [c.id, c])),
 

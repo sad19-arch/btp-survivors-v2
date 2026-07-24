@@ -11,7 +11,7 @@ import {
 } from '@core/sitePlan'
 import type { PlanSeg, PlacedZone, SitePlan } from '@core/sitePlan'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
-import { buildSiteLayout } from '@core/siteLayout'
+import { buildProceduralSiteLayout } from '@core/siteLayout'
 import { CLUSTERS } from '@content/clusters'
 
 /**
@@ -368,7 +368,7 @@ const INFRA_CLUSTERS = new Set(['cluster_route', 'cluster_gate_main'])
 
 describe.each(STAGES)('siteLayout — contraintes machines & zones (%s)', (stageId) => {
   it.each(SEEDS)('C4 deux machines en travail ne sont JAMAIS collées (seed %i)', (seed) => {
-    const layout = buildSiteLayout(seed, W, H, stageId)
+    const layout = buildProceduralSiteLayout(seed, W, H, stageId)
     const machines = layout.clusters.filter((c) => MACHINE_CLUSTERS.has(c.defId))
     expect(machines.length).toBeGreaterThan(0)
     const minDist = SITE_PROGRAMS[stageId]?.rules.minMachineDistPx ?? 600
@@ -404,7 +404,7 @@ describe.each(STAGES)('siteLayout — contraintes machines & zones (%s)', (stage
 
   it.each(SEEDS)('C9 aucun prefab ne flotte hors de sa zone (seed %i)', (seed) => {
     const plan = planFor(stageId, seed)
-    const layout = buildSiteLayout(seed, W, H, stageId)
+    const layout = buildProceduralSiteLayout(seed, W, H, stageId)
     for (const c of layout.clusters) {
       if (INFRA_CLUSTERS.has(c.defId)) {
         continue
@@ -418,7 +418,7 @@ describe.each(STAGES)('siteLayout — contraintes machines & zones (%s)', (stage
 
   it.each(SEEDS)('les clôtures du plan deviennent des obstacles bloquants (seed %i)', (seed) => {
     const plan = planFor(stageId, seed)
-    const layout = buildSiteLayout(seed, W, H, stageId)
+    const layout = buildProceduralSiteLayout(seed, W, H, stageId)
     const fenceObstacles = layout.obstacles.filter((o) => o.kind === 'segment' && o.blocks === 'both')
     // Au moins autant de segments d'obstacle que de segments de clôture du plan.
     expect(fenceObstacles.length).toBeGreaterThanOrEqual(plan.fences.length)

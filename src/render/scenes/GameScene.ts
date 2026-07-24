@@ -4,7 +4,7 @@ import type { GameSeam } from '@/app/seam'
 import { KeyboardInput } from '@input/keyboard'
 import { GamepadInput } from '@input/gamepad'
 import { routeInput, type FrameInput } from '@input/intents'
-import { buildPlayerInputs } from '@input/players'
+import { buildPlayerInputs, hasAnyPlayerInput } from '@input/players'
 import { TouchInput } from '@input/touch'
 import { isTouchPrimary } from '@ui/responsive'
 import { CarnageRenderer, CARNAGE_REF_SCALE } from '@render/scenes/carnageRenderer'
@@ -639,6 +639,7 @@ export class GameScene extends Phaser.Scene {
     // instance FRAÎCHE de PlayerRenderer recréée dans create() — rien à nettoyer ici.
     this.camera.reset()
     this.bubbles.reset()
+    this.prevIntroActive = false
     this.decorStreamerFrame = 0
     // Nettoie les chunks streamés (si le streamer est déjà initialisé — pas au 1er appel).
     if (this.decorStreamer !== undefined) {
@@ -795,7 +796,12 @@ export class GameScene extends Phaser.Scene {
     if (!this.lite) {
       this.siteRenderer.reset(this.app.getState().seed, WORLD.width, WORLD.height, this.loadedStageId)
       // Réseau bâti (tranchées/tuyaux/regards) — streamé par chunks autour de la caméra.
-      this.siteStructures.setPlan(WORLD.width, WORLD.height, this.loadedStageId)
+      this.siteStructures.setPlan(
+        WORLD.width,
+        WORLD.height,
+        this.loadedStageId,
+        resolveComposedLayout(this.loadedStageId) !== null,
+      )
       // Ouvriers navetteurs (T6) : construits depuis le même layout que le siteRenderer.
       // On passe les FEUILLES (clé + behavior + kind), pas seulement leurs clés :
       // SiteWorkers en tire un pool par rôle de marche. Avec les seules clés, il
@@ -937,6 +943,7 @@ export class GameScene extends Phaser.Scene {
         }
         return info.sort((a, b) => a.id - b.id)
       }
+      this.seam.debugEnemyRenderInfo = (): { id: number; texture: string | null }[] => this.horde.debugEnemyInfo()
       // Sonde du feedback de coup (test-only) : compteur chiffres actifs/total + cap.
       this.seam.debugFeedbackInfo = (): { active: number; spawnedTotal: number; maxPerFrame: number } => ({
         active: this.damageNumbers.active,
@@ -970,6 +977,23 @@ export class GameScene extends Phaser.Scene {
       this.seam.debugCameraOverview = (zoom: number, cx: number, cy: number): void => {
         this.camera.setOverview({ zoom, cx, cy })
       }
+      this.seam.debugCameraInfo = (): {
+        zoom: number
+        cx: number
+        cy: number
+        leaderX: number | null
+        leaderY: number | null
+      } => {
+        const camera = this.cameras.main
+        const leader = this.players.sprites.get(1)
+        return {
+          zoom: camera.zoom,
+          cx: camera.midPoint.x,
+          cy: camera.midPoint.y,
+          leaderX: leader?.x ?? null,
+          leaderY: leader?.y ?? null,
+        }
+      }
       // Sonde perf (test/overlay only) : snapshot du profileur de temps de frame.
       this.seam.debugPerfProfile = (): PerfSnapshot => this.perfSnapshot()
       // Sonde Carnage (test-only) : état RÉEL du renderer — `active` (que le toggle
@@ -1002,8 +1026,10 @@ export class GameScene extends Phaser.Scene {
     }
     // Overlay tactile visible en jeu uniquement (inconditionnel, même en test → l'e2e l'observe).
     this.touchInput?.setVisible(st.screen === 'game' && !st.introActive)
+    let playerInputs: Map<number, FrameInput> | null = null
     if (!this.testMode) {
-      routeInput(this.app, this.readPlayerInputs(st.players.length))
+      playerInputs = this.readPlayerInputs(st.inputPlayerCount)
+      routeInput(this.app, playerInputs)
       // Hitstop (juice #5) : le cooldown s'écoule toujours ; tant que le gel court, la
       // sim N'AVANCE PAS (frame figée = « claquement » d'impact), sinon on avance normalement.
       this.hitstopCooldownMsLeft = Math.max(0, this.hitstopCooldownMsLeft - delta)
@@ -1014,12 +1040,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
     // Skip intro sur n'importe quelle entrée (non-test uniquement : en test le seam pilote).
-    if (st.introActive && !this.testMode) {
-      const inputs = this.readPlayerInputs(1)
-      const p1 = inputs.get(1)
-      if ((p1 !== undefined && (p1.pressed.length > 0 || p1.action || p1.move.x !== 0 || p1.move.y !== 0))) {
-        this.app.skipIntro()
-      }
+    if (st.introActive && playerInputs !== null && hasAnyPlayerInput(playerInputs)) {
+      this.app.skipIntro()
     }
     // Séquenceur d'intro : dispatche les commandes cinématiques à la façade Phaser.
     // Sauté en mode lite (pas de textures ni de sprites chargés).
@@ -1031,6 +1053,10 @@ export class GameScene extends Phaser.Scene {
     // après skipIntro() (jusqu'au prochain shutdown de scène).
     if (this.prevIntroActive && !st.introActive) {
       this.intro.dispose()
+      // Une commande caméra d'intro active le mode overview, qui court-circuite
+      // volontairement le suivi joueur. La fin ou le skip doit donc rendre
+      // explicitement la main au contrôleur de gameplay.
+      this.camera.reset()
     }
     this.prevIntroActive = st.introActive
     this.syncSprites()

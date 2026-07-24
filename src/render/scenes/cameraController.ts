@@ -101,8 +101,8 @@ export class CameraController {
   camZoomTo(cx: number, cy: number, zoom: number, ms: number, ease: Ease): void {
     const cam = this.scene.cameras.main
     const from: CamPose = this.overview ?? {
-      cx: cam.scrollX + cam.width / 2 / cam.zoom,
-      cy: cam.scrollY + cam.height / 2 / cam.zoom,
+      cx: cam.midPoint.x,
+      cy: cam.midPoint.y,
       zoom: cam.zoom,
     }
     const to: CamPose = { cx, cy, zoom }
@@ -254,8 +254,11 @@ export class CameraController {
     }
     this.baseZoomCurrent = Phaser.Math.Linear(this.baseZoomCurrent, targetZoom, CAMERA_ZOOM_LERP)
     cam.zoom = this.baseZoomCurrent * (1 + this.punchDelta)
-    const targetScrollX = cx - cam.width / 2 / cam.zoom
-    const targetScrollY = cy - cam.height / 2 / cam.zoom
+    // Dans Phaser, scrollX/scrollY décrivent le centre logique avec la taille
+    // non zoomée de la caméra. Le zoom modifie `worldView`, pas ce décalage.
+    // Diviser ici par le zoom décale donc la caméra de groupe dès que zoom !== 1.
+    const targetScrollX = cx - cam.width / 2
+    const targetScrollY = cy - cam.height / 2
     cam.scrollX = Phaser.Math.Linear(cam.scrollX, targetScrollX, CAMERA_SCROLL_LERP)
     cam.scrollY = Phaser.Math.Linear(cam.scrollY, targetScrollY, CAMERA_SCROLL_LERP)
   }

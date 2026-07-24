@@ -179,12 +179,12 @@ export class App {
   private optionsOpen = false
   /** Sélection de personnage en cours (ouverte par « Jouer » au titre, avant le lancement de la partie). */
   private charSelectOpen = false
-  /** Joueur (1-based) en train de choisir son personnage. */
-  private charSelectPlayer = 1
-  /** Personnages choisis jusqu'ici (index = playerId-1), passés à `start()` une fois complets. */
+  /** Personnages choisis (index = playerId-1), passés à `start()` une fois tous verrouillés. */
   private selectedCharacters: string[] = []
-  /** Index courant dans la liste de roster (curseur du carrousel), remis à 0 à chaque joueur. */
-  private charCursor = 0
+  /** Un curseur de roster indépendant par joueur. */
+  private charCursors: number[] = []
+  /** Un verrouillage indépendant par joueur. */
+  private charReady: boolean[] = []
   /** Niveaux audio (possédés ici pour l'UI Options ; l'AudioDirector les lit). */
   private audioLevels: AudioLevels = loadAudioSettings()
   /** Vibrations manette activées (juice #2) ; lues par le Rumbler via `getVibrations()`. */
@@ -313,7 +313,8 @@ export class App {
     })
     // Relais des événements sémantiques audio (sim → App → AudioDirector).
     this.sim.events.addEventListener('enemyKilled', (e) => {
-      this.events.dispatchEvent(new EnemyKilledEvent((e as EnemyKilledEvent).count))
+      const ev = e as EnemyKilledEvent
+      this.events.dispatchEvent(new EnemyKilledEvent(ev.count, ev.byPlayer))
     })
     this.sim.events.addEventListener('enemyDied', (e) => {
       const d = e as EnemyDiedEvent
@@ -321,7 +322,9 @@ export class App {
         new EnemyDiedEvent(d.x, d.y, d.enemyType, d.isElite, d.bossRole, d.weapon, d.dirX, d.dirY)
       )
     })
-    this.sim.events.addEventListener('playerHurt', () => { this.events.dispatchEvent(new PlayerHurtEvent()) })
+    this.sim.events.addEventListener('playerHurt', (e) => {
+      this.events.dispatchEvent(new PlayerHurtEvent((e as PlayerHurtEvent).playerIds))
+    })
     this.sim.events.addEventListener('levelUp', () => { this.events.dispatchEvent(new LevelUpEvent()) })
     this.sim.events.addEventListener('weaponFired', (e) => {
       this.events.dispatchEvent(new WeaponFiredEvent((e as WeaponFiredEvent).kind))
@@ -419,8 +422,16 @@ export class App {
 
   // --- navigation manette/clavier ------------------------------------------
 
-  /** Déplace le curseur dans le menu actif. */
-  nav(dir: NavDir): void {
+  /**
+   * Déplace le curseur dans le menu actif.
+   *
+   * Sur un level-up, seul le joueur propriétaire peut déplacer son curseur.
+   * Omis (`undefined`) = appel système non filtré (seam/clic/tests).
+   */
+  nav(dir: NavDir, byPlayers?: ReadonlySet<number>): void {
+    if (!this.mayControlOwnedMenu(byPlayers)) {
+      return
+    }
     this.bumpState()
     this.recordCombo(dir)
     this.refreshFocus()
@@ -453,9 +464,9 @@ export class App {
       this.emitUi('menuMove')
       return
     }
-    // Carrousel de personnage : gauche/droite changent le perso (pas le focus, un seul item).
+    // Sélection simultanée : chaque joueur déplace uniquement son propre curseur.
     if (this.screen === 'characterSelect' && this.focus.current() === 'char' && (dir === 'left' || dir === 'right')) {
-      this.cycleCharacter(dir === 'right' ? 1 : -1)
+      this.cycleCharacters(byPlayers, dir === 'right' ? 1 : -1)
       this.emitUi('menuMove')
       return
     }
@@ -507,7 +518,11 @@ export class App {
     if (this.recordCombo('confirm')) {
       return
     }
-    if (!this.mayConfirm(byPlayers)) {
+    if (!this.mayControlOwnedMenu(byPlayers)) {
+      return
+    }
+    if (this.screen === 'characterSelect') {
+      this.confirmCharacters(byPlayers)
       return
     }
     this.refreshFocus()
@@ -518,19 +533,22 @@ export class App {
     this.activate(this.screen, id)
   }
 
-  /** Vrai si ce « valider » a le droit d'agir sur l'écran courant. */
-  private mayConfirm(byPlayers?: ReadonlySet<number>): boolean {
-    if (byPlayers === undefined || this.screen !== 'upgrade') {
+  /** Vrai si ces joueurs ont le droit de piloter l'écran contextuel courant. */
+  private mayControlOwnedMenu(byPlayers?: ReadonlySet<number>): boolean {
+    if (byPlayers === undefined) {
       return true
     }
-    const owner = this.sim?.getState().pendingLevelUp?.playerId
+    const owner =
+      this.screen === 'upgrade'
+        ? this.sim?.getState().pendingLevelUp?.playerId
+        : undefined
     // Propriétaire inconnu : on ne bloque pas (on ne rend pas l'écran injouable
     // sur un état inattendu — le soft-lock serait pire que le partage).
     return owner === undefined || byPlayers.has(owner)
   }
 
   /** Retour / annulation, selon l'écran. */
-  back(): void {
+  back(byPlayers?: ReadonlySet<number>): void {
     this.bumpState()
     this.recordCombo('back')
     if (this.optionsOpen) {
@@ -569,13 +587,7 @@ export class App {
         this.evolutionsView = null
         break
       case 'characterSelect':
-        if (this.charSelectPlayer > 1) {
-          this.charSelectPlayer--
-          this.selectedCharacters.pop()
-          this.charCursor = 0
-        } else {
-          this.charSelectOpen = false
-        }
+        this.backCharacters(byPlayers)
         break
       default:
         break // titre / upgrade : pas de retour
@@ -690,6 +702,11 @@ export class App {
    */
   debugConfirmAs(playerId: number): void {
     this.confirm(new Set([playerId]))
+  }
+
+  /** [Debug/seam] Simule « le joueur N déplace le curseur ». */
+  debugNavAs(playerId: number, dir: NavDir): void {
+    this.nav(dir, new Set([playerId]))
   }
 
   /** [Debug/seam] Audition d'un SFX d'arme (procédural) : rejoue weaponFired(id) → zzfx. */
@@ -882,6 +899,12 @@ export class App {
       players: base.players.map((p) => ({ ...p, inventory: buildInventory(p) })),
       screen,
       menu: this.menu(screen),
+      inputPlayerCount:
+        base.players.length > 0
+          ? base.players.length
+          : this.charSelectOpen
+            ? this.selectedPlayers
+            : 4,
       goldSkin: this.goldSkin,
       carnage: this.carnage,
       runId: this.runId,
@@ -891,7 +914,14 @@ export class App {
       stageSubtitle: phase?.subtitle ?? '',
       stageOrder: phase?.order ?? 0,
       characterSelect: this.charSelectOpen
-        ? { player: this.charSelectPlayer, total: this.selectedPlayers, charId: this.rosterIds()[this.charCursor] ?? DEFAULT_CHARACTER_ID }
+        ? {
+            total: this.selectedPlayers,
+            players: Array.from({ length: this.selectedPlayers }, (_, index) => ({
+              playerId: index + 1,
+              charId: this.rosterIds()[this.charCursors[index] ?? 0] ?? DEFAULT_CHARACTER_ID,
+              ready: this.charReady[index] ?? false
+            }))
+          }
         : null,
       // Saisie du prénom : les index d'alphabet sont résolus ICI en caractères —
       // l'overlay affiche, il n'interprète pas.
@@ -1252,25 +1282,72 @@ export class App {
     return CHARACTER_IDS
   }
 
-  /** Item unique du carrousel de sélection de personnage (◄ Nom — Arme ►). */
+  /** Item logique unique ; le rendu affiche un carrousel indépendant par joueur. */
   private characterSelectItems(): MenuItemView[] {
     const ids = this.rosterIds()
-    const char = characterDef(ids[this.charCursor] ?? DEFAULT_CHARACTER_ID)
+    const char = characterDef(ids[this.charCursors[0] ?? 0] ?? DEFAULT_CHARACTER_ID)
     const weaponName = WEAPONS[char.startingWeapon]?.name ?? char.startingWeapon
     return [
       { id: 'char', label: `◄ ${char.name} — ${weaponName} ►`, hint: 'Gauche/Droite • A: valider' }
     ]
   }
 
-  /** Décale le curseur de roster de `step` (cycle) — carrousel de sélection de personnage. */
-  private cycleCharacter(step: number): void {
+  /** Décale les curseurs des joueurs émetteurs, sans toucher aux choix déjà verrouillés. */
+  private cycleCharacters(byPlayers: ReadonlySet<number> | undefined, step: number): void {
     const ids = this.rosterIds()
     const n = ids.length
     if (n === 0) {
       return
     }
-    this.charCursor = (((this.charCursor + step) % n) + n) % n
+    for (const playerId of this.characterInputPlayers(byPlayers)) {
+      const index = playerId - 1
+      if (this.charReady[index] ?? false) {
+        continue
+      }
+      const cursor = this.charCursors[index] ?? 0
+      this.charCursors[index] = (((cursor + step) % n) + n) % n
+    }
     this.refreshFocus()
+  }
+
+  /** `undefined` est le contrôle système/clavier historique : il pilote J1. */
+  private characterInputPlayers(byPlayers?: ReadonlySet<number>): number[] {
+    const candidates = byPlayers === undefined ? [1] : [...byPlayers]
+    return candidates.filter((playerId) => playerId >= 1 && playerId <= this.selectedPlayers)
+  }
+
+  /** Verrouille les choix émis ce frame et démarre lorsque tout le groupe est prêt. */
+  private confirmCharacters(byPlayers?: ReadonlySet<number>): void {
+    const ids = this.rosterIds()
+    for (const playerId of this.characterInputPlayers(byPlayers)) {
+      const index = playerId - 1
+      if (this.charReady[index] ?? false) {
+        continue
+      }
+      this.selectedCharacters[index] = ids[this.charCursors[index] ?? 0] ?? DEFAULT_CHARACTER_ID
+      this.charReady[index] = true
+    }
+    if (this.charReady.length === this.selectedPlayers && this.charReady.every(Boolean)) {
+      this.charSelectOpen = false
+      this.start(modeForCount(this.selectedPlayers), this.selectedCharacters)
+    }
+    this.refreshFocus()
+  }
+
+  /** B déverrouille son propre choix ; J1 quitte l'écran s'il n'est pas verrouillé. */
+  private backCharacters(byPlayers?: ReadonlySet<number>): void {
+    const players = this.characterInputPlayers(byPlayers)
+    let unlocked = false
+    for (const playerId of players) {
+      const index = playerId - 1
+      if (this.charReady[index] ?? false) {
+        this.charReady[index] = false
+        unlocked = true
+      }
+    }
+    if (!unlocked && players.includes(1)) {
+      this.charSelectOpen = false
+    }
   }
 
   /** Décale la phase sélectionnée de `step` (cycle) — sélecteur de niveau du titre. */
@@ -1439,9 +1516,9 @@ export class App {
     if (screen === 'title') {
       if (id === 'jouer') {
         this.charSelectOpen = true
-        this.charSelectPlayer = 1
-        this.selectedCharacters = []
-        this.charCursor = 0
+        this.selectedCharacters = Array.from({ length: this.selectedPlayers }, () => DEFAULT_CHARACTER_ID)
+        this.charCursors = Array.from({ length: this.selectedPlayers }, () => 0)
+        this.charReady = Array.from({ length: this.selectedPlayers }, () => false)
       } else if (id === 'players') {
         this.cyclePlayers(1)
       } else if (id === 'stage') {
@@ -1456,21 +1533,6 @@ export class App {
         // L'ouverture de l'éditeur est un effet de bord `window.location` (boot
         // séparé `?editor=true`) → l'App PURE se contente d'émettre ; `main.ts` réagit.
         this.events.dispatchEvent(new Event('launchEditor'))
-      }
-      this.refreshFocus()
-      return
-    }
-    if (screen === 'characterSelect') {
-      if (id === 'char') {
-        const chosen = this.rosterIds()[this.charCursor] ?? DEFAULT_CHARACTER_ID
-        this.selectedCharacters[this.charSelectPlayer - 1] = chosen
-        if (this.charSelectPlayer < this.selectedPlayers) {
-          this.charSelectPlayer++
-          this.charCursor = 0
-        } else {
-          this.charSelectOpen = false
-          this.start(modeForCount(this.selectedPlayers), this.selectedCharacters)
-        }
       }
       this.refreshFocus()
       return
@@ -1549,6 +1611,7 @@ function emptyState(seed: number, stageId: ConstructionPhaseId): GameState {
     seed,
     stageId,
     elapsedMs: 0,
+    runBeat: 'pressure',
     wave: 0,
     score: 0,
     bossKills: 0,

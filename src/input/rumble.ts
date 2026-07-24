@@ -42,7 +42,14 @@ interface HapticActuator {
     type: string,
     params: { duration: number; strongMagnitude: number; weakMagnitude: number; startDelay?: number }
   ) => Promise<unknown>
+  pulse?: (value: number, duration: number) => Promise<unknown>
   reset?: () => Promise<unknown>
+}
+
+interface HapticGamepad {
+  index: number
+  vibrationActuator?: HapticActuator | null
+  hapticActuators?: readonly HapticActuator[]
 }
 
 export interface RumblerOpts {
@@ -54,7 +61,8 @@ export interface RumblerOpts {
 
 export class Rumbler {
   private enabled: boolean
-  private lastAtMs = -Infinity
+  /** Throttle indépendant par canal (`all`, `player:1`…`player:4`). */
+  private readonly lastAtMs = new Map<string, number>()
   private readonly minGapMs: number
   private readonly now: () => number
 
@@ -83,28 +91,61 @@ export class Rumbler {
    * Retourne `true` si la secousse a été émise (utile aux tests).
    */
   play(p: RumblePattern, bypassThrottle = false): boolean {
+    return this.playOn('all', this.actuators(), p, bypassThrottle, true)
+  }
+
+  /**
+   * Vibre uniquement la manette affectée au joueur (`P1 → pad 0`, …, `P4 → pad 3`).
+   * Le throttle est propre à ce joueur : un kill de P1 ne peut pas avaler celui de P2.
+   */
+  playForPlayer(playerId: number, p: RumblePattern, bypassThrottle = false): boolean {
+    const actuator = this.actuatorForPlayer(playerId)
+    return this.playOn(
+      `player:${playerId}`,
+      actuator === null ? [] : [actuator],
+      p,
+      bypassThrottle,
+      this.actuators().length === 0
+    )
+  }
+
+  private playOn(
+    channel: string,
+    actuators: readonly HapticActuator[],
+    p: RumblePattern,
+    bypassThrottle: boolean,
+    vibratePhone: boolean
+  ): boolean {
     if (!this.enabled) {
       return false
     }
     const t = this.now()
-    if (!bypassThrottle && t - this.lastAtMs < this.minGapMs) {
+    const lastAt = this.lastAtMs.get(channel) ?? -Infinity
+    if (!bypassThrottle && t - lastAt < this.minGapMs) {
       return false
     }
-    this.lastAtMs = t
-    for (const act of this.actuators()) {
-      // playEffect renvoie une Promise ; un rejet (pad débranché en vol) est sans gravité.
-      void act.playEffect?.('dual-rumble', {
+    this.lastAtMs.set(channel, t)
+    for (const act of actuators) {
+      this.playActuator(act, p)
+    }
+    // Vibreur du téléphone (Web Vibration API) — seul canal ressenti sans manette physique.
+    if (vibratePhone && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(Math.round(p.ms))
+    }
+    return true
+  }
+
+  private playActuator(act: HapticActuator, p: RumblePattern): void {
+    if (act.playEffect !== undefined) {
+      void act.playEffect('dual-rumble', {
         duration: p.ms,
         strongMagnitude: p.strong,
         weakMagnitude: p.weak,
         startDelay: 0
-      })?.catch?.(() => {})
+      }).catch(() => {})
+      return
     }
-    // Vibreur du téléphone (Web Vibration API) — seul canal ressenti sans manette physique.
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate(Math.round(p.ms))
-    }
-    return true
+    void act.pulse?.(Math.max(p.strong, p.weak), p.ms)?.catch?.(() => {})
   }
 
   private stopAll(): void {
@@ -126,11 +167,34 @@ export class Rumbler {
       if (gp === null) {
         continue
       }
-      const act = (gp as unknown as { vibrationActuator?: HapticActuator }).vibrationActuator
+      const act = this.actuator(gp as unknown as HapticGamepad)
       if (act !== undefined && act !== null) {
         out.push(act)
       }
     }
     return out
+  }
+
+  private actuatorForPlayer(playerId: number): HapticActuator | null {
+    if (
+      playerId < 1 ||
+      playerId > 4 ||
+      typeof navigator === 'undefined' ||
+      typeof navigator.getGamepads !== 'function'
+    ) {
+      return null
+    }
+    const slot = playerId - 1
+    const pads = Array.from(navigator.getGamepads())
+    // Même identité que Phaser `getPad(index)`. Ne jamais compacter les trous :
+    // sinon une reconnexion pourrait faire vibrer la manette voisine.
+    const pad = pads.find((candidate) => candidate?.index === slot) ?? pads[slot]
+    return pad === null || pad === undefined
+      ? null
+      : this.actuator(pad as unknown as HapticGamepad)
+  }
+
+  private actuator(pad: HapticGamepad): HapticActuator | null {
+    return pad.vibrationActuator ?? pad.hapticActuators?.[0] ?? null
   }
 }

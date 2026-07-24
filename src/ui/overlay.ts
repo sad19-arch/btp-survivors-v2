@@ -9,7 +9,7 @@ import type { ViewportState } from './viewport'
 import { approach } from './anim'
 import { cardEnterStyle } from './cardEnter'
 import { readHiScore } from './hiscore'
-import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
+import { DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { WEAPONS } from '@content/weapons'
 import { STAR_SLOTS } from '@content/stars'
 import type { AchievementEntryView, AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView, ChestResultView } from '@/app/appState'
@@ -39,24 +39,6 @@ export interface AchievementToast {
   readonly label: string
   readonly description: string
   readonly icon?: string
-}
-
-/**
- * Punchlines arcade par personnage (couche UI, purement cosmétique). Une phrase
- * d'accroche « select screen » façon borne, affichée sous le portrait dans le
- * sélecteur de personnage. Indexé par `CharacterDef.id`.
- */
-const PUNCHLINES: Readonly<Record<string, string>> = {
-  ouvrier: 'Polyvalent, increvable. Cloue tout ce qui bouge.',
-  soudeur: 'Fait tourner ses lames, personne n\'approche.',
-  macon: 'Béton dans les veines, marteau-piqueur en main.',
-  terrassier: 'Ouvre les hostilités au pied-de-biche.',
-  electricien: 'Envoie le jus. 380 volts dans la nuque.',
-  ouvriere: 'Charge la brouette et écrase tout devant.',
-  charpentier: 'Ses boulons ricochent de crâne en crâne.',
-  grutier: 'Étale du goudron brûlant sur leur passage.',
-  plombier: 'Sa clé revient toujours, comme un boomerang.',
-  samoyede: 'La mascotte. Mousse tout le monde à l\'extincteur.'
 }
 
 /**
@@ -870,56 +852,57 @@ export class Overlay {
     )
   }
 
-  /** Panneau de sélection de personnage : un joueur à la fois, carrousel ◄ Nom — Arme ►. */
+  /** Panneau de sélection simultanée : un carrousel isolé par joueur. */
   private characterSelectPanel(state: AppViewState): HTMLElement {
     const sel = state.characterSelect
-    const player = sel?.player ?? 1
-    const total = sel?.total ?? 1
-    const color = playerColor(player)
     const base = import.meta.env.BASE_URL
-    const activeId = sel?.charId ?? CHARACTER_IDS[0] ?? 'ouvrier'
-    const def = characterDef(activeId)
-    const weapon = WEAPONS[def.startingWeapon]
-    const punch = PUNCHLINES[def.id] ?? ''
-
-    // En-tête « SELECT YOUR CREW » + joueur courant (couleur du joueur).
     const header = h('h1', { className: 'panel__title charsel__heading', text: 'SELECT YOUR CREW' })
-    const who = h('p', { className: 'charsel__who', text: `JOUEUR ${player}/${total}` })
-    who.style.color = color.hex
 
-    // Portrait géant du perso courant (frame 0 = face, croppée dans un cadre pixel).
-    const portrait = h('div', { className: 'charsel-portrait' },
-      h('img', { className: 'charsel-portrait__img', attrs: { src: `${base}${sheetFile(def.sheet)}.png`, alt: '' } })
-    )
-    const info = h('div', { className: 'charsel__info' },
-      h('div', { className: 'charsel__name', text: def.name.toUpperCase() }),
-      h('div', { className: 'charsel__weapon' },
-        h('span', { className: 'charsel__weapon-label', text: 'ARME' }),
-        h('span', { className: 'charsel__weapon-name', text: weapon?.name ?? def.startingWeapon })
-      ),
-      h('p', { className: 'charsel__desc', text: weapon?.description ?? '' }),
-      h('p', { className: 'charsel__punch', text: punch })
-    )
-    const stage = h('div', { className: 'charsel__stage' }, portrait, info)
-
-    // Grille des 10 têtes (frame 0 croppée) — la sélection courante est mise en avant.
-    const grid = h('div', { className: 'charsel-grid', attrs: { 'aria-hidden': 'true' } })
-    for (const id of CHARACTER_IDS) {
-      const cd = characterDef(id)
-      const cell = h('div', {
-        className: id === activeId ? 'charsel-cell charsel-cell--active' : 'charsel-cell'
-      }, h('img', { className: 'charsel-cell__img', attrs: { src: `${base}${sheetFile(cd.sheet)}.png`, alt: '' } }))
-      grid.append(cell)
+    const board = h('div', {
+      className: `charsel-board charsel-board--${sel?.total ?? 1}`
+    })
+    for (const player of sel?.players ?? []) {
+      const color = playerColor(player.playerId)
+      const def = characterDef(player.charId)
+      const weapon = WEAPONS[def.startingWeapon]
+      const card = h(
+        'section',
+        {
+          className: player.ready ? 'charsel-card charsel-card--ready' : 'charsel-card',
+          attrs: {
+            'data-player': String(player.playerId),
+            'data-ready': String(player.ready)
+          }
+        },
+        h('p', { className: 'charsel__who', text: `JOUEUR ${player.playerId}` }),
+        h(
+          'div',
+          { className: 'charsel-portrait charsel-card__portrait' },
+          h('img', {
+            className: 'charsel-portrait__img',
+            attrs: { src: `${base}${sheetFile(def.sheet)}.png`, alt: '' }
+          })
+        ),
+        h('div', { className: 'charsel__name charsel-card__name', text: def.name.toUpperCase() }),
+        h(
+          'div',
+          { className: 'charsel__weapon charsel-card__weapon' },
+          h('span', { className: 'charsel__weapon-label', text: 'ARME' }),
+          h('span', {
+            className: 'charsel__weapon-name',
+            text: weapon?.name ?? def.startingWeapon
+          })
+        )
+      )
+      card.style.setProperty('--charsel-player', color.hex)
+      board.append(card)
     }
 
     const panel = h(
       'div',
       { className: 'panel panel--charsel arc-metal' },
       header,
-      who,
-      stage,
-      grid,
-      this.menuList(state),
+      board,
       h('p', { className: 'hint-line', text: 'Gauche/Droite pour changer • Valider: A / Entrée' })
     )
     return h('div', { className: 'screen screen--charsel' }, panel)
@@ -1785,16 +1768,16 @@ export class Overlay {
       cards.append(this.card(item, i === index, i))
     })
 
-    // Co-op : la carte appartient à UN joueur — on le dit, et sa couleur habille
-    // le panneau. En solo il n'y a pas d'ambiguïté : écran inchangé.
+    // Co-op : la carte appartient à UN joueur — le panneau ENTIER prend sa
+    // couleur sombre, plutôt qu'un simple liseré. En solo : écran inchangé.
     const owner = state.players.length > 1 ? state.menu?.playerId : undefined
     const panel = h('div', { className: 'panel' })
     if (owner !== undefined) {
       const color = playerColor(owner)
       panel.classList.add('panel--owned')
-      // Couleur en inline, comme le HUD (`playerBlock`) : les classes CSS ne
-      // portent que la structure, jamais l'identité joueur.
-      panel.style.borderColor = color.hex
+      // La variable transporte l'identité ; le CSS conserve la structure pixel
+      // commune et remet explicitement la bordure en noir.
+      panel.style.setProperty('--player-panel', color.panelHex)
       const who = h('p', { className: 'upgrade__who', text: `J${owner} CHOISIT` })
       who.style.color = color.hex
       panel.append(who)
@@ -1904,11 +1887,12 @@ export class Overlay {
       state.screen === 'gameover' || state.screen === 'victory' ? `${state.elapsedMs}|${state.score}` : ''
     // Le déblocage du casque doré change le panneau titre → l'inclure dans la signature.
     const titlePart = state.screen === 'title' && state.goldSkin ? 'gold' : ''
-    // Sélection de personnage : le joueur actif (couleur du header) ne fait pas partie du
-    // menu (item unique 'char') → inclure explicitement pour re-rendre au changement de joueur.
+    // Sélection simultanée : les curseurs/verrous vivent hors du menu logique.
     const charSelectPart =
       state.screen === 'characterSelect' && state.characterSelect !== null
-        ? `p${state.characterSelect.player}/${state.characterSelect.total}`
+        ? state.characterSelect.players
+            .map((player) => `${player.playerId}:${player.charId}:${player.ready ? '1' : '0'}`)
+            .join(',')
         : ''
     // Saisie du prénom : la grille est un état HORS menu (l'écran n'a qu'un item).
     // Le CURSEUR est indispensable ici : le déplacer ne change ni les lettres ni le

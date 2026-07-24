@@ -29,6 +29,35 @@ function clampNum(v: unknown, min: number, max: number): number | undefined {
   return Math.min(max, Math.max(min, v))
 }
 
+const LEGACY_ZONE_BY_SUFFIX: Readonly<Record<string, MarkerType>> = {
+  a: 'signature_zone',
+  b: 'zone_access',
+  c: 'zone_storage',
+  d: 'zone_secondary',
+  e: 'zone_atmosphere'
+}
+
+/**
+ * Transforme les marqueurs des anciens layouts au bord du système, pour que
+ * toutes les données consommées par l'éditeur soient canoniques. Un type déjà
+ * canonique garde son sens, même si son id hérité porte un suffixe différent.
+ */
+function normalizeMarkerType(id: unknown, type: unknown): MarkerType | undefined {
+  if (typeof type !== 'string') { return undefined }
+  const canonical = ZONE_BY_TYPE.get(type as MarkerType)
+  if (canonical !== undefined) { return canonical.type }
+  if (type !== 'zone_main_work' && type !== 'zone_logistics') { return undefined }
+
+  const suffix = typeof id === 'string' ? /_zone_([a-e])$/.exec(id)?.[1] : undefined
+  if (suffix !== undefined) { return LEGACY_ZONE_BY_SUFFIX[suffix] }
+  return type === 'zone_main_work' ? 'zone_access' : 'zone_storage'
+}
+
+/** Convertit le seul nom de scène historique Stage 07 vers le prefab catalogue. */
+function normalizePrefab(prefab: string): string {
+  return prefab === 'scene_charpente_toiture_stock' ? 'cluster_storage_charpente' : prefab
+}
+
 /** Parse une forme collidable embarquée (cercle ou segment). null si invalide. */
 function parseShape(v: unknown): EmbeddedShape | undefined {
   if (typeof v !== 'object' || v === null) {return undefined}
@@ -129,7 +158,7 @@ export function parseLayout(raw: string, fallbackStage: string): ParseResult {
         if (typeof o.prefab !== 'string') {return null}
         const li: LayoutInstance = {
           id: typeof o.id === 'string' ? o.id : `instance_${i + 1}`,
-          prefab: o.prefab,
+          prefab: normalizePrefab(o.prefab),
           x: num(o.x, 0),
           y: num(o.y, 0),
           flipX: o.flipX === true,
@@ -146,24 +175,31 @@ export function parseLayout(raw: string, fallbackStage: string): ParseResult {
   }
 
   if (Array.isArray(d.markers)) {
-    base.markers = d.markers
-      .map((it): LayoutMarker | null => {
-        if (typeof it !== 'object' || it === null) {return null}
-        const o = it as Record<string, unknown>
-        // Accepte les 4 macro-zones (A=signature_zone + B/C/D) via ZONE_DEFS ;
-        // rejette tout autre type. Tailles par défaut = celles de la zone.
-        const def = typeof o.type === 'string' ? ZONE_BY_TYPE.get(o.type as MarkerType) : undefined
-        if (def === undefined) {return null}
-        return {
-          id: typeof o.id === 'string' ? o.id : def.type,
-          type: def.type,
-          x: num(o.x, -def.w / 2),
-          y: num(o.y, -def.h / 2),
-          w: num(o.w, def.w),
-          h: num(o.h, def.h)
-        }
+    const seenZoneTypes = new Set<MarkerType>()
+    const markers: LayoutMarker[] = []
+    for (const it of d.markers) {
+      if (typeof it !== 'object' || it === null) { continue }
+      const o = it as Record<string, unknown>
+      // Les layouts historiques sont convertis ici, à la frontière JSON. Tout le
+      // reste de l'éditeur ne manipule que les cinq types canoniques A à E.
+      const type = normalizeMarkerType(o.id, o.type)
+      if (type === undefined) { continue }
+      if (seenZoneTypes.has(type)) {
+        return { ok: false, error: `Zone dupliquée : ${type}.` }
+      }
+      seenZoneTypes.add(type)
+      const def = ZONE_BY_TYPE.get(type)
+      if (def === undefined) { continue }
+      markers.push({
+        id: typeof o.id === 'string' ? o.id : def.type,
+        type,
+        x: num(o.x, -def.w / 2),
+        y: num(o.y, -def.h / 2),
+        w: num(o.w, def.w),
+        h: num(o.h, def.h)
       })
-      .filter((v): v is LayoutMarker => v !== null)
+    }
+    base.markers = markers
   }
 
   if (Array.isArray(d.paths)) {

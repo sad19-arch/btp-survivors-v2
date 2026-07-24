@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { EditorState } from '@/editor/EditorState'
+import { setActiveStage } from '@/editor/PrefabCatalog'
 
 /**
  * EditorState (pur) — multi-sélection, presse-papier et batch d'undo.
@@ -65,6 +66,16 @@ describe('EditorState — multi-sélection / copier-coller / batch', () => {
     expect(s.selectionCount).toBe(1)
     expect(s.selectedIdSet()).toEqual([a.id])
     expect(s.selected).toBe(a.id)
+  })
+
+  it('embarque les éléments du cluster quand une scène Terrassement est posée', () => {
+    setActiveStage('terrassement')
+    const scene = new EditorState('terrassement').addInstance('scene_dig_active_spawn', 330, -120)
+
+    const keys = scene.elements?.map((element) => element.assetKey) ?? []
+    expect(keys).toContain('struct_stage02_pit')
+    expect(keys.some((key) => key.startsWith('prop_s2_excavator'))).toBe(true)
+    expect(keys.some((key) => key.startsWith('prop_s2_truck'))).toBe(true)
   })
 
   it('selectMany / toggleSelection / clearSelection gèrent l\'ensemble', () => {
@@ -165,6 +176,36 @@ describe('EditorState — multi-sélection / copier-coller / batch', () => {
     expect(s.instances.find((i) => i.id === a.id)?.x).toBe(30)
     s.undo() // un seul undo doit revenir à l'origine (pas 3)
     expect(s.instances.find((i) => i.id === a.id)?.x).toBe(0)
+  })
+})
+
+describe('EditorState — import du niveau généré', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it.each([
+    'terrassement',
+    'fondations',
+    'reseaux_enterres',
+    'gros_oeuvre',
+    'echafaudages',
+    'charpente_toiture',
+    'second_oeuvre',
+    'finitions',
+    'livraison_audit'
+  ])('%s refuse le bootstrap généré sans modifier le brouillon ni son stockage', (stage) => {
+    const state = new EditorState(stage)
+    state.setSpawn(123, -45)
+    const beforeLayout = state.exportJson()
+    const beforeStorage = localStorage.getItem(`stageComposer:${stage}`)
+
+    expect(state.importGenerated()).toEqual({
+      ok: false,
+      error: 'Stage manuel : utiliser Charger un fichier.'
+    })
+    expect(state.exportJson()).toBe(beforeLayout)
+    expect(localStorage.getItem(`stageComposer:${stage}`)).toBe(beforeStorage)
   })
 })
 

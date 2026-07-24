@@ -70,9 +70,18 @@ export class PrisonerEnragedEvent extends Event {
 // Purement observationnels : dispatchés en fin de pas, ils N'ALTÈRENT PAS l'état
 // de la simulation (déterminisme préservé ; aucun écouteur en headless/tests).
 
+export interface PlayerKillCount {
+  readonly playerId: number
+  readonly count: number
+}
+
 /** Un ou plusieurs ennemis sont morts ce pas (pour un SFX d'explosion). */
 export class EnemyKilledEvent extends Event {
-  constructor(readonly count: number) {
+  constructor(
+    readonly count: number,
+    /** Attribution non plafonnée des kills de ce pas, utilisée par le feedback par joueur. */
+    readonly byPlayer: readonly PlayerKillCount[] = []
+  ) {
     super('enemyKilled')
   }
 }
@@ -104,9 +113,9 @@ export class EnemyDiedEvent extends Event {
   }
 }
 
-/** Un joueur a perdu des PV ce pas (pour un SFX de dégât). */
+/** Un ou plusieurs joueurs ont perdu des PV ce pas. */
 export class PlayerHurtEvent extends Event {
-  constructor() {
+  constructor(readonly playerIds: readonly number[] = []) {
     super('playerHurt')
   }
 }

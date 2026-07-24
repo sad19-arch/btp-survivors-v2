@@ -440,7 +440,31 @@ export function buildSiteLayout(
   worldH: number,
   stageId: string
 ): SiteLayout {
-  const base = computeBaseLayout(seed, worldW, worldH, stageId)
+  return completeSiteLayout(computeBaseLayout(seed, worldW, worldH, stageId), seed, worldW, worldH, stageId)
+}
+
+/**
+ * Construit volontairement l'ancien plan généré, sans consulter les compositions.
+ *
+ * Réservé aux outils de migration/éditeur et aux contrats unitaires du générateur
+ * legacy. Le jeu appelle toujours `buildSiteLayout`, où la composition prime.
+ */
+export function buildProceduralSiteLayout(
+  seed: number,
+  worldW: number,
+  worldH: number,
+  stageId: string
+): SiteLayout {
+  return completeSiteLayout(computeBaseLayout(seed, worldW, worldH, stageId, true), seed, worldW, worldH, stageId)
+}
+
+function completeSiteLayout(
+  base: SiteLayout,
+  seed: number,
+  worldW: number,
+  worldH: number,
+  stageId: string
+): SiteLayout {
   const result: SiteLayout = {
     clusters: base.clusters,
     obstacles: base.obstacles,
@@ -461,12 +485,13 @@ function computeBaseLayout(
   seed: number,
   worldW: number,
   worldH: number,
-  stageId: string
+  stageId: string,
+  ignoreComposed = false
 ): SiteLayout {
   // ── Chemin « COMPOSITION ÉDITEUR » (source de vérité, prioritaire) ─────────
   // Si une compo committée existe pour ce stage, elle DÉFINIT les scènes (décor +
   // collision). Pure/déterministe (aucun RNG). Registre vide → null → no-op.
-  const composed = resolveComposedLayout(stageId)
+  const composed = ignoreComposed ? null : resolveComposedLayout(stageId)
   if (composed !== null) {
     const site = composedToSiteLayout(composed)
     // Backdrop procédural : quand le plan est CONSERVÉ, le rendu dessine les

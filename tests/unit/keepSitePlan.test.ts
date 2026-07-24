@@ -73,7 +73,7 @@ describe('keepSitePlan — chemin SIM (obstacles)', () => {
     expect(resolveSitePlan(SEED, W, H, 'fondations')).toBeNull()
   })
 
-  it('aucune compo ⇒ plan présent (jeu génératif inchangé)', () => {
+  it('compo committée sans plan ⇒ collisions composées présentes', () => {
     expect(buildSiteLayout(SEED, W, H, 'terrassement').obstacles.length).toBeGreaterThan(0)
   })
 })
@@ -102,6 +102,7 @@ describe('keepSitePlan — PARITÉ sim ⇄ rendu', () => {
   })
 
   it('sans suppression, resolveSitePlan est le plan brut (aucun effet de bord)', () => {
+    setRuntimeLayout('terrassement', composition('terrassement'))
     expect(resolveSitePlan(SEED, W, H, 'terrassement')).toEqual(buildSitePlan(SEED, W, H, 'terrassement'))
   })
 

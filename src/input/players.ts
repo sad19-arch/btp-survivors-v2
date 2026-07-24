@@ -37,3 +37,18 @@ export function buildPlayerInputs(
   }
   return map
 }
+
+/** Vrai dès qu'au moins un joueur émet un mouvement ou une action cette frame. */
+export function hasAnyPlayerInput(perPlayer: ReadonlyMap<number, FrameInput>): boolean {
+  for (const frame of perPlayer.values()) {
+    if (
+      frame.move.x !== 0 ||
+      frame.move.y !== 0 ||
+      frame.pressed.length > 0 ||
+      frame.action
+    ) {
+      return true
+    }
+  }
+  return false
+}

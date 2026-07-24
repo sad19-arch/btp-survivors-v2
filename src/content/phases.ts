@@ -44,7 +44,9 @@ export const PHASES: Partial<Record<ConstructionPhaseId, ConstructionPhase>> = {
     enemyPools: {
       base: ['paperasse'],
       fast: ['inspecteur'],
-      tank: ['huissier']
+      tank: ['huissier'],
+      swarm: ['motton'],
+      charger: ['enracineur']
     }
   },
   [ConstructionPhaseId.TERRASSEMENT]: {

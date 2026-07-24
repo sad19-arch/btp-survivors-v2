@@ -6,7 +6,7 @@
 
 import type { EnemyBehavior } from '@core/types'
 
-export type EnemyArchetype = 'base' | 'fast' | 'tank' | 'elite'
+export type EnemyArchetype = 'swarm' | 'base' | 'fast' | 'tank' | 'charger' | 'elite'
 
 export interface EnemyDef {
   id: string
@@ -39,6 +39,8 @@ type EnemyStats = Omit<EnemyDef, 'id' | 'name'>
 const BASE: EnemyStats = { hp: 27, speed: 150, contactDamage: 6, archetype: 'base', xpValue: 5 }
 const FAST: EnemyStats = { hp: 16.5, speed: 210, contactDamage: 5, archetype: 'fast', xpValue: 4 }
 const TANK: EnemyStats = { hp: 90, speed: 96, contactDamage: 11, archetype: 'tank', xpValue: 12 }
+const SWARM: EnemyStats = { hp: 6, speed: 170, contactDamage: 2, archetype: 'swarm', xpValue: 1 }
+const CHARGER: EnemyStats = { hp: 42, speed: 125, contactDamage: 9, archetype: 'charger', xpValue: 8, behavior: 'charger' }
 const mk = (id: string, name: string, stats: EnemyStats): EnemyDef => ({ id, name, ...stats })
 
 export const ENEMIES: Record<string, EnemyDef> = {
@@ -46,6 +48,8 @@ export const ENEMIES: Record<string, EnemyDef> = {
   paperasse: mk('paperasse', 'Paperasse', BASE),
   inspecteur: mk('inspecteur', 'Inspecteur', FAST),
   huissier: mk('huissier', 'Huissier', TANK),
+  motton: mk('motton', 'Motton', SWARM),
+  enracineur: mk('enracineur', 'Enracineur', CHARGER),
   // 02 terrassement
   boueux: mk('boueux', 'Boueux', BASE),
   foreur: mk('foreur', 'Foreur', FAST),

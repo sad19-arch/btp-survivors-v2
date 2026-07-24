@@ -25,6 +25,13 @@ async function levelUpPlayer2(page: import('@playwright/test').Page) {
   })
 }
 
+const UPGRADE_THEMES = [
+  { playerId: 1, accent: 'rgb(74, 163, 255)', panel: 'rgb(23, 63, 99)' },
+  { playerId: 2, accent: 'rgb(255, 98, 176)', panel: 'rgb(103, 35, 67)' },
+  { playerId: 3, accent: 'rgb(90, 210, 90)', panel: 'rgb(36, 85, 46)' },
+  { playerId: 4, accent: 'rgb(255, 166, 74)', panel: 'rgb(105, 59, 28)' },
+] as const
+
 test('l’écran de cartes affiche le joueur à qui appartient le choix', async ({ page }) => {
   await bootCoop(page)
   const st = await levelUpPlayer2(page)
@@ -74,6 +81,37 @@ test('le verrou : un joueur NON concerné ne peut pas choisir la carte d’un au
   expect(await inventorySize()).toBeGreaterThan(before)
 })
 
+test('coop4 : chaque curseur de level-up répond uniquement à sa propre manette', async ({ page }) => {
+  for (let ownerId = 1; ownerId <= 4; ownerId++) {
+    await page.goto('/?autostart=coop4&seed=11&test=1&lite=1')
+    await page.waitForFunction(() => window.__GAME__?.ready === true)
+    await page.evaluate((playerId) => {
+      window.__GAME__?.debugAddXp(1000, playerId)
+      window.__GAME__?.advanceTime(100)
+    }, ownerId)
+
+    await expect.poll(
+      () => page.evaluate(() => window.__GAME__?.getState().pendingLevelUp?.playerId)
+    ).toBe(ownerId)
+    expect(await page.evaluate(() => window.__GAME__?.getState().menu?.index)).toBe(0)
+
+    for (let intruderId = 1; intruderId <= 4; intruderId++) {
+      if (intruderId === ownerId) {
+        continue
+      }
+      await page.evaluate((playerId) => {
+        window.__GAME__?.debugNavAs(playerId, 'right')
+      }, intruderId)
+      expect(await page.evaluate(() => window.__GAME__?.getState().menu?.index)).toBe(0)
+    }
+
+    await page.evaluate((playerId) => {
+      window.__GAME__?.debugNavAs(playerId, 'right')
+    }, ownerId)
+    expect(await page.evaluate(() => window.__GAME__?.getState().menu?.index)).toBe(1)
+  }
+})
+
 test('solo : aucun tag de propriétaire (pas d’ambiguïté à lever)', async ({ page }) => {
   await page.goto('/?autostart=solo&seed=11&test=1&lite=1')
   await page.waitForFunction(() => window.__GAME__?.ready === true)
@@ -86,4 +124,25 @@ test('solo : aucun tag de propriétaire (pas d’ambiguïté à lever)', async (
   expect(screen).toBe('upgrade')
   await expect(page.locator('.cards .card').first()).toBeVisible()
   await expect(page.locator('.upgrade__who')).toHaveCount(0)
+})
+
+test('coop4 : le panneau entier prend la couleur de J1 à J4, avec une bordure noire', async ({ page }) => {
+  for (const theme of UPGRADE_THEMES) {
+    await page.goto('/?autostart=coop4&seed=11&test=1&lite=1')
+    await page.waitForFunction(() => window.__GAME__?.ready === true)
+    await page.evaluate((playerId) => {
+      window.__GAME__?.debugAddXp(1000, playerId)
+      window.__GAME__?.advanceTime(100)
+    }, theme.playerId)
+
+    await expect.poll(
+      () => page.evaluate(() => window.__GAME__?.getState().pendingLevelUp?.playerId)
+    ).toBe(theme.playerId)
+
+    const panel = page.locator('.panel--owned')
+    await expect(panel).toBeVisible()
+    await expect(panel).toHaveCSS('background-color', theme.panel)
+    await expect(panel).toHaveCSS('border-color', 'rgb(16, 16, 20)')
+    await expect(page.locator('.upgrade__who')).toHaveCSS('color', theme.accent)
+  }
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mergeFrames, buildPlayerInputs } from '@input/players'
+import { mergeFrames, buildPlayerInputs, hasAnyPlayerInput } from '@input/players'
 import type { FrameInput } from '@input/intents'
 
 const EMPTY: FrameInput = { move: { x: 0, y: 0 }, pressed: [], action: false }
@@ -113,6 +113,25 @@ describe('buildPlayerInputs', () => {
     ]
     const map = buildPlayerInputs(keyboard, pads, 2)
     expect(map.get(2)?.action).toBe(true)
+  })
+})
+
+describe('hasAnyPlayerInput', () => {
+  it.each([1, 2, 3, 4])('détecte une action venant uniquement de J%d', (playerId) => {
+    const frames = new Map<number, FrameInput>()
+    for (let id = 1; id <= 4; id++) {
+      frames.set(
+        id,
+        id === playerId
+          ? { move: { x: 0, y: 0 }, pressed: ['pause'], action: false }
+          : EMPTY
+      )
+    }
+    expect(hasAnyPlayerInput(frames)).toBe(true)
+  })
+
+  it('reste faux quand les quatre joueurs sont neutres', () => {
+    expect(hasAnyPlayerInput(new Map([1, 2, 3, 4].map((id) => [id, EMPTY])))).toBe(false)
   })
 })
 

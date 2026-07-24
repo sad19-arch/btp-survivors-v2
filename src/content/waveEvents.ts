@@ -9,7 +9,7 @@
  */
 
 import { Rng } from '@core/rng'
-import type { EnemyBehavior, WavePlacement } from '@core/types'
+import type { EnemyBehavior, EnemySpawnRole, WavePlacement } from '@core/types'
 import { FORMATION } from './config'
 import { ConstructionPhaseId } from '@content/phases'
 
@@ -52,6 +52,12 @@ export interface WaveEventDef {
    * Passer `FORMATION.sweepSpreadLoose` (0.55) pour une vague aérée.
    */
   spreadOverride?: number
+  /** Rôle choisi intentionnellement pour cette recette. */
+  role?: EnemySpawnRole
+  /** Motif cyclique pour les recettes mixtes (prioritaire sur `role`). */
+  rolePattern?: readonly EnemySpawnRole[]
+  /** Coût de menace par unité (nuée < 1, tank > 1). Défaut 1. */
+  threatCost?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -87,30 +93,52 @@ export function placeEvent(
   ringRadius: number,
   rng: Rng,
   behaviorOverride?: EnemyBehavior,
-  spreadOverride?: number
+  spreadOverride?: number,
+  role?: EnemySpawnRole,
+  rolePattern?: readonly EnemySpawnRole[]
 ): WavePlacement[] {
+  let placements: WavePlacement[]
   switch (kind) {
     case 'converge':
-      return placeConverge(count, ringRadius, rng, behaviorOverride)
+      placements = placeConverge(count, ringRadius, rng, behaviorOverride)
+      break
     case 'pincer':
-      return placePincer(count, ringRadius, rng, behaviorOverride)
+      placements = placePincer(count, ringRadius, rng, behaviorOverride)
+      break
     case 'encircle':
-      return placeEncircle(count, ringRadius, rng, behaviorOverride)
+      placements = placeEncircle(count, ringRadius, rng, behaviorOverride)
+      break
     case 'burst':
-      return placeBurst(count, ringRadius, rng, behaviorOverride)
+      placements = placeBurst(count, ringRadius, rng, behaviorOverride)
+      break
     case 'sweep':
-      return placeSweep(count, ringRadius, rng, behaviorOverride, spreadOverride)
+      placements = placeSweep(count, ringRadius, rng, behaviorOverride, spreadOverride)
+      break
     case 'spiral':
-      return placeSpiral(count, ringRadius, rng, behaviorOverride)
+      placements = placeSpiral(count, ringRadius, rng, behaviorOverride)
+      break
     case 'columns':
-      return placeColumns(count, ringRadius, rng, behaviorOverride)
+      placements = placeColumns(count, ringRadius, rng, behaviorOverride)
+      break
     case 'concentric':
-      return placeConcentric(count, ringRadius, rng, behaviorOverride)
+      placements = placeConcentric(count, ringRadius, rng, behaviorOverride)
+      break
     case 'miniBoss':
       // Formation vide : le directeur (T10) gère le spawn du mini-boss directement,
       // sans passer par une liste de placements classique.
       return []
   }
+  for (let i = 0; i < placements.length; i++) {
+    const placement = placements[i]
+    const patternRole = rolePattern === undefined || rolePattern.length === 0
+      ? undefined
+      : rolePattern[i % rolePattern.length]
+    const chosenRole = patternRole ?? role
+    if (placement !== undefined && chosenRole !== undefined) {
+      placement.role = chosenRole
+    }
+  }
+  return placements
 }
 
 // ---------------------------------------------------------------------------
@@ -460,25 +488,35 @@ export const EVENT_POOL_DEFAULT: readonly WaveEventDef[] = [
  *   - Phases intermédiaires (4-7) : montée progressive des formations complexes.
  *   - Phases tardives (8-10) : encircle + sweep prédominants, seuils abaissés.
  *
- * CONTRAINTE D'ÉQUILIBRAGE (critique) :
- *   `TERRAIN_VIERGE` n'est PAS dans ce map → repli sur `EVENT_POOL_DEFAULT` garanti.
- *   `npm run sim:check` ne mesure que `terrain_vierge` → baseline conservée exacte.
+ * Le terrain vierge est volontairement plus précis : ses recettes imposent un
+ * rôle et un coût de menace afin d'orchestrer l'entrée des cinq silhouettes.
  *
  * Note : `miniBoss` est INERTE dans le pool (filtré par `triggerEvent`) — les
  * reapers de mi-parcours viennent du mécanisme `MID_BOSS_WAVES` dans simulation.ts.
  * On le conserve par cohérence de forme, avec un poids décoratif.
  */
 export const EVENT_POOL_BY_PHASE: Partial<Record<ConstructionPhaseId, readonly WaveEventDef[]>> = {
-  // terrain_vierge intentionnellement ABSENT → repli EVENT_POOL_DEFAULT
-  // (garde-fou sim:check diff 0)
+  [ConstructionPhaseId.TERRAIN_VIERGE]: [
+    { kind: 'converge', weight: 6, countMin: 3, countMax: 5, allowedFromSec: 0, role: 'base' },
+    { kind: 'burst', weight: 7, countMin: 12, countMax: 18, allowedFromSec: 20, role: 'swarm', threatCost: 0.25 },
+    { kind: 'pincer', weight: 5, countMin: 3, countMax: 5, allowedFromSec: 45, role: 'fast', behaviorOverride: 'zigzag', threatCost: 1.25 },
+    { kind: 'converge', weight: 3, countMin: 1, countMax: 2, allowedFromSec: 100, role: 'tank', threatCost: 4 },
+    { kind: 'pincer', weight: 3, countMin: 2, countMax: 3, allowedFromSec: 150, role: 'charger', behaviorOverride: 'charger', threatCost: 2.5 },
+    { kind: 'pincer', weight: 2, countMin: 6, countMax: 6, allowedFromSec: 210, rolePattern: ['tank', 'base', 'base'], threatCost: 2 },
+    { kind: 'concentric', weight: 2, countMin: 10, countMax: 14, allowedFromSec: 240, rolePattern: ['swarm', 'swarm', 'base', 'fast'], threatCost: 0.875 },
+    { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1, allowedFromSec: 300 }
+  ],
 
-  // Phase 2 — Terrassement : bulldozers et tranchées, afflux frontaux par groupes
+  // Phase 2 — Terrassement : coulées de boue, percées de foreurs dans les
+  // tranchées, puis masses rocheuses qui ferment progressivement les sorties.
   [ConstructionPhaseId.TERRASSEMENT]: [
-    { kind: 'converge', weight: 6, countMin: 4, countMax: 7, allowedFromSec: 0 },
-    { kind: 'pincer',   weight: 5, countMin: 4, countMax: 8, allowedFromSec: 0 },
-    { kind: 'burst',    weight: 3, countMin: 6, countMax: 10, allowedFromSec: 0 },
-    { kind: 'encircle', weight: 2, countMin: 8, countMax: 12, allowedFromSec: 120 },
-    { kind: 'sweep',    weight: 2, countMin: 4, countMax: 7,  allowedFromSec: 180 },
+    { kind: 'converge', weight: 7, countMin: 4, countMax: 7, allowedFromSec: 0, role: 'base' },
+    { kind: 'columns', weight: 6, countMin: 4, countMax: 6, allowedFromSec: 30, role: 'fast', behaviorOverride: 'zigzag', threatCost: 1.25 },
+    { kind: 'converge', weight: 3, countMin: 1, countMax: 2, allowedFromSec: 75, role: 'tank', threatCost: 4 },
+    { kind: 'columns', weight: 4, countMin: 6, countMax: 9, allowedFromSec: 120, rolePattern: ['tank', 'base', 'base'], threatCost: 2 },
+    { kind: 'pincer', weight: 4, countMin: 4, countMax: 6, allowedFromSec: 160, role: 'fast', behaviorOverride: 'zigzag', threatCost: 1.25 },
+    { kind: 'sweep', weight: 3, countMin: 6, countMax: 9, allowedFromSec: 210, rolePattern: ['tank', 'base', 'fast'], threatCost: 2.1, spreadOverride: 0.55 },
+    { kind: 'concentric', weight: 2, countMin: 8, countMax: 12, allowedFromSec: 250, rolePattern: ['base', 'fast', 'base', 'tank'], threatCost: 1.8 },
     { kind: 'miniBoss', weight: 1, countMin: 1, countMax: 1,  allowedFromSec: 300 }
   ],
 
@@ -587,8 +625,7 @@ export const EVENT_POOL_BY_PHASE: Partial<Record<ConstructionPhaseId, readonly W
 /**
  * Renvoie le pool d'événements correspondant à une phase de chantier.
  *
- * Repli sur `EVENT_POOL_DEFAULT` si la phase n'a pas de pool dédié
- * (`terrain_vierge` intentionnellement absent → baseline sim:check préservée).
+ * Repli sur `EVENT_POOL_DEFAULT` si la phase n'a pas de pool dédié.
  */
 export function eventPoolForPhase(phaseId: ConstructionPhaseId): readonly WaveEventDef[] {
   return EVENT_POOL_BY_PHASE[phaseId] ?? EVENT_POOL_DEFAULT

@@ -24,7 +24,7 @@ import { worldBoundsSystem } from './systems/bounds'
 import { enemyAiSystem } from './systems/enemyAi'
 import { bossSystem } from './systems/bossSystem'
 import { slowSystem } from './systems/slow'
-import { spawnBoss, spawnGroup, spawnSummons, spawnWave } from './systems/spawn'
+import { spawnBoss, spawnGroup, spawnOpeningWave, spawnSummons, spawnWave } from './systems/spawn'
 import { createWaveDirectorState, stepWaveDirector, type WaveDirectorState } from './systems/waveDirector'
 import { weaponSystem } from './systems/weapon'
 import { collisionSystem } from './systems/collision'
@@ -51,6 +51,7 @@ import { buildSiteLayout, type Obstacle, type SurfaceSlowZone, type PrisonerSpaw
 import { surfaceSlowMultiplierAt } from './systems/surfaceSlow'
 import { buildFlowField, CELL_FLOW, HALF_FLOW, type FlowField } from './systems/flowField'
 import { bossLevelHpMult, CHEST, coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RAGE, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
+import { runPacingAt } from '@content/runPacing'
 import { SPAWN_RAMP, difficultyScaleAt } from '@content/spawnRamp'
 import { eventPoolForPhase } from '@content/waveEvents'
 import { ConstructionPhaseId, PHASES } from '@content/phases'
@@ -190,8 +191,8 @@ export class Simulation {
   /** Vrai une fois le boss FINAL (rôle `final`) RÉELLEMENT apparu (garde-fou anti faux-positif de victoire). */
   private finalBossSpawned = false
   private choiceQueue: PendingLevelUp[] = []
-  /** PV totaux des joueurs au pas précédent → détecte les dégâts (SFX, observation pure). */
-  private prevHpTotal = 0
+  /** PV par joueur au pas précédent → feedback de dégâts routé vers sa propre manette. */
+  private prevHpByPlayer = new Map<number, number>()
   /** Nombre de prisonniers libérés depuis le début de la run (progression des sauvetages). */
   private rescuedTotal = 0
   /**
@@ -392,6 +393,7 @@ export class Simulation {
       seed: this.currentSeed,
       stageId: this.phaseId,
       elapsedMs: this.elapsedMs,
+      runBeat: runPacingAt(this.elapsedMs, this.hasLivingBoss(), this.phaseId).beat,
       wave: 0,
       score: this.score,
       bossKills: this.bossKills,
@@ -669,6 +671,14 @@ export class Simulation {
     this.lastFlowCol = -1
     this.lastFlowRow = -1
     this.spawnPlayers()
+    spawnOpeningWave(
+      this.world,
+      this._waveRng,
+      this.phase,
+      this.playersCentroid(),
+      SPAWN.openingCountPerPlayer * this.playerCount(),
+      { ...difficultyScaleAt(0), hp: difficultyScaleAt(0).hp * coopHpFactor(this.playerCount()) }
+    )
     // Compo éditeur = vérité totale : si le layout DÉFINIT les prisonniers (même
     // liste vide), on les pose tels quels et on COUPE le placement procédural.
     // Sinon (pas de compo), fallback au scatter procédural historique (RNG dédié).
@@ -680,16 +690,16 @@ export class Simulation {
       this.prisonerTotal = RESCUE.count
     }
     this.spawnDestructibles(site.destructibles ?? [])
-    this.prevHpTotal = this.totalPlayerHp()
+    this.prevHpByPlayer = this.playerHpSnapshot()
   }
 
-  /** Somme des PV de tous les joueurs (pour détecter une perte de PV entre deux pas). */
-  private totalPlayerHp(): number {
-    let total = 0
-    for (const e of this.playerEntities.values()) {
-      total += this.world.get(e, 'health')?.hp ?? 0
+  /** Snapshot playerId → PV, indépendant de l'ordre des entités. */
+  private playerHpSnapshot(): Map<number, number> {
+    const hpByPlayer = new Map<number, number>()
+    for (const [playerId, entity] of this.playerEntities) {
+      hpByPlayer.set(playerId, this.world.get(entity, 'health')?.hp ?? 0)
     }
-    return total
+    return hpByPlayer
   }
 
   /** Place les `RESCUE.count` prisonniers, éparpillés loin dans des secteurs distincts. */
@@ -909,13 +919,22 @@ export class Simulation {
       this.checkLevelUp()
     }
     // --- Événements sémantiques pour l'audio (observation pure, aucun effet sim) ---
-    const hpNow = this.totalPlayerHp()
-    if (hpNow < this.prevHpTotal - 0.001) {
-      this.events.dispatchEvent(new PlayerHurtEvent())
+    const hpNow = this.playerHpSnapshot()
+    const hurtPlayerIds: number[] = []
+    for (const [playerId, hp] of hpNow) {
+      if (hp < (this.prevHpByPlayer.get(playerId) ?? hp) - 0.001) {
+        hurtPlayerIds.push(playerId)
+      }
     }
-    this.prevHpTotal = hpNow
+    if (hurtPlayerIds.length > 0) {
+      this.events.dispatchEvent(new PlayerHurtEvent(hurtPlayerIds))
+    }
+    this.prevHpByPlayer = hpNow
     if (reap.total > 0) {
-      this.events.dispatchEvent(new EnemyKilledEvent(reap.total))
+      const byPlayer = [...reap.killsByPlayer]
+        .map(([playerId, count]) => ({ playerId, count }))
+        .sort((a, b) => a.playerId - b.playerId)
+      this.events.dispatchEvent(new EnemyKilledEvent(reap.total, byPlayer))
     }
     for (const k of fired) {
       this.events.dispatchEvent(new WeaponFiredEvent(k))
@@ -1116,6 +1135,8 @@ export class Simulation {
     // inchangés. Solo (n=1) : `coopHpFactor(1)=1` → `scale.hp` identique à avant.
     const coopScale = { ...scale, hp: scale.hp * coopHpFactor(this.playerCount()) }
     const center = this.playersCentroid()
+    const bossActive = this.hasLivingBoss()
+    const pacing = runPacingAt(this.elapsedMs, bossActive, this.phaseId)
     const placements = stepWaveDirector(this.waveDir, {
       dtMs,
       elapsedMs: this.elapsedMs,
@@ -1123,7 +1144,8 @@ export class Simulation {
       ramp: SPAWN_RAMP,
       events: eventPoolForPhase(this.phaseId),
       ringRadius: SPAWN.ringRadius,
-      rng: this._waveRng
+      rng: this._waveRng,
+      spawnRateMultiplier: pacing.spawnRate
     })
     // Clamp au budget restant : une vague dense (jusqu'à 17) ne doit PAS pousser
     // le total au-delà de `maxActive` (l'invariant sanity du harness le vérifie).
@@ -1132,6 +1154,17 @@ export class Simulation {
       const clamped = placements.length > budget ? placements.slice(0, budget) : placements
       spawnGroup(this.world, this._waveRng, this.phase, center, clamped, coopScale)
     }
+  }
+
+  private hasLivingBoss(): boolean {
+    for (const e of this.world.query('enemy', 'health')) {
+      const enemy = this.world.get(e, 'enemy')
+      const health = this.world.get(e, 'health')
+      if (enemy?.isBoss === true && health !== undefined && health.hp > 0) {
+        return true
+      }
+    }
+    return false
   }
 
   /**
@@ -1259,6 +1292,9 @@ export class Simulation {
         ...(enemy.bossRole !== undefined ? { bossRole: enemy.bossRole } : {}),
         ...(enemy.behavior === 'boss' && (enemy.bMode === 1 || enemy.bMode === 2)
           ? { bossCharge: enemy.bMode === 1 ? ('telegraph' as const) : ('charge' as const) }
+          : {}),
+        ...(enemy.behavior === 'charger' && (enemy.bMode === 1 || enemy.bMode === 2)
+          ? { chargePhase: enemy.bMode === 1 ? ('telegraph' as const) : ('charge' as const) }
           : {})
       })
     }

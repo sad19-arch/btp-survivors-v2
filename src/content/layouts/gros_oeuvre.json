@@ -1,0 +1,2661 @@
+{
+  "schemaVersion": 1,
+  "stage": "gros_oeuvre",
+  "worldSize": {
+    "width": 10240,
+    "height": 7680
+  },
+  "spawn": {
+    "x": 0,
+    "y": 0
+  },
+  "cameraPreview": {
+    "width": 1280,
+    "height": 720
+  },
+  "instances": [
+    {
+      "id": "instance_mrkulpx4_22",
+      "prefab": "obj_building_apartment",
+      "x": -1815.6248879944878,
+      "y": -3542.6875495021236,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_apartment",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkulpx4_23",
+      "prefab": "obj_building_lyon_gare_saint_exupery",
+      "x": -1583.1248854799169,
+      "y": -3532.562549991068,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_gare_saint_exupery",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkulpx4_24",
+      "prefab": "obj_building_lyon_traboule_avocats",
+      "x": -1302.374877237712,
+      "y": -3538.4375504800128,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_avocats",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkulpx4_25",
+      "prefab": "obj_building_warehouse",
+      "x": -1083.9998719990226,
+      "y": -3523.5625494322744,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_warehouse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkulpx4_26",
+      "prefab": "obj_building_shops",
+      "x": -880.124868157317,
+      "y": -3535.3125504101636,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkulpx4_27",
+      "prefab": "obj_building_tower",
+      "x": -735.49986277893,
+      "y": -3572.812551248354,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_tower",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkumicg_28",
+      "prefab": "obj_building_lyon_vieux_lyon",
+      "x": -584.9998613819462,
+      "y": -3567.6875500609176,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_vieux_lyon",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkumtiy_29",
+      "prefab": "obj_building_rowhouses",
+      "x": -394.8748551653671,
+      "y": -3533.937550200616,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_rowhouses",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkun3h2_30",
+      "prefab": "obj_building_shops",
+      "x": -235.6248499965268,
+      "y": -3528.312550968957,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkunh5c_31",
+      "prefab": "obj_building_lyon_tchecoslovaques_76",
+      "x": 30.500153984877215,
+      "y": -3542.9375507594095,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tchecoslovaques_76",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkunplr_32",
+      "prefab": "obj_building_lyon_tower_incity",
+      "x": 287.1251593632651,
+      "y": -3636.1875503403144,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_incity",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuo173_33",
+      "prefab": "obj_building_office",
+      "x": 406.50016292557393,
+      "y": -3556.1875503403144,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_office",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuo9kv_34",
+      "prefab": "obj_building_parking",
+      "x": 541.2501655798433,
+      "y": -3557.937550200616,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_parking",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuojp2_35",
+      "prefab": "obj_building_lyon_traboule_tour_rose",
+      "x": 721.5001690723029,
+      "y": -3583.3125504101636,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_tour_rose",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuotaj_36",
+      "prefab": "obj_building_lyon_traboule_longue",
+      "x": 876.000172704461,
+      "y": -3576.312550968957,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_longue",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkup0vl_37",
+      "prefab": "obj_building_lyon_traboule_galleries",
+      "x": 1065.250176755715,
+      "y": -3585.6875511785047,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_galleries",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkup7tu_38",
+      "prefab": "obj_building_lyon_traboule_escalier",
+      "x": 1230.8751804577223,
+      "y": -3584.312550968957,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_escalier",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkupf1n_39",
+      "prefab": "obj_building_lyon_traboule_cour_voraces",
+      "x": 1407.2501845788247,
+      "y": -3587.4375510388063,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_cour_voraces",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkupoen_40",
+      "prefab": "obj_building_lyon_tower_silex2",
+      "x": 1534.6251881411335,
+      "y": -3593.062550270465,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_silex2",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuq36l_41",
+      "prefab": "obj_building_lyon_tower_edf",
+      "x": 1634.3751891190223,
+      "y": -3580.1875503403144,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_edf",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuq9a0_42",
+      "prefab": "obj_building_lyon_tower_part_dieu",
+      "x": 1741.0001911446489,
+      "y": -3636.1875503403144,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_part_dieu",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuqoue_43",
+      "prefab": "obj_building_lyon_tower_oxygene",
+      "x": 1830.5001942180133,
+      "y": -3604.1875503403144,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_oxygene",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkusuet_44",
+      "prefab": "obj_building_lyon_fourviere",
+      "x": 1957.0800522984173,
+      "y": -3588.4328635317,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_fourviere",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkusz63_45",
+      "prefab": "obj_building_lyon_opera",
+      "x": -2019.586717945625,
+      "y": -3543.1122731351024,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_opera",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkutb1m_46",
+      "prefab": "obj_building_lyon_mural_canuts",
+      "x": -2260.802179114154,
+      "y": -3546.447199335528,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_mural_canuts",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkutgma_47",
+      "prefab": "obj_building_lyon_tower_edf",
+      "x": -2440.7352786962924,
+      "y": -3535.1122731351024,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_edf",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkutm13_48",
+      "prefab": "obj_building_lyon_tower_swiss_life",
+      "x": -2554.7018284873616,
+      "y": -3538.447199335528,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_swiss_life",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuu2a6_49",
+      "prefab": "obj_building_lyon_block_quais",
+      "x": 2171.644297092309,
+      "y": -3567.7677897321255,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_block_quais",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuu9qb_50",
+      "prefab": "obj_building_lyon_block_vieux_lyon",
+      "x": 2481.5439464655155,
+      "y": -3589.76301113085,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_block_vieux_lyon",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuuj6g_51",
+      "prefab": "obj_building_factory",
+      "x": 2762.7594076340465,
+      "y": -3563.102715932551,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_factory",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuuwbo_52",
+      "prefab": "obj_building_apartment",
+      "x": 2958.036990619161,
+      "y": -3591.0931587299992,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_apartment",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuv362_53",
+      "prefab": "obj_building_lyon_hotel_dieu",
+      "x": 3153.295459199173,
+      "y": -3585.097937331275,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_hotel_dieu",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuv8oi_54",
+      "prefab": "obj_building_lyon_tower_duchere",
+      "x": 3311.25245178769,
+      "y": -3583.7677897321255,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_duchere",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuvd6p_55",
+      "prefab": "obj_building_lyon_traboule_avocats",
+      "x": 3487.1951085723795,
+      "y": -3583.0931587299992,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_avocats",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuvrjw_56",
+      "prefab": "obj_building_lyon_traboule_escalier",
+      "x": -2674.816568491981,
+      "y": -3559.1122731351024,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_escalier",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuvxba_57",
+      "prefab": "obj_building_shops",
+      "x": -2827.4147418736934,
+      "y": -3527.1122731351024,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuw2vb_58",
+      "prefab": "obj_building_parking",
+      "x": -3025.3526200571073,
+      "y": -3548.4328635317,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_parking",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuw5ag_59",
+      "prefab": "obj_building_office",
+      "x": -3179.3000554430732,
+      "y": -3558.437642132976,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_office",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwa3x_60",
+      "prefab": "obj_building_warehouse",
+      "x": -3367.2331550252115,
+      "y": -3549.107494533827,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_warehouse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_94",
+      "prefab": "obj_building_apartment",
+      "x": -1758.3138548004417,
+      "y": 3657.9137938016343,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_apartment",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_95",
+      "prefab": "obj_building_lyon_gare_saint_exupery",
+      "x": -1525.8138522858708,
+      "y": 3668.03879331269,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_gare_saint_exupery",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_96",
+      "prefab": "obj_building_lyon_traboule_avocats",
+      "x": -1245.063844043666,
+      "y": 3662.163792823745,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_avocats",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_97",
+      "prefab": "obj_building_warehouse",
+      "x": -1026.6888388049765,
+      "y": 3677.0387938714834,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_warehouse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_98",
+      "prefab": "obj_building_shops",
+      "x": -822.8138349632709,
+      "y": 3665.2887928935943,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_99",
+      "prefab": "obj_building_tower",
+      "x": -678.1888295848839,
+      "y": 3627.788792055404,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_tower",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_100",
+      "prefab": "obj_building_lyon_vieux_lyon",
+      "x": -527.6888281879001,
+      "y": 3632.9137932428403,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_vieux_lyon",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_101",
+      "prefab": "obj_building_rowhouses",
+      "x": -337.563821971321,
+      "y": 3666.663793103142,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_rowhouses",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_102",
+      "prefab": "obj_building_shops",
+      "x": -178.3138168024807,
+      "y": 3672.2887923348007,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_103",
+      "prefab": "obj_building_lyon_tchecoslovaques_76",
+      "x": 87.81118717892332,
+      "y": 3657.6637925443483,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tchecoslovaques_76",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_104",
+      "prefab": "obj_building_lyon_tower_incity",
+      "x": 344.4361925573112,
+      "y": 3564.4137929634435,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_incity",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_105",
+      "prefab": "obj_building_office",
+      "x": 463.81119611962004,
+      "y": 3644.4137929634435,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_office",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_106",
+      "prefab": "obj_building_parking",
+      "x": 598.5611987738894,
+      "y": 3642.663793103142,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_parking",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_107",
+      "prefab": "obj_building_lyon_traboule_tour_rose",
+      "x": 778.811202266349,
+      "y": 3617.2887928935943,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_tour_rose",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_108",
+      "prefab": "obj_building_lyon_traboule_longue",
+      "x": 933.3112058985071,
+      "y": 3624.2887923348007,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_longue",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_109",
+      "prefab": "obj_building_lyon_traboule_galleries",
+      "x": 1122.5612099497612,
+      "y": 3614.913792125253,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_galleries",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_110",
+      "prefab": "obj_building_lyon_traboule_escalier",
+      "x": 1288.1862136517684,
+      "y": 3616.2887923348007,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_escalier",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_111",
+      "prefab": "obj_building_lyon_traboule_cour_voraces",
+      "x": 1464.5612177728708,
+      "y": 3613.1637922649516,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_cour_voraces",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_112",
+      "prefab": "obj_building_lyon_tower_silex2",
+      "x": 1591.9362213351797,
+      "y": 3607.5387930332927,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_silex2",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_113",
+      "prefab": "obj_building_lyon_tower_edf",
+      "x": 1691.6862223130684,
+      "y": 3620.4137929634435,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_edf",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_114",
+      "prefab": "obj_building_lyon_tower_part_dieu",
+      "x": 1798.311224338695,
+      "y": 3564.4137929634435,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_part_dieu",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_115",
+      "prefab": "obj_building_lyon_tower_oxygene",
+      "x": 1887.8112274120595,
+      "y": 3596.4137929634435,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_oxygene",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_116",
+      "prefab": "obj_building_lyon_fourviere",
+      "x": 2014.3910854924634,
+      "y": 3612.1684797720577,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_fourviere",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_117",
+      "prefab": "obj_building_lyon_opera",
+      "x": -1962.2756847515789,
+      "y": 3657.4890701686554,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_opera",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_118",
+      "prefab": "obj_building_lyon_mural_canuts",
+      "x": -2203.491145920108,
+      "y": 3654.15414396823,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_mural_canuts",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_119",
+      "prefab": "obj_building_lyon_tower_edf",
+      "x": -2383.4242455022463,
+      "y": 3665.4890701686554,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_edf",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_120",
+      "prefab": "obj_building_lyon_tower_swiss_life",
+      "x": -2497.3907952933155,
+      "y": 3662.15414396823,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_swiss_life",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_121",
+      "prefab": "obj_building_lyon_block_quais",
+      "x": 2228.955330286355,
+      "y": 3632.8335535716324,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_block_quais",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_122",
+      "prefab": "obj_building_lyon_traboule_escalier",
+      "x": -2617.505535297935,
+      "y": 3641.4890701686554,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_escalier",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_123",
+      "prefab": "obj_building_shops",
+      "x": -2770.1037086796473,
+      "y": 3673.4890701686554,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_124",
+      "prefab": "obj_building_parking",
+      "x": -2968.041586863061,
+      "y": 3652.1684797720577,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_parking",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_125",
+      "prefab": "obj_building_office",
+      "x": -3121.989022249027,
+      "y": 3642.1637011707817,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_office",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuwxzt_126",
+      "prefab": "obj_building_warehouse",
+      "x": -3309.9221218311654,
+      "y": 3651.493848769931,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_warehouse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuxxic_127",
+      "prefab": "obj_building_shops",
+      "x": 2470.1899058599884,
+      "y": 3639.7296047587643,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuyat7_128",
+      "prefab": "obj_building_warehouse",
+      "x": 2693.4579316425516,
+      "y": 3653.7248261574896,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_warehouse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuyf0v_129",
+      "prefab": "obj_building_lyon_traboule_longue",
+      "x": 2879.3862526234134,
+      "y": 3628.3946785583394,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_longue",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuymn4_130",
+      "prefab": "obj_building_lyon_tower_oxygene",
+      "x": 3019.993983207678,
+      "y": 3613.743940562592,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_oxygene",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuyslp_131",
+      "prefab": "obj_building_lyon_tower_fourviere_metal",
+      "x": 3121.970090201299,
+      "y": 3636.4137929634435,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_fourviere_metal",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuyxj8_132",
+      "prefab": "obj_building_lyon_traboule_avocats",
+      "x": 3265.276344794069,
+      "y": 3634.409014362167,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_traboule_avocats",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuz0yy_133",
+      "prefab": "obj_building_lyon_vieux_lyon",
+      "x": 3477.864960973231,
+      "y": 3646.399457159616,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_vieux_lyon",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuz3xh_134",
+      "prefab": "obj_building_parking",
+      "x": 3669.1329867557943,
+      "y": 3647.7487191638684,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_parking",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuzare_135",
+      "prefab": "obj_building_lyon_tower_swiss_life",
+      "x": 3833.7216029349547,
+      "y": 3635.739161961317,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_tower_swiss_life",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuzgg5_136",
+      "prefab": "obj_building_shops",
+      "x": 3965.673816922197,
+      "y": 3655.7296047587643,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_shops",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuzucl_138",
+      "prefab": "obj_building_lyon_block_croix_rousse",
+      "x": 4196.3054405128405,
+      "y": 3655.7296047587643,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_block_croix_rousse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkuzyxs_139",
+      "prefab": "obj_building_lyon_palais_bourse",
+      "x": 4466.860606483071,
+      "y": 3655.7296047587643,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_palais_bourse",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv00x4_140",
+      "prefab": "obj_building_lyon_opera",
+      "x": 4730.784148862658,
+      "y": 3625.7343833600407,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_opera",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrkv0cd4_141",
+      "prefab": "obj_building_lyon_mural_canuts",
+      "x": 4956.693355438418,
+      "y": 3623.074088161742,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "building_lyon_mural_canuts",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_001",
+      "prefab": "obj_landmark_stage05",
+      "x": -380,
+      "y": 20,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "landmark_stage05",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1.25,
+          "collide": "both",
+          "layer": "struct",
+          "shape": {
+            "kind": "circle",
+            "r": 50
+          }
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_003",
+      "prefab": "obj_prop_stage05_block_pallet",
+      "x": -40.00000635782908,
+      "y": 100,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage05_block_pallet",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none",
+          "layer": "prop"
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_004",
+      "prefab": "obj_decal_stage05_mortar",
+      "x": 170,
+      "y": 100,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_stage05_mortar",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none",
+          "layer": "decal"
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_005",
+      "prefab": "obj_prop_stage05_concrete_pole",
+      "x": 220,
+      "y": -70,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage05_concrete_pole",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none",
+          "layer": "prop"
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_008",
+      "prefab": "obj_prop_stage05_block_pallet",
+      "x": 450,
+      "y": 900,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage05_block_pallet",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none",
+          "layer": "prop"
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_009",
+      "prefab": "cluster_plant_gros_oeuvre",
+      "x": 1230.8751804577223,
+      "y": -250,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage05_mixer",
+          "dx": -55,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "layer": "struct",
+          "shape": {
+            "kind": "circle",
+            "r": 52
+          }
+        },
+        {
+          "assetKey": "struct_stage05_wall",
+          "dx": 55,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "layer": "struct",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_010",
+      "prefab": "obj_decal_stage05_rubble",
+      "x": -1150,
+      "y": 100,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_stage05_rubble",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1.5,
+          "collide": "none",
+          "layer": "decal"
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_011",
+      "prefab": "obj_pal_rubble_skip",
+      "x": -1250,
+      "y": 250,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "pal_rubble_skip",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "layer": "prop",
+          "shape": {
+            "kind": "circle",
+            "r": 48
+          }
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_012",
+      "prefab": "obj_decal_stage05_lifting_mark",
+      "x": 0,
+      "y": -850,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "decal_stage05_lifting_mark",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none",
+          "layer": "decal"
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_013",
+      "prefab": "otage",
+      "x": -1450,
+      "y": -950,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prisoner",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.62,
+          "collide": "none",
+          "prisoner": {}
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_014",
+      "prefab": "otage",
+      "x": 1450,
+      "y": -950,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prisoner",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.62,
+          "collide": "none",
+          "prisoner": {}
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_015",
+      "prefab": "otage",
+      "x": -1450,
+      "y": 950,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prisoner",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.62,
+          "collide": "none",
+          "prisoner": {}
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_016",
+      "prefab": "otage",
+      "x": 1450,
+      "y": 950,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prisoner",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.62,
+          "collide": "none",
+          "prisoner": {}
+        }
+      ]
+    },
+    {
+      "id": "gros_oeuvre_instance_017",
+      "prefab": "otage",
+      "x": 0,
+      "y": 1200,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prisoner",
+          "dx": 0,
+          "dy": 0,
+          "scale": 0.62,
+          "collide": "none",
+          "prisoner": {}
+        }
+      ]
+    },
+    {
+      "id": "instance_mryuwwjl_2",
+      "prefab": "obj_continuity_stage05_shell",
+      "x": 350.00008411705676,
+      "y": 143.75007950700956,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "continuity_stage05_shell",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "layer": "struct",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrywww12_1",
+      "prefab": "obj_prop_stage05_crane_hook_work",
+      "x": -259.9999976158142,
+      "y": 50.000001986821644,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage05_crane_hook_work",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none",
+          "layer": "prop"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrywyh3i_2",
+      "prefab": "obj_struct_stage05_crane_work",
+      "x": -437.4999334849399,
+      "y": -190.6249279668541,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage05_crane_work",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "layer": "struct",
+          "shape": {
+            "kind": "circle",
+            "r": 60
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrz2mu4s_1",
+      "prefab": "obj_struct_stage05_wall",
+      "x": -337.563821971321,
+      "y": -98.33346929814525,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage05_wall",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "layer": "struct",
+          "shape": {
+            "kind": "circle",
+            "r": 40
+          }
+        }
+      ]
+    },
+    {
+      "id": "instance_mrz2oman_2",
+      "prefab": "obj_prop_stage05_concrete_pole",
+      "x": 99.99981800715886,
+      "y": 249.99985019366568,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "prop_stage05_concrete_pole",
+          "dx": 0,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none",
+          "layer": "prop"
+        }
+      ]
+    },
+    {
+      "id": "instance_mrz3d5r0_1",
+      "prefab": "cluster_plant_gros_oeuvre",
+      "x": -437.4999334849399,
+      "y": -174.99992761760814,
+      "flipX": false,
+      "variant": 0,
+      "rotation": 0,
+      "scale": 1,
+      "locked": false,
+      "elements": [
+        {
+          "assetKey": "struct_stage05_mixer",
+          "dx": -55,
+          "dy": 0,
+          "scale": 1,
+          "collide": "both",
+          "shape": {
+            "kind": "circle",
+            "r": 52
+          }
+        },
+        {
+          "assetKey": "struct_stage05_wall",
+          "dx": 55,
+          "dy": 0,
+          "scale": 1,
+          "collide": "none"
+        }
+      ]
+    }
+  ],
+  "markers": [
+    {
+      "id": "gros_oeuvre_zone_a",
+      "type": "signature_zone",
+      "x": -550,
+      "y": -380,
+      "w": 1100,
+      "h": 760
+    },
+    {
+      "id": "gros_oeuvre_zone_b",
+      "type": "zone_access",
+      "x": 0.00008635223093733657,
+      "y": 201.25008928589614,
+      "w": 900,
+      "h": 760
+    },
+    {
+      "id": "gros_oeuvre_zone_c",
+      "type": "zone_storage",
+      "x": -450,
+      "y": 500,
+      "w": 900,
+      "h": 700
+    },
+    {
+      "id": "gros_oeuvre_zone_d",
+      "type": "zone_secondary",
+      "x": 640,
+      "y": -600,
+      "w": 820,
+      "h": 700
+    },
+    {
+      "id": "gros_oeuvre_zone_e",
+      "type": "zone_atmosphere",
+      "x": -1550.6249997904529,
+      "y": -250.0000011175871,
+      "w": 820,
+      "h": 700
+    }
+  ],
+  "paths": [
+    {
+      "id": "gros_oeuvre_block_delivery",
+      "type": "truck_path",
+      "points": [
+        {
+          "x": -1600,
+          "y": 1050
+        },
+        {
+          "x": 0,
+          "y": 1050
+        },
+        {
+          "x": 450,
+          "y": 850
+        }
+      ],
+      "skin": "camion",
+      "count": 1,
+      "speed": 135,
+      "pauseMs": 1200
+    },
+    {
+      "id": "gros_oeuvre_block_carrier",
+      "type": "worker_path",
+      "points": [
+        {
+          "x": 0,
+          "y": 780
+        },
+        {
+          "x": 0,
+          "y": 300
+        },
+        {
+          "x": -260,
+          "y": -260
+        }
+      ],
+      "skin": "npc_stage05_porteur_blocs",
+      "count": 1,
+      "speed": 70,
+      "pauseMs": 900
+    }
+  ],
+  "npcs": [
+    {
+      "id": "gros_oeuvre_mason",
+      "skin": "npc_stage05",
+      "kind": "trade",
+      "x": -437.4999334849399,
+      "y": 143.75007950700956
+    },
+    {
+      "id": "gros_oeuvre_blocklayer",
+      "skin": "npc_stage05_parpaingueur",
+      "kind": "trade",
+      "x": -337.563821971321,
+      "y": 339.99999125798604
+    },
+    {
+      "id": "gros_oeuvre_trade_1",
+      "skin": "npc_stage05_grutier",
+      "kind": "trade",
+      "x": -900,
+      "y": -700
+    }
+  ],
+  "groundKey": "ground_stage05_0",
+  "keepSitePlan": false
+}

@@ -19,6 +19,20 @@ export interface SfxCue {
   throttleMs?: number
 }
 
+export type EnemyDeathCue = 'deathStage01Small' | 'deathStage01Fast' | 'deathStage01Brute' | 'enemyKilled'
+
+/** Mapping technique du stage 1 vers ses trois silhouettes sonores. */
+export function enemyDeathCue(enemyType: string): EnemyDeathCue {
+  switch (enemyType) {
+    case 'paperasse':
+    case 'motton': return 'deathStage01Small'
+    case 'inspecteur':
+    case 'enracineur': return 'deathStage01Fast'
+    case 'huissier': return 'deathStage01Brute'
+    default: return 'enemyKilled'
+  }
+}
+
 /** Clés de musique (une par contexte). */
 export const MUSIC = {
   title: 'music_title',
@@ -104,16 +118,12 @@ export const WEAPON_SFX_IDS: readonly string[] = [
   // Régénérées après avoir été livrées mortes (cf. `WEAPON_SFX_FILES_REJETES`).
   'goudron', 'coulee_bitume',
   // Visée manuelle (bonbonne de gaz), inspirée de l'otage enragé (ElevenLabs).
-  'bonbonne_chantier', 'detonation_chaine',
-  // Évolutions des 3 armes MVP historiques (scie/marteau/pied-de-biche).
-  'tronconneuse_chantier', 'brise_roche', 'barre_a_mine'
+  'bonbonne_chantier', 'detonation_chaine'
 ]
 
 /**
- * Armes dont le FICHIER généré est INEXPLOITABLE — volontairement absentes de
+ * Armes dont le fichier est absent ou INEXPLOITABLE — volontairement absentes de
  * `WEAPON_SFX_IDS` pour que `playWeaponSfx` retombe sur le zzfx taillé main.
- *
- * VIDE aujourd'hui : le mécanisme reste, la quarantaine est levée.
  *
  * Historique, parce que c'est le mode de panne à ne pas refaire — `goudron` et
  * `coulee_bitume` ont été livrés MORTS par b67ec6c/1480078, mesurés à −50.3 et
@@ -128,7 +138,11 @@ export const WEAPON_SFX_IDS: readonly string[] = [
  * 200 vérifié » — un fichier qui se télécharge, pas un fichier qui s'entend.
  * `npm run audio:qa` mesure désormais le niveau et casse sur ce cas.
  */
-export const WEAPON_SFX_FILES_REJETES: readonly string[] = []
+export const WEAPON_SFX_FILES_REJETES: readonly string[] = [
+  'tronconneuse_chantier',
+  'brise_roche',
+  'barre_a_mine'
+]
 
 /** Gain nominal d'un SFX d'arme en FICHIER, avant trim et avant le gain SFX utilisateur. */
 export const WEAPON_FILE_VOLUME = 0.5
@@ -222,6 +236,11 @@ export const SFX_FILES: ReadonlyArray<readonly [string, string]> = [
   ['sfx_chest_kling', 'audio/sfx/chest_kling.mp3'],
   // Stinger d'anticipation (ElevenLabs) : klaxon/sirène de chantier — RÉSERVÉ au boss final.
   ['sfx_wave_incoming', 'audio/sfx/wave_incoming.mp3'],
+  ...(['small', 'fast', 'brute'] as const).flatMap((family) =>
+    [1, 2, 3].map((variant) =>
+      [`sfx_death_stage01_${family}_${variant}`, `audio/sfx/deaths/stage01/death_${family}_${variant}.wav`] as const
+    )
+  ),
   // Mode Carnage (ElevenLabs) : 5 bruits de chair broyée, tirés au sort à la mort.
   // Volontairement courts (~0.7-0.8 s, ~7 Ko pièce) : ils jouent en rafale.
   ...CARNAGE_GORE_IDS.map((n) => [`sfx_gore_${n}`, `audio/sfx/carnage/gore_${n}.mp3`] as const),
@@ -277,6 +296,9 @@ export const VOICE_FILES: ReadonlyArray<readonly [string, string]> = [
  */
 export const SFX: Readonly<Record<string, SfxCue>> = {
   enemyKilled: { keys: ['sfx_explosion_1', 'sfx_explosion_2', 'sfx_explosion_3', 'sfx_explosion_4', 'sfx_soft_destruction'], volume: 0.42, rateJitter: 0.12, throttleMs: 45 },
+  deathStage01Small: { keys: [1, 2, 3].map((n) => `sfx_death_stage01_small_${n}`), volume: 0.38, rateJitter: 0.04, throttleMs: 70 },
+  deathStage01Fast: { keys: [1, 2, 3].map((n) => `sfx_death_stage01_fast_${n}`), volume: 0.43, rateJitter: 0.04, throttleMs: 90 },
+  deathStage01Brute: { keys: [1, 2, 3].map((n) => `sfx_death_stage01_brute_${n}`), volume: 0.56, rateJitter: 0.025, throttleMs: 180 },
   playerHurt: { keys: ['sfx_hurt_1', 'sfx_hurt_2', 'sfx_hurt_3', 'sfx_hurt_4'], volume: 0.6, rateJitter: 0.1, throttleMs: 120 },
   levelUp: { keys: ['sfx_level_up'], volume: 0.9 },
   weapon_cloueur: { keys: ['sfx_fire_1'], volume: 0.26, rateJitter: 0.16, throttleMs: 70 },

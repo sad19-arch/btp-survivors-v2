@@ -40,6 +40,13 @@ describe('routeInput', () => {
     expect(app.getState().screen).toBe('paused')
   })
 
+  it('« minimap » bascule la mini-carte via le routeur', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: true })
+    const before = app.getState().minimapVisible
+    routeInput(app, new Map([[1, { move: { x: 0, y: 0 }, pressed: ['minimap'], action: false }]]))
+    expect(app.getState().minimapVisible).toBe(!before)
+  })
+
   it('déplace chaque joueur indépendamment en coop', () => {
     const app = new App({ seed: 1, mode: 'coop', autostart: true })
     const perPlayer = new Map<number, FrameInput>([
@@ -71,6 +78,87 @@ describe('routeInput', () => {
     ])
     routeInput(app, perPlayer)
     expect(app.getState().menu?.index).toBe(1)
+  })
+
+  it.each([1, 2, 3, 4])(
+    'réserve le curseur de level-up à son propriétaire J%d',
+    (ownerId) => {
+      const app = new App({ seed: 11, mode: 'coop4', autostart: true })
+      app.debugAddXp(1000, ownerId)
+      app.advanceTime(100)
+      expect(app.getState().pendingLevelUp?.playerId).toBe(ownerId)
+      expect(app.getState().menu?.index).toBe(0)
+
+      for (let playerId = 1; playerId <= 4; playerId++) {
+        if (playerId === ownerId) {
+          continue
+        }
+        routeInput(
+          app,
+          new Map([
+            [playerId, { move: { x: 0, y: 0 }, pressed: ['right'], action: false }],
+          ])
+        )
+        expect(app.getState().menu?.index).toBe(0)
+      }
+
+      routeInput(
+        app,
+        new Map([
+          [ownerId, { move: { x: 0, y: 0 }, pressed: ['right'], action: false }],
+        ])
+      )
+      expect(app.getState().menu?.index).toBe(1)
+    }
+  )
+
+  it('isole les quatre curseurs et démarre après quatre confirmations', () => {
+    const app = new App({ seed: 11, mode: 'coop4', autostart: false })
+    const press = (playerId: number, action: FrameInput['pressed'][number]) => {
+      routeInput(
+        app,
+        new Map([
+          [playerId, { move: { x: 0, y: 0 }, pressed: [action], action: false }],
+        ])
+      )
+    }
+
+    press(1, 'confirm')
+    expect(app.getState().characterSelect?.players).toHaveLength(4)
+
+    for (let playerId = 1; playerId <= 4; playerId++) {
+      const before = app.getState().characterSelect?.players.map((player) => player.charId)
+      press(playerId, 'right')
+      const after = app.getState().characterSelect?.players.map((player) => player.charId)
+      expect(after?.[playerId - 1]).not.toBe(before?.[playerId - 1])
+      for (let otherId = 1; otherId <= 4; otherId++) {
+        if (otherId !== playerId) {
+          expect(after?.[otherId - 1]).toBe(before?.[otherId - 1])
+        }
+      }
+    }
+
+    for (const playerId of [2, 4, 1]) {
+      press(playerId, 'confirm')
+      expect(app.getState().screen).toBe('characterSelect')
+      expect(app.getState().characterSelect?.players[playerId - 1]?.ready).toBe(true)
+    }
+    press(3, 'confirm')
+    expect(app.getState().screen).toBe('game')
+    expect(app.getState().players).toHaveLength(4)
+  })
+
+  it('B déverrouille uniquement le joueur qui l’a pressé', () => {
+    const app = new App({ seed: 12, mode: 'coop4', autostart: false })
+    const frame = (playerId: number, pressed: FrameInput['pressed']) =>
+      routeInput(app, new Map([[playerId, { move: { x: 0, y: 0 }, pressed, action: false }]]))
+
+    frame(1, ['confirm'])
+    frame(2, ['confirm'])
+    expect(app.getState().characterSelect?.players[1]?.ready).toBe(true)
+    frame(2, ['back'])
+    expect(app.getState().characterSelect?.players[1]?.ready).toBe(false)
+    expect(app.getState().screen).toBe('characterSelect')
   })
 
   it('propage action tenue par joueur (pas d’agrégation, contrairement aux NavAction)', () => {

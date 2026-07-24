@@ -176,7 +176,7 @@ export class EditorState {
   get signature(): LayoutMarker | null {
     return this.zoneOf('signature_zone')
   }
-  /** Marqueur d'une macro-zone donnée (singleton par type), ou null. */
+  /** Marqueur d'une macro-zone canonique donnée (singleton par type), ou null. */
   zoneOf(type: MarkerType): LayoutMarker | null {
     return this.layout.markers.find((m) => m.type === type) ?? null
   }
@@ -330,7 +330,20 @@ export class EditorState {
 
   // ── instances ─────────────────────────────────────────────────────────────
   addInstance(prefab: string, x: number, y: number): LayoutInstance {
-    const inst: LayoutInstance = { id: newId('instance'), prefab, x, y, flipX: false, variant: 0, rotation: 0, scale: 1, locked: false }
+    const cluster = CLUSTERS[prefab]
+    const elements = cluster?.elements.map((element): EmbeddedElement => ({ ...element }))
+    const inst: LayoutInstance = {
+      id: newId('instance'),
+      prefab,
+      x,
+      y,
+      flipX: false,
+      variant: 0,
+      rotation: 0,
+      scale: 1,
+      locked: false,
+      ...(elements === undefined ? {} : { elements }),
+    }
     this.layout.instances.push(inst)
     this.selectOnly(inst.id)
     this.emit()
@@ -685,7 +698,7 @@ export class EditorState {
   exportGameJson(): string {
     const clone = JSON.parse(serializeLayout(this.layout)) as StageLayout
     for (const inst of clone.instances) {
-      if (CLUSTERS[inst.prefab] !== undefined) {
+      if (inst.elements !== undefined || CLUSTERS[inst.prefab] !== undefined) {
         continue
       }
       const entry = paletteEntry(inst.prefab)
@@ -780,7 +793,10 @@ export class EditorState {
    * embarqués (clôtures en segments, trous en cercles — préservés ; ENGINS/héros
    * non-collidables passés BLOQUANTS). Écrase la compo courante de ce stage.
    */
-  importGenerated(): void {
+  importGenerated(): { ok: boolean; error?: string } {
+    if (this.stage !== 'terrain_vierge') {
+      return { ok: false, error: 'Stage manuel : utiliser Charger un fichier.' }
+    }
     const gen = buildSiteLayout(1, WORLD_W, WORLD_H, this.stage)
     const offX = WORLD_W / 2
     const offY = WORLD_H / 2
@@ -875,6 +891,7 @@ export class EditorState {
     this.layout.npcs = npcs
     this.selectOnly(null)
     this.emit()
+    return { ok: true }
   }
   /** Snippet TS prêt à coller (composition → constante typée que je consomme). */
   exportCode(): string {
@@ -920,7 +937,7 @@ export class EditorState {
     const halfW = this.layout.worldSize.width / 2
     const halfH = this.layout.worldSize.height / 2
     if (this.layout.instances.length === 0) {w.push({ level: 'warn', message: 'Aucune instance placée.' })}
-    // Les 4 macro-zones obligatoires (outil de conception) : signale les manquantes.
+    // Les 5 macro-zones obligatoires (outil de conception) : signale les manquantes.
     for (const z of ZONE_DEFS) {
       if (this.zoneOf(z.type) === null) {w.push({ level: 'warn', message: `Zone manquante : ${z.label}.` })}
     }

@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const E2E_PORT = Number.parseInt(process.env.E2E_PORT ?? '3000', 10)
+const E2E_URL = `http://localhost:${E2E_PORT}`
+
 // Lance le serveur Vite et teste le vrai jeu (rendu + UX).
 export default defineConfig({
   testDir: './tests/e2e',
@@ -21,7 +24,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: E2E_URL,
     // Tests E2E toujours en headless (CI-friendly, rapide, reproductible).
     headless: true,
     trace: 'on-first-retry',
@@ -49,8 +52,8 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
+    command: `npm run dev -- --port ${E2E_PORT}`,
+    url: E2E_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 120000
   }

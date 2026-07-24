@@ -17,6 +17,18 @@ function layoutWith(extra: Record<string, unknown>): string {
   })
 }
 
+describe('parseLayout — compatibilité des prefabs historiques', () => {
+  it('normalise le stock de charpente historique vers le prefab du catalogue', () => {
+    const res = parseLayout(layoutWith({
+      stage: 'charpente_toiture',
+      instances: [{ prefab: 'scene_charpente_toiture_stock', x: -1100, y: 100 }],
+    }), 'charpente_toiture')
+
+    expect(res.ok).toBe(true)
+    expect(res.layout?.instances[0]?.prefab).toBe('cluster_storage_charpente')
+  })
+})
+
 describe('parseLayout — keepSitePlan PRÉSERVÉ', () => {
   it('une compo avec keepSitePlan:false survit à parseLayout', () => {
     const res = parseLayout(layoutWith({ keepSitePlan: false }), 'terrain_vierge')

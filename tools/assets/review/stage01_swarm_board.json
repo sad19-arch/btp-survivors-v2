@@ -1,0 +1,10 @@
+{
+  "out": "tools/assets/review/stage01_swarm_board.png",
+  "ground": "public/stage01/ground/tile_0.png",
+  "items": [
+    { "file": "tools/assets/review/stage01_swarm_concept_south.png", "label": "Nuée — 45 px", "h": 45 },
+    { "file": "tools/assets/review/stage01_swarm_concept_south.png", "label": "Nuée — 55 px", "h": 55 },
+    { "file": "public/stage01/enemies/mudling_walk.png", "label": "Mudling actuel", "h": 192 },
+    { "file": "public/stage01/enemies/imp_walk.png", "label": "Rapide actuel", "h": 192 }
+  ]
+}

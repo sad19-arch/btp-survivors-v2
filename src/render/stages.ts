@@ -323,7 +323,9 @@ const TERRAIN_VIERGE_RENDER: StageRender = {
   enemies: {
     huissier:   { key: 'brute',   file: 'stage01/enemies/brute_walk.png',   frame: 192, scale: 1.0 },
     inspecteur: { key: 'imp',     file: 'stage01/enemies/imp_walk.png',     frame: 192, scale: 0.9 },
-    paperasse:  { key: 'mudling', file: 'stage01/enemies/mudling_walk.png', frame: 192, scale: 1.25 }
+    paperasse:  { key: 'mudling', file: 'stage01/enemies/mudling_walk.png', frame: 192, scale: 1.25 },
+    motton:     { key: 'motton', file: 'stage01/enemies/motton_walk.png', frame: 192, scale: 0.64 },
+    enracineur: { key: 'enracineur', file: 'stage01/enemies/enracineur_walk.png', frame: 192, scale: 0.938 }
   },
   boss: GROUND_KEEPER,
   // Terrain vierge : panneau « PERMIS DE CONSTRUIRE » en bordure de parcelle.
@@ -776,7 +778,8 @@ const GROS_OEUVRE_RENDER: StageRender = {
   editorExtras: [
     { key: 'struct_stage05_crane_work', file: 'stage05/props/tower_crane_work.png', role: 'structure', frame: 224 },
     { key: 'struct_stage05_mixer_work', file: 'stage05/props/mobile_crane_work.png', role: 'structure', frame: 224 },
-    { key: 'prop_stage05_crane_hook_work', file: 'stage05/props/crane_hook_work.png', role: 'prop', frame: 96 }
+    { key: 'prop_stage05_crane_hook_work', file: 'stage05/props/crane_hook_work.png', role: 'prop', frame: 96 },
+    { key: 'continuity_stage05_shell', file: 'stage05/landmarks/walls.png', role: 'structure' }
   ],
   ambient: [
     { key: 'npc_stage05', file: 'stage05/npc/macon_work.png', frame: 180, scale: 0.78, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
@@ -877,7 +880,8 @@ const ECHAFAUDAGES_RENDER: StageRender = {
   // fichier ment ; un « boom lift » est une nacelle à bras articulé). La cible
   // « monte/descend » du geste, elle, est juste pour des ciseaux.
   editorExtras: [
-    { key: 'struct_stage06_nacelle_work', file: 'stage06/props/boom_lift_work.png', role: 'structure', frame: 176 }
+    { key: 'struct_stage06_nacelle_work', file: 'stage06/props/boom_lift_work.png', role: 'structure', frame: 176 },
+    { key: 'continuity_stage05_shell', file: 'stage05/landmarks/walls.png', role: 'structure' }
   ],
   ambient: [
     { key: 'npc_stage06', file: 'stage06/npc/echafaudeur_work.png', frame: 180, scale: 0.78, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
@@ -978,7 +982,8 @@ const CHARPENTE_TOITURE_RENDER: StageRender = {
   // sorties). NB : la statique `crane_truck.png` est une ÉLÉVATION DE CÔTÉ ;
   // cette feuille est en vraie 3/4, comme le reste des engins du jeu.
   editorExtras: [
-    { key: 'struct_stage07_crane_work', file: 'stage07/props/crane_truck_work.png', role: 'structure', frame: 224 }
+    { key: 'struct_stage07_crane_work', file: 'stage07/props/crane_truck_work.png', role: 'structure', frame: 224 },
+    { key: 'continuity_stage05_shell', file: 'stage05/landmarks/walls.png', role: 'structure' }
   ],
   ambient: [
     { key: 'npc_stage07', file: 'stage07/npc/couvreur_work.png', frame: 180, scale: 0.78, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
@@ -1071,6 +1076,9 @@ const SECOND_OEUVRE_RENDER: StageRender = {
     { key: 'struct_stage08_van',       file: 'stage08/structures/artisan_van.png',    scale: 1.1,  count: 1, band: 'near' },
     { key: 'struct_stage08_partition', file: 'stage08/structures/partition_room.png', scale: 0.85, count: 5, band: 'mid'  }
   ],
+  editorExtras: [
+    { key: 'continuity_stage05_shell', file: 'stage05/landmarks/walls.png', role: 'structure' }
+  ],
   ambient: [
     { key: 'npc_stage08',          file: 'stage08/npc/plaquiste_work.png',     frame: 256, scale: 0.78, framePeriodMs: 280, behavior: 'work', kind: 'trade' },
     { key: 'npc_stage08_plaquiste_trade', file: 'stage08/npc/plaquiste_trade.png', frame: 256, scale: 0.62, framePeriodMs: 110, behavior: 'work', kind: 'trade' },
@@ -1162,6 +1170,10 @@ const FINITIONS_RENDER: StageRender = {
   structures: [
     { key: 'struct_stage09_station', file: 'stage09/structures/paint_station.png', scale: 1.1,  count: 1, band: 'near' },
     { key: 'struct_stage09_room',    file: 'stage09/structures/finished_room.png', scale: 0.80, count: 4, band: 'mid'  }
+  ],
+  editorExtras: [
+    { key: 'continuity_stage05_shell', file: 'stage05/landmarks/walls.png', role: 'structure' },
+    { key: 'continuity_stage08_partition', file: 'stage08/structures/partition_room.png', role: 'structure' }
   ],
   ambient: [
     { key: 'npc_stage09', file: 'stage09/npc/peintre_work.png', frame: 180, scale: 0.78, framePeriodMs: 110, behavior: 'work', kind: 'trade' },

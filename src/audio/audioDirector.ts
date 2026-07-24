@@ -1,8 +1,8 @@
 import type Phaser from 'phaser'
 import type { AppViewState } from '@/app/appState'
-import type { WeaponFiredEvent, PickupCollectedEvent, BossSpawnedEvent, ChestOpenedEvent, DestructibleBrokenEvent } from '@core/events'
+import type { WeaponFiredEvent, PickupCollectedEvent, BossSpawnedEvent, ChestOpenedEvent, DestructibleBrokenEvent, EnemyDiedEvent } from '@core/events'
 import { destructibleDef } from '@content/destructibles'
-import { SFX, VOICE, voiceRunStart, musicForState, weaponFileGain, MUSIC, AMB, MUSIC_FILES_STAGE, type MusicKey } from './manifest'
+import { SFX, VOICE, voiceRunStart, musicForState, weaponFileGain, MUSIC, AMB, MUSIC_FILES_STAGE, enemyDeathCue, type MusicKey } from './manifest'
 import { musicGain, sfxGain, duckedGain, type AudioLevels } from './settings'
 import { playZzfx } from './zzfx'
 import { weaponZzfx } from './weaponSfx'
@@ -159,7 +159,6 @@ export class AudioDirector {
   private bindEvents(events: EventTarget): void {
     const on = (name: string, fn: (e: Event) => void): void => { events.addEventListener(name, fn) }
     on('enemyKilled', () => {
-      this.playCue('enemyKilled')
       // Voix « enemy down » OCCASIONNELLE (throttle ~18s) et seulement si aucune
       // annonce n'est en cours (ne coupe pas une réplique d'écran/boss).
       const now = performance.now()
@@ -176,9 +175,11 @@ export class AudioDirector {
     // Gardé par `carnageActive`, remis à jour depuis `observe()` : hors Mode
     // Carnage, ce cue ne doit JAMAIS s'entendre. Le flag vit dans l'App (jamais
     // dans la sim) — on l'observe, on ne le décide pas.
-    on('enemyDied', () => {
+    on('enemyDied', (e) => {
       if (this.carnageActive) {
         this.playCue('carnageGore')
+      } else {
+        this.playCue(enemyDeathCue((e as EnemyDiedEvent).enemyType))
       }
     })
     on('playerHurt', () => { this.playCue('playerHurt') })

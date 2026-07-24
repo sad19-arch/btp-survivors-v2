@@ -1,4 +1,4 @@
-import type { BotAggregate } from './metrics'
+import type { BotAggregate, EarlyGameAggregate } from './metrics'
 
 const BLOCKS = '▁▂▃▄▅▆▇█'
 
@@ -64,4 +64,14 @@ export function renderDiff(current: BotAggregate[], baseline: BotAggregate[]): s
     lines.push(`${a.bot.padEnd(8)} | ${sign(dSurv)}s | niv ${sign(dLvl)} | pic ${sign(dPeak)}`)
   }
   return lines.join('\n')
+}
+
+export function renderEarlyGame(bot: string, a: EarlyGameAggregate): string {
+  const time = (ms: number | null): string => ms === null ? 'jamais' : `${(ms / 1000).toFixed(1)}s`
+  return [
+    `[${bot}] 0-90 s (${a.runs} seeds)`,
+    `  premier ennemi ${time(a.firstEnemyMsMedian)} | premier kill ${time(a.firstKillMsMedian)} | premier niveau ${time(a.firstLevelUpMsMedian)}`,
+    `  plus long gap sans kill ${time(a.longestKillGapMsMedian)} | sans ennemi ${a.enemyFreePctMedian.toFixed(1)}% | PV perdus ${a.hpLostPctMedian.toFixed(1)}%`,
+    `  kills/15 s ${a.killsPer15SecMedian.map((n) => Math.round(n)).join(' · ')}`
+  ].join('\n')
 }

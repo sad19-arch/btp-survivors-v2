@@ -101,11 +101,17 @@ export interface LayoutInstance {
 }
 
 /**
- * Type de marqueur (outil de conception ÉDITEUR). `signature_zone` = macro-zone A
- * (compat cartes existantes) ; les 3 autres = macro-zones B/C/D. Ces marqueurs ne
- * sont JAMAIS lus par la sim/le rendu jeu (voir src/editor/zones.ts).
+ * Type de marqueur (outil de conception ÉDITEUR). Les cinq types canoniques
+ * représentent les macro-zones A à E. Les identifiants historiques ne sont
+ * acceptés qu'à l'import par `parseLayout`, puis normalisés avant d'entrer dans
+ * ce contrat partagé.
  */
-export type MarkerType = 'signature_zone' | 'zone_main_work' | 'zone_logistics' | 'zone_atmosphere'
+export type MarkerType =
+  | 'signature_zone'
+  | 'zone_access'
+  | 'zone_storage'
+  | 'zone_secondary'
+  | 'zone_atmosphere'
 
 export interface LayoutMarker {
   id: string

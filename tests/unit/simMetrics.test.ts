@@ -5,7 +5,12 @@ function run(partial: Partial<RunResult>): RunResult {
   return {
     seed: 1, bot: 'kite', samples: [], survived: false, wonTheGame: false, survivalMs: 0,
     finalLevel: 0, levelAt5min: 0, peakEnemies: 0, nanSeen: false,
-    minHp: 100, minHpPct: 100, maxEnemies: 0, ...partial
+    minHp: 100, minHpPct: 100, maxEnemies: 0,
+    earlyGame: {
+      observationMs: 90000, firstEnemyMs: null, firstKillMs: null, firstLevelUpMs: null,
+      longestKillGapMs: 90000, enemyFreeMs: 90000, killsPer15Sec: [0, 0, 0, 0, 0, 0], hpLostPct: 0
+    },
+    ...partial
   }
 }
 

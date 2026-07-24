@@ -15,6 +15,11 @@ describe('runOne (déterministe)', () => {
     expect(r.samples.length).toBeGreaterThan(0)
     expect(r.nanSeen).toBe(false)
     expect(r.minHp).toBeGreaterThanOrEqual(0)
+    expect(r.earlyGame.observationMs).toBeGreaterThan(59000)
+    expect(r.earlyGame.firstEnemyMs).not.toBeNull()
+    expect(r.earlyGame.firstKillMs).not.toBeNull()
+    expect(r.earlyGame.killsPer15Sec).toHaveLength(4)
+    expect(r.earlyGame.enemyFreeMs).toBeGreaterThanOrEqual(0)
     expect(r.samples[0]?.hpPct).toBeCloseTo(100, 0) // plein HP au départ
   })
 })

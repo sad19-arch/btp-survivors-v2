@@ -7,6 +7,7 @@ import { wireAchievementToasts } from './achievementBridge'
 import { AudioDirector } from '@/audio/audioDirector'
 import { Rumbler } from '@input/rumble'
 import { RumbleDirector } from '@input/rumbleDirector'
+import { installPhaserGamepadLifecycleGuard } from '@input/phaserGamepadLifecycle'
 import { parseBootOptions, type BootOptions } from './bootOptions'
 import { applyUserLayouts } from './userLayoutBoot'
 import { phaseIdFromLevel } from '@content/phases'
@@ -21,6 +22,12 @@ import { CinemaBannerEvent, CinemaSfxEvent, CinemaVoiceEvent } from '@render/cin
  * démarre la scène. Le cœur (`src/core`) ignore tout de ce fichier.
  */
 const opts = parseBootOptions(window.location.search)
+
+// Phaser 3.90 plante au shutdown d'une scène si les index navigateur des pads
+// forment un tableau creux. Le garde doit précéder BootScene elle-même.
+installPhaserGamepadLifecycleGuard(
+  Phaser.Input.Gamepad.GamepadPlugin.prototype
+)
 
 // ── Stage Composer Editor (?editor=true) : remplace INTÉGRALEMENT le jeu normal.
 // Chargé dynamiquement (code-split) → aucun octet ni logique d'éditeur dans le
@@ -106,13 +113,11 @@ if (opts.test) {
 // AudioDirector : créé une fois, coupé en test/headless. Lit les niveaux via l'App.
 const audio = opts.test ? null : new AudioDirector(game.sound, app.events, () => app.getAudioLevels())
 
-// Rumble manette (juice #2) : créé une fois, inerte en test/headless. Le RumbleDirector
-// traduit les événements de jeu en secousses ; le toggle Options le (dés)active.
-const rumbler = opts.test ? null : new Rumbler(app.getVibrations())
-if (rumbler !== null) {
-  new RumbleDirector(rumbler, app.events)
-  app.events.addEventListener('inputSettings', () => rumbler.setEnabled(app.getVibrations()))
-}
+// Rumble manette (juice #2) : créé une fois. Sans actionneur (headless), il reste
+// naturellement inerte ; en test, cela permet de valider le vrai routage P1→pad0…P4→pad3.
+const rumbler = new Rumbler(app.getVibrations())
+new RumbleDirector(rumbler, app.events)
+app.events.addEventListener('inputSettings', () => rumbler.setEnabled(app.getVibrations()))
 
 // Overlay DOM des écrans (HUD, menus) — observe l'état de l'App à chaque frame.
 const uiRoot = document.getElementById('ui-root')

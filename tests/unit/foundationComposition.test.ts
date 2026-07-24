@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CLUSTERS, liveEngineFor } from '@content/clusters'
 import type { ClusterDef, ClusterElement } from '@content/clusters'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
-import { buildSiteLayout } from '@core/siteLayout'
+import { buildProceduralSiteLayout } from '@core/siteLayout'
 import { buildSitePlan, rectGap } from '@core/sitePlan'
 import type { PlacedZone, SitePlan } from '@core/sitePlan'
 
@@ -84,7 +84,7 @@ function dist(a: ClusterElement, b: ClusterElement): number {
 }
 
 function placedSignature(seed: number): { x: number; y: number } {
-  const layout = buildSiteLayout(seed, W, H, STAGE)
+  const layout = buildProceduralSiteLayout(seed, W, H, STAGE)
   const sig = layout.clusters.find((c) => c.defId === 'scene_foundation_pour_spawn')
   expect(sig).toBeDefined()
   if (sig === undefined) {
@@ -108,7 +108,7 @@ describe('stage 03 fondations - composition contract', () => {
   })
 
   it.each(SEEDS)('signature is unique and visible from spawn (seed %i)', (seed) => {
-    const layout = buildSiteLayout(seed, W, H, STAGE)
+    const layout = buildProceduralSiteLayout(seed, W, H, STAGE)
     const signatures = layout.clusters.filter((c) => c.defId === 'scene_foundation_pour_spawn')
     expect(signatures).toHaveLength(1)
     const sig = signatures[0]
@@ -119,7 +119,7 @@ describe('stage 03 fondations - composition contract', () => {
   })
 
   it.each(SEEDS)('no foundation-important asset is orphaned in the actual layout (seed %i)', (seed) => {
-    const layout = buildSiteLayout(seed, W, H, STAGE)
+    const layout = buildProceduralSiteLayout(seed, W, H, STAGE)
     for (const placed of layout.clusters) {
       const def = definedCluster(placed.defId)
       const hasStage03Asset = def.elements.some((el) => el.assetKey.includes('stage03'))
@@ -134,7 +134,7 @@ describe('stage 03 fondations - composition contract', () => {
   })
 
   it.each(SEEDS)('places all eight trade scenes and three fresh-concrete surfaces (seed %i)', (seed) => {
-    const layout = buildSiteLayout(seed, W, H, STAGE)
+    const layout = buildProceduralSiteLayout(seed, W, H, STAGE)
     const ids = new Set(layout.clusters.map((cluster) => cluster.defId))
     for (const sceneId of REQUIRED_TRADE_SCENES) {
       expect(ids.has(sceneId), `${sceneId} missing`).toBe(true)
@@ -268,7 +268,7 @@ describe('stage 03 fondations - composition contract', () => {
   })
 
   it.each(SEEDS)('spawn has no blocking footprint within 350px (seed %i)', (seed) => {
-    const layout = buildSiteLayout(seed, W, H, STAGE)
+    const layout = buildProceduralSiteLayout(seed, W, H, STAGE)
     for (const placed of layout.clusters) {
       const def = definedCluster(placed.defId)
       for (const el of def.elements) {
@@ -282,7 +282,7 @@ describe('stage 03 fondations - composition contract', () => {
   })
 
   it.each(SEEDS)('foundation-specific forbidden assets are not violated (seed %i)', (seed) => {
-    const layout = buildSiteLayout(seed, W, H, STAGE)
+    const layout = buildProceduralSiteLayout(seed, W, H, STAGE)
     const usedDefs = layout.clusters.map((c) => definedCluster(c.defId))
 
     const crackCount = usedDefs.reduce(

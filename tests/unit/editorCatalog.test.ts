@@ -92,6 +92,15 @@ describe('PrefabCatalog — complétude par stage', () => {
     })
   }
 
+  it.each([
+    ['reseaux_enterres', 'cluster_work_reseaux'],
+    ['charpente_toiture', 'cluster_work_charpente'],
+    ['livraison_audit', 'cluster_work_livraison']
+  ])('%s expose sa scène causale existante %s', (stage, sceneId) => {
+    const entry = getStageCatalog(stage).entries.find((candidate) => candidate.id === sceneId)
+    expect(entry).toMatchObject({ id: sceneId, kind: 'scene', category: 'scenes' })
+  })
+
   it('stage 01 (terrain vierge) a au moins un cassable (garde de non-régression)', () => {
     const entries = getStageCatalog('terrain_vierge').entries.filter((e) => e.destructibleTypeId !== undefined)
     expect(entries.length).toBeGreaterThanOrEqual(1)

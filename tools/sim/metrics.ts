@@ -25,6 +25,29 @@ export interface RunResult {
   /** PV minimum atteint sur le run, en % de maxHp (mesure la tension/climax, morts inclus). */
   minHpPct: number
   maxEnemies: number
+  earlyGame: EarlyGameMetrics
+}
+
+export interface EarlyGameMetrics {
+  observationMs: number
+  firstEnemyMs: number | null
+  firstKillMs: number | null
+  firstLevelUpMs: number | null
+  longestKillGapMs: number
+  enemyFreeMs: number
+  killsPer15Sec: number[]
+  hpLostPct: number
+}
+
+export interface EarlyGameAggregate {
+  runs: number
+  firstEnemyMsMedian: number | null
+  firstKillMsMedian: number | null
+  firstLevelUpMsMedian: number | null
+  longestKillGapMsMedian: number
+  enemyFreePctMedian: number
+  killsPer15SecMedian: number[]
+  hpLostPctMedian: number
 }
 
 export interface BotAggregate {
@@ -56,6 +79,27 @@ export function median(xs: number[]): number {
     return s[mid] ?? 0
   }
   return ((s[mid - 1] ?? 0) + (s[mid] ?? 0)) / 2
+}
+
+function nullableMedian(xs: Array<number | null>): number | null {
+  const values = xs.filter((x): x is number => x !== null)
+  return values.length === 0 ? null : median(values)
+}
+
+export function aggregateEarlyGame(results: RunResult[]): EarlyGameAggregate {
+  return {
+    runs: results.length,
+    firstEnemyMsMedian: nullableMedian(results.map((r) => r.earlyGame.firstEnemyMs)),
+    firstKillMsMedian: nullableMedian(results.map((r) => r.earlyGame.firstKillMs)),
+    firstLevelUpMsMedian: nullableMedian(results.map((r) => r.earlyGame.firstLevelUpMs)),
+    longestKillGapMsMedian: median(results.map((r) => r.earlyGame.longestKillGapMs)),
+    enemyFreePctMedian: median(results.map((r) => {
+      const e = r.earlyGame
+      return e.observationMs > 0 ? (e.enemyFreeMs / e.observationMs) * 100 : 0
+    })),
+    killsPer15SecMedian: medianCurve(results.map((r) => r.earlyGame.killsPer15Sec)),
+    hpLostPctMedian: median(results.map((r) => r.earlyGame.hpLostPct))
+  }
 }
 
 /**

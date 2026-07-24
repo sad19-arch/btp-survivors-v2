@@ -20,17 +20,16 @@ export interface ZoneDef {
 }
 
 /**
- * Les 4 macro-zones OBLIGATOIRES d'un stage. Source de vérité unique (palette,
- * rendu, tailles). Zone A RÉUTILISE le type `signature_zone` existant (compat
- * totale avec les cartes actuelles — leur zone signature devient A, aucune
- * migration) ; B/C/D sont de nouveaux types de marqueur. Tailles par défaut
- * selon le brief : B ≈ 4× l'aire de A, C ≈ 2× A, D remplit la périphérie.
+ * Les 5 macro-zones OBLIGATOIRES d'un stage. Source de vérité unique (palette,
+ * rendu, tailles). Les marqueurs enregistrés emploient uniquement les types
+ * canoniques A à E ; les anciens types sont normalisés à l'import.
  */
 export const ZONE_DEFS: readonly ZoneDef[] = [
   { type: 'signature_zone', label: 'A · Signature / spawn (1er écran)', color: 0x2f8f6f, w: 1400, h: 1000 },
-  { type: 'zone_main_work', label: 'B · Cœur du chantier (travaux)', color: 0xe86f1f, w: 2800, h: 2000 },
-  { type: 'zone_logistics', label: 'C · Logistique / stockage / accès', color: 0x28b9d6, w: 2000, h: 1400 },
-  { type: 'zone_atmosphere', label: 'D · Ambiance / périphérie', color: 0x3ddc84, w: 3600, h: 2600 }
+  { type: 'zone_access', label: 'B · Accès / logistique', color: 0xe86f1f, w: 2000, h: 1400 },
+  { type: 'zone_storage', label: 'C · Stockage', color: 0x28b9d6, w: 2000, h: 1400 },
+  { type: 'zone_secondary', label: 'D · Secondaire / déjà fait', color: 0xd6b928, w: 2000, h: 1400 },
+  { type: 'zone_atmosphere', label: 'E · Ambiance / périphérie', color: 0x3ddc84, w: 3600, h: 2600 }
 ]
 
 /** Résolution O(1) d'une zone par son type de marqueur. */

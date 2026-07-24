@@ -2,14 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { Simulation } from '@core/simulation'
 
 describe('Simulation — ennemis & spawn', () => {
-  it('ne contient aucun ennemi au démarrage puis en fait apparaître', () => {
+  it('contient immédiatement la vague d’ouverture standard', () => {
     const sim = new Simulation({ seed: 1, mode: 'solo' })
-    expect(sim.getState().enemies).toHaveLength(0)
-    // Avance jusqu'à la 1re vague (intervalle de départ data-driven → robuste à la rampe).
-    for (let t = 0; t < 8000 && sim.getState().enemies.length === 0; t += 200) {
-      sim.advanceTime(200)
-    }
-    expect(sim.getState().enemies.length).toBeGreaterThan(0)
+    const enemies = sim.getState().enemies
+    expect(enemies).toHaveLength(1)
+    expect(enemies[0]?.type).toBe('paperasse')
   })
 
   it('les ennemis se rapprochent du joueur avec le temps', () => {

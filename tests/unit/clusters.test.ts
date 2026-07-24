@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { CLUSTERS, STAGE_CLUSTERS, LIVE_ENGINE_KEYS, liveEngineFor } from '@content/clusters'
 import { resolveSolidity, type Solidity } from '@content/assetSolidity'
-import { buildSiteLayout } from '@core/siteLayout'
+import { buildProceduralSiteLayout } from '@core/siteLayout'
 import { STAGE_RENDER } from '@render/stages'
 
 /**
@@ -242,7 +242,7 @@ describe('LIVE_ENGINES — les engins animés arrivent dans le monde', () => {
   const H = 7680
   const animatedKeysOf = (stageId: string): Set<string> => {
     const found = new Set<string>()
-    for (const placed of buildSiteLayout(SEED, W, H, stageId).clusters) {
+    for (const placed of buildProceduralSiteLayout(SEED, W, H, stageId).clusters) {
       const elements = placed.elements ?? CLUSTERS[placed.defId]?.elements ?? []
       for (const el of elements) {
         if (el.animation !== undefined) {

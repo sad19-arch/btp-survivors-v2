@@ -4,6 +4,7 @@ import { CLUSTERS } from '@content/clusters'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
 import {
   buildSiteLayout,
+  buildProceduralSiteLayout,
   ROUTE_BAND,
   ROUTE_TILE,
   MIN_GAP,
@@ -148,7 +149,7 @@ describe('siteLayout — securite spawn', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('siteLayout — espacement', () => {
   it("4. toute paire de clusters non-route est distante d'au moins MIN_GAP", () => {
-    const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, 'terrassement')
+    const layout = buildProceduralSiteLayout(SEED, WORLD_W, WORLD_H, 'terrassement')
     // Exclure les clusters de route : ils sont volontairement adjacents (~ROUTE_TILE px)
     const clusters: PlacedCluster[] = layout.clusters.filter(
       (c) => c.defId !== 'cluster_route'
@@ -219,7 +220,7 @@ describe('siteLayout — isolation RNG', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('siteLayout — obstacles bien formes', () => {
   it('6a. chaque circle a r>0', () => {
-    const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, 'terrassement')
+    const layout = buildProceduralSiteLayout(SEED, WORLD_W, WORLD_H, 'terrassement')
     const circles = layout.obstacles.filter((o) => o.kind === 'circle')
     for (const obs of circles) {
       expect(obs.r).toBeDefined()
@@ -259,7 +260,7 @@ describe('siteLayout — obstacles bien formes', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('siteLayout — route au sud', () => {
   it('7. les clusters de type cluster_route ont y dans la bande sud', () => {
-    const layout = buildSiteLayout(SEED, WORLD_W, WORLD_H, 'terrassement')
+    const layout = buildProceduralSiteLayout(SEED, WORLD_W, WORLD_H, 'terrassement')
     const routeClusters = layout.clusters.filter((pc) => pc.defId === 'cluster_route')
     expect(routeClusters.length).toBeGreaterThan(0)
     for (const rc of routeClusters) {

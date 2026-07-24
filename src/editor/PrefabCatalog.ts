@@ -14,7 +14,7 @@
 
 import { STAGE_RENDER, SHARED_WORKER_NPCS, CITY_BUILDINGS, CAMION_SKIN, type StageRender, type StageAmbientNpc } from '@render/stages'
 import { CLUSTERS } from '@content/clusters'
-import type { PathType, TilePatch } from '@content/stageLayout'
+import type { MarkerType, PathType, TilePatch } from '@content/stageLayout'
 import { destructiblesForStage } from '@content/destructibles'
 import { PALETTE_ASSETS, type PaletteAssetDef } from '@content/paletteAssets'
 import { ZONE_DEFS } from './zones'
@@ -32,7 +32,7 @@ export interface PrefabElement {
   tile?: TilePatch
 }
 
-export type MarkerTool = 'spawn' | 'signature_zone' | 'worker_path' | 'truck_path' | 'zone_main_work' | 'zone_logistics' | 'zone_atmosphere'
+export type MarkerTool = 'spawn' | MarkerType | PathType
 
 export interface PaletteEntry {
   id: string
@@ -653,12 +653,16 @@ function authoredScenes(stageId: string): PaletteEntry[] {
  * (`cluster_work_<stage>`, `cluster_storage_<stage>`, `cluster_plant_<stage>`…) —
  * plus riche que les 2 gabarits auto.
  */
+const CAUSAL_SCENE_CLUSTERS: Readonly<Record<string, readonly string[]>> = {
+  reseaux_enterres: ['cluster_work_reseaux', 'cluster_storage_reseaux', 'cluster_plant_reseaux'],
+  charpente_toiture: ['cluster_work_charpente', 'cluster_storage_charpente', 'cluster_plant_charpente'],
+  livraison_audit: ['cluster_work_livraison', 'cluster_storage_livraison', 'cluster_plant_livraison']
+}
+
 function clusterScenes(stageId: string): PaletteEntry[] {
+  const ids = CAUSAL_SCENE_CLUSTERS[stageId] ?? Object.keys(CLUSTERS).filter((id) => id.endsWith(stageId))
   const out: PaletteEntry[] = []
-  for (const id of Object.keys(CLUSTERS)) {
-    if (!id.endsWith(stageId)) {
-      continue
-    }
+  for (const id of ids) {
     const label = humanize(id.replace(/^cluster_/, '').replace(/_/g, ' '))
     const e = clusterEntry(id, label, 'scene', 'grande', 'scenes')
     if (e !== null) {

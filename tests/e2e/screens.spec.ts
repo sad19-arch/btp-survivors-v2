@@ -34,7 +34,7 @@ test('l’écran titre s’affiche et se navigue', async ({ page }) => {
     .poll(() => page.evaluate(() => window.__GAME__?.getState().screen))
     .toBe('characterSelect')
   await expect(page.locator('.panel__title')).toHaveText('SELECT YOUR CREW')
-  await expect(page.locator('.charsel__who')).toHaveText('JOUEUR 1/1')
+  await expect(page.locator('.charsel__who')).toHaveText('JOUEUR 1')
 
   // Valide le personnage (par défaut du carrousel) → écran de jeu, HUD visible.
   await page.evaluate(() => window.__GAME__?.confirm())
@@ -63,7 +63,7 @@ test('l’écran de pause s’affiche', async ({ page }) => {
   await expect(page.locator('.menu__item')).toHaveCount(5)
 })
 
-test('sélectionner 2 joueurs au titre lance une coop (via la sélection de personnage séquentielle)', async ({
+test('sélectionner 2 joueurs au titre lance une coop après deux choix simultanés', async ({
   page
 }) => {
   await page.goto('/?seed=1&test=1&lite=1')
@@ -78,21 +78,33 @@ test('sélectionner 2 joueurs au titre lance une coop (via la sélection de pers
   })
   await expect
     .poll(() => page.evaluate(() => window.__GAME__?.getState().characterSelect))
-    .toEqual({ player: 1, total: 2, charId: 'ouvrier' })
-  await expect(page.locator('.charsel__who')).toHaveText('JOUEUR 1/2')
+    .toEqual({
+      total: 2,
+      players: [
+        { playerId: 1, charId: 'ouvrier', ready: false },
+        { playerId: 2, charId: 'ouvrier', ready: false }
+      ]
+    })
+  await expect(page.locator('.charsel-card')).toHaveCount(2)
+  await expect(page.locator('.charsel__who')).toHaveText(['JOUEUR 1', 'JOUEUR 2'])
 
-  // P1 choisit un perso (cycle une fois) puis valide → tour de P2.
+  // Les deux curseurs sont pilotés séparément et peuvent se verrouiller dans n'importe quel ordre.
   await page.evaluate(() => {
-    window.__GAME__?.nav('right')
-    window.__GAME__?.confirm()
+    window.__GAME__?.debugNavAs(1, 'right')
+    window.__GAME__?.debugConfirmAs(2)
   })
   await expect
     .poll(() => page.evaluate(() => window.__GAME__?.getState().characterSelect))
-    .toEqual({ player: 2, total: 2, charId: 'ouvrier' })
-  await expect(page.locator('.charsel__who')).toHaveText('JOUEUR 2/2')
+    .toEqual({
+      total: 2,
+      players: [
+        { playerId: 1, charId: 'soudeur', ready: false },
+        { playerId: 2, charId: 'ouvrier', ready: true }
+      ]
+    })
+  await expect(page.locator('.charsel-card[data-player="2"]')).toHaveAttribute('data-ready', 'true')
 
-  // P2 valide son perso (par défaut du carrousel) → la partie démarre avec 2 joueurs.
-  await page.evaluate(() => window.__GAME__?.confirm())
+  await page.evaluate(() => window.__GAME__?.debugConfirmAs(1))
   await expect
     .poll(() => page.evaluate(() => window.__GAME__?.getState().players.length))
     .toBe(2)

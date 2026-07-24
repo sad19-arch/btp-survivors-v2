@@ -12,6 +12,8 @@ import { WEAPONS } from '@content/weapons'
 import { AudioDirector } from '@/audio/audioDirector'
 import { EvolvedEvent, BossSpawnedEvent, EnemyDiedEvent, ChestOpenedEvent } from '@core/events'
 import type { AppViewState } from '@/app/appState'
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 describe('audio — musique par état (pure)', () => {
   const g = (screen: Screen, stageId: string, bossPresent = false): string | null =>
@@ -71,6 +73,12 @@ describe('audio — musique par état (pure)', () => {
 })
 
 describe('audio — cohérence manifeste ↔ préchargement', () => {
+  it('chaque fichier SFX déclaré existe réellement dans public', () => {
+    for (const [key, path] of SFX_FILES) {
+      expect(existsSync(resolve('public', path)), `${key} → ${path} absent`).toBe(true)
+    }
+  })
+
   it('chaque cue SFX ne référence que des clés préchargées', () => {
     const loaded = new Set(SFX_FILES.map(([k]) => k))
     for (const [name, cue] of Object.entries(SFX)) {

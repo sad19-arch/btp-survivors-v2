@@ -49,6 +49,8 @@ export interface GameSeam {
    * permet donc pas de tester le verrou de propriété des cartes de level-up.
    */
   debugConfirmAs(playerId: number): void
+  /** [Debug] Simule une direction émise par la manette du joueur N. */
+  debugNavAs(playerId: number, dir: NavDir): void
   /** [Debug] Fait apparaître un coffre d'évolution sur la position d'un joueur (1 par défaut). */
   debugSpawnChestOnPlayer(playerId?: number): void
   /** [Debug] Fait apparaître immédiatement le boss du rôle demandé (`mid`/`final`). */
@@ -76,6 +78,8 @@ export interface GameSeam {
    * le rendu. Absente tant que la scène n'est pas montée / en mode allégé.
    */
   debugRenderInfo?(): { id: number; texture: string | null }[]
+  /** [Debug] Textures réellement utilisées par les ennemis rendus. */
+  debugEnemyRenderInfo?(): { id: number; texture: string | null }[]
   /**
    * [Debug] Sonde du feedback de coup (posée par la GameScene) : compteur des chiffres
    * de dégâts actifs et total cumulé depuis la création du pool, et cap par frame.
@@ -114,6 +118,14 @@ export interface GameSeam {
   }
   /** Fige la caméra en vue d'ensemble (outil de revue visuelle, render-only). */
   debugCameraOverview?(zoom: number, cx: number, cy: number): void
+  /** État réel de la caméra Phaser, pour valider zoom et suivi sans screenshot. */
+  debugCameraInfo?(): {
+    zoom: number
+    cx: number
+    cy: number
+    leaderX: number | null
+    leaderY: number | null
+  }
   /**
    * [Debug/Perf] Snapshot du profileur de temps de frame render-side (posé par la
    * GameScene) : durées moyennes par section (`sim`, `hordeSync`, `playersSync`…)
@@ -215,6 +227,9 @@ export function createSeam(app: App): GameSeam {
     },
     debugConfirmAs: (playerId: number) => {
       app.debugConfirmAs(playerId)
+    },
+    debugNavAs: (playerId: number, dir: NavDir) => {
+      app.debugNavAs(playerId, dir)
     },
     debugSpawnChestOnPlayer: (playerId = 1) => {
       app.debugSpawnChestOnPlayer(playerId)

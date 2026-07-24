@@ -15,12 +15,13 @@
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { runOne } from './runOne'
-import { aggregate, type BotAggregate, type RunResult } from './metrics'
-import { renderSummaryTable, renderCurves, renderDiff } from './render'
+import { aggregate, aggregateEarlyGame, type BotAggregate, type RunResult } from './metrics'
+import { renderSummaryTable, renderCurves, renderDiff, renderEarlyGame } from './render'
 import { evaluateTargets } from './targets'
 import { saveBaseline, loadBaseline } from './baseline'
 import { BOT_NAMES, isBotName, type BotName } from './bots'
 import { SPAWN } from '@content/config'
+import { phaseIdFromLevel, type ConstructionPhaseId } from '@content/phases'
 
 /**
  * Marge de sécurité au-dessus de `SPAWN.maxActive` : les boss (mid/final) sont
@@ -37,6 +38,7 @@ interface Args {
   durationSec: number
   saveBaseline: boolean
   enforce: boolean
+  phaseId: ConstructionPhaseId
 }
 
 function flag(argv: string[], name: string): string | undefined {
@@ -71,20 +73,23 @@ function parseArgs(argv: string[]): Args {
     bots: bots.length > 0 ? bots : [...BOT_NAMES],
     durationSec: Number.parseInt(flag(argv, '--duration') ?? '480', 10),
     saveBaseline: flag(argv, '--baseline') === 'save',
-    enforce: argv.includes('--enforce')
+    enforce: argv.includes('--enforce'),
+    phaseId: phaseIdFromLevel(flag(argv, '--level') ?? null)
   }
 }
 
 function main(): void {
   const args = parseArgs(process.argv.slice(2))
   console.log(
-    '[sim] seeds=%s bots=%s duration=%ds',
+    '[sim] stage=%s seeds=%s bots=%s duration=%ds',
+    args.phaseId,
     args.seeds.join(','),
     args.bots.join(','),
     args.durationSec
   )
 
   const aggregates: BotAggregate[] = []
+  const earlyReports: string[] = []
   let nanSeen = false
   let minHp = Infinity
   let maxEnemies = 0
@@ -92,17 +97,19 @@ function main(): void {
   for (const bot of args.bots) {
     const results: RunResult[] = []
     for (const seed of args.seeds) {
-      const r = runOne(seed, bot, { durationSec: args.durationSec })
+      const r = runOne(seed, bot, { durationSec: args.durationSec, phaseId: args.phaseId })
       results.push(r)
       nanSeen = nanSeen || r.nanSeen
       minHp = Math.min(minHp, r.minHp)
       maxEnemies = Math.max(maxEnemies, r.maxEnemies)
     }
     aggregates.push(aggregate(results))
+    earlyReports.push(renderEarlyGame(bot, aggregateEarlyGame(results)))
   }
 
   console.log('\n' + renderSummaryTable(aggregates))
   console.log('\n' + renderCurves(aggregates))
+  console.log('\n--- diagnostic early-game (active = référence joueur ; autres = limites) ---\n' + earlyReports.join('\n'))
 
   if (args.saveBaseline) {
     saveBaseline(BASELINE_PATH, aggregates)

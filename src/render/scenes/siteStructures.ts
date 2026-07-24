@@ -80,6 +80,11 @@ export function hasStructurePlan(stageId: string): boolean {
   return STAGE_PLANS[stageId] !== undefined
 }
 
+/** Une composition complète remplace toujours le réseau procédural du stage. */
+export function shouldUseStructurePlan(stageId: string, hasComposedLayout: boolean): boolean {
+  return !hasComposedLayout && hasStructurePlan(stageId)
+}
+
 /** Hash déterministe 32-bit d'un couple d'entiers + sel (zéro Math.random). */
 function hash2(i: number, j: number, salt: number): number {
   let h = (Math.imul(i, 73856093) ^ Math.imul(j, 19349663) ^ Math.imul(salt, 83492791)) >>> 0
@@ -102,11 +107,11 @@ export class SiteStructures {
   constructor(private readonly scene: Phaser.Scene) {}
 
   /** Configure le réseau du stage (ou aucun). À appeler au (re)démarrage de la scène. */
-  setPlan(worldW: number, worldH: number, stageId: string): void {
+  setPlan(worldW: number, worldH: number, stageId: string, hasComposedLayout = false): void {
     this.dispose()
     this.worldW = worldW
     this.worldH = worldH
-    this.plan = STAGE_PLANS[stageId] ?? null
+    this.plan = shouldUseStructurePlan(stageId, hasComposedLayout) ? STAGE_PLANS[stageId] ?? null : null
   }
 
   /** Streame les chunks structurels autour de la caméra (charge visibles, décharge le reste). */

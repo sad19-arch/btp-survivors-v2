@@ -18,13 +18,13 @@ export const EMPTY_FRAME: FrameInput = { move: { x: 0, y: 0 }, pressed: [], acti
 /**
  * Route les entrées d'une frame par joueur vers l'App (logique pure, testable) :
  *  - chaque joueur déplace son propre personnage (ignoré hors jeu) ;
- *  - les actions ponctuelles de TOUS les joueurs pilotent la navigation des
- *    écrans partagés (menu unique, pas de notion de « joueur focus »).
+ *  - les actions ponctuelles conservent l'identité des joueurs qui les ont
+ *    émises. Les écrans d'équipe restent partagés, mais l'App peut réserver un
+ *    écran contextuel (level-up) à son propriétaire.
  *
- * `confirm` fait exception : on transmet à l'App QUI a pressé, en un seul appel.
- * L'App s'en sert pour n'accepter que le propriétaire d'une carte de level-up.
- * On ne boucle pas par joueur — deux joueurs validant la même frame sur le titre
- * doivent déclencher UN seul confirm, pas deux.
+ * On transmet à l'App QUI a pressé chaque direction/validation, en un seul appel
+ * par action. On ne boucle pas par joueur — deux joueurs pressant la même action
+ * sur un écran partagé doivent déclencher UN seul déplacement, pas deux.
  *
  * L'App décide contextuellement (en jeu, `nav/confirm` sont sans effet ;
  * `back` met en pause, etc.), ce qui garde ce routeur sans condition d'écran.
@@ -34,29 +34,27 @@ export function routeInput(app: App, perPlayer: ReadonlyMap<number, FrameInput>)
     app.setInput(playerId, { move: frame.move, attack: false, action: frame.action })
   }
 
-  const actions = new Set<NavAction>()
-  const confirmedBy = new Set<number>()
+  const actions = new Map<NavAction, Set<number>>()
   for (const [playerId, frame] of perPlayer) {
     for (const action of frame.pressed) {
-      actions.add(action)
-      if (action === 'confirm') {
-        confirmedBy.add(playerId)
-      }
+      const players = actions.get(action) ?? new Set<number>()
+      players.add(playerId)
+      actions.set(action, players)
     }
   }
-  for (const action of actions) {
+  for (const [action, byPlayers] of actions) {
     switch (action) {
       case 'up':
       case 'down':
       case 'left':
       case 'right':
-        app.nav(action)
+        app.nav(action, byPlayers)
         break
       case 'confirm':
-        app.confirm(confirmedBy)
+        app.confirm(byPlayers)
         break
       case 'back':
-        app.back()
+        app.back(byPlayers)
         break
       case 'pause':
         app.togglePause()

@@ -142,6 +142,15 @@ export class HordeRenderer {
     private readonly damageNumbers: DamageNumberPool
   ) {}
 
+  /** Sonde test-only : prouve qu'un ennemi utilise bien une texture, pas le cercle de repli. */
+  debugEnemyInfo(): { id: number; texture: string | null }[] {
+    const info: { id: number; texture: string | null }[] = []
+    for (const [id, sprite] of this.enemySprites) {
+      info.push({ id, texture: sprite instanceof Phaser.GameObjects.Sprite ? sprite.texture.key : null })
+    }
+    return info.sort((a, b) => a.id - b.id)
+  }
+
   /**
    * Synchronise tous les sprites de la horde avec l'état de la frame. `stage`
    * fournit les skins d'ennemis/boss ; `state.players[0]` oriente les ennemis.
@@ -316,16 +325,17 @@ export class HordeRenderer {
           this.enemyFlashUntil.delete(en.id)
         }
       }
-      // ── Télégraphe de charge du boss (behavior 'boss') ──
+      // ── Télégraphe de charge (ennemi spécial ou boss) ──
       // Wind-up = clignotement rouge (fenêtre d'esquive lisible) ; charge = teinte
       // rouge pleine. N'écrase pas le hit-flash blanc (priorité au feedback de coup).
-      if (en.isBoss && sprite instanceof Phaser.GameObjects.Sprite) {
+      const chargePhase = en.chargePhase ?? en.bossCharge
+      if (chargePhase !== undefined && sprite instanceof Phaser.GameObjects.Sprite) {
         const flashing = flashUntil !== undefined && this.scene.time.now < flashUntil
         if (!flashing) {
-          if (en.bossCharge === 'telegraph') {
+          if (chargePhase === 'telegraph') {
             const blinkOn = Math.floor(this.scene.time.now / 100) % 2 === 0
             if (blinkOn) { sprite.setTint(PALETTE_HEX.rougeAlerte) } else { sprite.clearTint() }
-          } else if (en.bossCharge === 'charge') {
+          } else if (chargePhase === 'charge') {
             sprite.setTint(PALETTE_HEX.orangeDanger)
           } else {
             sprite.clearTint()

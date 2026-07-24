@@ -60,13 +60,20 @@ describe('Simulation — visée manuelle (facing)', () => {
     expect(Math.abs(shots[0]?.vy ?? 1)).toBeLessThan(1e-6)
   })
 
-  it('les armes auto-aim existantes (cloueur) restent inchangées : ne tirent PAS sans ennemi', () => {
+  it('les armes auto-aim existantes (cloueur) visent la vague d’ouverture', () => {
     const sim = new Simulation({ seed: 1, mode: 'solo' })
-    // Arme de départ = cloueur (auto-aim). Aucun ennemi n'est encore apparu à seed=1
-    // dans les toutes premières ms — le cloueur ne doit PAS tirer « à vide ».
+    const before = sim.getState()
+    const player = before.players[0]
+    const enemy = before.enemies[0]
+    expect(player).toBeDefined()
+    expect(enemy).toBeDefined()
     sim.setInput(1, { move: { x: 1, y: 0 }, attack: false })
     sim.advanceTime(50)
     const cloueurShots = sim.getState().projectiles.filter((p) => p.type === 'cloueur')
-    expect(cloueurShots.length).toBe(0)
+    expect(cloueurShots.length).toBeGreaterThan(0)
+    const shot = cloueurShots[0]
+    const towardEnemy = (shot?.vx ?? 0) * ((enemy?.x ?? 0) - (player?.x ?? 0)) +
+      (shot?.vy ?? 0) * ((enemy?.y ?? 0) - (player?.y ?? 0))
+    expect(towardEnemy).toBeGreaterThan(0)
   })
 })

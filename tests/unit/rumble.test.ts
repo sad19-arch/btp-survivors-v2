@@ -23,6 +23,17 @@ function stubPad(): { playEffect: ReturnType<typeof vi.fn>; reset: ReturnType<ty
   return { playEffect, reset }
 }
 
+function stubFourPads(): Array<{ playEffect: ReturnType<typeof vi.fn>; reset: ReturnType<typeof vi.fn> }> {
+  const actuators = Array.from({ length: 4 }, () => ({
+    playEffect: vi.fn(() => Promise.resolve()),
+    reset: vi.fn(() => Promise.resolve()),
+  }))
+  vi.stubGlobal('navigator', {
+    getGamepads: () => actuators.map((vibrationActuator, index) => ({ index, vibrationActuator })),
+  })
+  return actuators
+}
+
 describe('Rumbler — portillon (activé / throttle / bypass)', () => {
   it('désactivé : play() ne fait rien et renvoie false', () => {
     const r = new Rumbler(false, { now })
@@ -81,6 +92,48 @@ describe('Rumbler — émission sur la manette', () => {
     vi.stubGlobal('navigator', {})
     const r = new Rumbler(true, { now })
     expect(() => r.play(RUMBLE.kill, true)).not.toThrow()
+  })
+
+  it('playForPlayer cible uniquement la manette associée au playerId', () => {
+    const pads = stubFourPads()
+    const r = new Rumbler(true, { now })
+
+    r.playForPlayer(2, RUMBLE.hurt, true)
+
+    expect(pads[0]?.playEffect).not.toHaveBeenCalled()
+    expect(pads[1]?.playEffect).toHaveBeenCalledOnce()
+    expect(pads[2]?.playEffect).not.toHaveBeenCalled()
+    expect(pads[3]?.playEffect).not.toHaveBeenCalled()
+  })
+
+  it('les throttles sont indépendants pour P1 à P4', () => {
+    const pads = stubFourPads()
+    const r = new Rumbler(true, { now, minGapMs: 40 })
+
+    for (let playerId = 1; playerId <= 4; playerId++) {
+      expect(r.playForPlayer(playerId, RUMBLE.kill)).toBe(true)
+    }
+
+    for (const pad of pads) {
+      expect(pad.playEffect).toHaveBeenCalledOnce()
+    }
+    expect(r.playForPlayer(1, RUMBLE.kill)).toBe(false)
+    expect(r.playForPlayer(2, RUMBLE.kill)).toBe(false)
+  })
+
+  it('supporte l’actionneur legacy hapticActuators/pulse sur la deuxième manette', () => {
+    const pulse = vi.fn(() => Promise.resolve(true))
+    vi.stubGlobal('navigator', {
+      getGamepads: () => [
+        { index: 0, vibrationActuator: null },
+        { index: 1, hapticActuators: [{ pulse }] },
+      ],
+    })
+    const r = new Rumbler(true, { now })
+
+    r.playForPlayer(2, RUMBLE.hurt, true)
+
+    expect(pulse).toHaveBeenCalledWith(Math.max(RUMBLE.hurt.strong, RUMBLE.hurt.weak), RUMBLE.hurt.ms)
   })
 })
 

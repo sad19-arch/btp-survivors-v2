@@ -5,11 +5,43 @@ import type { ConstructionPhase } from '@content/phases'
 import { phasePoolIds } from '@content/phases'
 import { ENEMIES } from '@content/enemies'
 import type { EnemyDef } from '@content/enemies'
-import { SPAWN } from '@content/config'
+import { REFERENCE_VIEW, SPAWN } from '@content/config'
 import type { DifficultyScale } from '@content/spawnRamp'
 
 /** Aucun renforcement (boss / défaut). */
 const NO_SCALE: DifficultyScale = { hp: 1, contactDamage: 1, speed: 1 }
+
+/** Position juste hors du rectangle de référence, quelle que soit la direction. */
+export function openingSpawnPosition(center: Vec2, angle: number, margin: number): Vec2 {
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+  const toVerticalEdge = Math.abs(cos) < 0.000001 ? Infinity : REFERENCE_VIEW.halfW / Math.abs(cos)
+  const toHorizontalEdge = Math.abs(sin) < 0.000001 ? Infinity : REFERENCE_VIEW.halfH / Math.abs(sin)
+  const radius = Math.min(toVerticalEdge, toHorizontalEdge) + margin
+  return { x: center.x + cos * radius, y: center.y + sin * radius }
+}
+
+/** Vague initiale immédiate : uniquement l'archétype standard de la phase. */
+export function spawnOpeningWave(
+  world: World,
+  rng: Rng,
+  phase: ConstructionPhase,
+  center: Vec2,
+  count: number,
+  scale: DifficultyScale = NO_SCALE
+): void {
+  const standardPool = phasePoolIds(phase).filter((id) => ENEMIES[id]?.archetype === 'base')
+  if (standardPool.length === 0) {
+    return
+  }
+  for (let i = 0; i < count; i++) {
+    const def = ENEMIES[rng.pick(standardPool)]
+    if (def !== undefined) {
+      const angle = Math.PI / 2 + (i - (count - 1) / 2) * 0.18
+      spawnEnemy(world, def, openingSpawnPosition(center, angle, SPAWN.openingMargin), false, scale)
+    }
+  }
+}
 
 /**
  * Fait apparaître une vague d'ennemis autour d'un centre, sur un anneau
@@ -147,7 +179,11 @@ export function spawnGroup(
   }
 
   for (const placement of placements) {
-    const id = rng.pick(pool)
+    const rolePool = placement.role === undefined ? pool : (phase.enemyPools[placement.role] ?? [])
+    if (rolePool.length === 0) {
+      continue
+    }
+    const id = rng.pick(rolePool)
     const def = ENEMIES[id]
     if (def === undefined) {
       continue
@@ -208,8 +244,10 @@ function enemyKnockbackMult(def: EnemyDef, isBoss: boolean): number {
     return 0.12
   }
   switch (def.archetype) {
+    case 'swarm': return 1.45
     case 'fast': return 1.1
     case 'tank': return 0.55
+    case 'charger': return 0.75
     case 'elite': return 0.35
     default: return 1
   }

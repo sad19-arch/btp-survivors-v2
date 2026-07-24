@@ -1,0 +1,9 @@
+{
+  "out": "tools/assets/review/stage01_charger_board.png",
+  "ground": "public/stage01/ground/tile_0.png",
+  "items": [
+    { "file": "tools/assets/review/stage01_charger_concept_south.png", "label": "Chargeur — 75 px", "h": 75 },
+    { "file": "tools/assets/review/stage01_charger_concept_south.png", "label": "Chargeur — 85 px", "h": 85 },
+    { "file": "tools/assets/review/stage01_swarm_concept_south.png", "label": "Nuée — 45 px", "h": 45 }
+  ]
+}

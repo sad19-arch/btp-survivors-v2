@@ -263,10 +263,12 @@ const CSS = `
 #ui-root .cone::after { content:''; position:absolute; left:-1px; bottom:2px; width:42px; height:10px; background:${PALETTE.brunSombre}; border:2px solid ${PALETTE.contour}; box-sizing:border-box; }
 
 /* ── Cartes d'amélioration (level-up) ─────────────────────────────────── */
-/* Co-op : le panneau prend la couleur du joueur qui choisit (posée en inline
-   par l'overlay — ici on ne fait que renforcer le cadre). En solo, aucune de ces
-   deux classes n'est appliquée : l'écran reste celui d'avant. */
-#ui-root .panel--owned { border-width: 8px; }
+/* Co-op : plaque ENTIÈRE à la couleur sombre du joueur, bordure noire commune.
+   La variable vient de playerColor(owner). En solo, écran historique inchangé. */
+#ui-root .panel--owned {
+  background: var(--player-panel);
+  border-color: ${PALETTE.contour};
+}
 #ui-root .upgrade__who {
   font-family: 'Pixelify Sans'; font-size: 30px; font-weight: 700; letter-spacing: 2px;
   text-shadow: 2px 2px 0 ${PALETTE.contour}; margin: 0;
@@ -938,14 +940,25 @@ const CSS = `
 #ui-root .crew-fig--left { left: clamp(6px, 6vw, 120px); }
 #ui-root .crew-fig--right { right: clamp(6px, 6vw, 120px); transform: scaleX(-1); }
 /* --- Sélecteur de personnage (écran « SELECT YOUR CREW » arcade) ---------- */
-#ui-root .panel--charsel { width: min(760px, 94vw); gap: 14px; }
+#ui-root .panel--charsel { width: min(1080px, 96vw); gap: 14px; }
 #ui-root .charsel__heading { font-family: 'Press Start 2P'; font-size: clamp(16px, 3.4vw, 34px); color: var(--arc-jaune); letter-spacing: 2px; text-shadow: 3px 3px 0 var(--arc-contour); margin: 0; }
 #ui-root .charsel__who { font-family: 'Press Start 2P'; font-size: clamp(9px, 1.6vw, 15px); letter-spacing: 2px; text-shadow: 2px 2px 0 var(--arc-contour); margin: 0; }
+#ui-root .charsel-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; width: 100%; }
+#ui-root .charsel-board--1 { grid-template-columns: minmax(0, 520px); justify-content: center; }
+#ui-root .charsel-card { --charsel-player: var(--arc-jaune); position: relative; display: grid; grid-template-columns: clamp(92px, 13vw, 144px) minmax(0, 1fr); grid-template-rows: auto 1fr auto; gap: 8px 12px; align-items: center; min-width: 0; padding: 12px; background: var(--arc-brun3); border: 5px solid var(--charsel-player); box-shadow: 5px 5px 0 var(--arc-contour); }
+#ui-root .charsel-card--ready { background: var(--arc-brun2); box-shadow: inset 0 0 0 4px var(--charsel-player), 5px 5px 0 var(--arc-contour); }
+#ui-root .charsel-card--ready::after { content: ''; position: absolute; inset: 6px; border: 2px solid var(--charsel-player); pointer-events: none; }
+#ui-root .charsel-card .charsel__who { grid-column: 1 / -1; color: var(--charsel-player); }
+#ui-root .charsel-card__portrait { grid-column: 1; grid-row: 2 / 4; }
+#ui-root .charsel-card__name { grid-column: 2; align-self: end; }
+#ui-root .charsel-card__weapon { grid-column: 2; align-self: start; min-width: 0; flex-wrap: wrap; }
 #ui-root .charsel__stage { display: flex; align-items: center; gap: clamp(14px, 3vw, 30px); width: 100%; }
 #ui-root .charsel-portrait { position: relative; flex: 0 0 auto; width: clamp(140px, 26vw, 208px); height: clamp(140px, 26vw, 208px); overflow: hidden; background: var(--arc-brun3); border: 5px solid var(--arc-contour); box-shadow: inset 0 0 0 3px var(--arc-orange2), 6px 6px 0 rgba(0,0,0,.5); image-rendering: pixelated; }
+#ui-root .charsel-card__portrait { width: clamp(92px, 13vw, 144px); height: clamp(92px, 13vw, 144px); border-color: var(--charsel-player); box-shadow: inset 0 0 0 3px var(--arc-contour); }
 #ui-root .charsel-portrait__img { position: absolute; left: 0; top: 0; width: 400%; height: 400%; image-rendering: pixelated; }
 #ui-root .charsel__info { flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; text-align: left; min-width: 0; }
 #ui-root .charsel__name { font-family: 'Jersey 25'; font-size: clamp(34px, 7vw, 62px); line-height: .9; color: var(--arc-jaune); letter-spacing: 2px; text-shadow: 0.03em 0.03em 0 var(--arc-ombre2), 0.06em 0.06em 0 var(--arc-contour); }
+#ui-root .charsel-card__name { font-size: clamp(24px, 3.5vw, 42px); color: var(--charsel-player); overflow-wrap: anywhere; }
 #ui-root .charsel__weapon { display: flex; align-items: baseline; gap: 10px; font-family: 'Pixelify Sans'; }
 #ui-root .charsel__weapon-label { font-family: 'Press Start 2P'; font-size: clamp(8px, 1.3vw, 12px); color: var(--arc-creme2); letter-spacing: 1px; }
 #ui-root .charsel__weapon-name { font-size: clamp(18px, 3vw, 28px); font-weight: 700; color: var(--arc-orange2); text-shadow: 2px 2px 0 var(--arc-contour); }
@@ -955,6 +968,14 @@ const CSS = `
 #ui-root .charsel-cell { position: relative; aspect-ratio: 1; overflow: hidden; background: var(--arc-brun3); border: 3px solid var(--arc-contour); filter: brightness(.62) saturate(.8); }
 #ui-root .charsel-cell--active { filter: none; border-color: var(--arc-jaune); box-shadow: 0 0 0 3px var(--arc-orange2), 0 0 14px rgba(255,210,74,.6); }
 #ui-root .charsel-cell__img { position: absolute; left: 0; top: 0; width: 400%; height: 400%; image-rendering: pixelated; }
+@media (max-width: 720px) {
+  #ui-root .charsel-board { gap: 8px; }
+  #ui-root .charsel-card { grid-template-columns: clamp(64px, 18vw, 92px) minmax(0, 1fr); gap: 5px 8px; padding: 8px; border-width: 3px; }
+  #ui-root .charsel-card__portrait { width: clamp(64px, 18vw, 92px); height: clamp(64px, 18vw, 92px); }
+  #ui-root .charsel-card__name { font-size: clamp(19px, 5vw, 28px); }
+  #ui-root .charsel-card__weapon .charsel__weapon-label { display: none; }
+  #ui-root .charsel-card__weapon .charsel__weapon-name { font-size: clamp(13px, 3.5vw, 18px); }
+}
 
 /* --- Saisie du prénom + tableau des scores (fin de run) -------------------
    Largeur 720px en border-box : le padding box fait alors 704px, soit

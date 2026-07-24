@@ -165,9 +165,16 @@ export class EditorOverlay {
     gFile.appendChild(btn('🗋 Nouveau (vierge)', () => {
       if (window.confirm('Repartir d\'un stage VIERGE ? (efface la compo courante de ce niveau)')) { state.reset() }
     }))
-    gFile.appendChild(btn('🏗 Partir du niveau existant', () => {
-      if (window.confirm('Charger le niveau EXISTANT comme base éditable ? (remplace la compo courante ; les engins deviennent bloquants)')) { state.importGenerated() }
-    }))
+    if (scene.stage === 'terrain_vierge') {
+      gFile.appendChild(btn('🏗 Partir du niveau existant', () => {
+        if (window.confirm('Charger le niveau EXISTANT comme base éditable ? (remplace la compo courante ; les engins deviennent bloquants)')) { state.importGenerated() }
+      }))
+    } else {
+      const manualStage = document.createElement('span')
+      manualStage.className = 'sce-file-note'
+      manualStage.textContent = 'Stage manuel : utiliser Charger un fichier'
+      gFile.appendChild(manualStage)
+    }
     gFile.appendChild(btn('💾 Sauver (jouable)', () => {
       saveUserLayout(scene.stage, state.exportGameJson())
       window.alert('Sauvé ✓ — jouable depuis le menu titre (niveau : ' + scene.stage + ').')

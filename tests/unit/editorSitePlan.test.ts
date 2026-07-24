@@ -70,17 +70,18 @@ describe('éditeur — restaurer le niveau d\'origine (A4)', () => {
     expect(resolved?.spawn).toEqual({ x: 123, y: -45 })
   })
 
-  it('save puis delete → boot : retour au niveau d\'origine (génératif)', async () => {
+  it('save puis delete → boot : retour à la composition committée', async () => {
     const custom = new EditorState('terrassement')
     custom.setSpawn(123, -45)
     saveUserLayout('terrassement', custom.exportGameJson())
     expect(await bootGame()).not.toBeNull()
 
     deleteUserLayout('terrassement')
-    // Aucune compo committée pour ce stage (REGISTRY vide) ⇒ null = jeu génératif.
+    // La suppression retire seulement l'override joueur : la composition
+    // committée redevient la source de vérité.
     const { getComposedLayout } = await import('@content/composedLayouts')
-    expect(await bootGame()).toBe(getComposedLayout('terrassement'))
-    expect(await bootGame()).toBeNull()
+    expect(await bootGame()).toStrictEqual(getComposedLayout('terrassement'))
+    expect(await bootGame()).not.toBeNull()
   })
 
   it('delete NE TOUCHE PAS au brouillon de l\'éditeur (stores distincts)', () => {
@@ -140,6 +141,30 @@ describe('éditeur — keepSitePlan (A3)', () => {
     s.setKeepSitePlan(false)
     s.undo()
     expect(s.keepSitePlan).toBe(true)
+  })
+})
+
+describe('éditeur — import du niveau généré', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    document.body.innerHTML = ''
+  })
+
+  it.each(STAGE_LIST.slice(1))('$label masque le bootstrap généré et explique le chargement manuel', ({ id }) => {
+    const root = mountToolbar(id, new EditorState(id))
+    const labels = Array.from(root.querySelectorAll('button')).map((button) => button.textContent ?? '')
+
+    expect(labels).not.toContain('🏗 Partir du niveau existant')
+    expect(root.textContent).toContain('Stage manuel : utiliser Charger un fichier')
+    expect(labels).toContain('⬆ Charger un fichier')
+  })
+
+  it('terrain vierge conserve le bootstrap du niveau généré', () => {
+    const root = mountToolbar('terrain_vierge', new EditorState('terrain_vierge'))
+    const labels = Array.from(root.querySelectorAll('button')).map((button) => button.textContent ?? '')
+
+    expect(labels).toContain('🏗 Partir du niveau existant')
+    expect(root.textContent).not.toContain('Stage manuel : utiliser Charger un fichier')
   })
 })
 

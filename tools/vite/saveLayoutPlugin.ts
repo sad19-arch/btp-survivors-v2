@@ -29,6 +29,41 @@ const CONTENT_DIR = join('src', 'content')
 const LAYOUTS_DIR = join(CONTENT_DIR, 'layouts')
 const REGISTRY_FILE = join(CONTENT_DIR, 'composedLayouts.ts')
 
+const CANONICAL_ZONE_TYPES = [
+  'signature_zone',
+  'zone_access',
+  'zone_storage',
+  'zone_secondary',
+  'zone_atmosphere'
+] as const
+
+/** Valide le contenu du layout avant toute écriture au dépôt. */
+export function validateSaveLayoutRequest(stage: string, json: string): string | null {
+  let layout: unknown
+  try {
+    layout = JSON.parse(json)
+  } catch {
+    return 'JSON invalide'
+  }
+  if (typeof layout !== 'object' || layout === null || Array.isArray(layout)) {
+    return 'JSON invalide'
+  }
+  const record = layout as { stage?: unknown; markers?: unknown }
+  if (record.stage !== stage) {
+    return 'stage JSON incohérent'
+  }
+  if (!Array.isArray(record.markers)) {
+    return 'zones canoniques invalides'
+  }
+  const types = record.markers.map((marker) =>
+    typeof marker === 'object' && marker !== null ? (marker as { type?: unknown }).type : undefined
+  )
+  const hasCanonicalZonesExactlyOnce = CANONICAL_ZONE_TYPES.every(
+    (type) => types.filter((candidate) => candidate === type).length === 1
+  )
+  return hasCanonicalZonesExactlyOnce ? null : 'zones canoniques invalides'
+}
+
 const HEADER = `/**
  * composedLayouts — REGISTRE des compositions du Stage Composer Editor,
  * committées sous src/content/layouts/*.json.
@@ -128,7 +163,12 @@ export function saveLayoutPlugin(): Plugin {
               res.end('json manquant')
               return
             }
-            JSON.parse(json) // valide la forme
+            const validationError = validateSaveLayoutRequest(stage, json)
+            if (validationError !== null) {
+              res.statusCode = 400
+              res.end(validationError)
+              return
+            }
             mkdirSync(LAYOUTS_DIR, { recursive: true })
             writeFileSync(join(LAYOUTS_DIR, `${stage}.json`), json)
             regenerateRegistry()

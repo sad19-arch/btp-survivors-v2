@@ -199,6 +199,10 @@ export const INVENTORY = { weapons: 6, passives: 6 } as const
 export const REFERENCE_VIEW = { halfW: 800, halfH: 450 } as const
 
 export const SPAWN = {
+  /** Marge hors viewport de la vague d'ouverture (géométrie rectangulaire dédiée). */
+  openingMargin: 96,
+  /** Un ennemi standard d'ouverture par joueur : contact rapide, sans pic de difficulté. */
+  openingCountPerPlayer: 1,
   /**
    * Rayon d'apparition autour du centre des joueurs, DÉRIVÉ de REFERENCE_VIEW
    * (demi-diagonale ~918 + marge 122 ≈ 1040) : les ennemis apparaissent HORS du

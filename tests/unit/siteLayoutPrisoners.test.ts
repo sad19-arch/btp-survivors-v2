@@ -68,14 +68,14 @@ describe('buildSiteLayout — gate compo vs procédural', () => {
     expect(site.prisoners).toBeDefined()
   })
 
-  it('stage SANS compo (terrassement) → prisoners ABSENT (fallback procédural)', () => {
+  it('terrassement composé → cinq otages explicites', () => {
     const site = buildSiteLayout(42, WORLD.width, WORLD.height, ConstructionPhaseId.TERRASSEMENT)
-    expect(site.prisoners).toBeUndefined()
+    expect(site.prisoners).toHaveLength(RESCUE.count)
   })
 })
 
-describe('Simulation — otages : compo = loi, sinon procédural', () => {
-  it('stage SANS compo → 5 otages procéduraux (comportement historique) + rescue.total=5', () => {
+describe('Simulation — otages : la compo est la loi', () => {
+  it('terrassement composé → 5 otages explicites + rescue.total=5', () => {
     const sim = new Simulation({ seed: 7, mode: 'solo', phaseId: ConstructionPhaseId.TERRASSEMENT })
     const st = sim.getState()
     expect(st.prisoners.length).toBe(RESCUE.count)

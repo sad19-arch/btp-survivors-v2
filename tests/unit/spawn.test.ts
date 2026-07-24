@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { World } from '@core/world'
 import { Rng } from '@core/rng'
-import { spawnWave, spawnBoss } from '@core/systems/spawn'
+import { openingSpawnPosition, spawnOpeningWave, spawnWave, spawnBoss } from '@core/systems/spawn'
 import { PHASES, ConstructionPhaseId, phasePoolIds } from '@content/phases'
 import { ENEMIES, MINI_BOSS_ID } from '@content/enemies'
-import { SPAWN } from '@content/config'
+import { REFERENCE_VIEW, SPAWN } from '@content/config'
 import type { ConstructionPhase } from '@content/phases'
 
 function terrainVierge(): ConstructionPhase {
@@ -14,6 +14,38 @@ function terrainVierge(): ConstructionPhase {
   }
   return phase
 }
+
+describe('vague d’ouverture', () => {
+  it('reste hors du rectangle visible à tous les angles cardinaux et diagonaux', () => {
+    const center = { x: 800, y: 600 }
+    for (let i = 0; i < 16; i++) {
+      const pos = openingSpawnPosition(center, (i * Math.PI * 2) / 16, SPAWN.openingMargin)
+      const outside = Math.abs(pos.x - center.x) > REFERENCE_VIEW.halfW || Math.abs(pos.y - center.y) > REFERENCE_VIEW.halfH
+      expect(outside).toBe(true)
+    }
+  })
+
+  it('crée uniquement des ennemis standards de la phase', () => {
+    const world = new World()
+    spawnOpeningWave(world, new Rng(42), terrainVierge(), { x: 800, y: 600 }, 3)
+    const enemies = [...world.query('enemy')]
+    expect(enemies).toHaveLength(3)
+    for (const entity of enemies) {
+      const type = world.get(entity, 'enemy')?.type
+      expect(type === undefined ? undefined : ENEMIES[type]?.archetype).toBe('base')
+    }
+  })
+
+  it('met en scène l’ouverture depuis le bas du viewport', () => {
+    const world = new World()
+    const center = { x: 800, y: 600 }
+    spawnOpeningWave(world, new Rng(7), terrainVierge(), center, 1)
+    const entity = [...world.query('enemy', 'position')][0]
+    const pos = entity === undefined ? undefined : world.get(entity, 'position')
+    expect(pos?.y ?? 0).toBeGreaterThan(center.y + REFERENCE_VIEW.halfH)
+    expect(pos?.x).toBeCloseTo(center.x)
+  })
+})
 
 describe('spawnWave (déterministe)', () => {
   it('crée le nombre demandé d\'ennemis, au rayon, avec un type du pool de la phase', () => {
