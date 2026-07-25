@@ -35,6 +35,29 @@ describe('Overlay (DOM)', () => {
     expect(items[0]?.classList.contains('menu__item--focus')).toBe(true)
   })
 
+  it('rend le choix fullscreen et met à jour l’invite du splash', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    app.setFullscreenState({ supported: true, active: false, preference: 'unset', feedback: null, authorizationRequired: false })
+    app.showFullscreenConsent()
+    const { root, overlay } = mount()
+    overlay.setStudioSplashHint('Appuie pour démarrer en plein écran')
+    overlay.sync(app.getState())
+    expect(root.querySelector('.fullscreen-consent')?.textContent).toContain('Plein écran (recommandé)')
+    expect(root.querySelector<HTMLElement>('.pads')?.style.display).toBe('none')
+    expect(root.querySelector('.splash__hint')?.textContent).toBe('Appuie pour démarrer en plein écran')
+  })
+
+  it('affiche brièvement un refus du navigateur sans bloquer le titre', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    app.setFullscreenState({ supported: true, active: false, preference: 'fullscreen', feedback: null, authorizationRequired: false })
+    const { root, overlay } = mount()
+    overlay.sync(app.getState())
+    app.setFullscreenState({ supported: true, active: false, preference: 'fullscreen', feedback: 'REFUSÉ', authorizationRequired: false })
+    overlay.sync(app.getState())
+    expect(root.querySelector('.fullscreen-feedback')?.textContent).toBe('Plein écran : REFUSÉ')
+    expect(root.querySelector('.panel--title')).not.toBeNull()
+  })
+
   it('affiche les trois étoiles de progression et le compteur sur le titre', () => {
     localStorage.clear()
     const app = new App({ seed: 1, mode: 'solo', autostart: false })

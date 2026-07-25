@@ -457,6 +457,7 @@ export function musicForState(ctx: MusicContext): MusicKey | null {
     // laisser passer la musique du stage (ni celle du boss).
     case 'paused':
     case 'characterSelect':
+    case 'fullscreenConsent':
     case 'options':
     case 'nameEntry':
     case 'hiscores':

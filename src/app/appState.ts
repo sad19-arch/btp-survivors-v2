@@ -129,9 +129,19 @@ export interface CharacterSelectView {
   players: CharacterSelectPlayerView[]
 }
 
+/** État sérialisable du plein écran, publié par la plateforme mais consommé par App/UI. */
+export interface FullscreenViewState {
+  supported: boolean
+  active: boolean
+  preference: 'unset' | 'fullscreen' | 'windowed'
+  feedback: 'REFUSÉ' | 'INDISPONIBLE' | null
+  authorizationRequired: boolean
+}
+
 /** Écran applicatif courant (dérivé de l'état de la simulation + surcouches). */
 export type Screen =
   | 'title'
+  | 'fullscreenConsent'
   | 'characterSelect'
   | 'game'
   | 'paused'
@@ -333,6 +343,8 @@ export interface AppViewState extends Omit<GameState, 'players'> {
    * sélection, seuls les joueurs inscrits sont lus ; en run, suit `players`.
    */
   inputPlayerCount: number
+  /** État plein écran sérialisable ; le contrôleur navigateur vit hors de l'App. */
+  fullscreen: FullscreenViewState
   /** Skin doré débloqué — cosmétique, session. Son déclencheur est en attente
    *  (le Konami active désormais le Mode Carnage). */
   goldSkin: boolean

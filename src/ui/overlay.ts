@@ -6,6 +6,7 @@ import { playerColor } from '@content/players'
 import { gamepadHudModel } from './gamepadHud'
 import { Minimap } from './minimap'
 import type { ViewportState } from './viewport'
+import { computeTitleLayout } from './titleLayout'
 import { approach } from './anim'
 import { cardEnterStyle } from './cardEnter'
 import { readHiScore } from './hiscore'
@@ -153,6 +154,8 @@ export class Overlay {
   private studioSplashEl: HTMLElement | null = null
   /** Callback de cycle de vie du splash (émet 'end' à son retrait). */
   private onStudioSplash: ((phase: 'start' | 'end') => void) | undefined
+  /** Ligne d'invite du splash, modifiable par la plateforme fullscreen. */
+  private studioSplashHintEl: HTMLElement | null = null
   /**
    * Garde one-shot : `true` tant que la machine à sous du coffre courant a déjà
    * été jouée. Évite de la rejouer à chaque rAF pendant que `chestOpen` reste
@@ -300,16 +303,18 @@ export class Overlay {
     // (dismissStudioSplash) dès que l'audio est prêt / au 1er input — la voix « presents »
     // l'accompagne À COUP SÛR. L'invite « appuie pour commencer » clignote après le reveal.
     const base = import.meta.env.BASE_URL
+    const splashHint = h('div', { className: 'splash__hint', text: 'Appuie pour commencer' })
     const splash = h('div', { className: 'splash' },
       h('div', { className: 'splash__gyro' }),
       h('div', { className: 'splash__flash' }),
       h('img', { className: 'splash__helmet', attrs: { src: `${base}ui_casque.png`, alt: '' } }),
       h('div', { className: 'splash__name', text: 'AIL ENTERTAINMENT' }),
       h('div', { className: 'splash__tag', text: 'PRÉSENTE' }),
-      h('div', { className: 'splash__hint', text: 'Appuie pour commencer' })
+      splashHint
     )
     root.append(splash)
     this.studioSplashEl = splash
+    this.studioSplashHintEl = splashHint
     this.onStudioSplash = onStudioSplash
     // Signale l'apparition → l'audio arme/joue « AIL Entertainment presents » EN SYNC.
     onStudioSplash?.('start')
@@ -324,9 +329,19 @@ export class Overlay {
    * IDEMPOTENT : ré-appliquer le même état ne change rien au DOM.
    */
   applyResponsive(v: ViewportState): void {
+    const title = computeTitleLayout(v)
     this.root.classList.toggle('ui-mobile', v.uiMobile)
+    this.root.classList.toggle('title-density--compact', title.density === 'compact')
+    this.root.classList.toggle('title-density--expanded', title.density === 'expanded')
     this.minimap.setCompact(v.uiMobile)
     this.root.style.setProperty('--ui-scale', String(v.uiScale))
+    this.root.style.setProperty('--title-scale', String(title.scale))
+    this.root.style.setProperty('--title-safe-x', `${title.safe.x}px`)
+    this.root.style.setProperty('--title-safe-y', `${title.safe.y}px`)
+    this.root.style.setProperty('--title-safe-width', `${title.safe.width}px`)
+    this.root.style.setProperty('--title-safe-height', `${title.safe.height}px`)
+    this.root.style.setProperty('--title-rendered-width', `${title.rendered.width}px`)
+    this.root.style.setProperty('--title-rendered-height', `${title.rendered.height}px`)
     // P6 : sur un vrai tactile tenu en portrait, invite à tourner (jeu = paysage).
     // Jamais sur desktop (pointer) — une fenêtre étroite reste jouable à la souris.
     const showRotate = v.inputType === 'touch' && v.orientation === 'portrait'
@@ -344,9 +359,15 @@ export class Overlay {
       return
     }
     this.studioSplashEl = null
+    this.studioSplashHintEl = null
     el.classList.add('splash--out')
     window.setTimeout(() => { el.remove() }, 420)
     this.onStudioSplash?.('end')
+  }
+
+  /** Change l'invite du splash sans laisser la plateforme toucher le DOM de l'UI. */
+  setStudioSplashHint(text: string): void {
+    this.studioSplashHintEl?.replaceChildren(text)
   }
 
   /** Met à jour l'overlay depuis l'état applicatif. */
@@ -562,7 +583,11 @@ export class Overlay {
     // « Manettes » ferait doublon ET chevaucherait le bloc de J2 (haut-droite).
     // Gardé ICI et pas en CSS : `display` est posé en style inline plus bas, qui
     // l'emporterait sur toute règle de la feuille.
-    const show = !state.introActive && state.players.length <= 1
+    const show =
+      !state.introActive &&
+      state.players.length <= 1 &&
+      state.screen !== 'fullscreenConsent' &&
+      state.screen !== 'options'
     const raw =
       typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function'
         ? Array.from(navigator.getGamepads())
@@ -752,6 +777,9 @@ export class Overlay {
         case 'title':
           this.screenLayer.append(this.titlePanel(state))
           break
+        case 'fullscreenConsent':
+          this.screenLayer.append(this.fullscreenConsentPanel(state))
+          break
         case 'characterSelect':
           this.screenLayer.append(this.characterSelectPanel(state))
           break
@@ -779,7 +807,7 @@ export class Overlay {
           this.screenLayer.append(this.upgradePanel(state))
           break
         case 'options':
-          this.screenLayer.append(this.menuPanel('Options', 'Réglages audio', state))
+          this.screenLayer.append(this.menuPanel('Options', 'Audio, vibrations et affichage', state))
           break
         default:
           break // en jeu : pas de modale
@@ -804,7 +832,7 @@ export class Overlay {
   private titlePanel(state: AppViewState): HTMLElement {
     const panel = h(
       'div',
-      { className: 'panel' },
+      { className: 'panel panel--title' },
       h('div', { className: 'panel__title logo' },
         h('div', { className: 'logo__flash', attrs: { 'aria-hidden': 'true' } }),
         h('div', { className: 'logo__topper', text: 'SUPER CHANTIER-001' }),
@@ -814,7 +842,12 @@ export class Overlay {
       ),
       h('p', { className: 'panel__subtitle', text: 'Survis au chantier' }),
       this.menuList(state),
-      h('p', { className: 'hint-line', text: 'Manette ou clavier · Valider: A / Entrée' })
+      h('p', {
+        className: state.fullscreen.feedback === 'REFUSÉ' ? 'hint-line fullscreen-feedback' : 'hint-line',
+        text: state.fullscreen.feedback === 'REFUSÉ'
+          ? 'Plein écran : REFUSÉ'
+          : 'Manette ou clavier · Valider: A / Entrée'
+      })
     )
     if (state.goldSkin) {
       panel.append(h('p', { className: 'unlock-line', text: 'Casque doré débloqué' }))
@@ -843,12 +876,16 @@ export class Overlay {
       h('div', { className: 'crew-fig crew-fig--right' }, h('img', { className: 'crew-fig__img', attrs: { src: `${base}player_soudeur.png`, alt: '' } }))
     )
     // Décor titre tramé derrière le panneau (screen--title allège le voile sombre).
+    // Le titre possède son propre rectangle de conception : il ne doit jamais
+    // hériter de l'échelle du HUD, qui est calibrée pour les éléments en jeu.
+    const composition = h('div', { className: 'title-composition' }, panel, chrome)
+    const frame = h('div', { className: 'title-frame' }, composition)
+    const safe = h('div', { className: 'title-safe' }, frame)
     return h('div', { className: 'screen screen--title' },
       h('img', { className: 'title-bg', attrs: { src: `${base}ui_bg_dusk.png`, alt: '' } }),
       crew,
       arcbar,
-      panel,
-      chrome
+      safe
     )
   }
 
@@ -1458,8 +1495,21 @@ export class Overlay {
     }
   }
 
+  private fullscreenConsentPanel(state: AppViewState): HTMLElement {
+    const panel = h(
+      'div',
+      { className: 'panel fullscreen-consent' },
+      h('h1', { className: 'panel__title', text: 'AFFICHAGE' }),
+      h('p', { className: 'panel__subtitle', text: 'Choisis ton mode de jeu' }),
+      this.menuList(state),
+      h('p', { className: 'hint-line', text: 'Manette ou clavier · Valider: A / Entrée' })
+    )
+    return h('div', { className: 'screen' }, panel)
+  }
+
   private menuPanel(title: string, subtitle: string | null, state: AppViewState): HTMLElement {
-    const panel = h('div', { className: 'panel' }, h('h1', { className: 'panel__title', text: title }))
+    const panelClass = title === 'Options' ? 'panel panel--options' : 'panel'
+    const panel = h('div', { className: panelClass }, h('h1', { className: 'panel__title', text: title }))
     if (subtitle !== null) {
       panel.append(h('p', { className: 'panel__subtitle', text: subtitle }))
     }
@@ -1971,7 +2021,8 @@ export class Overlay {
       state.screen === 'title' || state.screen === 'victory'
         ? `${state.stageProgress.selectedStageId}:${state.stageProgress.unlockedCount}:${state.stageProgress.stages.map((stage) => `${stage.bestStars}${stage.unlocked ? 'u' : 'l'}`).join('')}:${state.stageProgress.notification ?? ''}:${state.stageProgress.newlyUnlockedStage?.id ?? ''}`
         : ''
-    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}|${charSelectPart}|${nameEntryPart}|${hiScoresPart}|${achievementsPart}|${progressionPart}`
+    const fullscreenPart = state.screen === 'title' ? (state.fullscreen.feedback ?? '') : ''
+    return `${state.screen}|${menuPart}|${statsPart}|${titlePart}|${charSelectPart}|${nameEntryPart}|${hiScoresPart}|${achievementsPart}|${progressionPart}|${fullscreenPart}`
   }
 }
 

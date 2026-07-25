@@ -42,7 +42,7 @@ import { loadHaptics, saveHaptics } from './hapticsSettings'
 import { evolutionStatuses } from '@core/systems/evolution'
 import { chestRevealTotalMs } from '@ui/overlay'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
-import type { AchievementsView, AppViewState, RunReport, HiScoresView, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen, EvolutionEntryView, EvolutionsView, StageProgressView } from './appState'
+import type { AchievementsView, AppViewState, RunReport, HiScoresView, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen, EvolutionEntryView, EvolutionsView, StageProgressView, FullscreenViewState } from './appState'
 import { selectDeathQuote } from '@content/deathQuotes'
 import { selectVictoryQuote } from '@content/victoryQuotes'
 import { EVOLUTIONS } from '@content/evolutions'
@@ -68,6 +68,26 @@ export interface AppOptions {
   intro?: boolean
   /** Exception de test explicite : ignore les verrous de stage, jamais activée par le jeu normal. */
   bypassStageLocks?: boolean
+}
+
+export type FullscreenIntent =
+  | {
+      type: 'select'
+      preference: 'fullscreen' | 'windowed'
+      source: 'pointer' | 'keyboard' | 'gamepad'
+      requestNow: boolean
+    }
+  | {
+      type: 'request' | 'exit'
+      source: 'pointer' | 'keyboard' | 'gamepad'
+    }
+
+const DEFAULT_FULLSCREEN_STATE: FullscreenViewState = {
+  supported: false,
+  active: false,
+  preference: 'unset',
+  feedback: 'INDISPONIBLE',
+  authorizationRequired: false
 }
 
 /** Action prise en compte par le code secret (directions + valider/annuler). */
@@ -195,6 +215,10 @@ export class App {
   private chestSkipToken = 0
   /** Écran Options ouvert (surcouche au-dessus du titre / pause). */
   private optionsOpen = false
+  /** État sérialisable transmis par le contrôleur navigateur (aucun DOM dans App). */
+  private fullscreenState: FullscreenViewState = { ...DEFAULT_FULLSCREEN_STATE }
+  /** Le choix est proposé seulement après la fin du splash studio. */
+  private fullscreenConsentOpen = false
   /** Sélection de personnage en cours (ouverte par « Jouer » au titre, avant le lancement de la partie). */
   private charSelectOpen = false
   /** Personnages choisis (index = playerId-1), passés à `start()` une fois tous verrouillés. */
@@ -453,6 +477,51 @@ export class App {
     this.sim?.setInput(playerId, input)
   }
 
+  /** Met à jour la vue plateforme sans importer l'API Fullscreen dans l'App. */
+  setFullscreenState(state: FullscreenViewState): void {
+    this.bumpState()
+    this.fullscreenState = { ...state }
+    if (!state.supported) {
+      this.fullscreenConsentOpen = false
+    }
+    this.refreshFocus()
+  }
+
+  /** Appelé après le splash : le premier choix ne bloque jamais une API indisponible. */
+  showFullscreenConsent(): void {
+    if (this.fullscreenState.supported && this.fullscreenState.preference === 'unset') {
+      this.fullscreenConsentOpen = true
+      this.bumpState()
+      this.refreshFocus()
+    }
+  }
+
+  /** Geste tactile/clic : ne sert qu'une demande déjà armée (jamais le choix pointé). */
+  consumeTrustedFullscreenPointer(): boolean {
+    if (!this.fullscreenState.authorizationRequired) {
+      return false
+    }
+    this.emitFullscreenIntent({ type: 'request', source: 'pointer' })
+    return true
+  }
+
+  /** Entrée/Espace de confiance : peut aussi sélectionner l'option fullscreen focalisée. */
+  consumeTrustedFullscreenKeyboard(): boolean {
+    if (this.fullscreenState.authorizationRequired) {
+      this.emitFullscreenIntent({ type: 'request', source: 'keyboard' })
+      return true
+    }
+    if (this.screen === 'fullscreenConsent' && this.focus.current() === 'fullscreen') {
+      this.activate('fullscreenConsent', 'fullscreen', 'keyboard')
+      return true
+    }
+    if (this.screen === 'options' && this.focus.current() === 'fullscreen') {
+      this.activate('options', 'fullscreen', 'keyboard')
+      return true
+    }
+    return false
+  }
+
   // --- navigation manette/clavier ------------------------------------------
 
   /**
@@ -524,7 +593,7 @@ export class App {
       return
     }
     this.focus.setIndex(index)
-    this.activate(this.screen, items[index].id)
+    this.activate(this.screen, items[index].id, 'pointer')
   }
 
   /**
@@ -949,6 +1018,7 @@ export class App {
           : this.charSelectOpen
             ? this.selectedPlayers
             : 4,
+      fullscreen: { ...this.fullscreenState },
       goldSkin: this.goldSkin,
       carnage: this.carnage,
       runId: this.runId,
@@ -1047,6 +1117,9 @@ export class App {
     if (this.optionsOpen) {
       return 'options'
     }
+    if (this.fullscreenConsentOpen && !this.started) {
+      return 'fullscreenConsent'
+    }
     // Surcouches de fin de run (saisie du prénom → tableau) : elles s'empilent
     // AU-DESSUS du rapport, qui reste l'écran de fin (la sim est toujours en
     // `gameover`/`won` dessous). En sortir rend la main au rapport.
@@ -1094,6 +1167,8 @@ export class App {
     switch (this.screen) {
       case 'title':
         return this.titleItems()
+      case 'fullscreenConsent':
+        return this.fullscreenConsentItems()
       case 'characterSelect':
         return this.characterSelectItems()
       case 'paused':
@@ -1136,7 +1211,15 @@ export class App {
     ]
   }
 
-  /** Écran Options : volumes (◄/►) + mute + retour. */
+  /** Premier lancement : deux choix, tous deux visibles et focalisables. */
+  private fullscreenConsentItems(): MenuItemView[] {
+    return [
+      { id: 'fullscreen', label: 'Plein écran (recommandé)', hint: 'Immersion maximale' },
+      { id: 'windowed', label: 'Fenêtré', hint: 'Toujours visible et jouable' }
+    ]
+  }
+
+  /** Écran Options : volumes, entrées et affichage. */
   private optionsItems(): MenuItemView[] {
     const a = this.audioLevels
     const pct = (v: number): string => `${Math.round(v * 100)}%`
@@ -1146,8 +1229,33 @@ export class App {
       { id: 'vol_sfx', label: `◄ Effets : ${pct(a.sfx)} ►`, hint: 'Gauche/Droite pour régler' },
       { id: 'mute', label: `Son : ${a.muted ? 'COUPÉ' : 'activé'}`, hint: 'Valider pour basculer' },
       { id: 'vibrations', label: `Vibrations : ${this.vibrationsEnabled ? 'activées' : 'désactivées'}`, hint: 'Valider pour basculer' },
+      { id: 'fullscreen', label: `Plein écran : ${this.fullscreenLabel()}`, hint: this.fullscreenHint() },
+      { id: 'fullscreen_startup', label: `Plein écran au démarrage : ${this.fullscreenState.preference === 'fullscreen' ? 'OUI' : 'NON'}`, hint: 'Valider pour basculer' },
       { id: 'retour', label: 'Retour', hint: null }
     ]
+  }
+
+  private fullscreenLabel(): 'ACTIVER' | 'QUITTER' | 'INDISPONIBLE' | 'AUTORISATION REQUISE' {
+    if (!this.fullscreenState.supported) {
+      return 'INDISPONIBLE'
+    }
+    if (this.fullscreenState.active) {
+      return 'QUITTER'
+    }
+    if (this.fullscreenState.authorizationRequired) {
+      return 'AUTORISATION REQUISE'
+    }
+    return 'ACTIVER'
+  }
+
+  private fullscreenHint(): string | null {
+    if (!this.fullscreenState.supported) {
+      return 'Non disponible sur cet appareil'
+    }
+    if (this.fullscreenState.authorizationRequired) {
+      return 'Touche, clic ou Entrée requis'
+    }
+    return 'Valider pour basculer'
   }
 
   /** Réglage vibrations courant (lu par le Rumbler, câblé dans main.ts). */
@@ -1165,6 +1273,11 @@ export class App {
     saveAudioSettings(this.audioLevels)
     this.events.dispatchEvent(new Event('audioSettings'))
     this.refreshFocus()
+  }
+
+  /** Émet une intention typée ; seul main.ts appelle l'API navigateur. */
+  private emitFullscreenIntent(intent: FullscreenIntent): void {
+    this.events.dispatchEvent(new CustomEvent<FullscreenIntent>('fullscreenIntent', { detail: intent }))
   }
 
   /** Émet un SFX d'UI (navigation/valider/annuler) — écouté par l'AudioDirector. */
@@ -1577,8 +1690,16 @@ export class App {
   }
 
   /** Exécute l'action d'un item de menu. */
-  private activate(screen: Screen, id: string): void {
+  private activate(screen: Screen, id: string, source: FullscreenIntent['source'] = 'gamepad'): void {
     this.emitUi(screen === 'upgrade' ? 'upgradePick' : 'menuConfirm')
+    if (screen === 'fullscreenConsent') {
+      this.fullscreenConsentOpen = false
+      if (id === 'fullscreen' || id === 'windowed') {
+        this.emitFullscreenIntent({ type: 'select', preference: id, source, requestNow: true })
+      }
+      this.refreshFocus()
+      return
+    }
     if (screen === 'options') {
       if (id === 'mute') {
         this.audioLevels = { ...this.audioLevels, muted: !this.audioLevels.muted }
@@ -1589,6 +1710,15 @@ export class App {
         saveHaptics(this.vibrationsEnabled)
         // Le Rumbler (câblé dans main.ts) écoute cet événement et se (dés)active.
         this.events.dispatchEvent(new Event('inputSettings'))
+      } else if (id === 'fullscreen') {
+        if (this.fullscreenState.active) {
+          this.emitFullscreenIntent({ type: 'exit', source })
+        } else if (this.fullscreenState.supported) {
+          this.emitFullscreenIntent({ type: 'request', source })
+        }
+      } else if (id === 'fullscreen_startup') {
+        const preference = this.fullscreenState.preference === 'fullscreen' ? 'windowed' : 'fullscreen'
+        this.emitFullscreenIntent({ type: 'select', preference, source, requestNow: false })
       } else if (id === 'retour') {
         this.optionsOpen = false
       }

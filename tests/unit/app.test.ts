@@ -40,6 +40,107 @@ describe('App — écrans & navigation', () => {
     expect(s.players.length).toBe(0)
   })
 
+  it('expose un écran de consentement fullscreen piloté par FocusModel sans API navigateur', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    const intents: unknown[] = []
+    app.events.addEventListener('fullscreenIntent', (event) => {
+      intents.push((event as CustomEvent).detail)
+    })
+    app.setFullscreenState({
+      supported: true,
+      active: false,
+      preference: 'unset',
+      feedback: null,
+      authorizationRequired: false
+    })
+    app.showFullscreenConsent()
+    expect(app.getState().screen).toBe('fullscreenConsent')
+    expect(app.getState().menu?.items.map((item) => item.id)).toEqual(['fullscreen', 'windowed'])
+    app.nav('down')
+    expect(app.getState().menu?.index).toBe(1)
+    app.nav('up')
+    app.confirm() // chemin manette : la plateforme doit attendre un geste de confiance.
+    expect(intents).toEqual([{ type: 'select', preference: 'fullscreen', source: 'gamepad', requestNow: true }])
+    expect(app.getState().screen).toBe('title')
+  })
+
+  it('expose l’état fullscreen JSON-safe et les commandes Options françaises', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    app.setFullscreenState({
+      supported: true,
+      active: false,
+      preference: 'fullscreen',
+      feedback: null,
+      authorizationRequired: true
+    })
+    expect(app.getState().fullscreen).toEqual({
+      supported: true,
+      active: false,
+      preference: 'fullscreen',
+      feedback: null,
+      authorizationRequired: true
+    })
+    app.nav('down')
+    app.nav('down')
+    app.nav('down')
+    app.nav('down')
+    app.nav('down')
+    app.confirm() // options
+    const items = app.getState().menu?.items.map((item) => item.label) ?? []
+    expect(items).toContain('Plein écran : AUTORISATION REQUISE')
+    expect(items).toContain('Plein écran au démarrage : OUI')
+  })
+
+  it('consomme Entrée directement sur ACTIVER pour conserver le geste clavier fiable', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    const intents: unknown[] = []
+    app.events.addEventListener('fullscreenIntent', (event) => {
+      intents.push((event as CustomEvent).detail)
+    })
+    app.setFullscreenState({
+      supported: true,
+      active: false,
+      preference: 'windowed',
+      feedback: null,
+      authorizationRequired: false
+    })
+    for (let step = 0; step < 5; step++) {
+      app.nav('down')
+    }
+    app.confirm()
+    for (let step = 0; step < 5; step++) {
+      app.nav('down')
+    }
+    expect(app.consumeTrustedFullscreenKeyboard()).toBe(true)
+    expect(intents).toEqual([{ type: 'request', source: 'keyboard' }])
+  })
+
+  it('le réglage de démarrage ne demande pas le plein écran courant', () => {
+    const app = new App({ seed: 1, mode: 'solo', autostart: false })
+    const intents: unknown[] = []
+    app.events.addEventListener('fullscreenIntent', (event) => {
+      intents.push((event as CustomEvent).detail)
+    })
+    app.setFullscreenState({
+      supported: true,
+      active: false,
+      preference: 'windowed',
+      feedback: null,
+      authorizationRequired: false
+    })
+    for (let step = 0; step < 5; step++) {
+      app.nav('down')
+    }
+    app.confirm()
+    app.clickItem(6)
+    expect(intents).toEqual([{
+      type: 'select',
+      preference: 'fullscreen',
+      source: 'pointer',
+      requestNow: false
+    }])
+  })
+
   it('l\'item « Éditeur » émet launchEditor (effet de bord câblé hors App pure)', () => {
     const app = new App({ seed: 1, mode: 'solo', autostart: false })
     let launched = false

@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
-import { App } from './app'
+import { App, type FullscreenIntent } from './app'
+import { createBrowserFullscreenController, FullscreenGestureBridge } from '@platform/fullscreen'
 import { GameScene, type GameSceneData } from '@render/scenes/GameScene'
 import { BootScene } from '@render/scenes/BootScene'
 import { Overlay } from '@ui/overlay'
@@ -55,6 +56,44 @@ const app = new App({
   // jeu normal (même en dev/autostart) respecte toujours la progression persistée.
   bypassStageLocks: opts.test
 })
+const fullscreen = createBrowserFullscreenController()
+if (fullscreen !== null) {
+  app.setFullscreenState(fullscreen.state())
+  // Échap / les contrôles natifs du navigateur ne traversent pas les intents de
+  // l'App : le contrôleur republie donc son snapshot à chaque fullscreenchange.
+  fullscreen.subscribe((state) => app.setFullscreenState(state))
+  // Préférence persistée : seulement armée ici. L'API ne sera appelée qu'au
+  // premier geste que le pont plateforme intercepte dans le même événement.
+  fullscreen.armStartupRequest()
+  app.setFullscreenState(fullscreen.state())
+  new FullscreenGestureBridge(window, {
+    onKeyboard: () => app.consumeTrustedFullscreenKeyboard(),
+    onPointer: () => app.consumeTrustedFullscreenPointer()
+  })
+  app.events.addEventListener('fullscreenIntent', (event) => {
+    const intent = (event as CustomEvent<FullscreenIntent>).detail
+    if (intent.type === 'select') {
+      fullscreen.selectPreference(intent.preference, intent.requestNow)
+      app.setFullscreenState(fullscreen.state())
+      if (intent.requestNow && intent.preference === 'fullscreen' && intent.source !== 'gamepad') {
+        void fullscreen.requestFromTrustedGesture().then(() => app.setFullscreenState(fullscreen.state()))
+      }
+      return
+    }
+    if (intent.type === 'request') {
+      if (intent.source === 'gamepad') {
+        fullscreen.armRequest()
+        app.setFullscreenState(fullscreen.state())
+      } else {
+        void fullscreen.requestFromTrustedGesture().then(() => app.setFullscreenState(fullscreen.state()))
+      }
+      return
+    }
+    if (intent.type === 'exit') {
+      void fullscreen.exit().then(() => app.setFullscreenState(fullscreen.state()))
+    }
+  })
+}
 const seam = createSeam(app)
 
 // Item « Éditeur de niveaux » du menu titre → bascule vers le boot éditeur
@@ -131,8 +170,18 @@ if (uiRoot !== null) {
   const overlay = new Overlay(
     uiRoot,
     (i) => app.clickItem(i),
-    (phase) => { if (phase === 'start') { audio?.beginStudioPresents() } else { audio?.endStudioPresents() } }
+    (phase) => {
+      if (phase === 'start') {
+        audio?.beginStudioPresents()
+      } else {
+        audio?.endStudioPresents()
+        app.showFullscreenConsent()
+      }
+    }
   )
+  if (app.getState().fullscreen.authorizationRequired) {
+    overlay.setStudioSplashHint('Appuie pour démarrer en plein écran')
+  }
   // L'overlay CONSOMME la source de vérité responsive (émission immédiate à
   // l'abonnement → HUD correct dès le boot ; recalculs coalescés ensuite).
   viewport.subscribe((v) => overlay.applyResponsive(v))

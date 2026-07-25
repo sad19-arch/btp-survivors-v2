@@ -883,6 +883,26 @@ const CSS = `
 /* Minimap : plus petite (JS setCompact) + déplacée en haut-droite (hors zone du pouce/stick). */
 #ui-root.ui-mobile .minimap { left: auto; bottom: auto; right: max(12px, env(safe-area-inset-right)); top: max(12px, env(safe-area-inset-top)); padding: 5px; }
 
+/* Options gagne deux lignes : en paysage court, on conserve tous les contrôles
+   focalisables plutôt que d'imposer un scroll à la souris. */
+@media (max-height: 430px) {
+  #ui-root .panel--options,
+  #ui-root .fullscreen-consent,
+  #ui-root.ui-mobile .panel--options,
+  #ui-root.ui-mobile .fullscreen-consent {
+    transform: scale(0.62);
+    transform-origin: center;
+  }
+  #ui-root .panel--options {
+    padding: 16px 28px;
+    gap: 8px;
+  }
+  #ui-root .panel--options .panel__title { font-size: 44px; }
+  #ui-root .panel--options .panel__subtitle { margin: 0; font-size: 19px; }
+  #ui-root .panel--options .menu { gap: 6px; }
+  #ui-root .panel--options .menu__item { padding: 8px 16px 8px 38px; border-width: 4px; font-size: 20px; }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Refonte ARCADE (BTP Carnage) — tokens couleur + cadre métal/CRT + keyframes.
    Couleurs LOCALES (jamais dans palette.ts). Repère : maquette planche 2a.
@@ -1187,7 +1207,124 @@ const CSS = `
   letter-spacing: 2px; text-shadow: 3px 3px 0 var(--arc-contour, #101014); }
 #ui-root .rotate-hint__sub { font-family: 'Pixelify Sans', sans-serif; font-size: clamp(13px, 3.6vw, 18px); color: var(--arc-creme, #EAD9B8); }
 @keyframes rotate-hint-turn { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(90deg); } }
+
+/* ── Titre responsive : géométrie indépendante du HUD ─────────────────── */
+/* Le rectangle est fourni par computeTitleLayout. Sa transformation est posée
+   UNE fois sur la composition afin que le HUD conserve sa variable --ui-scale. */
+#ui-root .title-safe {
+  position: absolute;
+  left: var(--title-safe-x, 16px);
+  top: var(--title-safe-y, 16px);
+  width: var(--title-safe-width, calc(100% - 32px));
+  height: var(--title-safe-height, calc(100% - 32px));
+  display: grid;
+  place-items: center;
+  z-index: 3;
+}
+#ui-root .title-frame {
+  position: relative;
+  width: var(--title-rendered-width, 1100px);
+  height: var(--title-rendered-height, 920px);
+}
+#ui-root .title-composition {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1100px;
+  height: 920px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  transform: translate(-50%, -50%) scale(var(--title-scale, 1));
+  transform-origin: center;
+}
+#ui-root .panel--title {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 20px 38px;
+  gap: 8px;
+  justify-content: center;
+  overflow: visible;
+}
+#ui-root .panel--title::before, #ui-root .panel--title::after { display: none; }
+#ui-root .panel--title .logo { gap: 1px; }
+#ui-root .panel--title .logo__topper { font-size: 24px; letter-spacing: 5px; }
+#ui-root .panel--title .logo__topper::before, #ui-root .panel--title .logo__topper::after { width: 72px; height: 3px; }
+#ui-root .panel--title .logo__btp { font-size: 96px; }
+#ui-root .panel--title .logo__carnage { font-size: 132px; }
+#ui-root .panel--title .logo__dust { width: 440px; height: 18px; margin-top: 0; }
+#ui-root .panel--title .panel__subtitle,
+#ui-root .panel--title .hint-line,
+#ui-root .panel--title .unlock-line { margin: 0; line-height: 1; }
+#ui-root .panel--title .panel__subtitle { font-size: 22px; }
+#ui-root .panel--title .hint-line { font-size: 18px; }
+#ui-root .panel--title .unlock-line { font-size: 18px; }
+#ui-root .panel--title .menu { gap: 6px; }
+#ui-root .panel--title .menu__item {
+  box-sizing: border-box;
+  min-height: 38px;
+  padding: 5px 20px 5px 42px;
+  border-width: 4px;
+  overflow: visible;
+  font-size: 20px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+#ui-root .panel--title .menu__item--focus::before { left: 12px; border-left-width: 10px; border-right-width: 10px; border-bottom-width: 17px; }
+#ui-root .panel--title .menu__item--stage { min-height: 42px; gap: 8px; padding-top: 3px; padding-bottom: 3px; }
+#ui-root .panel--title .stage-progress { flex-basis: 190px; gap: 0; }
+#ui-root .panel--title .stage-progress__count { font-size: 12px; }
+#ui-root .panel--title .stage-progress__stars { gap: 2px; }
+#ui-root .panel--title .stage-progress__star { width: 14px; height: 14px; }
+#ui-root .panel--title .stage-progress__requirement,
+#ui-root .panel--title .stage-progress__notice,
+#ui-root .panel--title .stage-progress__unlocked { font-size: 10px; line-height: 1; }
+#ui-root .title-composition .title-chrome {
+  position: static;
+  flex: 0 0 auto;
+  width: 100%;
+  gap: 4px;
+}
+#ui-root .title-composition .insertcoin { padding: 4px 14px; font-size: 14px; }
+#ui-root .title-composition .pushstart { width: 480px; height: 38px; border-width: 4px; }
+#ui-root .title-composition .pushstart__label { padding: 4px 14px; font-size: 14px; }
+#ui-root .title-composition .title-credits { width: 500px; }
+#ui-root .title-composition .credit, #ui-root .title-composition .studio { font-size: 16px; }
+
+#ui-root.title-density--compact .title-composition { width: 840px; height: 520px; gap: 0; }
+#ui-root.title-density--compact .arcbar,
+#ui-root.title-density--compact .title-composition .title-chrome { display: none; }
+#ui-root.title-density--compact .panel--title { padding: 12px 24px; gap: 4px; }
+#ui-root.title-density--compact .panel--title .logo__topper { font-size: 16px; letter-spacing: 3px; }
+#ui-root.title-density--compact .panel--title .logo__topper::before,
+#ui-root.title-density--compact .panel--title .logo__topper::after { width: 42px; height: 2px; }
+#ui-root.title-density--compact .panel--title .logo__btp { font-size: 64px; }
+#ui-root.title-density--compact .panel--title .logo__carnage { font-size: 84px; }
+#ui-root.title-density--compact .panel--title .logo__dust { display: none; }
+#ui-root.title-density--compact .panel--title .panel__subtitle { font-size: 18px; }
+#ui-root.title-density--compact .panel--title .hint-line { font-size: 16px; }
+#ui-root.title-density--compact .panel--title .unlock-line { display: none; }
+#ui-root.title-density--compact .panel--title .menu { gap: 3px; }
+#ui-root.title-density--compact .panel--title .menu__item { min-height: 31px; padding: 3px 14px 3px 30px; border-width: 3px; font-size: 19px; }
+#ui-root.title-density--compact .panel--title .menu__item--focus::before { left: 8px; border-left-width: 8px; border-right-width: 8px; border-bottom-width: 14px; }
+#ui-root.title-density--compact .panel--title .menu__item--stage { min-height: 46px; flex-direction: column; justify-content: center; gap: 0; }
+#ui-root.title-density--compact .panel--title .menu__stage-label { flex: 0 0 auto; width: 100%; }
+#ui-root.title-density--compact .panel--title .stage-progress { flex: 0 0 auto; width: 100%; flex-direction: row; justify-content: center; gap: 6px; }
+#ui-root.title-density--compact .panel--title .stage-progress__count { display: none; }
+#ui-root.title-density--compact .panel--title .stage-progress__star { width: 14px; height: 14px; }
+#ui-root.title-density--compact .panel--title .stage-progress__requirement,
+#ui-root.title-density--compact .panel--title .stage-progress__notice,
+#ui-root.title-density--compact .panel--title .stage-progress__unlocked { font-size: 16px; }
+/* La règle mobile générale scale les panneaux HUD : le titre possède déjà sa
+   composition transformée, donc on la neutralise explicitement. */
+#ui-root.ui-mobile .panel--title { transform: none; max-width: none; }
+
 `
+
 
 let injected = false
 
