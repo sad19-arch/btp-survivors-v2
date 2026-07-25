@@ -20,15 +20,22 @@ import { renderSummaryTable, renderCurves, renderDiff, renderEarlyGame } from '.
 import { evaluateTargets } from './targets'
 import { saveBaseline, loadBaseline } from './baseline'
 import { BOT_NAMES, isBotName, type BotName } from './bots'
-import { SPAWN } from '@content/config'
+import { spawnCapAt, FINALE } from '@content/config'
 import { phaseIdFromLevel, type ConstructionPhaseId } from '@content/phases'
 
 /**
- * Marge de sécurité au-dessus de `SPAWN.maxActive` : les boss (mid/final) sont
- * des ennemis qui apparaissent HORS du plafond de vague (condition de victoire,
- * jamais clampés). Le pic légitime = maxActive + quelques boss simultanés.
+ * Marge de sécurité au-dessus du plafond COURANT : les boss (mid/final) sont des
+ * ennemis qui apparaissent HORS du plafond de vague (condition de victoire, jamais
+ * clampés). Le pic légitime = plafond du moment + quelques boss simultanés.
  */
 const ENEMY_SANITY_MARGIN = 8
+
+/**
+ * Plafond légitime maximal atteignable sur toute la run = plafond de la finale
+ * (`spawnCapAt` à 20:00→22:00). L'invariant s'y réfère : sinon la saturation
+ * volontaire (~700) donnerait un faux rouge « plafond dépassé ».
+ */
+const PEAK_ENEMY_CAP = spawnCapAt(FINALE.fullMs)
 
 const BASELINE_PATH = join(dirname(fileURLToPath(import.meta.url)), 'baseline.json')
 
@@ -137,8 +144,8 @@ function main(): void {
   if (minHp < 0) {
     sanity.push(`HP négatif silencieux (min=${minHp})`)
   }
-  if (maxEnemies > SPAWN.maxActive + ENEMY_SANITY_MARGIN) {
-    sanity.push(`plafond d'ennemis dépassé (${maxEnemies})`)
+  if (maxEnemies > PEAK_ENEMY_CAP + ENEMY_SANITY_MARGIN) {
+    sanity.push(`plafond d'ennemis dépassé (${maxEnemies} > ${PEAK_ENEMY_CAP})`)
   }
   if (sanity.length > 0) {
     console.error('\n[sim] INVARIANTS SANITY ROUGES:\n - ' + sanity.join('\n - '))

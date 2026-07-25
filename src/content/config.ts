@@ -210,20 +210,59 @@ export const SPAWN = {
    */
   ringRadius: Math.round(Math.hypot(REFERENCE_VIEW.halfW, REFERENCE_VIEW.halfH) + 122),
   /**
-   * Plafond d'ennemis simultanés. TUN-3 : 300→220 (= la limite sanity du harness).
+   * Plafond d'ennemis simultanés en régime NORMAL (0 → ~19:30). TUN-3 : 300→220.
    * Un pic à 300 n'apportait pas de menace mais nourrissait l'XP (armes AoE) et la
-   * charge CPU. 220 aligne le cap sur l'invariant et affame un peu le swarm.
+   * charge CPU. 220 affame un peu le swarm hors finale.
    */
-  maxActive: 220
+  maxActive: 220,
+  /**
+   * Plafond ÉTENDU pendant la finale (20:00 → 22:00) : écran complètement saturé
+   * (spectacle « power fantasy », demande user). Surcoût CPU/GPU CONFINÉ à ces 2
+   * min (le reste de la run reste à `maxActive`). Faisable ici car l'IA lit un
+   * flow field (O(1)/ennemi), aucun système de séparation O(n²), collisions par
+   * grille spatiale, rendu culled + pool à la demande, VFX capés par frame.
+   */
+  maxActiveFinale: 700
 } as const
+
+/**
+ * Jalons temporels de la finale (ms de temps de jeu) : montée du plafond puis
+ * boss. La saturation (20:00→22:00) précède le boss final à 22:00.
+ */
+export const FINALE = {
+  /** Début de la montée du plafond vers la saturation. */
+  rampStartMs: 19.5 * 60_000, // 1_170_000 (19:30)
+  /** Plafond finale atteint (plein) et tenu jusqu'au boss. */
+  fullMs: 20 * 60_000, // 1_200_000 (20:00)
+  /** Fin de la finale = apparition du boss. */
+  endMs: 22 * 60_000 // 1_320_000 (22:00)
+} as const
+
+/**
+ * Plafond d'ennemis simultanés au temps `elapsedMs` (pur, déterministe). Reste à
+ * `SPAWN.maxActive` (220) jusqu'à 19:30, monte linéairement vers
+ * `SPAWN.maxActiveFinale` (700) d'ici 20:00, puis tenu jusqu'à 22:00. Utilisé
+ * pour le budget de spawn ET l'invariant sanity du harness (même source).
+ */
+export function spawnCapAt(elapsedMs: number): number {
+  const t = Math.max(0, elapsedMs)
+  if (t <= FINALE.rampStartMs) {
+    return SPAWN.maxActive
+  }
+  if (t >= FINALE.fullMs) {
+    return SPAWN.maxActiveFinale
+  }
+  const f = (t - FINALE.rampStartMs) / (FINALE.fullMs - FINALE.rampStartMs)
+  return Math.round(SPAWN.maxActive + f * (SPAWN.maxActiveFinale - SPAWN.maxActive))
+}
 
 /**
  * Boss final (rôle `final`). Sa mort est la condition de victoire de la run
  * (remplace l'ancienne victoire au mini-boss de 5:00 — cf. Plan B1, split de boss).
  */
 export const FINAL_BOSS = {
-  /** Instant d'apparition, en ms de temps de jeu (~20:00 — arc long). */
-  atMs: 1_200_000,
+  /** Instant d'apparition, en ms de temps de jeu (22:00 — après la finale saturée). */
+  atMs: 1_320_000,
   /** Rayon d'apparition du boss (px), plus court que l'anneau normal (560) : le boss entre À L'ÉCRAN, combat vu et engagé. */
   spawnRadius: 320,
   /**

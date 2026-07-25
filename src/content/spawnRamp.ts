@@ -1,13 +1,14 @@
 /**
  * Rampe de spawn temporelle (data-driven). Définit comment la pression
- * ennemie monte dans le temps sur un arc de ~20 min :
+ * ennemie monte dans le temps sur un arc de ~22 min :
  *  - 0-3 min   : calme (PRD apprentissage), greedy/idle ne sont pas wipés d'emblée.
  *  - 3-9 min   : phase de puissance — la PRESSION monte via le NOMBRE (densité de
  *    spawn en forte hausse) pendant que les PV des ennemis montent doucement.
  *    Mini-boss périodiques à 5:00/10:00/15:00 ponctuent l'arc.
- *  - 9-15 min  : montée soutenue — densité croissante, PV en hausse continue.
- *  - 15-20 min : climax final — densité maximum, coup de fouet PV → encerclement
- *    inévitable avant le boss final à 20:00.
+ *  - 9-19 min  : montée soutenue — densité croissante, PV en hausse continue.
+ *  - 20-22 min : FINALE saturée — afflux extrême, l'écran se remplit jusqu'au
+ *    plafond étendu (`spawnCapAt` → 700). Spectacle « power fantasy ».
+ *  - 22:00     : boss final (condition de victoire).
  *
  * Un palier = un seuil de temps. Tuné via le harness sim (cibles « skill récompensé »).
  */
@@ -42,8 +43,16 @@ export const SPAWN_RAMP: readonly SpawnRampStep[] = [
   { fromSec: 960,  intervalMs: 138,  countPerWave: 13 }, // 16:00 : vague serrée
   { fromSec: 1020, intervalMs: 118,  countPerWave: 14 }, // 17:00
   { fromSec: 1080, intervalMs: 100,  countPerWave: 15 }, // 18:00
-  { fromSec: 1140, intervalMs: 85,   countPerWave: 16 }, // 19:00 : climax final
-  { fromSec: 1185, intervalMs: 72,   countPerWave: 17 }  // 19:45 : horde de fin avant boss @20:00
+  { fromSec: 1140, intervalMs: 85,   countPerWave: 16 }, // 19:00 : climax
+  { fromSec: 1185, intervalMs: 72,   countPerWave: 17 }, // 19:45 : la horde s'épaissit
+  // FINALE 20:00→22:00 : inflow EXTRÊME pour saturer et TENIR le plafond étendu
+  // (spawnCapAt → 700). L'intervalle très court + count élevé garantit que
+  // l'afflux dépasse le rythme de kills → l'écran reste plein (le budget clampe
+  // à 700 dans `runSpawns`). Spectacle « power fantasy ».
+  { fromSec: 1200, intervalMs: 48,   countPerWave: 22 }, // 20:00 : saturation
+  { fromSec: 1230, intervalMs: 40,   countPerWave: 26 }, // 20:30
+  { fromSec: 1260, intervalMs: 34,   countPerWave: 30 }, // 21:00
+  { fromSec: 1290, intervalMs: 30,   countPerWave: 34 }  // 21:30 : mur d'ennemis avant boss @22:00
 ]
 
 /** Palier courant : le dernier dont `fromSec` est ≤ au temps écoulé. */
@@ -75,13 +84,13 @@ export interface DifficultyScale {
 /**
  * Montée en puissance temporelle des ennemis de vague (pas le boss) : les PV
  * croissent doucement (les ennemis fondent) pendant la phase de puissance (≤9:00)
- * puis de façon soutenue sur l'arc 9-19 min, avec un dernier coup de fouet avant
- * le boss final à 20:00. Les dégâts de contact et la vitesse (plafonnée) croissent
- * linéairement avec le temps. Déterministe (fonction pure du temps).
+ * puis de façon soutenue sur l'arc 9-17 min, avec une continuation ADOUCIE 17-22
+ * (finale spectacle : ennemis mowables). Contact plafonné à 20:00, vitesse
+ * plafonnée. Déterministe (fonction pure du temps).
  *
- * Arc 20 min (PV de vague, valeurs réelles produites ci-dessous) :
- *   3:00 → hp≈0,97   6:00 → hp≈1,24   9:00 → hp≈1,51
- *  12:00 → hp≈1,81  15:00 → hp≈2,11  18:00 → hp≈2,86  20:00 → hp≈3,96
+ * Arc 22 min (PV de vague, valeurs réelles produites ci-dessous) :
+ *   3:00 → hp≈0,97   9:00 → hp≈1,33   17:00 → hp≈2,05
+ *  20:00 → hp≈2,65  22:00 → hp≈3,05
  */
 export function difficultyScaleAt(elapsedMs: number): DifficultyScale {
   const min = Math.max(0, elapsedMs) / 60000
@@ -99,14 +108,19 @@ export function difficultyScaleAt(elapsedMs: number): DifficultyScale {
   } else if (min <= 17) {
     hp = 0.7 + 0.07 * 9 + 0.09 * (min - 9)
   } else {
-    hp = 0.7 + 0.07 * 9 + 0.09 * 8 + 0.55 * (min - 17)
+    // 17→22 : coup de fouet ADOUCI (0.55 → 0.20/min). Finale SPECTACLE (power
+    // fantasy) : les ennemis restent MOWABLES pour la faux du joueur — la
+    // saturation vient de l'AFFLUX (spawnRamp) + du plafond étendu (spawnCapAt),
+    // pas de PV coriaces (qui rendraient la horde poisseuse ET plus lourde).
+    hp = 0.7 + 0.07 * 9 + 0.09 * 8 + 0.20 * (min - 17)
   }
   return {
     hp,
-    // Contact relevé (0.5+0.09 → 0.62+0.14) : levier SÉPARATEUR. Le growth ralenti
-    // aide kite ET greedy à survivre ; le contact re-punit spécifiquement le greedy
-    // qui ENCAISSE (kite l'évite). Sans sur-level (growth 1.20), il mord vraiment.
-    contactDamage: 0.62 + 0.14 * min,
+    // Contact : croît jusqu'à 20:00 puis PLAFONNE (Math.min(min,20)). La finale à
+    // 700 ennemis ne doit pas être un mur d'insta-mort (intention spectacle, pas
+    // mortel) — sans ce plafond, 700 contacts à dégât croissant tueraient d'un
+    // frôlement. Kite l'évite ; greedy encaisse déjà assez.
+    contactDamage: 0.62 + 0.14 * Math.min(min, 20),
     // Vitesse plafonnée : re-tune phase 8 (terrain tactique). Les clusters
     // (clôtures) ABRITENT le kiter → poursuite rallongée (flux qui contourne)
     // → il fallait remonter la vitesse pour que la horde rattrape autour des

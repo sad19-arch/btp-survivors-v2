@@ -50,7 +50,7 @@ import { resolveObstacleCollisions } from './systems/obstacleCollision'
 import { buildSiteLayout, type Obstacle, type SurfaceSlowZone, type PrisonerSpawn } from './siteLayout'
 import { surfaceSlowMultiplierAt } from './systems/surfaceSlow'
 import { buildFlowField, CELL_FLOW, HALF_FLOW, type FlowField } from './systems/flowField'
-import { bossLevelHpMult, CHEST, coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RAGE, RESCUE, SPAWN, TETHER, WORLD } from '@content/config'
+import { bossLevelHpMult, CHEST, coopHpFactor, FINAL_BOSS, MID_BOSS_WAVES, MODE_PLAYER_COUNT, PLAYER_BASE, PROGRESSION, RAGE, RESCUE, SPAWN, spawnCapAt, TETHER, WORLD } from '@content/config'
 import { runPacingAt } from '@content/runPacing'
 import { SPAWN_RAMP, difficultyScaleAt } from '@content/spawnRamp'
 import { eventPoolForPhase } from '@content/waveEvents'
@@ -1147,9 +1147,11 @@ export class Simulation {
       rng: this._waveRng,
       spawnRateMultiplier: pacing.spawnRate
     })
-    // Clamp au budget restant : une vague dense (jusqu'à 17) ne doit PAS pousser
-    // le total au-delà de `maxActive` (l'invariant sanity du harness le vérifie).
-    const budget = SPAWN.maxActive - this.countEnemies()
+    // Clamp au budget restant : une vague dense ne doit PAS pousser le total
+    // au-delà du plafond COURANT `spawnCapAt(elapsedMs)` (220 en régime normal,
+    // jusqu'à 700 pendant la finale 20:00→22:00 — l'invariant sanity utilise la
+    // même source). Confine le surcoût de la saturation aux 2 dernières minutes.
+    const budget = spawnCapAt(this.elapsedMs) - this.countEnemies()
     if (placements.length > 0 && budget > 0) {
       const clamped = placements.length > budget ? placements.slice(0, budget) : placements
       spawnGroup(this.world, this._waveRng, this.phase, center, clamped, coopScale)
