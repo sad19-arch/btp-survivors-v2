@@ -184,6 +184,9 @@ describe('EditorState — import du niveau généré', () => {
     localStorage.clear()
   })
 
+  // « Partir du niveau existant » doit marcher pour TOUS les stages, pas
+  // seulement terrain_vierge (buildSiteLayout est stage-générique). Le verrou
+  // historique terrain_vierge-only a été retiré.
   it.each([
     'terrassement',
     'fondations',
@@ -194,18 +197,13 @@ describe('EditorState — import du niveau généré', () => {
     'second_oeuvre',
     'finitions',
     'livraison_audit'
-  ])('%s refuse le bootstrap généré sans modifier le brouillon ni son stockage', (stage) => {
+  ])('%s importe le niveau généré comme base éditable (instances non vides)', (stage) => {
     const state = new EditorState(stage)
-    state.setSpawn(123, -45)
-    const beforeLayout = state.exportJson()
-    const beforeStorage = localStorage.getItem(`stageComposer:${stage}`)
-
-    expect(state.importGenerated()).toEqual({
-      ok: false,
-      error: 'Stage manuel : utiliser Charger un fichier.'
-    })
-    expect(state.exportJson()).toBe(beforeLayout)
-    expect(localStorage.getItem(`stageComposer:${stage}`)).toBe(beforeStorage)
+    const res = state.importGenerated()
+    expect(res.ok).toBe(true)
+    expect(state.instances.length).toBeGreaterThan(0)
+    // Chaque instance importée porte ses éléments résolus (rendu sans catalogue).
+    expect(state.instances.every((i) => (i.elements?.length ?? 0) > 0)).toBe(true)
   })
 })
 

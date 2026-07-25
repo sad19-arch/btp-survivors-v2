@@ -60,6 +60,7 @@ import { CLUSTERS } from '@content/clusters'
 import { destructibleDef } from '@content/destructibles'
 import { SHARED_WORKER_NPCS, stageRender } from '@render/stages'
 import { buildSiteLayout } from '@core/siteLayout'
+import { getComposedLayout } from '@content/composedLayouts'
 
 const WORLD_W = 10240
 const WORLD_H = 7680
@@ -794,10 +795,31 @@ export class EditorState {
    * non-collidables passés BLOQUANTS). Écrase la compo courante de ce stage.
    */
   importGenerated(): { ok: boolean; error?: string } {
-    if (this.stage !== 'terrain_vierge') {
-      return { ok: false, error: 'Stage manuel : utiliser Charger un fichier.' }
+    // ── Voie 1 : compo committée = LE niveau existant, déjà au format éditeur ──
+    // Chaque stage livré a un layout committé (`src/content/layouts/*.json`) :
+    // c'est exactement « le niveau existant » avec ses instances + éléments +
+    // PNJ. On le charge tel quel (clone défensif — le registre est partagé).
+    // Marche pour les 10 stages, terrain_vierge inclus. NB : on ne passe PAS par
+    // buildSiteLayout ici — ses clusters portent des defId de scène absents du
+    // catalogue CLUSTERS et seraient filtrés (bug : import vide sur ces stages).
+    const composed = getComposedLayout(this.stage)
+    if (composed !== null) {
+      const cloned = JSON.parse(JSON.stringify(composed)) as StageLayout
+      cloned.stage = this.stage
+      this.layout = cloned
+      this.selectOnly(null)
+      this.emit()
+      return { ok: true }
     }
+
+    // ── Voie 2 : aucune compo committée → base GÉNÉRATIVE (clusters/plan) ──────
     const gen = buildSiteLayout(1, WORLD_W, WORLD_H, this.stage)
+    // Garde-fou : un stage sans base générative (ni compo, ni plan, ni clusters)
+    // ne produit aucune scène — importer donnerait un niveau vide. On le refuse
+    // plutôt que d'écraser le brouillon par du vide.
+    if (gen.clusters.length === 0) {
+      return { ok: false, error: 'Ce stage n\'a pas de niveau de base générable : utiliser Charger un fichier.' }
+    }
     const offX = WORLD_W / 2
     const offY = WORLD_H / 2
     const instances: LayoutInstance[] = []

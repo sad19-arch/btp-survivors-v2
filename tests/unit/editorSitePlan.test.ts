@@ -150,21 +150,16 @@ describe('éditeur — import du niveau généré', () => {
     document.body.innerHTML = ''
   })
 
-  it.each(STAGE_LIST.slice(1))('$label masque le bootstrap généré et explique le chargement manuel', ({ id }) => {
+  // Le bouton « Partir du niveau existant » est désormais offert sur TOUS les
+  // stages (pas seulement terrain_vierge) : chaque stage a une compo committée
+  // chargeable comme base éditable. Plus de note « Stage manuel ».
+  it.each(STAGE_LIST)('$label propose le bootstrap du niveau existant', ({ id }) => {
     const root = mountToolbar(id, new EditorState(id))
-    const labels = Array.from(root.querySelectorAll('button')).map((button) => button.textContent ?? '')
-
-    expect(labels).not.toContain('🏗 Partir du niveau existant')
-    expect(root.textContent).toContain('Stage manuel : utiliser Charger un fichier')
-    expect(labels).toContain('⬆ Charger un fichier')
-  })
-
-  it('terrain vierge conserve le bootstrap du niveau généré', () => {
-    const root = mountToolbar('terrain_vierge', new EditorState('terrain_vierge'))
     const labels = Array.from(root.querySelectorAll('button')).map((button) => button.textContent ?? '')
 
     expect(labels).toContain('🏗 Partir du niveau existant')
     expect(root.textContent).not.toContain('Stage manuel : utiliser Charger un fichier')
+    expect(labels).toContain('⬆ Charger un fichier')
   })
 })
 
