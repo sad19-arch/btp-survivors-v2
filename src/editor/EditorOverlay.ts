@@ -219,6 +219,10 @@ export class EditorOverlay {
     gEdit.appendChild(btn('⧉ Copier', () => state.copySelection()))
     gEdit.appendChild(btn('⧈ Coller', () => state.paste()))
     gEdit.appendChild(btn('Effacer sélection', () => { state.clearSelection(); scene.clearActive() }))
+    // Prévisualisation « vie du chantier » : ouvriers + engins qui bougent, sans
+    // ennemis. Le libellé reflète l'état (la barre se reconstruit à chaque bascule).
+    const previewLabel = state.isPreviewing ? '⏸ Arrêter la preview' : '▶ Prévisualiser'
+    gEdit.appendChild(btn(previewLabel, () => state.setPreviewing(!state.isPreviewing), state.isPreviewing ? 'sce-btn-primary' : undefined))
     this.toolbar.appendChild(gEdit)
 
     // Groupe AVANCÉ : baker au repo (dev), export/import texte.

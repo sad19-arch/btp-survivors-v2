@@ -164,6 +164,64 @@ describe('EditorState — multi-sélection / copier-coller / batch', () => {
     expect(s.instances.length).toBe(3) // original + 2 collages
   })
 
+  // Copier-coller ENTRE DEUX ONGLETS : deux EditorState de stages différents
+  // partagent le même localStorage (comme deux onglets même-origine). Copier
+  // dans l'un rend le collage possible dans l'autre — le scénario demandé
+  // (sélectionner des barrières sur le stage 1, les coller sur le stage 2).
+  it('copie sur un stage → collage sur un AUTRE stage (presse-papier partagé entre onglets)', () => {
+    // Onglet 1 : stage terrain_vierge. On copie 2 instances.
+    const tab1 = new EditorState('terrain_vierge')
+    const a = tab1.addInstance('obj_fence', 100, 100)
+    const b = tab1.addInstance('obj_fence', 200, 100)
+    tab1.selectMany([a.id, b.id])
+    tab1.copySelection()
+
+    // Onglet 2 : stage terrassement, instance SÉPARÉE (aucun presse-papier mémoire
+    // partagé). Il voit le presse-papier partagé et peut coller.
+    const tab2 = new EditorState('terrassement')
+    const before = tab2.instances.length
+    expect(tab2.hasClipboard).toBe(true) // voit la copie faite dans l'onglet 1
+    tab2.paste(0, 0)
+
+    const pasted = tab2.instances.filter((i) => tab2.selectedIdSet().includes(i.id))
+    expect(pasted.length).toBe(2)
+    expect(tab2.instances.length).toBe(before + 2)
+    // Les collages ont de nouveaux ids (pas de collision avec l'onglet source).
+    expect(pasted.map((p) => p.id)).not.toContain(a.id)
+    expect(pasted.map((p) => p.id)).not.toContain(b.id)
+  })
+
+  it('mode preview : flag basculable + notifie + snapshot indépendant du layout', () => {
+    const s = make()
+    const a = s.addInstance('obj_a', 10, 20)
+    expect(s.isPreviewing).toBe(false)
+    let notified = 0
+    s.onChange(() => { notified++ })
+    s.setPreviewing(true)
+    expect(s.isPreviewing).toBe(true)
+    expect(notified).toBeGreaterThan(0)
+    // Re-basculer sur la même valeur ne re-notifie pas.
+    const n = notified
+    s.setPreviewing(true)
+    expect(notified).toBe(n)
+    // snapshotLayout est un clone profond : muter le retour ne touche pas l'état.
+    const snap = s.snapshotLayout()
+    expect(snap.instances.some((i) => i.id === a.id)).toBe(true)
+    snap.instances.length = 0
+    expect(s.instances.length).toBeGreaterThan(0)
+    s.setPreviewing(false)
+    expect(s.isPreviewing).toBe(false)
+  })
+
+  it('presse-papier partagé : JSON corrompu → hasClipboard faux, paste no-op (pas de crash)', () => {
+    localStorage.setItem('btp:editorClipboard', '{ pas du json')
+    const s = make()
+    expect(s.hasClipboard).toBe(false)
+    const before = s.instances.length
+    s.paste()
+    expect(s.instances.length).toBe(before)
+  })
+
   it('un glisser en batch = UN seul pas d\'undo', () => {
     const s = make()
     const a = s.addInstance('obj_a', 0, 0)

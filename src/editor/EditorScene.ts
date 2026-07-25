@@ -14,7 +14,10 @@ import { activeAssets, activeGroundKey, editorAsset, paletteEntry, setActiveStag
 import { EditorState } from './EditorState'
 import type { Vec2, MarkerType } from './StageLayoutSchema'
 import { ZONE_DEFS, isZoneType } from './zones'
-import { resolveWorkerSkin } from '@render/stages'
+import { resolveWorkerSkin, stageRender, SHARED_WORKER_NPCS, CAMION_SKIN } from '@render/stages'
+import { SiteWorkers } from '@render/scenes/siteWorkers'
+import { setRuntimeLayout } from '@content/runtimeLayouts'
+import { buildPreviewViewState } from './previewState'
 
 /** Zoom de jeu réel (identique à CameraController.SOLO_ZOOM). */
 const GAME_ZOOM = 1.2
@@ -119,6 +122,10 @@ export class EditorScene extends Phaser.Scene {
   private camSig = ''
   private onCameraChange: ((v: EditorViewRect) => void) | null = null
 
+  // Prévisualisation « vie du chantier » : ouvriers + engins qui bougent.
+  private siteWorkers?: SiteWorkers
+  private previewOn = false
+
   // Mode « parcourir » : un marqueur joueur pilotable au clavier (WASD/flèches).
   private walk = false
   private walkPos: Vec2 = { x: 0, y: 0 }
@@ -144,8 +151,20 @@ export class EditorScene extends Phaser.Scene {
         this.load.image(a.key, a.file)
       }
     }
+    // Feuilles nécessaires à la PRÉVISUALISATION « vie du chantier » (SiteWorkers) :
+    // ouvriers d'ambiance du stage, ouvriers génériques partagés, camion benne.
+    // Chargées ici (et pas seulement au clic Prévisualiser) car le loader Phaser
+    // tourne dans preload() ; SiteWorkers ignore de toute façon les feuilles absentes.
+    for (const a of stageRender(this.stageId).ambient ?? []) {
+      this.load.spritesheet(a.key, a.file, { frameWidth: a.frame, frameHeight: a.frame })
+    }
+    for (const w of SHARED_WORKER_NPCS) {
+      this.load.spritesheet(w.key, w.file, { frameWidth: w.frame, frameHeight: w.frame })
+    }
+    this.load.spritesheet(CAMION_SKIN.key, CAMION_SKIN.file, { frameWidth: CAMION_SKIN.frame, frameHeight: CAMION_SKIN.frame })
+
     // Un asset manquant ne doit pas bloquer l'éditeur.
-     
+
     this.load.on('loaderror', (f: Phaser.Loader.File) => console.warn('[editor] asset manquant:', f.key))
   }
 
@@ -179,6 +198,7 @@ export class EditorScene extends Phaser.Scene {
     this.cameras.main.centerOn(OFFSET_X, OFFSET_Y - 300)
 
     this.state.onChange(() => this.syncAll())
+    this.state.onChange(() => this.applyPreviewToggle())
     this.setupInput()
     this.setupKeyboard()
     this.syncAll()
@@ -194,6 +214,13 @@ export class EditorScene extends Phaser.Scene {
     if (sig !== this.camSig) {
       this.camSig = sig
       this.onCameraChange?.({ x: wv.x, y: wv.y, w: wv.width, h: wv.height, worldW: WORLD_W, worldH: WORLD_H })
+    }
+    // Preview « vie du chantier » : anime ouvriers + engins autour du centre de
+    // la caméra (le « joueur » synthétique), sans ennemis. Indépendant du mode
+    // « parcourir ».
+    if (this.previewOn && this.siteWorkers !== undefined) {
+      const state = buildPreviewViewState(wv.centerX, wv.centerY)
+      this.siteWorkers.sync(state)
     }
     if (!this.walk) {
       return
@@ -215,6 +242,45 @@ export class EditorScene extends Phaser.Scene {
     this.walkGfx.clear()
     this.walkGfx.fillStyle(0x66ccff, 1).fillCircle(this.walkPos.x, this.walkPos.y, 26)
     this.walkGfx.lineStyle(5, 0x000000, 1).strokeCircle(this.walkPos.x, this.walkPos.y, 26)
+  }
+
+  /** Démarre/arrête la preview selon le flag de l'état (appelé sur chaque onChange). */
+  private applyPreviewToggle(): void {
+    const want = this.state.isPreviewing
+    if (want === this.previewOn) {
+      return
+    }
+    if (want) {
+      this.startPreview()
+    } else {
+      this.stopPreview()
+    }
+  }
+
+  /**
+   * Lance la « vie du chantier » : injecte la compo COURANTE comme layout runtime
+   * (pour que SiteWorkers bâtisse ses jobs sur ce que tu vois) puis (re)construit
+   * les ouvriers/engins. La sync par frame se fait dans update().
+   */
+  private startPreview(): void {
+    setRuntimeLayout(this.stageId, this.state.snapshotLayout())
+    if (this.siteWorkers === undefined) {
+      this.siteWorkers = new SiteWorkers(this)
+    }
+    const ambient = stageRender(this.stageId).ambient ?? []
+    const tradeNpcs = {
+      entries: ambient.filter((a) => a.kind === 'trade').map((a) => ({ key: a.key, scale: a.scale })),
+      baseAngleDeg: 55
+    }
+    this.siteWorkers.reset(1, WORLD_W, WORLD_H, this.stageId, ambient, tradeNpcs)
+    this.previewOn = true
+  }
+
+  /** Coupe la preview : détruit les sprites vivants et retire l'override runtime. */
+  private stopPreview(): void {
+    this.siteWorkers?.dispose()
+    setRuntimeLayout(this.stageId, null)
+    this.previewOn = false
   }
 
   /** Bascule le mode « parcourir » (marqueur joueur WASD, zoom de jeu, panneaux masqués). */
@@ -793,6 +859,9 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private teardown(): void {
+    if (this.previewOn) {
+      this.stopPreview() // libère les sprites vivants + retire l'override runtime
+    }
     window.removeEventListener('keydown', this.onKey)
     this.input.removeAllListeners()
   }

@@ -67,6 +67,44 @@ const WORLD_H = 7680
 
 const LS_PREFIX = 'stageComposer:'
 
+// Presse-papier PARTAGÉ entre onglets du navigateur (même origine → même
+// localStorage). Permet de copier une sélection dans l'onglet d'un stage et de
+// la coller dans l'onglet d'un AUTRE stage. Clé unique, distincte des brouillons.
+const CLIPBOARD_KEY = 'btp:editorClipboard'
+
+interface ClipboardData {
+  instances: LayoutInstance[]
+  npcs: LayoutNpc[]
+}
+
+/** Lit le presse-papier partagé (localStorage). `null` si absent/corrompu/headless. */
+function readSharedClipboard(): ClipboardData | null {
+  try {
+    const raw = window.localStorage.getItem(CLIPBOARD_KEY)
+    if (raw === null) {
+      return null
+    }
+    const parsed = JSON.parse(raw) as Partial<ClipboardData>
+    const instances = Array.isArray(parsed.instances) ? parsed.instances : []
+    const npcs = Array.isArray(parsed.npcs) ? parsed.npcs : []
+    if (instances.length === 0 && npcs.length === 0) {
+      return null
+    }
+    return { instances, npcs }
+  } catch {
+    return null
+  }
+}
+
+/** Écrit le presse-papier partagé (localStorage). No-op silencieux si indisponible. */
+function writeSharedClipboard(data: ClipboardData): void {
+  try {
+    window.localStorage.setItem(CLIPBOARD_KEY, JSON.stringify(data))
+  } catch {
+    // localStorage plein/indisponible : le presse-papier mémoire prend le relais.
+  }
+}
+
 let idCounter = 0
 function newId(prefix: string): string {
   idCounter += 1
@@ -90,6 +128,8 @@ export class EditorState {
   private selectedZoneType: MarkerType | null = null
   /** Coalescence d'historique : pendant un batch, les mutations ne poussent pas de snapshot. */
   private batching = false
+  /** Mode PRÉVISUALISATION « vie du chantier » (ouvriers + engins qui bougent). */
+  private previewing = false
   private listeners: Array<() => void> = []
   grid = true
   snap = false
@@ -294,10 +334,34 @@ export class EditorState {
       return
     }
     this.clipboard = { instances, npcs }
+    // Miroir dans le presse-papier PARTAGÉ → collable dans un autre onglet/stage.
+    writeSharedClipboard(this.clipboard)
     this.notify()
   }
   get hasClipboard(): boolean {
-    return this.clipboard !== null
+    // Vrai si copie dans CET onglet OU dans un autre (presse-papier partagé).
+    return this.clipboard !== null || readSharedClipboard() !== null
+  }
+
+  // ── prévisualisation « vie du chantier » ────────────────────────────────────
+  get isPreviewing(): boolean {
+    return this.previewing
+  }
+  /** Bascule le mode preview (la scène éditeur écoute ce flag pour lancer/arrêter). */
+  setPreviewing(on: boolean): void {
+    if (this.previewing === on) {
+      return
+    }
+    this.previewing = on
+    this.notify()
+  }
+  /**
+   * Instantané (clone profond) du layout courant, au format StageLayout — pour
+   * l'injecter comme layout runtime le temps de la preview, afin que la vie du
+   * chantier (SiteWorkers) se construise sur CE que tu vois, brouillon compris.
+   */
+  snapshotLayout(): StageLayout {
+    return JSON.parse(JSON.stringify(this.layout)) as StageLayout
   }
   /**
    * Colle le presse-papier. Si (atX,atY) est fourni (coords COMPO), le groupe est
@@ -305,7 +369,9 @@ export class EditorState {
    * Un seul `emit()` (via `selectMany`) → 1 pas d'undo ; sélectionne les collages.
    */
   paste(atX?: number, atY?: number): void {
-    const clip = this.clipboard
+    // Presse-papier PARTAGÉ prioritaire (récupère une copie faite dans un autre
+    // onglet), repli sur le presse-papier mémoire de cet onglet.
+    const clip = readSharedClipboard() ?? this.clipboard
     if (clip === null || (clip.instances.length === 0 && clip.npcs.length === 0)) {
       return
     }
