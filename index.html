@@ -5,10 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#1a1a1a" />
     <title>BTP Carnage</title>
-    <!-- Refonte UI 16-bit premium : titres = Jersey 25, UI = Pixelify Sans (repli système hors-ligne). -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Jersey+25&family=Pixelify+Sans:wght@400;500;600;700&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+    <!-- Refonte UI 16-bit premium : titres = Jersey 25, UI = Pixelify Sans.
+         Polices AUTO-HÉBERGÉES (public/fonts.css + public/fonts/*.woff2) — AUCUNE
+         dépendance CDN externe : marche hors-ligne et sur réseau restreint (le CDN
+         Google Fonts était bloqué → titre/polices cassés sur certains PC). -->
+    <link rel="stylesheet" href="/fonts.css" />
     <style>
       /* Safe areas (encoches/coins arrondis) : source CSS unique, lue par le
          ViewportBus (src/ui/viewport.ts) et consommable par tout le HUD. */
