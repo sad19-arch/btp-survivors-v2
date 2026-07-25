@@ -366,6 +366,12 @@ export interface AppViewState extends Omit<GameState, 'players'> {
   stageSubtitle: string
   /** Numéro de phase dans le cycle (1..10). */
   stageOrder: number
+  /**
+   * Avancement du chantier en % (0→99 sur l'arc de 22 min ; PLAFONNÉ à 99 tant
+   * que le boss final n'est pas tué). 100 UNIQUEMENT en victoire — cf.
+   * `stageCompletionPct`. Affiché au HUD et repris dans le rapport de fin.
+   */
+  completionPct: number
   /** Profil de progression complet, exposé au seam et consommé par l'overlay. */
   stageProgress: StageProgressView
   /** Sélection simultanée : curseur et verrouillage indépendants pour chaque joueur. */

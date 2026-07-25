@@ -31,7 +31,7 @@ import {
   type NameEntryState
 } from './nameEntry'
 import { ConstructionPhaseId, ORDERED_PHASES } from '@content/phases'
-import { FINAL_BOSS, MODE_PLAYER_COUNT, modeForCount } from '@content/config'
+import { FINAL_BOSS, MODE_PLAYER_COUNT, modeForCount, stageCompletionPct } from '@content/config'
 import { introDurationFor } from '@content/introScripts'
 import { WEAPONS } from '@content/weapons'
 import { PASSIVES, aggregatePassives } from '@content/passives'
@@ -922,7 +922,9 @@ export class App {
       const victory = screen === 'victory'
       const stageDurationMs = FINAL_BOSS.atMs
       const elapsedMs = base.elapsedMs
-      const progressRatio = victory ? 1 : Math.max(0, Math.min(elapsedMs / stageDurationMs, 1))
+      // PLAFOND 99 % hors victoire : on ne doit jamais afficher « chantier livré à
+      // 100 % » sur une défaite. 100 % ⇔ victoire (boss tué), même frame.
+      const progressRatio = victory ? 1 : Math.max(0, Math.min(elapsedMs / stageDurationMs, 0.99))
       const flawless = base.players.every((p) => p.alive)
       // Une arme évoluée remplace son id in-place et DÉFINITIVEMENT pour la run
       // (cf. tryEvolve) : l'id évolué présent dans le loadout est donc la preuve
@@ -939,7 +941,7 @@ export class App {
         elapsedMs,
         stageDurationMs,
         progressRatio,
-        progressPercent: Math.floor(progressRatio * 100),
+        progressPercent: stageCompletionPct(elapsedMs, victory),
         remainingSeconds: victory
           ? 0
           : Math.max(0, Math.floor(stageDurationMs / 1000) - Math.floor(elapsedMs / 1000)),
@@ -1038,6 +1040,7 @@ export class App {
       stageTitle: phase?.title ?? '—',
       stageSubtitle: phase?.subtitle ?? '',
       stageOrder: phase?.order ?? 0,
+      completionPct: stageCompletionPct(base.elapsedMs, screen === 'victory'),
       stageProgress: this.stageProgressView(),
       characterSelect: this.charSelectOpen
         ? {

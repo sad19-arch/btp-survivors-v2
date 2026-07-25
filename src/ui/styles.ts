@@ -99,6 +99,11 @@ const CSS = `
 #ui-root .hud__stagenum { color: ${PALETTE.jauneSecurite}; }
 #ui-root .hud__stagename { color: ${PALETTE.blanc}; font-size: 22px; }
 #ui-root .hud__coins { color: ${PALETTE.jauneSecurite}; font-weight: 700; }
+/* Avancement du chantier (0→99 %, 100 % = victoire). À 99 % : accent + pulsation
+   « plus qu'à abattre le boss ». */
+#ui-root .hud__completion { color: ${PALETTE.jauneSecurite}; font-weight: 700; }
+#ui-root .hud__completion--max { color: ${PALETTE.orangeDanger}; animation: hudCompletionPulse 0.9s steps(2) infinite; }
+@keyframes hudCompletionPulse { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.55; } }
 #ui-root .hud__players { display: flex; flex-direction: row; gap: 8px; margin-top: 2px; }
 #ui-root .hud__pcard {
   display: flex; align-items: center; gap: 6px;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { spawnCapAt, SPAWN, FINALE, FINAL_BOSS } from '@content/config'
+import { spawnCapAt, SPAWN, FINALE, FINAL_BOSS, stageCompletionPct } from '@content/config'
 
 /**
  * Plafond d'ennemis variable dans le temps : 220 en régime normal, montée vers
@@ -38,5 +38,26 @@ describe('spawnCapAt — plafond variable (finale saturée)', () => {
   it('le boss final apparaît à 22:00 (après la finale)', () => {
     expect(FINAL_BOSS.atMs).toBe(1_320_000)
     expect(FINAL_BOSS.atMs).toBe(FINALE.endMs)
+  })
+})
+
+describe('stageCompletionPct — avancement du chantier', () => {
+  it('progresse de 0 vers 99 sur l\'arc, sans jamais atteindre 100 hors victoire', () => {
+    expect(stageCompletionPct(0, false)).toBe(0)
+    expect(stageCompletionPct(660_000, false)).toBe(50) // 11:00 = mi-arc
+    expect(stageCompletionPct(FINAL_BOSS.atMs / 2, false)).toBe(50)
+  })
+
+  it('PLAFONNE à 99 à 22:00 et au-delà tant que le boss n\'est pas tué', () => {
+    expect(stageCompletionPct(FINAL_BOSS.atMs, false)).toBe(99) // 22:00 pile
+    expect(stageCompletionPct(FINAL_BOSS.atMs + 120_000, false)).toBe(99) // combat de boss
+    expect(stageCompletionPct(9_999_999, false)).toBe(99)
+  })
+
+  it('100 UNIQUEMENT en victoire (boss tué) — jamais en défaite', () => {
+    expect(stageCompletionPct(FINAL_BOSS.atMs, true)).toBe(100)
+    expect(stageCompletionPct(0, true)).toBe(100) // victoire = livré, quel que soit t
+    // Invariant clé : une défaite, même à/après 22:00, n'affiche jamais 100.
+    expect(stageCompletionPct(FINAL_BOSS.atMs, false)).toBeLessThan(100)
   })
 })

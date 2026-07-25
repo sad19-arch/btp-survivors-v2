@@ -650,7 +650,15 @@ export class Overlay {
         { className: 'hud__row hud__stage' },
         h('span', { className: 'hud__stagenum', text: `Phase ${state.stageOrder}/10` }),
         h('span', { className: 'hud__sep', text: '·' }),
-        h('span', { className: 'hud__stagename', text: state.stageTitle })
+        h('span', { className: 'hud__stagename', text: state.stageTitle }),
+        h('span', { className: 'hud__sep', text: '·' }),
+        // Avancement du chantier : 0→99 % sur l'arc, bloqué à 99 % tant que le
+        // boss final n'est pas tué (100 % = victoire, écran de fin). À 99 %, on
+        // souligne (« plus qu'à abattre le boss »).
+        h('span', {
+          className: state.completionPct >= 99 ? 'hud__completion hud__completion--max' : 'hud__completion',
+          text: `Chantier ${state.completionPct}%`
+        })
       ),
       h(
         'div',

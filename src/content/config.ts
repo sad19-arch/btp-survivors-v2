@@ -276,6 +276,20 @@ export const FINAL_BOSS = {
 } as const
 
 /**
+ * Avancement du chantier en % (HUD en jeu + rapport de fin). Linéaire sur l'arc
+ * (0 → 22:00 = `FINAL_BOSS.atMs`). **100 % UNIQUEMENT à la victoire** (boss final
+ * tué) ; sinon PLAFONNÉ à 99 %. Invariant voulu par l'user : on ne peut pas
+ * « finir à 100 % » puis perdre — 100 % ⇔ victoire (la mort du boss bascule sur
+ * l'écran de victoire la même frame, aucune fenêtre pour mourir à 100 %). Pur.
+ */
+export function stageCompletionPct(elapsedMs: number, won: boolean): number {
+  if (won) {
+    return 100
+  }
+  return Math.min(99, Math.floor((Math.max(0, elapsedMs) / FINAL_BOSS.atMs) * 100))
+}
+
+/**
  * Mini-boss/reapers périodiques intermédiaires (rôle `mid`). Trois paliers :
  * 5:00 / 10:00 / 15:00 — ponctuent l'arc long, laissent chacun un coffre d'évolution
  * à leur mort. La condition de victoire est UNIQUEMENT le boss FINAL à 20:00.
