@@ -22,7 +22,6 @@ const REFERENCED_ASSETS = [
   'ui_metal_v.png',
   'ui_dither_light.png',
   'ui_dither_dark.png',
-  'ui_bg_dusk.png',
   'ui_casque.png',
   // Barre de progression du rapport de fin
   'ui_death_start.png',

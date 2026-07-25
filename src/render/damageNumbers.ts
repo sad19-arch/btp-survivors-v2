@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { PALETTE } from '@ui/palette'
+import { gameTextScaleOf, loadGameTextLevel } from '@ui/gameTextScale'
 
 // ── Fonctions pures (testables sans Phaser) ────────────────────────────────
 
@@ -33,7 +34,8 @@ export function damageNumberStyle(isElite: boolean, isBoss: boolean, amount: num
 // ── Pool de chiffres de dégâts ─────────────────────────────────────────────
 
 const FONT_FAMILY = 'monospace'
-const FONT_SIZE = '16px'
+/** Taille de base (px) avant l'échelle de lisibilité (Options → Taille du texte). */
+const FONT_SIZE_BASE = 16
 const FONT_STYLE = 'bold'
 /** Montée en px pendant l'animation. */
 const RISE_PX = 20
@@ -98,10 +100,14 @@ export class DamageNumberPool {
   }
 
   private acquire(x: number, y: number, label: string, color: string): Phaser.GameObjects.Text {
+    // Échelle de lisibilité (Options → Taille du texte). Appliquée AUSSI au
+    // chemin recyclé, sinon un chiffre repris garde l'ancienne taille.
+    const fontSize = `${Math.round(FONT_SIZE_BASE * gameTextScaleOf(loadGameTextLevel()))}px`
     const recycled = this.free.pop()
     if (recycled !== undefined) {
       recycled.setText(label)
       recycled.setColor(color)
+      recycled.setFontSize(fontSize)
       recycled.setPosition(x, y - 40)
       recycled.setAlpha(1)
       recycled.setActive(true)
@@ -110,7 +116,7 @@ export class DamageNumberPool {
     }
     const t = this.scene.add.text(x, y - 40, label, {
       fontFamily: FONT_FAMILY,
-      fontSize: FONT_SIZE,
+      fontSize,
       fontStyle: FONT_STYLE,
       color,
       stroke: PALETTE.contour,

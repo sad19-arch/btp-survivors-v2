@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { PALETTE, PALETTE_HEX } from '@ui/palette'
 import { shouldBubble } from '@render/ambientNpc'
 import { pickNpcLine, type NpcDialogueType, type NpcDialogueTrigger } from '@content/npcDialogues'
+import { gameTextScaleOf, loadGameTextLevel } from '@ui/gameTextScale'
 
 /** Délai (ms) entre deux bulles pour le MÊME PNJ d'ambiance. */
 const AMBIENT_BUBBLE_COOLDOWN_MS = 4000
@@ -129,12 +130,15 @@ export class SpeechBubbleManager {
    * Fade court (1 200 ms) ; le conteneur se détruit automatiquement à la fin.
    */
   private spawn(x: number, y: number, text: string): void {
-    const pad = 8
+    // Échelle de lisibilité (Options → Taille du texte) : grossit toute la bulle
+    // proportionnellement pour rester lisible de loin (TV du salon).
+    const k = gameTextScaleOf(loadGameTextLevel())
+    const pad = 8 * k
     const txt = this.scene.add.text(0, 0, text, {
       fontFamily: 'monospace',
-      fontSize: '11px',
+      fontSize: `${Math.round(11 * k)}px`,
       color: PALETTE.contour,
-      wordWrap: { width: 140 }
+      wordWrap: { width: 140 * k }
     }).setOrigin(0.5, 0.5)
 
     const bw = txt.width + pad * 2

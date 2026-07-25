@@ -496,12 +496,15 @@ const CSS = `
   display: flex; flex-direction: column; gap: 8px;
   animation: stagecard-in 0.35s ease-out;
 }
-#ui-root .stagecard__num { font-family: 'Pixelify Sans'; color: ${PALETTE.jauneSecurite}; font-size: 30px; font-weight: 700; letter-spacing: 4px; text-shadow: 2px 2px 0 ${PALETTE.contour}; }
+/* --game-text-scale : échelle de lisibilité (Options → Taille du texte), posée
+   sur .stagecard à sa construction ; défaut 1. Scopé au carton d'intro → aucun
+   impact HUD/menus. */
+#ui-root .stagecard__num { font-family: 'Pixelify Sans'; color: ${PALETTE.jauneSecurite}; font-size: calc(30px * var(--game-text-scale, 1)); font-weight: 700; letter-spacing: 4px; text-shadow: 2px 2px 0 ${PALETTE.contour}; }
 #ui-root .stagecard__title {
-  font-family: 'Jersey 25', monospace; color: ${PALETTE.blanc}; font-size: 78px; letter-spacing: 2px;
+  font-family: 'Jersey 25', monospace; color: ${PALETTE.blanc}; font-size: calc(78px * var(--game-text-scale, 1)); letter-spacing: 2px;
   text-shadow: -2px -2px 0 rgba(255,255,255,0.3), 4px 4px 0 ${PALETTE.contour}, 7px 7px 0 rgba(0,0,0,0.5);
 }
-#ui-root .stagecard__sub { font-family: 'Pixelify Sans'; color: ${PALETTE.solSable}; font-size: 30px; font-weight: 500; }
+#ui-root .stagecard__sub { font-family: 'Pixelify Sans'; color: ${PALETTE.solSable}; font-size: calc(30px * var(--game-text-scale, 1)); font-weight: 500; }
 @keyframes stagecard-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 /* ── HUD manettes ─────────────────────────────────────────────────────── */
@@ -808,11 +811,26 @@ const CSS = `
   position: absolute; inset: 0; pointer-events: none; z-index: 16;
   background: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 2px, transparent 2px 4px);
 }
-/* Décor titre (backdrop tramé bg_dusk derrière le panneau du titre). Ajouter
-   <img class="title-bg" src=".../ui_bg_dusk.png"> en 1er enfant du .screen du titre,
-   et donner au .screen du titre la classe .screen--title. cf. overlay-patch.md */
-#ui-root .title-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
-#ui-root .screen--title { background: rgba(6,8,16,0.30); }
+/* Décor titre — « pluie d'assets » qui remplit l'écran façon sablier (JS :
+   titleFill.ts). Couche persistante SOUS le panneau titre. Fond crépuscule plat
+   sobre ; les items du jeu tombent et s'empilent par-dessus. screen--title est
+   transparent pour laisser voir cette couche au travers. */
+#ui-root .title-fill { position: absolute; inset: 0; overflow: hidden; display: none;
+  background: linear-gradient(180deg, #16122e 0%, #241a44 46%, #3a2450 74%, #5b2f4a 100%); }
+/* PERF : pas de will-change ni de filter par défaut. Les items POSÉS sont
+   statiques → peints une fois dans la couche parente (aucune couche GPU par
+   élément, sinon des centaines de couches = lag croissant). Seuls les items EN
+   CHUTE sont promus en couche via will-change inline (posé au spawn, retiré à
+   la pose). Pas de drop-shadow (rastérisation par élément trop coûteuse en masse). */
+/* Deux <canvas> superposés (base = items posés, fx = items en chute). */
+#ui-root .title-fill__canvas { position: absolute; inset: 0; width: 100%; height: 100%;
+  image-rendering: pixelated; transition: opacity 0.7s ease; }
+/* Fondu de sortie avant le re-remplissage de la boucle. */
+#ui-root .title-fill--fading .title-fill__canvas { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  #ui-root .title-fill__canvas { transition: none; }
+}
+#ui-root .screen--title { background: transparent; }
 
 /* ── Transition d'écran : sas de chantier + gyrophare ────────────────── */
 /* Overlay plein écran. Ajoute la classe .is-closed pour fermer le sas (JS), retire
@@ -838,10 +856,21 @@ const CSS = `
 #ui-root .splash { position: absolute; inset: 0; z-index: 70; background: #08080d; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; }
 #ui-root .splash__gyro { position: absolute; top: -240px; left: 50%; width: 1000px; height: 1000px; margin-left: -500px; background: repeating-conic-gradient(from 0deg, rgba(232,111,31,0.07) 0deg 20deg, transparent 20deg 40deg); animation: sweep 9s linear infinite; pointer-events: none; }
 #ui-root .splash__flash { position: absolute; inset: 0; background: ${GOLD_HI}; opacity: 0; animation: splash-flash 3.4s steps(2) forwards; pointer-events: none; }
-#ui-root .splash__helmet { position: relative; width: 150px; height: auto; image-rendering: pixelated; transform-origin: 50% 100%; animation: splash-drop 3.4s steps(1) forwards; }
+#ui-root .splash__helmet { position: relative; width: clamp(148px, 20vw, 208px); height: auto; image-rendering: pixelated; transform-origin: 50% 100%; filter: drop-shadow(0 14px 0 rgba(0,0,0,0.45)); animation: splash-drop 3.4s linear forwards; }
 #ui-root .splash__name { position: relative; text-align: center; font-family: 'Jersey 25', monospace; font-size: 108px; letter-spacing: 4px; color: ${PALETTE.jauneSecurite}; animation: splash-text 3.4s steps(1) forwards; text-shadow: -2px -2px 0 ${GOLD_HI}, 3px 0 ${PALETTE.contour}, -3px 0 ${PALETTE.contour}, 0 3px ${PALETTE.contour}, 0 -3px ${PALETTE.contour}, 6px 6px 0 ${GOLD_DK}, 10px 10px 0 ${GOLD_DEEP}, 13px 13px 0 ${PALETTE.contour}; }
 #ui-root .splash__tag { position: relative; font-family: 'Pixelify Sans', monospace; font-weight: 700; font-size: 34px; letter-spacing: 6px; color: #E8B27A; background: ${PALETTE.contour}; border: 5px solid ${PALETTE.jauneSecurite}; box-shadow: 6px 6px 0 rgba(0,0,0,0.5); padding: 8px 28px; animation: splash-text 3.4s steps(1) forwards; }
-@keyframes splash-drop { 0% { transform: translateY(-500px); } 38% { transform: translateY(0) scaleY(1); } 45% { transform: translateY(0) scaleY(0.72) scaleX(1.2); } 55% { transform: translateY(-46px); } 66% { transform: translateY(0) scaleY(0.9); } 74%, 100% { transform: translateY(0) scaleY(1); } }
+/* Chute pesante : anticipation haute → accélération (gravité) → impact écrasé →
+   rebond → 2e contact amorti → repos. Easing PAR keyframe pour le poids. */
+@keyframes splash-drop {
+  0%   { transform: translateY(-520px) rotate(-7deg); animation-timing-function: cubic-bezier(.55,0,.9,.35); }
+  22%  { transform: translateY(-250px) rotate(-3deg); animation-timing-function: cubic-bezier(.6,0,.95,.4); }
+  36%  { transform: translateY(0) rotate(0deg) scaleY(1) scaleX(1); animation-timing-function: ease-out; }
+  42%  { transform: translateY(0) scaleY(0.66) scaleX(1.22); animation-timing-function: ease-out; }
+  53%  { transform: translateY(-52px) scaleY(1.06) scaleX(0.95); animation-timing-function: ease-in; }
+  63%  { transform: translateY(0) scaleY(0.86) scaleX(1.08); animation-timing-function: ease-out; }
+  71%  { transform: translateY(-15px) scaleY(1.02) scaleX(0.99); animation-timing-function: ease-in; }
+  80%, 100% { transform: translateY(0) scaleY(1) scaleX(1); }
+}
 @keyframes splash-flash { 0%, 40% { opacity: 0; } 43% { opacity: 0.85; } 54%, 100% { opacity: 0; } }
 @keyframes splash-text { 0%, 46% { opacity: 0; transform: translateY(10px); } 58%, 100% { opacity: 1; transform: translateY(0); } }
 /* Invite « appuie pour commencer » : clignote APRÈS le reveal (le splash persiste jusqu'au 1er input). */
@@ -943,8 +972,23 @@ const CSS = `
 #ui-root .logo__topper::before, #ui-root .logo__topper::after { content: ''; height: 5px; width: clamp(40px, 8vw, 120px); }
 #ui-root .logo__topper::before { background: linear-gradient(90deg, transparent, var(--arc-creme2)); }
 #ui-root .logo__topper::after { background: linear-gradient(90deg, var(--arc-creme2), transparent); }
-#ui-root .logo__btp { font-family: 'Jersey 25'; font-size: clamp(52px, 12vw, 150px); line-height: .8; color: var(--arc-jaune); letter-spacing: 6px; text-shadow: -0.02em -0.02em 0 var(--arc-jaune-clair), 0.02em 0 0 var(--arc-contour), -0.02em 0 0 var(--arc-contour), 0 0.02em 0 var(--arc-contour), 0 -0.02em 0 var(--arc-contour), 0.033em 0.033em 0 var(--arc-ombre1), 0.06em 0.06em 0 var(--arc-ombre2), 0.087em 0.087em 0 var(--arc-ombre3), 0.107em 0.107em 0 var(--arc-contour); }
-#ui-root .logo__carnage { font-family: 'Jersey 25'; font-size: clamp(88px, 20vw, 250px); line-height: .78; margin-top: -.03em; color: var(--arc-orange2); letter-spacing: 2px; text-shadow: -0.012em -0.012em 0 #FFD08A, 0.016em 0 0 var(--arc-contour), -0.016em 0 0 var(--arc-contour), 0 0.016em 0 var(--arc-contour), 0 -0.016em 0 var(--arc-contour), 0.028em 0.028em 0 #B23A0C, 0.048em 0.048em 0 #7c2408, 0.068em 0.068em 0 var(--arc-ombre4), 0.088em 0.096em 0 rgba(0,0,0,.55); }
+/* Lettres CHROMÉES : dégradé métallique clippé au texte + bande claire qui
+   balaie (glint). Le biseau multi-ombres (text-shadow) reste — il se rend depuis
+   la forme du glyphe, indépendamment du remplissage. Repli color: si
+   background-clip:text non supporté (rare). Metal Slug feel. */
+#ui-root .logo__btp { font-family: 'Jersey 25'; font-size: clamp(52px, 12vw, 150px); line-height: .8; color: var(--arc-jaune); letter-spacing: 6px;
+  background: linear-gradient(100deg, var(--arc-ombre1) 0%, var(--arc-jaune) 26%, var(--arc-jaune-clair) 44%, #FFFFFF 50%, var(--arc-jaune-clair) 56%, var(--arc-jaune) 74%, var(--arc-ombre1) 100%);
+  background-size: 260% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  text-shadow: -0.02em -0.02em 0 var(--arc-jaune-clair), 0.02em 0 0 var(--arc-contour), -0.02em 0 0 var(--arc-contour), 0 0.02em 0 var(--arc-contour), 0 -0.02em 0 var(--arc-contour), 0.033em 0.033em 0 var(--arc-ombre1), 0.06em 0.06em 0 var(--arc-ombre2), 0.087em 0.087em 0 var(--arc-ombre3), 0.107em 0.107em 0 var(--arc-contour); }
+#ui-root .logo__carnage { font-family: 'Jersey 25'; font-size: clamp(88px, 20vw, 250px); line-height: .78; margin-top: -.03em; color: var(--arc-orange2); letter-spacing: 2px;
+  background: linear-gradient(100deg, #7c2408 0%, var(--arc-orange2) 24%, #FFD08A 44%, #FFFFFF 50%, #FFD08A 56%, var(--arc-orange2) 76%, #7c2408 100%);
+  background-size: 260% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  text-shadow: -0.012em -0.012em 0 #FFD08A, 0.016em 0 0 var(--arc-contour), -0.016em 0 0 var(--arc-contour), 0 0.016em 0 var(--arc-contour), 0 -0.016em 0 var(--arc-contour), 0.028em 0.028em 0 #B23A0C, 0.048em 0.048em 0 #7c2408, 0.068em 0.068em 0 var(--arc-ombre4), 0.088em 0.096em 0 rgba(0,0,0,.55); }
+/* Glint : la bande claire du dégradé traverse les lettres en boucle lente. */
+#ui-root .logo__btp { animation: logoSheen 4.5s ease-in-out infinite; background-position: 0% 50%; }
+#ui-root .logo__carnage { animation: logoSheen 4.5s ease-in-out .5s infinite; background-position: 0% 50%; }
+@keyframes logoSheen { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+@media (prefers-reduced-motion: reduce) { #ui-root .logo__btp, #ui-root .logo__carnage { animation: none; background-position: 50% 50%; } }
 #ui-root .logo__dust { width: min(640px, 80vw); height: 40px; margin-top: 6px; background: radial-gradient(ellipse at center, rgba(120,96,64,.95) 0%, rgba(120,96,64,0) 70%); transform-origin: center top; opacity: 0; }
 #ui-root.arc-slam .logo__dust { animation: impactDust 5s ease-out both; }
 #ui-root .logo__flash { position: absolute; left: 50%; top: 52%; width: 150%; height: 220%; transform: translate(-50%, -50%); z-index: -1; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, rgba(255,244,204,.95) 0%, rgba(255,210,74,.45) 34%, rgba(255,210,74,0) 66%); }

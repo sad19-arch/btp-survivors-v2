@@ -39,6 +39,7 @@ import { describeWeaponLevelDelta } from '@content/weaponDelta'
 import { CHARACTER_IDS, DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { loadAudioSettings, saveAudioSettings, clamp01, type AudioLevels } from '@/audio/settings'
 import { loadHaptics, saveHaptics } from './hapticsSettings'
+import { loadGameTextLevel, saveGameTextLevel, nextGameTextLevel, gameTextLabelOf, type GameTextLevel } from '@ui/gameTextScale'
 import { evolutionStatuses } from '@core/systems/evolution'
 import { chestRevealTotalMs } from '@ui/overlay'
 import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
@@ -231,6 +232,8 @@ export class App {
   private audioLevels: AudioLevels = loadAudioSettings()
   /** Vibrations manette activées (juice #2) ; lues par le Rumbler via `getVibrations()`. */
   private vibrationsEnabled: boolean = loadHaptics()
+  /** Taille des textes de jeu (bulles/dégâts/carton phase) — Options → grande TV. */
+  private gameTextLevel: GameTextLevel = loadGameTextLevel()
   /** Compteur de frame, bumpé en fin d'`advanceTime` — clé du cache `getStateForFrame`. */
   private frame = 0
   /** Cache du dernier `AppViewState` calculé, partagé par rendu/overlay/audio sur une frame. */
@@ -576,6 +579,14 @@ export class App {
     const cur = this.focus.current()
     if (this.screen === 'options' && cur !== null && cur.startsWith('vol_') && (dir === 'left' || dir === 'right')) {
       this.adjustVolume(cur.slice(4) as 'master' | 'music' | 'sfx', dir === 'right' ? 0.1 : -0.1)
+      this.emitUi('menuMove')
+      return
+    }
+    // Options : gauche/droite règlent la taille des textes de jeu (cycle borné).
+    if (this.screen === 'options' && cur === 'game_text' && (dir === 'left' || dir === 'right')) {
+      this.gameTextLevel = nextGameTextLevel(this.gameTextLevel, dir === 'right' ? 1 : -1)
+      saveGameTextLevel(this.gameTextLevel)
+      this.refreshFocus()
       this.emitUi('menuMove')
       return
     }
@@ -1229,6 +1240,7 @@ export class App {
       { id: 'vol_sfx', label: `◄ Effets : ${pct(a.sfx)} ►`, hint: 'Gauche/Droite pour régler' },
       { id: 'mute', label: `Son : ${a.muted ? 'COUPÉ' : 'activé'}`, hint: 'Valider pour basculer' },
       { id: 'vibrations', label: `Vibrations : ${this.vibrationsEnabled ? 'activées' : 'désactivées'}`, hint: 'Valider pour basculer' },
+      { id: 'game_text', label: `◄ Taille du texte : ${gameTextLabelOf(this.gameTextLevel)} ►`, hint: 'Gauche/Droite pour régler (bulles, dégâts, nom de phase)' },
       { id: 'fullscreen', label: `Plein écran : ${this.fullscreenLabel()}`, hint: this.fullscreenHint() },
       { id: 'fullscreen_startup', label: `Plein écran au démarrage : ${this.fullscreenState.preference === 'fullscreen' ? 'OUI' : 'NON'}`, hint: 'Valider pour basculer' },
       { id: 'retour', label: 'Retour', hint: null }

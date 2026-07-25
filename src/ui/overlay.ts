@@ -5,7 +5,9 @@ import { formatTime, formatNumber } from './format'
 import { playerColor } from '@content/players'
 import { gamepadHudModel } from './gamepadHud'
 import { Minimap } from './minimap'
+import { TitleFill } from './titleFill'
 import type { ViewportState } from './viewport'
+import { gameTextScaleOf, loadGameTextLevel } from './gameTextScale'
 import { computeTitleLayout } from './titleLayout'
 import { approach } from './anim'
 import { cardEnterStyle } from './cardEnter'
@@ -96,6 +98,9 @@ export function cadenceFontSizePx(comboCount: number): number {
 export class Overlay {
   private readonly root: HTMLElement
   private readonly hud: HTMLElement
+  /** Décor animé de l'écran titre (pluie d'assets « sablier »), sous le panneau. */
+  private readonly titleFillLayer: HTMLElement
+  private titleFill: TitleFill | null = null
   private readonly screenLayer: HTMLElement
   /** Couche des éléments transitoires (bandeau « ZONE À SÉCURISER → »). */
   private readonly bannerLayer: HTMLElement
@@ -250,6 +255,7 @@ export class Overlay {
     root.id = 'ui-root'
     this.root = root
     this.hud = h('div', { className: 'hud' })
+    this.titleFillLayer = h('div', { className: 'title-fill', attrs: { 'aria-hidden': 'true' } })
     this.screenLayer = h('div')
     this.bannerLayer = h('div')
     this.introLayer = h('div')
@@ -279,6 +285,7 @@ export class Overlay {
     root.append(this.cadenceEl, this.milestoneEl)
     root.append(
       this.hud,
+      this.titleFillLayer,
       this.screenLayer,
       this.bannerLayer,
       this.introLayer,
@@ -765,6 +772,16 @@ export class Overlay {
     if (state.screen === 'title' && this.prevScreen !== 'title') {
       this.root.classList.add('arc-slam')
       window.setTimeout(() => this.root.classList.remove('arc-slam'), 1700)
+      // Décor animé « pluie d'assets » : démarre à l'entrée sur le titre. Couche
+      // persistante (hors screenLayer) → survit aux reconstructions de nav menu.
+      this.titleFillLayer.style.display = 'block'
+      this.titleFill = new TitleFill(this.titleFillLayer)
+      this.titleFill.start()
+    } else if (state.screen !== 'title' && this.prevScreen === 'title') {
+      // Sortie du titre : on coupe la boucle rAF et on libère les nœuds.
+      this.titleFill?.stop()
+      this.titleFill = null
+      this.titleFillLayer.style.display = 'none'
     }
     this.prevScreen = state.screen
 
@@ -868,22 +885,16 @@ export class Overlay {
         h('span', { className: 'studio', text: '© 2026 AIL ENTERTAINMENT' })
       )
     )
-    // Décor : ouvriers de chantier assombris en bas (frame 0 = face, croppée),
-    // silhouettes d'ambiance derrière le menu et l'habillage.
-    const base = import.meta.env.BASE_URL
-    const crew = h('div', { className: 'title-crew', attrs: { 'aria-hidden': 'true' } },
-      h('div', { className: 'crew-fig crew-fig--left' }, h('img', { className: 'crew-fig__img', attrs: { src: `${base}player_terrassier.png`, alt: '' } })),
-      h('div', { className: 'crew-fig crew-fig--right' }, h('img', { className: 'crew-fig__img', attrs: { src: `${base}player_soudeur.png`, alt: '' } }))
-    )
-    // Décor titre tramé derrière le panneau (screen--title allège le voile sombre).
+    // Le décor animé (pluie d'assets « sablier ») vit dans `titleFillLayer`, une
+    // couche persistante DERRIÈRE ce panneau (cf. constructeur + syncScreen) — pas
+    // ici, car `titlePanel` est reconstruit à chaque navigation menu. `screen--title`
+    // est donc TRANSPARENT pour laisser voir la couche de remplissage au travers.
     // Le titre possède son propre rectangle de conception : il ne doit jamais
-    // hériter de l'échelle du HUD, qui est calibrée pour les éléments en jeu.
+    // hériter de l'échelle du HUD, calibrée pour les éléments en jeu.
     const composition = h('div', { className: 'title-composition' }, panel, chrome)
     const frame = h('div', { className: 'title-frame' }, composition)
     const safe = h('div', { className: 'title-safe' }, frame)
     return h('div', { className: 'screen screen--title' },
-      h('img', { className: 'title-bg', attrs: { src: `${base}ui_bg_dusk.png`, alt: '' } }),
-      crew,
       arcbar,
       safe
     )
@@ -1480,10 +1491,13 @@ export class Overlay {
       }
       this.introShown = true
       clear(this.introLayer)
+      // Échelle de lisibilité (Options → Taille du texte) : scopée au carton
+      // d'intro via une variable CSS, sans toucher au HUD ni aux menus.
+      const k = gameTextScaleOf(loadGameTextLevel())
       this.introLayer.append(
         h(
           'div',
-          { className: 'stagecard' },
+          { className: 'stagecard', attrs: { style: `--game-text-scale: ${k}` } },
           h('div', { className: 'stagecard__num', text: `Phase ${state.stageOrder} / 10` }),
           h('div', { className: 'stagecard__title', text: state.stageTitle }),
           h('div', { className: 'stagecard__sub', text: state.stageSubtitle })

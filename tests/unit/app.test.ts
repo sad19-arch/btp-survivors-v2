@@ -108,7 +108,9 @@ describe('App — écrans & navigation', () => {
       app.nav('down')
     }
     app.confirm()
-    for (let step = 0; step < 5; step++) {
+    // Options : vol_master(0) vol_music(1) vol_sfx(2) mute(3) vibrations(4)
+    // game_text(5) fullscreen(6) → 6 descentes pour atteindre « Plein écran ».
+    for (let step = 0; step < 6; step++) {
       app.nav('down')
     }
     expect(app.consumeTrustedFullscreenKeyboard()).toBe(true)
@@ -132,7 +134,7 @@ describe('App — écrans & navigation', () => {
       app.nav('down')
     }
     app.confirm()
-    app.clickItem(6)
+    app.clickItem(7) // game_text inséré en 5 → fullscreen_startup passe de 6 à 7
     expect(intents).toEqual([{
       type: 'select',
       preference: 'fullscreen',

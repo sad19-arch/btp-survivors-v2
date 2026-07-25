@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { PALETTE } from '@ui/palette'
 import { selectCriticalText } from '@content/carnage'
+import { gameTextScaleOf, loadGameTextLevel } from '@ui/gameTextScale'
 
 /**
  * TEXTE DE COUP CRITIQUE — accent arcade sur une mort marquante.
@@ -42,8 +43,9 @@ export function shouldCritText(kill: CritKill, roll: number): boolean {
 const FONT_FAMILY = 'monospace'
 const FONT_STYLE = 'bold'
 /** Un « gros » coup (boss/élite) est plus grand et alerte-rouge ; un normal, jaune arcade. */
-const FONT_SIZE_BIG = '26px'
-const FONT_SIZE_NORMAL = '18px'
+/** Tailles de base (px) avant l'échelle de lisibilité (Options → Taille du texte). */
+const FONT_SIZE_BIG_BASE = 26
+const FONT_SIZE_NORMAL_BASE = 18
 const STROKE_BIG = 6
 const STROKE_NORMAL = 4
 /** Montée en px pendant l'animation. */
@@ -133,7 +135,11 @@ export class CritTextRenderer {
 
   private acquire(x: number, y: number, label: string, big: boolean): Phaser.GameObjects.Text {
     const color = big ? PALETTE.rougeAlerte : PALETTE.jauneSecurite
-    const fontSize = big ? FONT_SIZE_BIG : FONT_SIZE_NORMAL
+    // Échelle de lisibilité (Options → Taille du texte). Appliquée aussi au
+    // chemin recyclé (setFontSize ci-dessous), sinon un texte repris garde
+    // l'ancienne taille.
+    const k = gameTextScaleOf(loadGameTextLevel())
+    const fontSize = `${Math.round((big ? FONT_SIZE_BIG_BASE : FONT_SIZE_NORMAL_BASE) * k)}px`
     const strokeThickness = big ? STROKE_BIG : STROKE_NORMAL
     const startY = y - 30
     const startScale = big ? 0.5 : 0.4
