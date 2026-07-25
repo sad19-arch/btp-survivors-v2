@@ -79,7 +79,7 @@ export type FullscreenIntent =
       requestNow: boolean
     }
   | {
-      type: 'request' | 'exit'
+      type: 'request' | 'exit' | 'reset'
       source: 'pointer' | 'keyboard' | 'gamepad'
     }
 
@@ -1234,7 +1234,7 @@ export class App {
   private optionsItems(): MenuItemView[] {
     const a = this.audioLevels
     const pct = (v: number): string => `${Math.round(v * 100)}%`
-    return [
+    const items: MenuItemView[] = [
       { id: 'vol_master', label: `◄ Volume général : ${pct(a.master)} ►`, hint: 'Gauche/Droite pour régler' },
       { id: 'vol_music', label: `◄ Musique : ${pct(a.music)} ►`, hint: 'Gauche/Droite pour régler' },
       { id: 'vol_sfx', label: `◄ Effets : ${pct(a.sfx)} ►`, hint: 'Gauche/Droite pour régler' },
@@ -1242,9 +1242,15 @@ export class App {
       { id: 'vibrations', label: `Vibrations : ${this.vibrationsEnabled ? 'activées' : 'désactivées'}`, hint: 'Valider pour basculer' },
       { id: 'game_text', label: `◄ Taille du texte : ${gameTextLabelOf(this.gameTextLevel)} ►`, hint: 'Gauche/Droite pour régler (bulles, dégâts, nom de phase)' },
       { id: 'fullscreen', label: `Plein écran : ${this.fullscreenLabel()}`, hint: this.fullscreenHint() },
-      { id: 'fullscreen_startup', label: `Plein écran au démarrage : ${this.fullscreenState.preference === 'fullscreen' ? 'OUI' : 'NON'}`, hint: 'Valider pour basculer' },
-      { id: 'retour', label: 'Retour', hint: null }
+      { id: 'fullscreen_startup', label: `Plein écran au démarrage : ${this.fullscreenState.preference === 'fullscreen' ? 'OUI' : 'NON'}`, hint: 'Valider pour basculer' }
     ]
+    // Réinitialiser le choix plein écran : n'apparaît que si un choix est déjà
+    // persisté (sinon rien à réinitialiser). Reproposera l'invite de démarrage.
+    if (this.fullscreenState.supported && this.fullscreenState.preference !== 'unset') {
+      items.push({ id: 'fullscreen_reset', label: 'Réinitialiser le choix plein écran', hint: 'Reproposer l’invite au prochain lancement' })
+    }
+    items.push({ id: 'retour', label: 'Retour', hint: null })
+    return items
   }
 
   private fullscreenLabel(): 'ACTIVER' | 'QUITTER' | 'INDISPONIBLE' | 'AUTORISATION REQUISE' {
@@ -1731,6 +1737,14 @@ export class App {
       } else if (id === 'fullscreen_startup') {
         const preference = this.fullscreenState.preference === 'fullscreen' ? 'windowed' : 'fullscreen'
         this.emitFullscreenIntent({ type: 'select', preference, source, requestNow: false })
+      } else if (id === 'fullscreen_reset') {
+        // Réinitialise le choix persisté → l'invite se reproposera. Sur le titre
+        // (hors run), on la rouvre immédiatement pour un retour visible.
+        this.emitFullscreenIntent({ type: 'reset', source })
+        if (!this.started) {
+          this.optionsOpen = false
+          this.showFullscreenConsent()
+        }
       } else if (id === 'retour') {
         this.optionsOpen = false
       }

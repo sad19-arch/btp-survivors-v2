@@ -91,6 +91,11 @@ if (fullscreen !== null) {
     }
     if (intent.type === 'exit') {
       void fullscreen.exit().then(() => app.setFullscreenState(fullscreen.state()))
+      return
+    }
+    if (intent.type === 'reset') {
+      fullscreen.resetPreference()
+      app.setFullscreenState(fullscreen.state())
     }
   })
 }

@@ -132,6 +132,24 @@ describe('fullscreen platform', () => {
     expect(controller.state().authorizationRequired).toBe(false)
   })
 
+  it('resetPreference remet le choix à unset, le persiste et désarme la demande', () => {
+    const dom = fakeDom()
+    const store = new Map<string, string>()
+    const storage = {
+      get: (key: string): string | null => store.get(key) ?? null,
+      set: (key: string, value: string): void => { store.set(key, value) }
+    }
+    const controller = new FullscreenController(dom, storage)
+    controller.selectPreference('fullscreen') // choix persisté + demande armée
+    expect(controller.state()).toMatchObject({ preference: 'fullscreen', authorizationRequired: true })
+
+    controller.resetPreference()
+    expect(controller.state()).toMatchObject({ preference: 'unset', authorizationRequired: false })
+    expect(store.get(FULLSCREEN_SETTINGS_KEY)).toBe('{"preference":"unset"}')
+    // Relu au prochain boot → unset → l'invite se reproposera.
+    expect(loadFullscreenPreference({ get: storage.get })).toBe('unset')
+  })
+
   it('le pont clavier consomme Entrée une fois sans doubler le confirm Phaser', () => {
     const keyboard = new EventTarget()
     const calls: string[] = []

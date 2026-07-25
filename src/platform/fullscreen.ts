@@ -101,6 +101,18 @@ export class FullscreenController {
     this.authorizationRequired = armCurrentRequest && preference === 'fullscreen' && !this.active && this.supported
   }
 
+  /**
+   * Remet le choix à « non défini » (persisté) : l'invite de démarrage se
+   * reproposera. Le refus de session est aussi levé. N'invoque jamais l'API.
+   */
+  resetPreference(): void {
+    this.preference = 'unset'
+    this.storage?.set(FULLSCREEN_SETTINGS_KEY, JSON.stringify({ preference: 'unset' }))
+    this.authorizationRequired = false
+    this.rejectedThisSession = false
+    this.feedback = this.supported ? null : 'INDISPONIBLE'
+  }
+
   /** Arms a saved startup preference; calling this method never invokes the API. */
   armStartupRequest(): boolean {
     if (this.preference !== 'fullscreen' || !this.supported || this.active || this.rejectedThisSession) {
