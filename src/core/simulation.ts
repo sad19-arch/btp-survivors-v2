@@ -857,12 +857,12 @@ export class Simulation {
     // Résolution des obstacles statiques : repousse joueurs+ennemis hors du décor.
     // No-op pour terrain_vierge (obstacles = []) → sim:check diff 0 garanti.
     resolveObstacleCollisions(this.world, this.obstacles)
-    boomerangSystem(this.world, dtMs)
+    boomerangSystem(this.world, dtMs, pulses)
     // Boules de feu des alliés : homing + impact. APRÈS `movementSystem` (la boule a
     // bougé), AVANT `reapDeadEnemies` : les kills létaux (hp=0) sont récoltés ce pas.
     allyBoltSystem(this.world)
     this.rebuildEnemyGrid()
-    collisionSystem(this.world, dtMs, this.enemyGrid)
+    collisionSystem(this.world, dtMs, this.enemyGrid, pulses)
     knockbackSystem(this.world, dtMs)
     // Le recul ne doit jamais pousser une cible à travers une structure.
     resolveObstacleCollisions(this.world, this.obstacles)
@@ -929,7 +929,18 @@ export class Simulation {
       this.events.dispatchEvent(new PickupCollectedEvent(c))
     }
     for (const p of pulses) {
-      this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius, p.kind, p.dirX, p.dirY, p.weaponId))
+      this.events.dispatchEvent(new AuraPulseEvent(
+        p.x,
+        p.y,
+        p.radius,
+        p.kind,
+        p.dirX,
+        p.dirY,
+        p.weaponId,
+        p.ownerId,
+        p.sourceX,
+        p.sourceY
+      ))
     }
     for (const t of thanked) {
       this.events.dispatchEvent(new PrisonerFreedEvent(t.x, t.y))
@@ -1300,7 +1311,16 @@ export class Simulation {
       if (pos === undefined || vel === undefined || proj === undefined) {
         continue
       }
-      projectiles.push({ id: e, x: pos.x, y: pos.y, vx: vel.x, vy: vel.y, type: proj.type })
+      projectiles.push({
+        id: e,
+        x: pos.x,
+        y: pos.y,
+        vx: vel.x,
+        vy: vel.y,
+        type: proj.type,
+        radius: proj.radius,
+        ...(proj.returning !== undefined ? { returning: proj.returning } : {})
+      })
     }
     // Les lames de scie sont rendues comme des projectiles (type 'scie').
     for (const e of this.world.query('orbiter', 'position')) {
@@ -1309,7 +1329,7 @@ export class Simulation {
       if (pos === undefined || orb === undefined) {
         continue
       }
-      projectiles.push({ id: e, x: pos.x, y: pos.y, vx: 0, vy: 0, type: orb.weaponId })
+      projectiles.push({ id: e, x: pos.x, y: pos.y, vx: 0, vy: 0, type: orb.weaponId, radius: orb.hitRadius })
     }
     // Les boules de feu des alliés sont rendues comme des projectiles (type 'boule_feu').
     for (const e of this.world.query('allyBolt', 'position', 'velocity')) {

@@ -87,6 +87,66 @@ export interface GameSeam {
    * et que le cap borne les émissions en horde AOE. Absente en mode allégé.
    */
   debugFeedbackInfo?(): { active: number; spawnedTotal: number; maxPerFrame: number }
+  /** Dernier arc Court-circuit réellement remis au renderer, pour vérifier sa source coop. */
+  debugStrikeInfo?(): {
+    sequence: number
+    ownerId: number | undefined
+    fromX: number
+    fromY: number
+    toX: number
+    toY: number
+  } | null
+  /** Dernier anneau Marteau effectivement remis au renderer. */
+  debugHammerInfo?(): {
+    sequence: number
+    simulationRadius: number
+    renderedRadius: number
+  } | null
+  /** Dernier contact de Scie effectivement dessiné. */
+  debugSawInfo?(): {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+  } | null
+  /** Impact et activité de traînée du Cloueur observés côté renderer. */
+  debugNailInfo?(): {
+    impactWeaponId: string
+    impactX: number
+    impactY: number
+    maxTrailCount: number
+  } | null
+  /** Dernier rebond et activité de traînée des Boulons observés côté renderer. */
+  debugBoltInfo?(): {
+    impactWeaponId: string
+    impactX: number
+    impactY: number
+    maxTrailCount: number
+  } | null
+  /** Dernière marque de contact mousse ou thermique effectivement dessinée. */
+  debugConeContactInfo?(): {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+    mark: 'foam' | 'thermal'
+  } | null
+  /** Échelle réellement calculée pour les projectiles Brouette/Transpalette actifs. */
+  debugBrouetteInfo?(): { type: string; radius: number | undefined; scale: number }[]
+  /** Frontières exactes des flaques de Goudron actives. */
+  debugTarBoundaryInfo?(): {
+    simulationRadius: number
+    boundaryRadius: number
+    spriteScale: number
+  }[]
+  /** Inversion et traînées aller/retour de la Clé observées côté renderer. */
+  debugWrenchInfo?(): {
+    turnWeaponId: string
+    turnX: number
+    turnY: number
+    maxOutboundTrailCount: number
+    maxReturnTrailCount: number
+  } | null
   /**
    * [Debug] Sonde du streaming de décor (posée par la GameScene) : nombre de chunks
    * de décor actuellement chargés et nombre total d'objets de décor actifs.

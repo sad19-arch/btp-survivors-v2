@@ -1,4 +1,5 @@
 import type { World } from '../world'
+import type { AuraPulse } from '../events'
 
 /**
  * Système boomerang : gère le retour des projectiles `boomerangOutMs`.
@@ -12,7 +13,7 @@ import type { World } from '../world'
  *     Si distance(owner) < 24 px → despawn.
  *  3. Owner absent ou mort (hp <= 0) → despawn.
  */
-export function boomerangSystem(world: World, dtMs: number): void {
+export function boomerangSystem(world: World, dtMs: number, pulses?: AuraPulse[]): void {
   const toRemove: number[] = []
 
   for (const p of world.query('projectile', 'position', 'velocity')) {
@@ -56,6 +57,14 @@ export function boomerangSystem(world: World, dtMs: number): void {
       proj.boomerangOutMs -= dtMs
       if (proj.boomerangOutMs <= 0) {
         proj.returning = true
+        pulses?.push({
+          x: ppos.x,
+          y: ppos.y,
+          radius: proj.radius,
+          kind: 'boomerang_turn',
+          weaponId: proj.type,
+          ownerId: proj.ownerId
+        })
         // Vider hitIds au moment de l'inversion : chaque ennemi peut être touché une fois
         // à l'aller et une fois au retour (double coup voulu). La liste se re-remplit
         // pendant la phase retour, empêchant les hits répétés dans le même passage.

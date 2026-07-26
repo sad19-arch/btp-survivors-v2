@@ -5,18 +5,22 @@ import type { WeaponDef } from '@content/weapons'
 import type { EffectiveStats } from '@content/effectiveStats'
 import { WEAPONS, weaponStatsAtLevel } from '@content/weapons'
 import { effectiveWeaponStats } from '@content/effectiveStats'
-import { BASE_STATS } from '@content/passives'
+import { BASE_STATS, signaturePassiveEffects } from '@content/passives'
 import { CONE_HALF_ANGLE, HITBOX } from '@content/config'
 import { Rng } from '../rng'
 import type { SpatialGrid } from '../spatialGrid'
 import { applyEnemyHit } from './knockback'
+
+const EXPLOSIVE_WEAPONS = new Set(['bonbonne_chantier', 'detonation_chaine'])
+const CONTACT_WEAPON_KINDS = new Set(['orbital', 'aura', 'sweep'])
+const MAX_ORBITAL_IMPACT_PULSES_PER_STEP = 12
 
 /**
  * Système d'armes : chaque arme du joueur agit automatiquement selon son `kind`.
  *  - projectile : tire vers l'ennemi vivant le plus proche, à la cadence du cooldown.
  *  - aura       : impulsion de dégâts circulaire autour du joueur.
  *  - orbital    : lames qui tournent autour du joueur et frappent au contact.
- *  - sweep      : balayage circulaire autour du joueur (pied-de-biche).
+ *  - sweep      : balayage frontal en secteur (pied-de-biche).
  *  - strike     : frappe des ennemis choisis au hasard (court-circuit).
  *
  * Les stats effectives (`EffectiveStats`) résultent du niveau de l'arme combiné
@@ -46,6 +50,7 @@ export function weaponSystem(
       continue
     }
     const stats = world.get(e, 'stats') ?? BASE_STATS
+    const signatureEffects = signaturePassiveEffects(world.get(e, 'passives')?.list ?? [])
 
     for (const slot of loadout.slots) {
       const def = WEAPONS[slot.id]
@@ -53,20 +58,44 @@ export function weaponSystem(
         continue
       }
       const lvl = weaponStatsAtLevel(def, slot.level)
-      const eff = effectiveWeaponStats(lvl, stats)
+      const baseEffective = effectiveWeaponStats(lvl, stats)
+      const eff: EffectiveStats = {
+        ...baseEffective,
+        damage: CONTACT_WEAPON_KINDS.has(def.kind)
+          ? baseEffective.damage * (1 + signatureEffects.contactPenetration)
+          : baseEffective.damage,
+        projectileRadius: EXPLOSIVE_WEAPONS.has(def.id)
+          ? baseEffective.projectileRadius * signatureEffects.explosionScale
+          : baseEffective.projectileRadius,
+        explosionRadius: EXPLOSIVE_WEAPONS.has(def.id)
+          ? baseEffective.explosionRadius * signatureEffects.explosionScale
+          : baseEffective.explosionRadius
+      }
       const cdBefore = slot.cooldownLeftMs
       switch (def.kind) {
         case 'projectile':
           tickProjectile(world, slot, def, eff, pos, player, dtMs)
           break
         case 'aura':
-          tickAura(slot, eff, pos, dtMs, world, def.kind, def.knockback, pulses, grid, player.playerId)
+          tickAura(
+            slot,
+            eff,
+            pos,
+            dtMs,
+            world,
+            def.kind,
+            def.knockback,
+            signatureEffects.heavyImpactHaste,
+            pulses,
+            grid,
+            player.playerId
+          )
           break
         case 'orbital':
-          tickOrbital(world, slot, def, eff, e, pos, player, dtMs, grid)
+          tickOrbital(world, slot, def, eff, e, pos, player, dtMs, pulses, grid)
           break
         case 'sweep':
-          tickSweep(slot, eff, pos, dtMs, world, def.kind, def.knockback, pulses, grid, player.playerId)
+          tickSweep(slot, eff, pos, player, dtMs, world, def.kind, def.id, def.knockback, pulses, grid)
           break
         case 'strike':
           tickStrike(slot, eff, pos, dtMs, world, def.kind, def.knockback, rng, pulses, grid, player.playerId)
@@ -186,9 +215,16 @@ function fireProjectiles(
       ownerId,
       lifeMs: life,
       radius: eff.projectileRadius > 0 ? eff.projectileRadius : HITBOX.projectile,
+      ...(eff.explosionRadius > 0 ? {
+        explosionRadius: eff.explosionRadius,
+        explosionDamageMult: eff.explosionDamageMult,
+        chainExplosions: eff.chainExplosions,
+        chainRange: eff.chainRange
+      } : {}),
       pierce: eff.pierce,
       knockback: def.knockback,
-      ...(hasBounces ? { bounces: eff.bounces, hitIds: [] as number[] } : {}),
+      hitIds: [],
+      ...(hasBounces ? { bounces: eff.bounces } : {}),
       ...(boomerangOutMs !== undefined ? { boomerangOutMs, returning: false as const } : {})
     })
   }
@@ -204,6 +240,7 @@ function tickAura(
   world: World,
   kind: string,
   knockback: number,
+  heavyImpactHaste: number,
   pulses?: AuraPulse[],
   grid?: SpatialGrid,
   ownerId?: number
@@ -214,28 +251,41 @@ function tickAura(
   }
   slot.cooldownLeftMs = eff.cooldownMs
   const reach = eff.area + HITBOX.enemy
-  damageEnemiesInRadius(world, pos, reach, eff.damage, { grid, ownerId, knockback, knockbackOrigin: pos })
+  const hits = damageEnemiesInRadius(world, pos, reach, eff.damage, {
+    grid,
+    ownerId,
+    knockback,
+    knockbackOrigin: pos
+  })
+  if (hits > 0 && heavyImpactHaste > 0) {
+    slot.cooldownLeftMs *= 1 - heavyImpactHaste
+  }
   pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind })
 }
 
 // --- sweep (pied-de-biche) --------------------------------------------------
 
+/** Demi-angle du grand arc frontal : 60°, soit un secteur total de 120°. */
+const SWEEP_HALF_ANGLE = Math.PI / 3
+const sweepScratch: number[] = []
+
 /**
- * Balayage circulaire lisible centré sur le joueur (la forme rectangulaire
- * exacte devant/derrière est du polish Plan B). `count` > 1 répète la passe
- * (impulsions rapprochées) plutôt que de varier la géométrie.
+ * Balayage frontal auto-orienté vers l'ennemi le plus proche. Sans cible, la
+ * dernière direction du joueur sert de repli. `count` > 1 répète la passe dans
+ * le même secteur, conformément au double coup visuel.
  */
 function tickSweep(
   slot: CooldownSlot,
   eff: EffectiveStats,
   pos: Vec2,
+  player: PlayerComp,
   dtMs: number,
   world: World,
   kind: string,
+  weaponId: string,
   knockback: number,
   pulses?: AuraPulse[],
-  grid?: SpatialGrid,
-  ownerId?: number
+  grid?: SpatialGrid
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -244,10 +294,63 @@ function tickSweep(
   slot.cooldownLeftMs = eff.cooldownMs
   const reach = eff.area + HITBOX.enemy
   const passes = Math.max(1, Math.round(eff.count))
+  const target = findNearestEnemy(world, pos, Infinity)
+  const direction = target === null
+    ? (player.facing ?? { x: 0, y: 1 })
+    : { x: target.x - pos.x, y: target.y - pos.y }
+  const directionLength = Math.hypot(direction.x, direction.y)
+  const dirX = directionLength > 0 ? direction.x / directionLength : 0
+  const dirY = directionLength > 0 ? direction.y / directionLength : 1
   for (let i = 0; i < passes; i++) {
-    damageEnemiesInRadius(world, pos, reach, eff.damage, { grid, ownerId, knockback, knockbackOrigin: pos })
+    if (grid !== undefined) {
+      sweepScratch.length = 0
+      grid.queryCircle(pos.x, pos.y, reach, sweepScratch)
+      for (const enemy of sweepScratch) {
+        applySweepDamage(world, enemy, pos, reach, dirX, dirY, eff.damage, knockback, player.playerId)
+      }
+    } else {
+      for (const enemy of world.query('enemy', 'position', 'health')) {
+        applySweepDamage(world, enemy, pos, reach, dirX, dirY, eff.damage, knockback, player.playerId)
+      }
+    }
   }
-  pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind })
+  pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind, dirX, dirY, weaponId })
+}
+
+function applySweepDamage(
+  world: World,
+  enemy: EntityId,
+  origin: Vec2,
+  reach: number,
+  dirX: number,
+  dirY: number,
+  damage: number,
+  knockback: number,
+  ownerId: number
+): void {
+  const position = world.get(enemy, 'position')
+  const health = world.get(enemy, 'health')
+  if (position === undefined || health === undefined || health.hp <= 0) {
+    return
+  }
+  const dx = position.x - origin.x
+  const dy = position.y - origin.y
+  const distanceSquared = dx * dx + dy * dy
+  if (distanceSquared > reach * reach) {
+    return
+  }
+  const distance = Math.sqrt(distanceSquared)
+  const inSector =
+    distance === 0 ||
+    dirX * (dx / distance) + dirY * (dy / distance) >= Math.cos(SWEEP_HALF_ANGLE)
+  if (!inSector) {
+    return
+  }
+  applyEnemyHit(world, enemy, damage, {
+    ownerId,
+    knockback,
+    direction: distance > 0 ? { x: dx / distance, y: dy / distance } : { x: dirX, y: dirY }
+  })
 }
 
 // --- strike (court-circuit) -------------------------------------------------
@@ -317,7 +420,15 @@ function tickStrike(
       knockbackOrigin: origin
     })
     // Retour visuel : une onde à chaque ennemi frappé (VFX propre = passe DA).
-    pulses?.push({ x: tpos.x, y: tpos.y, radius: eff.area, kind })
+    pulses?.push({
+      x: tpos.x,
+      y: tpos.y,
+      radius: eff.area,
+      kind,
+      sourceX: origin.x,
+      sourceY: origin.y,
+      ...(ownerId === undefined ? {} : { ownerId })
+    })
   }
 }
 
@@ -332,6 +443,7 @@ function tickOrbital(
   pos: Vec2,
   player: PlayerComp,
   dtMs: number,
+  pulses?: AuraPulse[],
   grid?: SpatialGrid
 ): void {
   const count = Math.max(1, Math.round(eff.count))
@@ -367,7 +479,23 @@ function tickOrbital(
       grid,
       ownerId: player.playerId,
       knockback: def.knockback,
-      knockbackOrigin: b
+      knockbackOrigin: b,
+      onHit: (_enemyId, enemyPos) => {
+        if (
+          pulses !== undefined
+          && pulses.reduce((count, pulse) => count + (pulse.kind === 'orbital_hit' ? 1 : 0), 0)
+            < MAX_ORBITAL_IMPACT_PULSES_PER_STEP
+        ) {
+          pulses.push({
+            x: enemyPos.x,
+            y: enemyPos.y,
+            radius: hitRadius,
+            kind: 'orbital_hit',
+            weaponId: def.id,
+            ownerId: player.playerId
+          })
+        }
+      }
     })
   }
 }
@@ -544,16 +672,40 @@ function tickCone(
   // Récupère les candidats via la grille spatiale (ou repli linéaire).
   const slowMult = eff.slowMult ?? 1
   const slowMs = eff.slowMs ?? 0
+  let contactFeedbackCount = pulses?.reduce(
+    (count, pulse) => count + (pulse.kind === 'cone_hit' ? 1 : 0),
+    0
+  ) ?? 0
+
+  const applyAndReportContact = (en: number): void => {
+    const hit = applyConeDamage(world, en, pos, reach, dirX, dirY, eff.damage, knockback, slowMult, slowMs, ownerId)
+    if (!hit || pulses === undefined || weaponId === undefined || contactFeedbackCount >= 12) {
+      return
+    }
+    const targetPos = world.get(en, 'position')
+    if (targetPos === undefined) {
+      return
+    }
+    pulses.push({
+      x: targetPos.x,
+      y: targetPos.y,
+      radius: HITBOX.enemy,
+      kind: 'cone_hit',
+      weaponId,
+      ...(ownerId !== undefined ? { ownerId } : {})
+    })
+    contactFeedbackCount++
+  }
 
   if (grid !== undefined) {
     coneScratch.length = 0
     grid.queryCircle(pos.x, pos.y, reach, coneScratch)
     for (const en of coneScratch) {
-      applyConeDamage(world, en, pos, reach, dirX, dirY, eff.damage, knockback, slowMult, slowMs, ownerId)
+      applyAndReportContact(en)
     }
   } else {
     for (const en of world.query('enemy', 'position', 'health')) {
-      applyConeDamage(world, en, pos, reach, dirX, dirY, eff.damage, knockback, slowMult, slowMs, ownerId)
+      applyAndReportContact(en)
     }
   }
 
@@ -584,11 +736,11 @@ function applyConeDamage(
   slowMult: number,
   slowMs: number,
   ownerId?: number
-): void {
+): boolean {
   const epos = world.get(en, 'position')
   const eh = world.get(en, 'health')
   if (epos === undefined || eh === undefined || eh.hp <= 0) {
-    return
+    return false
   }
 
   // Test rayon.
@@ -596,7 +748,7 @@ function applyConeDamage(
   const dy = epos.y - pos.y
   const dist2 = dx * dx + dy * dy
   if (dist2 > reach * reach) {
-    return
+    return false
   }
 
   // Test angle : cos(angle) = dot(dir, enemyDir).
@@ -606,7 +758,7 @@ function applyConeDamage(
     dist === 0 ||
     dirX * (dx / dist) + dirY * (dy / dist) >= Math.cos(CONE_HALF_ANGLE)
   if (!inCone) {
-    return
+    return false
   }
 
   applyEnemyHit(world, en, damage, {
@@ -625,6 +777,7 @@ function applyConeDamage(
       existing.remainingMs = Math.max(existing.remainingMs, slowMs)
     }
   }
+  return true
 }
 
 // Scratch réutilisé par tickCone avec grille (évite une allocation par tir).
@@ -645,6 +798,8 @@ export interface RadiusDamageOptions {
   knockbackOrigin?: Vec2 | undefined
   /** Direction fixe prioritaire, par exemple celle d'un cône. */
   knockbackDirection?: Vec2 | undefined
+  /** Observation synchrone déclenchée après chaque vrai impact. */
+  onHit?: ((enemyId: EntityId, position: Vec2) => void) | undefined
 }
 
 /**
@@ -667,8 +822,9 @@ export function damageEnemiesInRadius(
   reach: number,
   damage: number,
   options: RadiusDamageOptions = {}
-): void {
+): number {
   const r2 = reach * reach
+  let hitCount = 0
   const hit = (en: number, epos: Vec2): void => {
     const origin = options.knockbackOrigin ?? center
     applyEnemyHit(world, en, damage, {
@@ -676,6 +832,8 @@ export function damageEnemiesInRadius(
       knockback: options.knockback,
       direction: options.knockbackDirection ?? { x: epos.x - origin.x, y: epos.y - origin.y }
     })
+    hitCount += 1
+    options.onHit?.(en, epos)
   }
   if (options.grid !== undefined) {
     options.grid.queryCircle(center.x, center.y, reach, radiusQueryScratch)
@@ -689,7 +847,7 @@ export function damageEnemiesInRadius(
         hit(en, epos)
       }
     }
-    return
+    return hitCount
   }
   for (const en of world.query('enemy', 'position', 'health')) {
     const epos = world.get(en, 'position')
@@ -701,4 +859,5 @@ export function damageEnemiesInRadius(
       hit(en, epos)
     }
   }
+  return hitCount
 }

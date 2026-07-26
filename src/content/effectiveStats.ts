@@ -13,6 +13,13 @@ export interface EffectiveStats {
   boomerangOutMs: number | undefined
   /** Rayon du projectile (px, scalé par `s.area`) ; 0 = non applicable (arme sans kind projectile). */
   projectileRadius: number
+  /** Rayon d'explosion (px, scalé par `s.area`) ; 0 = projectile non explosif. */
+  explosionRadius: number
+  /** Fraction des dégâts directs infligée par l'explosion. */
+  explosionDamageMult: number
+  /** Nombre de détonations secondaires et portée entre deux centres successifs. */
+  chainExplosions: number
+  chainRange: number
   /**
    * Intervalle entre deux ticks de dégâts (ms) pour les armes kind `hazard`.
    * Non scalé (cadence fixe, indépendante des passifs).
@@ -50,6 +57,10 @@ export function effectiveWeaponStats(lvl: WeaponLevel, s: PlayerStats): Effectiv
     bounces: lvl.bounces ?? 0,
     boomerangOutMs: lvl.boomerangOutMs !== undefined ? lvl.boomerangOutMs * s.duration : undefined,
     projectileRadius: (lvl.projectileRadius ?? 0) * s.area,
+    explosionRadius: (lvl.explosionRadius ?? 0) * s.area,
+    explosionDamageMult: lvl.explosionDamageMult ?? 0,
+    chainExplosions: lvl.chainExplosions ?? 0,
+    chainRange: (lvl.chainRange ?? 0) * s.area,
     tickMs: lvl.tickMs,
     // Ralentissement : non scalé par les passifs (l'intensité / la durée du slow
     // sont des propriétés intrinsèques de l'arme, pas des stats joueur).

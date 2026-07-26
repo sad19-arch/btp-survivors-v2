@@ -38,6 +38,7 @@ describe('weaponSystem', () => {
     expect(vel?.x ?? 0).toBeGreaterThan(0) // vers l'ennemi en +x
     expect(proj?.ownerId).toBe(1)
     expect((proj?.damage ?? 0)).toBeGreaterThan(0)
+    expect(proj?.hitIds).toEqual([])
   })
 
   it('remet le cooldown après un tir', () => {

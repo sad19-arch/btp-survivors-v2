@@ -9,6 +9,9 @@ import { hitFlashUntil, DamageNumberPool } from '@render/damageNumbers'
 import { SpritePool } from '@render/spritePool'
 import { VfxManager } from '@render/scenes/vfxManager'
 import { boomScale } from '@render/boomScale'
+import { projectileRenderScale } from '@render/projectileRenderScale'
+import { tarRenderGeometry } from '@render/tarRenderGeometry'
+import { PROJECTILE_SPRITE_CONFIG } from '@render/projectileSpriteConfig'
 
 /** Sprite de personnage : feuille pixel-art si l'asset existe, sinon cercle de repli. */
 type CharSprite = Phaser.GameObjects.Sprite | Phaser.GameObjects.Arc
@@ -16,31 +19,6 @@ type CharSprite = Phaser.GameObjects.Sprite | Phaser.GameObjects.Arc
 /** Échelle par défaut d'un personnage sans échelle de skin dédiée. */
 const DEFAULT_CHAR_SCALE = 0.516
 
-/** Sprites de projectiles par type d'arme (spin = rotation continue ; faceVel = orienté vers la vitesse). */
-const PROJ_SPRITE: Record<string, { key: string; scale: number; spin: boolean; faceVel: boolean }> = {
-  scie: { key: 'proj_scie', scale: 0.8, spin: true, faceVel: false },
-  cloueur: { key: 'proj_cloueur', scale: 0.8, spin: false, faceVel: true },
-  // Armes Phase A (Persos) — sprites dédiés PixelLab. Piste C : boulon doré brillant
-  // (remplace l'écrou gris terne) + échelle relevée 0.55→0.68 pour la lisibilité.
-  boulons: { key: 'proj_boulons', scale: 0.68, spin: false, faceVel: true },
-  tempete_boulons: { key: 'proj_boulons', scale: 0.68, spin: false, faceVel: true },
-  // Clé à molette : sprite PixelLab dédié (clé anglaise qui tournoie en boomerang).
-  cle_molette: { key: 'proj_cle', scale: 0.52, spin: true, faceVel: false },
-  cle_choc: { key: 'proj_cle', scale: 0.58, spin: true, faceVel: false },
-  // Brouette : VRAI sprite PixelLab (brouette d'acier pleine de gravats) — remplace
-  // l'ancienne icône UI 64px minuscule ; grosse et lisible. Pas de rotation (le sprite
-  // a une orientation propre : la faire pivoter vers la vitesse la rendrait de travers).
-  brouette: { key: 'proj_brouette', scale: 0.62, spin: false, faceVel: false },
-  transpalette: { key: 'proj_brouette', scale: 0.82, spin: false, faceVel: false },
-  // Boule de feu de l'otage enragé (allié) : sprite PixelLab dédié (flamme qui vrille).
-  boule_feu: { key: 'proj_boule_feu', scale: 0.9, spin: true, faceVel: false },
-  // Bonbonne de chantier (visée manuelle, cadeau des ouvriers libérés) : réutilise le
-  // même sprite que la boule de feu de l'otage — même lecture visuelle, zéro nouvel asset.
-  bonbonne_chantier: { key: 'proj_boule_feu', scale: 1.15, spin: true, faceVel: false },
-  detonation_chaine: { key: 'proj_boule_feu', scale: 1.4, spin: true, faceVel: false },
-  // Tronçonneuse de chantier (évolution de la scie orbitale) : mêmes lames, plus grosses.
-  tronconneuse_chantier: { key: 'proj_scie', scale: 1.3, spin: true, faceVel: false },
-}
 /**
  * Sprites de pickups par type. Typé `Record<PickupKind, …>` : le compilateur
  * EXIGE une entrée pour chaque type de pickup du cœur — ajouter un `PickupKind`
@@ -101,6 +79,7 @@ const DEATH_BOOM_MAX_PER_FRAME = 12
  */
 export class HordeRenderer {
   private hazardGraphics?: Phaser.GameObjects.Graphics
+  private projectileTrailGraphics?: Phaser.GameObjects.Graphics
   private readonly hazardSprites = new Map<number, Phaser.GameObjects.Image>()
   private readonly enemySprites = new Map<number, CharSprite>()
   private readonly projectileSprites = new Map<number, CharSprite>()
@@ -134,6 +113,16 @@ export class HordeRenderer {
   private readonly seenEnemy = new Set<number>()
   private readonly seenProj = new Set<number>()
   private readonly seenPickup = new Set<number>()
+  private maxNailTrailCount = 0
+  private maxBoltTrailCount = 0
+  private maxWrenchOutboundTrailCount = 0
+  private maxWrenchReturnTrailCount = 0
+  private readonly projectileScaleInfo = new Map<number, { type: string; radius: number | undefined; scale: number }>()
+  private readonly tarBoundaryInfo = new Map<number, {
+    simulationRadius: number
+    boundaryRadius: number
+    spriteScale: number
+  }>()
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -151,13 +140,47 @@ export class HordeRenderer {
     return info.sort((a, b) => a.id - b.id)
   }
 
+  /** Maximum de traînées de clous dessinées simultanément depuis la création de la scène. */
+  debugNailTrailInfo(): { maxTrailCount: number } {
+    return { maxTrailCount: this.maxNailTrailCount }
+  }
+
+  /** Maximum de traînées de boulons dessinées simultanément. */
+  debugBoltTrailInfo(): { maxTrailCount: number } {
+    return { maxTrailCount: this.maxBoltTrailCount }
+  }
+
+  /** Maximum de traînées de Clé observées pendant les phases aller et retour. */
+  debugWrenchTrailInfo(): { maxOutboundTrailCount: number; maxReturnTrailCount: number } {
+    return {
+      maxOutboundTrailCount: this.maxWrenchOutboundTrailCount,
+      maxReturnTrailCount: this.maxWrenchReturnTrailCount
+    }
+  }
+
+  /** Projectiles lourds réellement remis au renderer et leur échelle calculée. */
+  debugBrouetteInfo(): { type: string; radius: number | undefined; scale: number }[] {
+    return [...this.projectileScaleInfo.values()]
+      .filter((info) => info.type === 'brouette' || info.type === 'transpalette')
+      .map((info) => ({ ...info }))
+  }
+
+  /** Frontières de Goudron réellement dessinées et rayon source de la simulation. */
+  debugTarBoundaryInfo(): {
+    simulationRadius: number
+    boundaryRadius: number
+    spriteScale: number
+  }[] {
+    return [...this.tarBoundaryInfo.values()].map((info) => ({ ...info }))
+  }
+
   /**
    * Synchronise tous les sprites de la horde avec l'état de la frame. `stage`
    * fournit les skins d'ennemis/boss ; `state.players[0]` oriente les ennemis.
    */
   sync(state: AppViewState, stage: StageRender): void {
     if (this.hazardGraphics === undefined) {
-      this.hazardGraphics = this.scene.add.graphics().setDepth(-2)
+      this.hazardGraphics = this.scene.add.graphics().setDepth(-1.5)
     }
 
     // ── Flaques de goudron (hazards) : sprite dédié par flaque, repli Graphics ──
@@ -165,7 +188,9 @@ export class HordeRenderer {
     const useTarSprite = this.scene.textures.exists('vfx_goudron')
     const seenHaz = this.seenHaz
     seenHaz.clear()
+    this.tarBoundaryInfo.clear()
     for (const h of state.hazards) {
+      let textureWidth = 160
       if (useTarSprite) {
         seenHaz.add(h.id)
         let hs = this.hazardSprites.get(h.id)
@@ -176,11 +201,25 @@ export class HordeRenderer {
           this.scene.tweens.add({ targets: hs, alpha: 0.85, duration: 250, ease: 'Quad.easeOut' })
           this.vfx.spawnTarBubbles(h.x, h.y, h.radius)
         }
-        hs.setPosition(h.x, h.y).setScale((h.radius * 2) / hs.width)
+        textureWidth = hs.width
+        const geometry = tarRenderGeometry(h.radius, textureWidth)
+        hs.setPosition(h.x, h.y).setScale(geometry.spriteScale)
       } else {
         this.hazardGraphics.fillStyle(0x1a1a20, 0.35)
         this.hazardGraphics.fillCircle(h.x, h.y, h.radius)
       }
+      const geometry = tarRenderGeometry(h.radius, textureWidth)
+      // Contour pixel sombre + liseré chaud : la ligne extérieure est centrée
+      // exactement sur le rayon de dégâts, sans étirer le sprite sous-jacent.
+      this.hazardGraphics.lineStyle(3, PALETTE_HEX.contour, 0.82)
+      this.hazardGraphics.strokeCircle(h.x, h.y, geometry.boundaryRadius)
+      this.hazardGraphics.lineStyle(1, PALETTE_HEX.orangeDanger, 0.72)
+      this.hazardGraphics.strokeCircle(h.x, h.y, Math.max(1, geometry.boundaryRadius - 2))
+      this.tarBoundaryInfo.set(h.id, {
+        simulationRadius: h.radius,
+        boundaryRadius: geometry.boundaryRadius,
+        spriteScale: geometry.spriteScale
+      })
     }
     for (const [id, hs] of this.hazardSprites) {
       if (!seenHaz.has(id)) {
@@ -377,22 +416,97 @@ export class HordeRenderer {
     }
 
     // ── Projectiles (spin ou orienté vitesse selon la config) ──
+    if (this.projectileTrailGraphics === undefined) {
+      this.projectileTrailGraphics = this.scene.add.graphics().setDepth(0)
+    }
+    this.projectileTrailGraphics.clear()
+    let nailTrailCount = 0
+    let boltTrailCount = 0
+    let wrenchOutboundTrailCount = 0
+    let wrenchReturnTrailCount = 0
     const seenProj = this.seenProj
     seenProj.clear()
     for (const pr of state.projectiles) {
       seenProj.add(pr.id)
       let sprite = this.projectileSprites.get(pr.id)
-      const cfg = PROJ_SPRITE[pr.type]
+      const cfg = PROJECTILE_SPRITE_CONFIG[pr.type]
       if (sprite === undefined) {
         if (cfg !== undefined && this.scene.textures.exists(cfg.key)) {
           sprite = this.pool.acquire(cfg.key, pr.x, pr.y)
-          sprite.setScale(cfg.scale)
         } else {
           sprite = this.scene.add.circle(pr.x, pr.y, PROJECTILE_RADIUS, PROJECTILE_COLOR)
         }
         this.projectileSprites.set(pr.id, sprite)
       }
       sprite.setPosition(pr.x, pr.y)
+      if (sprite instanceof Phaser.GameObjects.Sprite && cfg !== undefined) {
+        const scale = projectileRenderScale(pr.type, pr.radius, cfg.scale)
+        sprite.setScale(scale)
+        this.projectileScaleInfo.set(pr.id, { type: pr.type, radius: pr.radius, scale })
+      }
+      if (
+        (pr.type === 'cloueur' || pr.type === 'mitrailleuse_clous')
+        && (pr.vx !== 0 || pr.vy !== 0)
+      ) {
+        const speed = Math.hypot(pr.vx, pr.vy)
+        const evolved = pr.type === 'mitrailleuse_clous'
+        const length = evolved ? 28 : 18
+        this.projectileTrailGraphics.lineStyle(
+          evolved ? 4 : 3,
+          evolved ? PALETTE_HEX.orangeDanger : PALETTE_HEX.jauneSecurite,
+          evolved ? 0.85 : 0.68
+        )
+        this.projectileTrailGraphics.lineBetween(
+          pr.x - (pr.vx / speed) * length,
+          pr.y - (pr.vy / speed) * length,
+          pr.x,
+          pr.y
+        )
+        nailTrailCount += 1
+      } else if (
+        (pr.type === 'boulons' || pr.type === 'tempete_boulons')
+        && (pr.vx !== 0 || pr.vy !== 0)
+      ) {
+        const speed = Math.hypot(pr.vx, pr.vy)
+        const evolved = pr.type === 'tempete_boulons'
+        const length = evolved ? 22 : 14
+        this.projectileTrailGraphics.lineStyle(
+          evolved ? 3 : 2,
+          evolved ? PALETTE_HEX.orangeDanger : PALETTE_HEX.jauneSecurite,
+          evolved ? 0.78 : 0.58
+        )
+        this.projectileTrailGraphics.lineBetween(
+          pr.x - (pr.vx / speed) * length,
+          pr.y - (pr.vy / speed) * length,
+          pr.x,
+          pr.y
+        )
+        boltTrailCount += 1
+      } else if (
+        (pr.type === 'cle_molette' || pr.type === 'cle_choc')
+        && (pr.vx !== 0 || pr.vy !== 0)
+      ) {
+        const speed = Math.hypot(pr.vx, pr.vy)
+        const returning = pr.returning === true
+        const evolved = pr.type === 'cle_choc'
+        const length = returning ? (evolved ? 30 : 25) : (evolved ? 18 : 14)
+        this.projectileTrailGraphics.lineStyle(
+          returning ? (evolved ? 4 : 3) : 2,
+          returning ? PALETTE_HEX.cyanAccent : PALETTE_HEX.jauneSecurite,
+          returning ? 0.88 : 0.48
+        )
+        this.projectileTrailGraphics.lineBetween(
+          pr.x - (pr.vx / speed) * length,
+          pr.y - (pr.vy / speed) * length,
+          pr.x,
+          pr.y
+        )
+        if (returning) {
+          wrenchReturnTrailCount += 1
+        } else {
+          wrenchOutboundTrailCount += 1
+        }
+      }
       if (sprite instanceof Phaser.GameObjects.Sprite && cfg !== undefined) {
         if (cfg.spin) {
           sprite.setRotation(this.scene.time.now / 120)
@@ -402,6 +516,10 @@ export class HordeRenderer {
         }
       }
     }
+    this.maxNailTrailCount = Math.max(this.maxNailTrailCount, nailTrailCount)
+    this.maxBoltTrailCount = Math.max(this.maxBoltTrailCount, boltTrailCount)
+    this.maxWrenchOutboundTrailCount = Math.max(this.maxWrenchOutboundTrailCount, wrenchOutboundTrailCount)
+    this.maxWrenchReturnTrailCount = Math.max(this.maxWrenchReturnTrailCount, wrenchReturnTrailCount)
     for (const [id, sprite] of this.projectileSprites) {
       if (!seenProj.has(id)) {
         if (sprite instanceof Phaser.GameObjects.Sprite) {
@@ -410,6 +528,7 @@ export class HordeRenderer {
           sprite.destroy()
         }
         this.projectileSprites.delete(id)
+        this.projectileScaleInfo.delete(id)
       }
     }
 

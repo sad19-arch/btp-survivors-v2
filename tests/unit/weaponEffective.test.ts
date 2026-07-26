@@ -7,7 +7,15 @@ function player(w: World, weaponId: string, level: number, stats?: Partial<impor
   const e = w.spawn()
   w.add(e, 'position', { x: 0, y: 0 }); w.add(e, 'velocity', { x: 0, y: 0 })
   w.add(e, 'health', { hp: 100, maxHp: 100 })
-  w.add(e, 'player', { playerId: 1, speed: 200, vigilance: 100, damageMult: 1, cooldownMult: 1, pickupRadius: 90 })
+  w.add(e, 'player', {
+    playerId: 1,
+    speed: 200,
+    vigilance: 100,
+    damageMult: 1,
+    cooldownMult: 1,
+    pickupRadius: 90,
+    facing: { x: 1, y: 0 }
+  })
   w.add(e, 'weapons', { slots: [{ id: weaponId, level, cooldownLeftMs: 0 }] })
   w.add(e, 'stats', { might: 1, area: 1, amount: 0, cooldown: 1, duration: 1, projectileSpeed: 1, moveSpeed: 1, maxHp: 1, recovery: 0, magnet: 1, growth: 1, ...stats })
   return e
@@ -30,7 +38,7 @@ describe('weaponSystem — stats effectives + kinds', () => {
     weaponSystem(w, 2000, undefined, undefined, new Rng(1))
     expect(w.get(en, 'health')?.hp).toBeLessThan(100)
   })
-  it('pied_de_biche (sweep) : inflige des dégâts autour du joueur à la cadence', () => {
+  it('pied_de_biche (sweep) : inflige des dégâts devant le joueur à la cadence', () => {
     const w = new World(); player(w, 'pied_de_biche', 1); const en = enemy(w, 50, 0, 100)
     weaponSystem(w, 1000)
     expect(w.get(en, 'health')?.hp).toBeLessThan(100)

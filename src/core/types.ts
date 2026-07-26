@@ -186,6 +186,12 @@ export interface ProjectileComp {
   /** Durée de vie restante, en ms. */
   lifeMs: number
   radius: number
+  /** Détonation de zone déclenchée à l'impact ; absente pour les projectiles ordinaires. */
+  explosionRadius?: number
+  explosionDamageMult?: number
+  /** Propagation déterministe propre aux évolutions explosives. */
+  chainExplosions?: number
+  chainRange?: number
   /** Nombre d'ennemis SUPPLÉMENTAIRES que le projectile peut encore traverser après un impact (0 = despawn au 1er impact). */
   pierce: number
   /** Force de recul transmise à l'ennemi lors de l'impact. */
@@ -199,7 +205,10 @@ export interface ProjectileComp {
   boomerangOutMs?: number
   /** Vrai une fois l'inversion déclenchée : le projectile revient vers son owner. */
   returning?: boolean
-  /** Liste des ids d'ennemis déjà touchés par ce projectile (pour le ricochet, éviter re-hit). */
+  /**
+   * Ids d'ennemis déjà touchés pendant le passage courant.
+   * Réinitialisé uniquement à l'inversion d'un boomerang pour autoriser un coup au retour.
+   */
   hitIds?: number[]
 }
 
@@ -441,6 +450,10 @@ export interface ProjectileState {
   vx: number
   vy: number
   type: string
+  /** Rayon de collision exposé au rendu, sans autorité sur la simulation. */
+  radius?: number
+  /** Phase retour d'un boomerang, exposée uniquement pour différencier son rendu. */
+  returning?: boolean
 }
 
 export interface PickupState {
