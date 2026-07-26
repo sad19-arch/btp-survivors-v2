@@ -11,6 +11,7 @@ export default tseslint.config(
       '.remember/**',
       '.superpowers/**',
       '.claude/**',
+      'tools/local/**',
       'golden-batch-review/**',
       'tools/assets/*.mjs',
       'tools/content/*.mjs',

@@ -89,6 +89,11 @@ export interface EnemyComp {
   speed: number // px/seconde
   isElite: boolean
   isBoss: boolean
+  /**
+   * Joueur vivant poursuivi par cet ennemi. Affecté par `enemyAiSystem` au
+   * joueur actuellement le moins ciblé, puis conservé tant que la cible vit.
+   */
+  targetPlayerId?: number
   /** Résistance au recul physique (1 = standard, plus bas = plus lourd). */
   knockbackMult?: number
   /**
@@ -407,6 +412,8 @@ export interface PlayerState {
 export interface EnemyState {
   id: number
   type: string
+  /** Joueur vivant actuellement poursuivi, exposé pour le seam de test. */
+  targetPlayerId?: number
   x: number
   y: number
   hp: number

@@ -228,12 +228,10 @@ export class Simulation {
   private obstacles: readonly Obstacle[] = []
   /** Beton frais et autres surfaces sans degats qui affectent uniquement les joueurs. */
   private slowZones: readonly SurfaceSlowZone[] = []
-  /** Champ de flux courant (null si aucun obstacle ou pas encore construit). */
-  private flowField: FlowField | null = null
-  /** Colonne de la cellule du joueur lors du dernier build du champ de flux. */
-  private lastFlowCol = -1
-  /** Ligne de la cellule du joueur lors du dernier build du champ de flux. */
-  private lastFlowRow = -1
+  /** Champ de flux courant par joueur vivant (vide sans obstacle). */
+  private readonly flowFields = new Map<number, FlowField>()
+  /** Cellule ayant servi au dernier build, par joueur. */
+  private readonly flowCells = new Map<number, { col: number; row: number }>()
 
   constructor(opts: SimOptions) {
     this.mode = opts.mode
@@ -666,10 +664,9 @@ export class Simulation {
     const site = buildSiteLayout(seed, WORLD.width, WORLD.height, this.phaseId)
     this.obstacles = site.obstacles
     this.slowZones = site.slowZones ?? []
-    // Réinitialise le champ de flux (sera reconstruit au premier pas si obstacles > 0).
-    this.flowField = null
-    this.lastFlowCol = -1
-    this.lastFlowRow = -1
+    // Réinitialise les champs de flux (reconstruits au premier pas si obstacles > 0).
+    this.flowFields.clear()
+    this.flowCells.clear()
     this.spawnPlayers()
     spawnOpeningWave(
       this.world,
@@ -827,8 +824,8 @@ export class Simulation {
     this.rebuildEnemyGrid()
     weaponSystem(this.world, dtMs, pulses, fired, this.rng, this.enemyGrid)
     slowSystem(this.world, dtMs)
-    // Champ de flux : construit UNIQUEMENT si des obstacles existent (sinon il n'y a
-    // rien à contourner et `enemyAiSystem` reçoit null = ligne droite vers le joueur).
+    // Champs de flux : construits UNIQUEMENT si des obstacles existent (sinon il
+    // n'y a rien à contourner et `enemyAiSystem` reçoit null).
     //
     // ⚠️ N'ALLEZ PAS CHERCHER ICI UNE GARDE DE DÉTERMINISME. Le commentaire qui vivait
     // là l'affirmait — « terrain_vierge (obstacles=[]) → flowField reste null →
@@ -843,25 +840,14 @@ export class Simulation {
     // obstacles viennent de `buildSiteLayout`, lui-même à seed. Même seed ⇒ mêmes
     // obstacles ⇒ même champ ⇒ même partie. Le RNG des clusters est isolé (seed^0x51e0).
     if (this.obstacles.length > 0) {
-      const leaderPos = this.getLeaderPosition()
-      if (leaderPos !== null) {
-        // Cellule absolue du joueur dans la grille mondiale (throttle = rebuild uniquement
-        // quand le joueur franchit une frontière de cellule CELL_FLOW).
-        const col = Math.floor(leaderPos.x / CELL_FLOW)
-        const row = Math.floor(leaderPos.y / CELL_FLOW)
-        if (this.flowField === null || col !== this.lastFlowCol || row !== this.lastFlowRow) {
-          this.flowField = buildFlowField(leaderPos.x, leaderPos.y, this.obstacles, CELL_FLOW, HALF_FLOW)
-          this.lastFlowCol = col
-          this.lastFlowRow = row
-        }
-      }
+      this.refreshPlayerFlowFields()
     }
     // Mini-événement boss (enrage + invocation d'add) AVANT le steering : l'enrage
     // doit être à jour quand `steerBoss` calcule la vitesse. Add mis à l'échelle
     // comme une vague normale (difficulté temporelle × co-op).
     const bossScale = difficultyScaleAt(this.elapsedMs)
     bossSystem(this.world, this.rng, this.phase, { ...bossScale, hp: bossScale.hp * coopHpFactor(this.playerCount()) })
-    enemyAiSystem(this.world, this.elapsedMs, dtMs, this.flowField)
+    enemyAiSystem(this.world, this.elapsedMs, dtMs, this.obstacles.length > 0 ? this.flowFields : null)
     tetherSystem(this.world, MODE_PLAYER_COUNT[this.mode] ?? 1, TETHER.maxRadius)
     // Alliés enragés : suivi du joueur + salves (purge dirigée). AVANT `movementSystem`
     // pour que la vélocité de suivi soit intégrée ce pas. `thanked` : otages qui expirent.
@@ -1284,6 +1270,7 @@ export class Simulation {
       enemies.push({
         id: e,
         type: enemy.type,
+        ...(enemy.targetPlayerId !== undefined ? { targetPlayerId: enemy.targetPlayerId } : {}),
         x: pos.x,
         y: pos.y,
         hp: health.hp,
@@ -1460,29 +1447,35 @@ export class Simulation {
   }
 
   /**
-   * Retourne la position du joueur leader (playerId=1, ou premier vivant).
-   * Utilisé pour centrer la fenêtre du champ de flux.
-   * Retourne null si aucun joueur vivant.
+   * Maintient un champ de navigation par joueur vivant. Chaque champ est
+   * reconstruit seulement quand son joueur change de cellule de flux.
    */
-  private getLeaderPosition(): Vec2 | null {
-    // Tente d'abord le joueur 1
-    const e1 = this.playerEntities.get(1)
-    if (e1 !== undefined) {
-      const pos = this.world.get(e1, 'position')
-      const health = this.world.get(e1, 'health')
-      if (pos !== undefined && health !== undefined && health.hp > 0) {
-        return { x: pos.x, y: pos.y }
-      }
-    }
-    // Fallback : premier joueur vivant
-    for (const [, e] of this.playerEntities) {
+  private refreshPlayerFlowFields(): void {
+    const alivePlayerIds = new Set<number>()
+    for (const [playerId, e] of this.playerEntities) {
       const pos = this.world.get(e, 'position')
       const health = this.world.get(e, 'health')
-      if (pos !== undefined && health !== undefined && health.hp > 0) {
-        return { x: pos.x, y: pos.y }
+      if (pos === undefined || health === undefined || health.hp <= 0) {
+        continue
+      }
+      alivePlayerIds.add(playerId)
+      const col = Math.floor(pos.x / CELL_FLOW)
+      const row = Math.floor(pos.y / CELL_FLOW)
+      const previous = this.flowCells.get(playerId)
+      if (previous === undefined || previous.col !== col || previous.row !== row) {
+        this.flowFields.set(
+          playerId,
+          buildFlowField(pos.x, pos.y, this.obstacles, CELL_FLOW, HALF_FLOW)
+        )
+        this.flowCells.set(playerId, { col, row })
       }
     }
-    return null
+    for (const playerId of this.flowFields.keys()) {
+      if (!alivePlayerIds.has(playerId)) {
+        this.flowFields.delete(playerId)
+        this.flowCells.delete(playerId)
+      }
+    }
   }
 
   private playersCentroid(): Vec2 {

@@ -6,7 +6,7 @@
 
 import { paletteEntry, STAGE_LIST, walkerSkinsFor } from './PrefabCatalog'
 import type { EditorScene } from './EditorScene'
-import { saveUserLayout, deleteUserLayout } from '@ui/userLayouts'
+import { saveUserLayout, getUserLayout, deleteUserLayout } from '@ui/userLayouts'
 import { SITE_PROGRAMS } from '@content/sitePrograms'
 import { ZONE_BY_TYPE } from './zones'
 import { PATH_DEFAULT_SPEED, PATH_LIMITS, type LayoutPath } from '@content/stageLayout'
@@ -123,6 +123,7 @@ function pickFile(onText: (text: string) => void): void {
 
 export class EditorOverlay {
   private readonly toolbar: HTMLElement
+  private readonly versionStatus: HTMLElement
   private readonly inspector: HTMLElement
   private readonly warns: HTMLElement
   private readonly modal: HTMLElement
@@ -146,6 +147,10 @@ export class EditorOverlay {
     title.className = 'sce-title'
     title.textContent = 'Stage Composer'
     this.toolbar.appendChild(title)
+    this.versionStatus = document.createElement('span')
+    this.versionStatus.className = 'sce-version-status'
+    this.versionStatus.dataset.testid = 'active-layout-version'
+    this.toolbar.appendChild(this.versionStatus)
 
     // Sélecteur de stage.
     const sel = document.createElement('select')
@@ -160,7 +165,8 @@ export class EditorOverlay {
     sel.addEventListener('change', () => this.switchStage(sel.value))
     this.toolbar.appendChild(sel)
 
-    // Groupe FICHIER : base vierge/existante, sauver (jouable), télécharger, charger.
+    // Groupe FICHIER : les deux destinations sont explicites. Une variante
+    // personnelle reste locale ; une publication modifie les sources officielles.
     const gFile = group('Fichier')
     gFile.appendChild(btn('🗋 Nouveau (vierge)', () => {
       if (window.confirm('Repartir d\'un stage VIERGE ? (efface la compo courante de ce niveau)')) { state.reset() }
@@ -171,10 +177,19 @@ export class EditorOverlay {
         if (!res.ok) { window.alert(res.error ?? 'Import impossible.') }
       }
     }))
-    gFile.appendChild(btn('💾 Sauver (jouable)', () => {
+    gFile.appendChild(btn('Sauver comme variante personnelle', () => {
       saveUserLayout(scene.stage, state.exportGameJson())
-      window.alert('Sauvé ✓ — jouable depuis le menu titre (niveau : ' + scene.stage + ').')
+      this.refreshActiveVersion()
+      window.alert(
+        'Variante personnelle sauvée. Elle est prioritaire dans ce navigateur pour le niveau : ' +
+        scene.stage + '.'
+      )
     }, 'sce-btn-primary'))
+    if (import.meta.env.DEV) {
+      gFile.appendChild(btn('Publier comme niveau officiel', () => {
+        void this.publishOfficial()
+      }, 'sce-btn-official'))
+    }
     // Plan de chantier procédural : uniquement là où il en existe un.
     if (stageHasSitePlan(scene.stage)) {
       const cb = checkbox('Garder le plan de chantier de base', state.keepSitePlan, (v) => state.setKeepSitePlan(v))
@@ -192,6 +207,7 @@ export class EditorOverlay {
       // le brouillon `stageComposer:<stage>` est un store distinct → l'utilisateur
       // garde son travail en cours et peut re-sauver derrière.
       deleteUserLayout(scene.stage)
+      this.refreshActiveVersion()
       window.alert('Niveau d\'origine restauré ✓ (niveau : ' + scene.stage + '). Le brouillon de l\'éditeur est intact.')
     }, 'sce-btn-danger'))
     gFile.appendChild(btn('⬇ Télécharger', () => downloadText('stage_' + scene.stage + '.json', state.exportGameJson())))
@@ -225,20 +241,9 @@ export class EditorOverlay {
     gEdit.appendChild(btn(previewLabel, () => state.setPreviewing(!state.isPreviewing), state.isPreviewing ? 'sce-btn-primary' : undefined))
     this.toolbar.appendChild(gEdit)
 
-    // Groupe AVANCÉ : baker au repo (dev), export/import texte.
+    // Groupe AVANCÉ : export/import texte. La publication officielle est une
+    // action de premier niveau dans Fichier, pas une opération cachée ici.
     const gAdv = group('Avancé')
-    gAdv.appendChild(btn('Sauver au repo (dev)', () => {
-      void fetch('/__save-layout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage: scene.stage, json: state.exportGameJson() })
-      })
-        .then(async (r) => {
-          const t = await r.text()
-          window.alert(r.ok ? `Sauvé au repo ✓ (${t})` : `Échec : ${t}`)
-        })
-        .catch(() => window.alert('Endpoint indisponible : « Sauver au repo » ne marche qu\'en dev (npm run dev).'))
-    }))
     gAdv.appendChild(btn('Export JSON', () => this.openModal(state.exportJson(), 'export')))
     gAdv.appendChild(btn('Export code', () => this.openModal(state.exportCode(), 'export')))
     gAdv.appendChild(btn('Import JSON', () => this.openModal('', 'import')))
@@ -276,6 +281,47 @@ export class EditorOverlay {
   }
 
   private modalBtns: HTMLElement
+
+  private refreshActiveVersion(): void {
+    const personal = getUserLayout(this.scene.stage) !== null
+    this.versionStatus.textContent = personal ? 'Version active : personnelle' : 'Version active : officielle'
+    this.versionStatus.dataset.version = personal ? 'personal' : 'official'
+  }
+
+  private async publishOfficial(): Promise<void> {
+    try {
+      const response = await fetch('/__save-layout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stage: this.scene.stage,
+          json: this.scene.state.exportGameJson()
+        })
+      })
+      const raw = await response.text()
+      if (!response.ok) {
+        window.alert(`Publication officielle refusée : ${raw}`)
+        return
+      }
+      const result = JSON.parse(raw) as { layoutPath?: unknown; registryPath?: unknown }
+      if (typeof result.layoutPath !== 'string' || typeof result.registryPath !== 'string') {
+        window.alert('Publication officielle invalide : le serveur n’a pas renvoyé les fichiers modifiés.')
+        return
+      }
+      const masked = getUserLayout(this.scene.stage) !== null
+      const warning = masked
+        ? '\n\nLa variante personnelle reste prioritaire dans ce navigateur. Utilise « Restaurer le niveau d’origine » pour jouer l’officiel.'
+        : ''
+      window.alert(
+        `Niveau officiel publié.\nFichiers modifiés :\n- ${result.layoutPath}\n- ${result.registryPath}${warning}`
+      )
+      this.refreshActiveVersion()
+    } catch {
+      window.alert(
+        'Publication officielle indisponible : cette action nécessite le serveur de développement (npm run dev).'
+      )
+    }
+  }
 
   private openModal(content: string, mode: 'export' | 'import'): void {
     this.modalText.value = content
@@ -403,6 +449,7 @@ export class EditorOverlay {
 
   refresh(): void {
     const state = this.scene.state
+    this.refreshActiveVersion()
     this.gridBtn.classList.toggle('sce-btn-on', state.grid)
     this.snapBtn.classList.toggle('sce-btn-on', state.snap)
     // Resynchro : annuler/rétablir et l'import JSON changent le layout sous la

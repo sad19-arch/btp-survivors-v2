@@ -14,17 +14,66 @@ import { sampleFlow } from './flowField'
  * Les deux paramètres ont des valeurs par défaut pour rétrocompatibilité
  * avec les fixtures de test qui appellent encore `enemyAiSystem(world)`.
  */
-export function enemyAiSystem(world: World, elapsedMs = 0, dtMs = 16, flowField: FlowField | null = null): void {
-  const targets: Vec2[] = []
+interface PlayerTarget extends Vec2 {
+  playerId: number
+}
+
+export function enemyAiSystem(
+  world: World,
+  elapsedMs = 0,
+  dtMs = 16,
+  flowFields: ReadonlyMap<number, FlowField> | null = null
+): void {
+  const targets: PlayerTarget[] = []
   for (const p of world.query('player', 'position', 'health')) {
     const h = world.get(p, 'health')
     const pos = world.get(p, 'position')
-    if (h !== undefined && pos !== undefined && h.hp > 0) {
-      targets.push({ x: pos.x, y: pos.y })
+    const player = world.get(p, 'player')
+    if (h !== undefined && pos !== undefined && player !== undefined && h.hp > 0) {
+      targets.push({ playerId: player.playerId, x: pos.x, y: pos.y })
+    }
+  }
+  targets.sort((left, right) => left.playerId - right.playerId)
+  const targetsByPlayerId = new Map(targets.map((target) => [target.playerId, target]))
+  const targetLoads = new Map(targets.map((target) => [target.playerId, 0]))
+  const enemyIds = [...world.query('enemy', 'position', 'velocity')].sort((left, right) => left - right)
+
+  // Conserve les affectations encore valides afin d'éviter qu'un ennemi change
+  // de cible à chaque mort dans la horde.
+  for (const e of enemyIds) {
+    const enemy = world.get(e, 'enemy')
+    if (enemy?.behavior === 'sweep') {
+      delete enemy.targetPlayerId
+      continue
+    }
+    const targetPlayerId = enemy?.targetPlayerId
+    if (targetPlayerId !== undefined && targetsByPlayerId.has(targetPlayerId)) {
+      targetLoads.set(targetPlayerId, (targetLoads.get(targetPlayerId) ?? 0) + 1)
     }
   }
 
-  for (const e of world.query('enemy', 'position', 'velocity')) {
+  // Affecte uniquement les nouveaux ennemis ou ceux dont la cible est tombée.
+  // Le joueur actuellement le moins ciblé est toujours choisi ; égalité résolue
+  // par playerId croissant pour rester parfaitement déterministe.
+  for (const e of enemyIds) {
+    const enemy = world.get(e, 'enemy')
+    if (
+      enemy === undefined ||
+      enemy.behavior === 'sweep' ||
+      (enemy.targetPlayerId !== undefined && targetsByPlayerId.has(enemy.targetPlayerId))
+    ) {
+      continue
+    }
+    const target = leastLoadedTarget(targets, targetLoads)
+    if (target === null) {
+      delete enemy.targetPlayerId
+      continue
+    }
+    enemy.targetPlayerId = target.playerId
+    targetLoads.set(target.playerId, (targetLoads.get(target.playerId) ?? 0) + 1)
+  }
+
+  for (const e of enemyIds) {
     const pos = world.get(e, 'position')
     const vel = world.get(e, 'velocity')
     const enemy = world.get(e, 'enemy')
@@ -32,33 +81,35 @@ export function enemyAiSystem(world: World, elapsedMs = 0, dtMs = 16, flowField:
       continue
     }
 
-    const nearest = findNearest(pos, targets)
+    const target = enemy.targetPlayerId === undefined
+      ? null
+      : targetsByPlayerId.get(enemy.targetPlayerId) ?? null
+    const flowField = target === null ? undefined : flowFields?.get(target.playerId)
 
-    // Calcule la direction de base (vers le joueur) en mélangeant flux et chase.
-    // GATE : si flowField === null → nearest inchangé, CODE ACTUEL INCHANGÉ (diff 0).
-    // Sinon  : blend flow(0.7) + direct(0.3), renormalisé.
-    const blendedNearest = (flowField !== null && nearest !== null)
-      ? blendFlowNearest(flowField, pos.x, pos.y, nearest)
-      : nearest
+    // Chaque cible possède son propre champ de flux : les obstacles ne doivent
+    // pas rabattre les ennemis affectés à J2-J4 vers le leader J1.
+    const blendedTarget = (flowField !== undefined && target !== null)
+      ? blendFlowNearest(flowField, pos.x, pos.y, target)
+      : target
 
     switch (enemy.behavior) {
       case 'zigzag':
-        steerZigzag(pos, vel, enemy, blendedNearest, elapsedMs)
+        steerZigzag(pos, vel, enemy, blendedTarget, elapsedMs)
         break
       case 'circler':
-        steerCircler(pos, vel, enemy, blendedNearest, dtMs)
+        steerCircler(pos, vel, enemy, blendedTarget, dtMs)
         break
       case 'sweep':
         steerSweep(vel, enemy)
         break
       case 'charger':
-        steerCharger(pos, vel, enemy, blendedNearest, dtMs)
+        steerCharger(pos, vel, enemy, blendedTarget, dtMs)
         break
       case 'boss':
-        steerBoss(pos, vel, enemy, blendedNearest, dtMs)
+        steerBoss(pos, vel, enemy, blendedTarget, dtMs)
         break
       default:
-        steerChase(pos, vel, enemy, blendedNearest)
+        steerChase(pos, vel, enemy, blendedTarget)
     }
 
     // Applique le ralentissement si l'ennemi porte un composant `slow`.
@@ -285,15 +336,21 @@ function blendFlowNearest(
   }
 }
 
-function findNearest(from: Vec2, targets: readonly Vec2[]): Vec2 | null {
-  let best: Vec2 | null = null
-  let bestDist = Number.POSITIVE_INFINITY
-  for (const t of targets) {
-    const d = (t.x - from.x) ** 2 + (t.y - from.y) ** 2
-    if (d < bestDist) {
-      bestDist = d
-      best = t
+/**
+ * Renvoie le joueur vivant actuellement le moins ciblé.
+ */
+function leastLoadedTarget(
+  targets: readonly PlayerTarget[],
+  loads: ReadonlyMap<number, number>
+): PlayerTarget | null {
+  let selected: PlayerTarget | null = null
+  let selectedLoad = Number.POSITIVE_INFINITY
+  for (const target of targets) {
+    const load = loads.get(target.playerId) ?? 0
+    if (load < selectedLoad) {
+      selected = target
+      selectedLoad = load
     }
   }
-  return best
+  return selected
 }

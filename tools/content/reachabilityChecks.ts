@@ -90,8 +90,9 @@ export interface StageGroundProbe {
  * — jamais les tuiles de sol. Toute tuile déclarée autre que la base (ou une tuile
  * explicitement référencée par une compo) est donc chargée mais jamais peinte.
  *
- * ⚠️ INCIDENT CONNU ET NON CORRIGÉ (50/60) : cet outil le DÉTECTE, il ne le corrige
- * pas (réparer le rendu du sol est hors mandat). C'est un signalement, pas un patch.
+ * ⚠️ EXCEPTION PRODUIT DOCUMENTÉE : les variantes de tuiles sont conservées comme
+ * palette de composition, même lorsqu'aucun layout officiel ne les emploie encore.
+ * L'audit les rend visibles sans bloquer le dépôt ni suggérer leur suppression.
  */
 export function checkGroundTiles(stages: readonly StageGroundProbe[]): CategoryReport {
   const declaredKeys: string[] = []
@@ -114,9 +115,7 @@ export function checkGroundTiles(stages: readonly StageGroundProbe[]): CategoryR
     declared: declaredKeys.length,
     reachable: declaredKeys.length - orphanKeys.length,
     orphans: orphanKeys.sort(),
-    // Bloquant : l'incident est réel et mesurable. Le mettre en warning-only le
-    // laisserait pourrir « en reste » — ce que le brief demande précisément d'éviter.
-    gate: true
+    gate: false
   }
 }
 

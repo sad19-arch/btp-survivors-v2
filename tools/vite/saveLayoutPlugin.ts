@@ -10,7 +10,7 @@
 
 import type { Plugin } from 'vite'
 import { writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 
 const STAGES = new Set([
   'terrain_vierge',
@@ -25,10 +25,6 @@ const STAGES = new Set([
   'livraison_audit'
 ])
 
-const CONTENT_DIR = join('src', 'content')
-const LAYOUTS_DIR = join(CONTENT_DIR, 'layouts')
-const REGISTRY_FILE = join(CONTENT_DIR, 'composedLayouts.ts')
-
 const CANONICAL_ZONE_TYPES = [
   'signature_zone',
   'zone_access',
@@ -39,6 +35,9 @@ const CANONICAL_ZONE_TYPES = [
 
 /** Valide le contenu du layout avant toute écriture au dépôt. */
 export function validateSaveLayoutRequest(stage: string, json: string): string | null {
+  if (!STAGES.has(stage)) {
+    return 'stage invalide'
+  }
   let layout: unknown
   try {
     layout = JSON.parse(json)
@@ -108,9 +107,11 @@ import type { StageLayout } from './stageLayout'
  * garde signale déjà au bon moment (revue/CI). Committer une compo exige de committer
  * le registre régénéré : c'est une décision humaine, pas un effet de bord de build.
  */
-function regenerateRegistry(): void {
-  const files = existsSync(LAYOUTS_DIR)
-    ? readdirSync(LAYOUTS_DIR).filter((f) => f.endsWith('.json')).sort()
+function regenerateRegistry(contentDir: string): string {
+  const layoutsDir = join(contentDir, 'layouts')
+  const registryFile = join(contentDir, 'composedLayouts.ts')
+  const files = existsSync(layoutsDir)
+    ? readdirSync(layoutsDir).filter((f) => f.endsWith('.json')).sort()
     : []
   const imports = files.map((f, i) => `import l${i} from './layouts/${f}'`).join('\n')
   const entries = files
@@ -130,7 +131,44 @@ export function composedStageIds(): string[] {
   return Object.keys(REGISTRY)
 }
 `
-  writeFileSync(REGISTRY_FILE, body)
+  writeFileSync(registryFile, body)
+  return registryFile
+}
+
+export interface PublishedLayout {
+  readonly stage: string
+  readonly layoutPath: string
+  readonly registryPath: string
+}
+
+/**
+ * Publie une composition dans les sources officielles du dépôt.
+ *
+ * `repositoryRoot` est injectable pour tester toute l'écriture dans un dossier
+ * temporaire. Le nom de fichier ne vient jamais directement de l'appelant :
+ * `stage` doit appartenir au registre fermé `STAGES`, ce qui maintient toutes les
+ * écritures sous `src/content/layouts`.
+ */
+export function publishOfficialLayout(
+  stage: string,
+  json: string,
+  repositoryRoot = process.cwd()
+): PublishedLayout {
+  const validationError = validateSaveLayoutRequest(stage, json)
+  if (validationError !== null) {
+    throw new Error(validationError)
+  }
+  const contentDir = join(repositoryRoot, 'src', 'content')
+  const layoutsDir = join(contentDir, 'layouts')
+  mkdirSync(layoutsDir, { recursive: true })
+  const layoutFile = join(layoutsDir, `${stage}.json`)
+  writeFileSync(layoutFile, json)
+  const registryFile = regenerateRegistry(contentDir)
+  return {
+    stage,
+    layoutPath: relative(repositoryRoot, layoutFile).replaceAll('\\', '/'),
+    registryPath: relative(repositoryRoot, registryFile).replaceAll('\\', '/')
+  }
 }
 
 export function saveLayoutPlugin(): Plugin {
@@ -153,7 +191,7 @@ export function saveLayoutPlugin(): Plugin {
             const parsed = JSON.parse(raw) as { stage?: unknown; json?: unknown }
             const stage = parsed.stage
             const json = parsed.json
-            if (typeof stage !== 'string' || !STAGES.has(stage)) {
+            if (typeof stage !== 'string') {
               res.statusCode = 400
               res.end('stage invalide')
               return
@@ -163,17 +201,10 @@ export function saveLayoutPlugin(): Plugin {
               res.end('json manquant')
               return
             }
-            const validationError = validateSaveLayoutRequest(stage, json)
-            if (validationError !== null) {
-              res.statusCode = 400
-              res.end(validationError)
-              return
-            }
-            mkdirSync(LAYOUTS_DIR, { recursive: true })
-            writeFileSync(join(LAYOUTS_DIR, `${stage}.json`), json)
-            regenerateRegistry()
+            const published = publishOfficialLayout(stage, json)
             res.statusCode = 200
-            res.end(`ok: ${stage}`)
+            res.setHeader('Content-Type', 'application/json; charset=utf-8')
+            res.end(JSON.stringify(published))
           } catch (e) {
             res.statusCode = 400
             res.end(`erreur: ${e instanceof Error ? e.message : String(e)}`)

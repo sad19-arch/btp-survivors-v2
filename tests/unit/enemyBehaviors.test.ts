@@ -92,6 +92,7 @@ describe('enemyAiSystem — dispatch', () => {
     if (v === undefined) { throw new Error('velocity component manquant') }
     expect(v.x).toBeCloseTo(150, 5)
     expect(v.y).toBeCloseTo(0, 5)
+    expect(enemy.targetPlayerId).toBeUndefined()
   })
 
   it('sweep: ignorer le joueur — déplacer le joueur ne change pas la vel', () => {

@@ -27,6 +27,61 @@ async function openEditor(page: import('@playwright/test').Page): Promise<void> 
   await page.waitForSelector('.sce-card[title="marker_worker_path"]', { timeout: 30_000 })
 }
 
+test('les variantes personnelle et officielle sont deux sauvegardes explicites', async ({ page }) => {
+  await openEditor(page)
+
+  const status = page.locator('[data-testid="active-layout-version"]')
+  await expect(status).toHaveText('Version active : officielle')
+  await expect(page.getByRole('button', { name: 'Sauver comme variante personnelle' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Publier comme niveau officiel' })).toBeVisible()
+
+  page.once('dialog', (dialog) => dialog.dismiss())
+  await page.getByRole('button', { name: 'Sauver comme variante personnelle' }).click()
+  await expect(status).toHaveText('Version active : personnelle')
+  await expect.poll(() =>
+    page.evaluate(() => {
+      const stored = JSON.parse(localStorage.getItem('btp:userLayouts') ?? '{}') as unknown
+      return typeof stored === 'object' && stored !== null && 'terrain_vierge' in stored
+    })
+  ).toBe(true)
+})
+
+test('publier annonce les fichiers officiels sans désactiver la variante personnelle', async ({ page }) => {
+  await openEditor(page)
+  page.once('dialog', (dialog) => dialog.dismiss())
+  await page.getByRole('button', { name: 'Sauver comme variante personnelle' }).click()
+
+  let postedStage = ''
+  await page.route('**/__save-layout', async (route) => {
+    const body = route.request().postDataJSON() as { stage?: string }
+    postedStage = body.stage ?? ''
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        stage: 'terrain_vierge',
+        layoutPath: 'src/content/layouts/terrain_vierge.json',
+        registryPath: 'src/content/composedLayouts.ts'
+      })
+    })
+  })
+
+  const publication = new Promise<string>((resolve) => {
+    page.once('dialog', (dialog) => {
+      resolve(dialog.message())
+      void dialog.dismiss()
+    })
+  })
+  await page.getByRole('button', { name: 'Publier comme niveau officiel' }).click()
+  const message = await publication
+
+  expect(postedStage).toBe('terrain_vierge')
+  expect(message).toContain('src/content/layouts/terrain_vierge.json')
+  expect(message).toContain('src/content/composedLayouts.ts')
+  expect(message).toContain('variante personnelle reste prioritaire')
+  await expect(page.locator('[data-testid="active-layout-version"]')).toHaveText('Version active : personnelle')
+})
+
 test('l’outil de chemin annonce la touche Entrée AVANT de valider', async ({ page }) => {
   await openEditor(page)
   await page.locator('.sce-card[title="marker_worker_path"]').click()
