@@ -1,12 +1,19 @@
 /**
  * Calcule l'échelle purement visuelle d'un projectile.
  *
- * La Brouette suit partiellement son rayon de collision : l'exposant inférieur
- * à 1 rend la progression perceptible sans faire croître le sprite aussi vite
- * que la hitbox. Le N1 (rayon 26) et tous les autres projectiles conservent
- * exactement leur échelle configurée.
+ * Les armes orbitales suivent exactement leur hitbox. La Brouette suit
+ * partiellement son rayon : sa silhouette progresse sans grossir aussi vite
+ * que sa collision.
  */
 export function projectileRenderScale(type: string, radius: number | undefined, configuredScale: number): number {
+  const orbitalBaseRadius = type === 'scie'
+    ? 22
+    : type === 'tronconneuse_chantier'
+      ? 26
+      : undefined
+  if (orbitalBaseRadius !== undefined && radius !== undefined && radius > 0) {
+    return configuredScale * (radius / orbitalBaseRadius)
+  }
   if (type !== 'brouette' || radius === undefined || radius <= 0) {
     return configuredScale
   }

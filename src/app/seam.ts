@@ -123,6 +123,14 @@ export interface GameSeam {
     y: number
     radius: number
   } | null
+  /** Dernière contraction du Compresseur effectivement dessinée. */
+  debugHeavyHasteInfo?(): {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+    radius: number
+  } | null
   /** Nombre d'ondes de Casque effectivement dessinées. */
   debugHelmetRepulseCount?(): number
   /** Impact et activité de traînée du Cloueur observés côté renderer. */
@@ -149,6 +157,8 @@ export interface GameSeam {
   } | null
   /** Échelle réellement calculée pour les projectiles Brouette/Transpalette actifs. */
   debugBrouetteInfo?(): { type: string; radius: number | undefined; scale: number }[]
+  /** Échelle réellement calculée pour les Scies orbitales actives. */
+  debugScieScaleInfo?(): { type: string; radius: number | undefined; scale: number }[]
   /** Frontières exactes des flaques de Goudron actives. */
   debugTarBoundaryInfo?(): {
     simulationRadius: number

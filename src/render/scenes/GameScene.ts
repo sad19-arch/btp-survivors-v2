@@ -199,6 +199,10 @@ export class GameScene extends Phaser.Scene {
       this.vfx.spawnPassiveReimpact(p.x, p.y, p.radius, p.weaponId ?? 'scie')
       return
     }
+    if (p.kind === 'passive_heavy_haste') {
+      this.vfx.spawnHeavyHaste(p.x, p.y, p.radius, p.weaponId ?? 'marteau')
+      return
+    }
     if (p.kind === 'casque_repulse') {
       this.vfx.spawnHelmetRepulse(p.x, p.y, p.radius)
       return
@@ -989,6 +993,7 @@ export class GameScene extends Phaser.Scene {
       this.seam.debugHammerInfo = () => this.vfx.debugLastHammerRingInfo()
       this.seam.debugSawInfo = () => this.vfx.debugLastSawContactInfo()
       this.seam.debugPassiveReimpactInfo = () => this.vfx.debugLastPassiveReimpactInfo()
+      this.seam.debugHeavyHasteInfo = () => this.vfx.debugLastHeavyHasteInfo()
       this.seam.debugHelmetRepulseCount = () => this.vfx.debugHelmetRepulseCount()
       this.seam.debugNailInfo = () => {
         const impact = this.vfx.debugLastNailImpactInfo()
@@ -1016,6 +1021,7 @@ export class GameScene extends Phaser.Scene {
       }
       this.seam.debugConeContactInfo = () => this.vfx.debugLastConeContactInfo()
       this.seam.debugBrouetteInfo = () => this.horde.debugBrouetteInfo()
+      this.seam.debugScieScaleInfo = () => this.horde.debugScieScaleInfo()
       this.seam.debugTarBoundaryInfo = () => this.horde.debugTarBoundaryInfo()
       this.seam.debugWrenchInfo = () => {
         const turn = this.vfx.debugLastWrenchTurnInfo()

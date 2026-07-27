@@ -11,14 +11,6 @@ import { Rng } from '../rng'
 import type { SpatialGrid } from '../spatialGrid'
 import { applyEnemyHit } from './knockback'
 
-const EXPLOSIVE_WEAPONS = new Set(['bonbonne_chantier', 'detonation_chaine'])
-const DISQUE_WEAPONS = new Set(['scie', 'tronconneuse_chantier', 'pied_de_biche', 'barre_a_mine'])
-const HEAVY_WEAPONS = new Set([
-  'marteau', 'brise_roche',
-  'brouette', 'transpalette',
-  'bonbonne_chantier', 'detonation_chaine',
-  'pied_de_biche', 'barre_a_mine'
-])
 const MAX_ORBITAL_IMPACT_PULSES_PER_STEP = 12
 const DIAMOND_REIMPACT_DELAY_MS = 120
 
@@ -72,9 +64,9 @@ export function weaponSystem(
       }
       const lvl = weaponStatsAtLevel(def, slot.level)
       const baseEffective = effectiveWeaponStats(lvl, stats)
-      const disqueCompatible = DISQUE_WEAPONS.has(def.id)
-      const explosive = EXPLOSIVE_WEAPONS.has(def.id)
-      const heavy = HEAVY_WEAPONS.has(def.id)
+      const disqueCompatible = def.passiveTags?.includes('contact') ?? false
+      const explosive = def.passiveTags?.includes('explosive') ?? false
+      const heavy = def.passiveTags?.includes('heavy') ?? false
       const eff: EffectiveStats = {
         ...baseEffective,
         area: disqueCompatible && def.kind === 'sweep'
@@ -288,9 +280,9 @@ function applyImmediateHeavyHaste(
   passiveLevel: number,
   weaponId: string,
   baseCooldownMs: number
-): void {
+): boolean {
   if (hits < threshold || haste <= 0) {
-    return
+    return false
   }
   const before = slot.cooldownLeftMs
   slot.cooldownLeftMs *= 1 - haste
@@ -307,6 +299,7 @@ function applyImmediateHeavyHaste(
   if (slot.cooldownLeftMs > before) {
     slot.cooldownLeftMs = before
   }
+  return true
 }
 
 function recordExplosionScale(
@@ -529,7 +522,7 @@ function tickAura(
     knockback,
     knockbackOrigin: pos
   })
-  applyImmediateHeavyHaste(
+  const heavyHasteTriggered = applyImmediateHeavyHaste(
     slot,
     hits,
     heavyImpactThreshold,
@@ -539,6 +532,16 @@ function tickAura(
     weaponId,
     eff.cooldownMs
   )
+  if (heavyHasteTriggered) {
+    pulses?.push({
+      x: pos.x,
+      y: pos.y,
+      radius: Math.max(32, Math.min(eff.area * 0.35, 72)),
+      kind: 'passive_heavy_haste',
+      weaponId,
+      ...(ownerId === undefined ? {} : { ownerId })
+    })
+  }
   pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind, weaponId })
 }
 
@@ -620,7 +623,7 @@ function tickSweep(
       knockback_applied: knockback
     })
   }
-  applyImmediateHeavyHaste(
+  const heavyHasteTriggered = applyImmediateHeavyHaste(
     slot,
     uniqueHits.size,
     heavyImpactThreshold,
@@ -630,6 +633,16 @@ function tickSweep(
     weaponId,
     eff.cooldownMs
   )
+  if (heavyHasteTriggered) {
+    pulses?.push({
+      x: pos.x,
+      y: pos.y,
+      radius: Math.max(32, Math.min(reach * 0.35, 72)),
+      kind: 'passive_heavy_haste',
+      weaponId,
+      ownerId: player.playerId
+    })
+  }
   pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind, dirX, dirY, weaponId })
 }
 

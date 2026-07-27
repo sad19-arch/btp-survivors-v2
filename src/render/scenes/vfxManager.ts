@@ -63,6 +63,14 @@ export class VfxManager {
     radius: number
   } | null = null
   private passiveReimpactSequence = 0
+  private lastHeavyHaste: {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+    radius: number
+  } | null = null
+  private heavyHasteSequence = 0
   private helmetRepulseSequence = 0
   private lastNailImpact: { sequence: number; weaponId: string; x: number; y: number } | null = null
   private nailImpactSequence = 0
@@ -115,6 +123,17 @@ export class VfxManager {
     radius: number
   } | null {
     return this.lastPassiveReimpact === null ? null : { ...this.lastPassiveReimpact }
+  }
+
+  /** Sonde test-only du feedback de recharge accélérée du Compresseur. */
+  debugLastHeavyHasteInfo(): {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+    radius: number
+  } | null {
+    return this.lastHeavyHaste === null ? null : { ...this.lastHeavyHaste }
   }
 
   debugHelmetRepulseCount(): number {
@@ -441,6 +460,37 @@ export class VfxManager {
       onComplete: () => ring.destroy()
     })
     this.spawnPixelPop(x, y, PALETTE_HEX.blanc, 10, 120)
+  }
+
+  /** Contraction pneumatique jaune/cyan : la prochaine frappe est avancée. */
+  spawnHeavyHaste(x: number, y: number, radius: number, weaponId: string): void {
+    this.lastHeavyHaste = {
+      sequence: ++this.heavyHasteSequence,
+      weaponId,
+      x,
+      y,
+      radius
+    }
+    const outer = this.scene.add.circle(x, y, radius, 0x000000, 0)
+      .setStrokeStyle(4, PALETTE_HEX.jauneSecurite, 1)
+      .setDepth(8)
+      .setScale(1.25)
+    const inner = this.scene.add.circle(x, y, Math.max(8, radius * 0.55), 0x000000, 0)
+      .setStrokeStyle(2, PALETTE_HEX.cyanAccent, 0.95)
+      .setDepth(8)
+      .setScale(1.15)
+    this.scene.tweens.add({
+      targets: [outer, inner],
+      scale: 0.55,
+      alpha: 0,
+      duration: 180,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        outer.destroy()
+        inner.destroy()
+      }
+    })
+    this.spawnPixelPop(x, y, PALETTE_HEX.jauneSecurite, 8, 130)
   }
 
   /** Onde courte du Casque homologué : frontière verte instantanée au contact. */

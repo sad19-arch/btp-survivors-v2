@@ -6,6 +6,7 @@ import {
   aggregatePassives,
   signaturePassiveEffects
 } from '@content/passives'
+import { WEAPONS } from '@content/weapons'
 import type { AuraPulse } from '@core/events'
 import { Simulation } from '@core/simulation'
 import { SpatialGrid } from '@core/spatialGrid'
@@ -85,6 +86,15 @@ describe('passifs signatures', () => {
 
     expect(stats.might).toBe(1)
     expect(stats.cooldown).toBe(1)
+  })
+
+  it('déclare les compatibilités dans les données des armes', () => {
+    expect(WEAPONS['bonbonne_chantier']?.passiveTags).toEqual(
+      expect.arrayContaining(['explosive', 'heavy'])
+    )
+    expect(WEAPONS['scie']?.passiveTags).toContain('contact')
+    expect(WEAPONS['marteau']?.passiveTags).toContain('heavy')
+    expect(WEAPONS['cloueur']?.passiveTags).toBeUndefined()
   })
 
   it('applique exactement les cinq paliers de chaque passif', () => {
@@ -225,6 +235,25 @@ describe('passifs signatures', () => {
     expect(worldCooldown(hit, hitPlayer)).toBeCloseTo(900 * (1 - haste))
   })
 
+  it('Compresseur émet un feedback au point de la frappe lourde', () => {
+    const world = new World()
+    addPlayer(world, 'marteau', [{ id: 'compresseur_pneumatique', level: 5 }])
+    for (let i = 0; i < 3; i++) {
+      addEnemy(world, 50 + i * 10, 0)
+    }
+    const pulses: AuraPulse[] = []
+
+    weaponSystem(world, 0, pulses)
+
+    expect(pulses).toContainEqual(expect.objectContaining({
+      kind: 'passive_heavy_haste',
+      weaponId: 'marteau',
+      ownerId: 1,
+      x: 0,
+      y: 0
+    }))
+  })
+
   it('transporte Compresseur sur les armes lourdes à projectile et l’applique une fois', () => {
     const world = new World()
     const player = addPlayer(world, 'brouette', [{ id: 'compresseur_pneumatique', level: 5 }])
@@ -234,17 +263,19 @@ describe('passifs signatures', () => {
     weaponSystem(world, 0)
     const projectileId = world.query('projectile').next().value as number
     const position = world.get(projectileId, 'position')
+    const pulses: AuraPulse[] = []
     if (position === undefined) {
       throw new Error('projectile de test absent')
     }
     position.x = 20
 
     for (let i = 0; i < 3; i++) {
-      collisionSystem(world, 16, enemyGrid(world))
+      collisionSystem(world, 16, enemyGrid(world), pulses)
     }
 
     expect(worldCooldown(world, player)).toBe(980)
     expect(firstProjectile(world)?.heavyImpactApplied).toBe(true)
+    expect(pulses.filter((pulse) => pulse.kind === 'passive_heavy_haste')).toHaveLength(1)
   })
 
   it('Compresseur ne se déclenche qu’une fois pour une salve lourde multi-projectiles', () => {

@@ -108,7 +108,16 @@ export function collisionSystem(
             })
           }
         }
-        applyProjectileHeavyHaste(world, proj, hitIds.length, passiveMetrics)
+        if (applyProjectileHeavyHaste(world, proj, hitIds.length, passiveMetrics)) {
+          pulses?.push({
+            x: ppos.x,
+            y: ppos.y,
+            radius: Math.max(28, Math.min(proj.explosionRadius ?? proj.radius * 2, 72)),
+            kind: 'passive_heavy_haste',
+            weaponId: proj.type,
+            ownerId: proj.ownerId
+          })
+        }
         // Un seul ennemi touché par ce projectile CE pas (break) : l'ennemi visé ici
         // ne peut pas être re-touché par le même projectile dans cette même itération.
         if ((proj.bounces ?? 0) > 0) {
@@ -387,11 +396,11 @@ function applyProjectileHeavyHaste(
   proj: ProjectileComp,
   enemiesHit: number,
   passiveMetrics?: PassiveDebugMetric[]
-): void {
+): boolean {
   const threshold = proj.heavyImpactThreshold ?? Number.POSITIVE_INFINITY
   const haste = proj.heavyImpactHaste ?? 0
   if (proj.heavyImpactApplied === true || enemiesHit < threshold || haste <= 0) {
-    return
+    return false
   }
   for (const entity of world.query('player', 'weapons')) {
     const player = world.get(entity, 'player')
@@ -406,7 +415,7 @@ function applyProjectileHeavyHaste(
     const attackId = proj.heavyImpactAttackId
     if (attackId !== undefined && slot.heavyImpactAppliedAttackId === attackId) {
       proj.heavyImpactApplied = true
-      return
+      return false
     }
     const baseCooldown = proj.heavyImpactBaseCooldownMs ?? 0
     slot.cooldownLeftMs = Math.max(0, slot.cooldownLeftMs - baseCooldown * haste)
@@ -423,8 +432,9 @@ function applyProjectileHeavyHaste(
       base_cooldown: baseCooldown,
       modified_cooldown: slot.cooldownLeftMs
     })
-    return
+    return true
   }
+  return false
 }
 
 function findChainTarget(

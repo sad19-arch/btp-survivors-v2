@@ -88,6 +88,27 @@ test('les trois passifs signatures déclenchent leurs mécaniques dans une parti
   expect(disque.rendered?.weaponId).toBe('pied_de_biche')
 
   await boot(page)
+  const scieScale = await page.evaluate(() => {
+    const game = window.__GAME__
+    if (game === undefined) {
+      throw new Error('Seam __GAME__ absent')
+    }
+    game.debugGrant({
+      weapons: [{ id: 'scie', level: 1 }],
+      passives: [{ id: 'disque_diamant', level: 5 }]
+    })
+    game.setInput(1, { move: { x: 1, y: 0 }, attack: true })
+    game.advanceTime(50)
+    return new Promise<{ type: string; radius: number | undefined; scale: number } | null>((resolve) => {
+      requestAnimationFrame(() => {
+        resolve(game.debugScieScaleInfo?.().find((entry) => entry.type === 'scie') ?? null)
+      })
+    })
+  })
+  expect(scieScale?.radius).toBeCloseTo(22 * 1.32)
+  expect(scieScale?.scale).toBeCloseTo(0.8 * 1.32)
+
+  await boot(page)
   const compresseur = await page.evaluate(() => {
     const game = window.__GAME__
     if (game === undefined) {
@@ -103,12 +124,16 @@ test('les trois passifs signatures déclenchent leurs mécaniques dans une parti
       game.setInput(1, { move, attack: true })
       game.advanceTime(50)
     }
-    return game.debugPassiveInfo().filter((metric) => metric.passive_id === 'compresseur_pneumatique')
+    return {
+      metrics: game.debugPassiveInfo().filter((metric) => metric.passive_id === 'compresseur_pneumatique'),
+      rendered: game.debugHeavyHasteInfo?.() ?? null
+    }
   })
-  expect(compresseur.some((metric) =>
+  expect(compresseur.metrics.some((metric) =>
     metric.enemies_hit >= 3
     && metric.base_cooldown === 900
     && metric.modified_cooldown === 630
   )).toBe(true)
+  expect(compresseur.rendered?.weaponId).toBe('marteau')
   expect(errors).toHaveLength(0)
 })

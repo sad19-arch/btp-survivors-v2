@@ -165,6 +165,13 @@ export class HordeRenderer {
       .map((info) => ({ ...info }))
   }
 
+  /** Scies réellement remises au renderer et leur échelle dérivée de la hitbox. */
+  debugScieScaleInfo(): { type: string; radius: number | undefined; scale: number }[] {
+    return [...this.projectileScaleInfo.values()]
+      .filter((info) => info.type === 'scie' || info.type === 'tronconneuse_chantier')
+      .map((info) => ({ ...info }))
+  }
+
   /** Frontières de Goudron réellement dessinées et rayon source de la simulation. */
   debugTarBoundaryInfo(): {
     simulationRadius: number

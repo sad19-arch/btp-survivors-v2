@@ -16,6 +16,7 @@
  */
 
 export type WeaponKind = 'projectile' | 'orbital' | 'aura' | 'sweep' | 'strike' | 'hazard' | 'cone'
+export type PassiveWeaponTag = 'explosive' | 'contact' | 'heavy'
 
 export interface WeaponLevel {
   damage: number
@@ -52,6 +53,8 @@ export interface WeaponDef {
   maxLevel: number
   /** Force de recul fixe, indépendante du niveau de l'arme. */
   knockback: number
+  /** Compatibilités des passifs spécialisés, déclarées avec le contenu. */
+  passiveTags?: readonly PassiveWeaponTag[]
   levels: WeaponLevel[]
   /**
    * Mode de visée (uniquement lu par `tickProjectile`). Absent ⇒ `'nearest'`
@@ -117,6 +120,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     kind: 'orbital',
     maxLevel: 8,
     knockback: 90,
+    passiveTags: ['contact'],
     levels: buildLevels(
       { damage: 6, cooldownMs: 250, count: 2, area: 0, pierce: 99, orbitRadius: 104, orbitSpeed: 3.6, orbitHitRadius: 22 },
       { damage: 1.5 },
@@ -131,6 +135,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     kind: 'aura',
     maxLevel: 8,
     knockback: 360,
+    passiveTags: ['heavy'],
     levels: buildLevels(
       { damage: 10, cooldownMs: 900, count: 1, area: 175, pierce: 99 },
       { damage: 3, area: 8 },
@@ -144,6 +149,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     kind: 'sweep',
     maxLevel: 8,
     knockback: 300,
+    passiveTags: ['contact', 'heavy'],
     levels: buildLevels(
       { damage: 14, cooldownMs: 700, count: 1, area: 120, pierce: 99 },
       { damage: 4, area: 6 },
@@ -198,6 +204,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   },
   brouette: {
     id: 'brouette', name: 'Brouette', description: 'Propulse une brouette lourde qui traverse tout.', kind: 'projectile', maxLevel: 8, knockback: 420,
+    passiveTags: ['heavy'],
     levels: buildLevels(
       { damage: 26, cooldownMs: 1400, count: 1, area: 0, pierce: 99, projectileSpeed: 240, projectileRadius: 26, projectileLifeMs: 2600 },
       { damage: 7, projectileRadius: 2 }, 8
@@ -243,6 +250,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
   canon_mousse: { id: 'canon_mousse', name: 'Canon à mousse', description: 'Jet de mousse puissant qui immobilise les ennemis.', kind: 'cone', maxLevel: 1, knockback: 380,
     levels: [{ damage: 40, cooldownMs: 620, count: 1, area: 190, pierce: 99, slowMult: 0.35, slowMs: 2200 }] },
   transpalette: { id: 'transpalette', name: 'Transpallette automatisée', description: 'Transpalette géant qui écrase tout sur son passage.', kind: 'projectile', maxLevel: 1, knockback: 500,
+    passiveTags: ['heavy'],
     levels: [{ damage: 110, cooldownMs: 1100, count: 1, area: 0, pierce: 99, projectileSpeed: 300, projectileRadius: 40, projectileLifeMs: 3200 }] },
   lance_thermique: { id: 'lance_thermique', name: 'Lance thermique', description: 'Lance de découpe industrielle qui fait fondre les rangs.', kind: 'cone', maxLevel: 1, knockback: 180,
     levels: [{ damage: 42, cooldownMs: 300, count: 1, area: 150, pierce: 99 }] },
@@ -256,6 +264,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     kind: 'projectile',
     maxLevel: 8,
     knockback: 300,
+    passiveTags: ['explosive', 'heavy'],
     aim: 'facing',
     levels: buildLevels(
       {
@@ -282,6 +291,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     kind: 'projectile',
     maxLevel: 1,
     knockback: 380,
+    passiveTags: ['explosive', 'heavy'],
     aim: 'facing',
     levels: [{
       damage: 62,
@@ -306,6 +316,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     kind: 'orbital',
     maxLevel: 1,
     knockback: 130,
+    passiveTags: ['contact'],
     levels: [{ damage: 24, cooldownMs: 200, count: 6, area: 0, pierce: 99, orbitRadius: 128, orbitSpeed: 4.8, orbitHitRadius: 26 }]
   },
   // Marteau-piqueur maxé + compresseur pneumatique (air sous haute pression) → brise-roche.
@@ -316,6 +327,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     kind: 'aura',
     maxLevel: 1,
     knockback: 430,
+    passiveTags: ['heavy'],
     levels: [{ damage: 44, cooldownMs: 620, count: 1, area: 260, pierce: 99 }]
   },
   // Pied-de-biche maxé + chaussures de sécurité (appuis stables, swing plus large) → barre à mine.
@@ -326,6 +338,7 @@ export const WEAPONS: Record<string, WeaponDef> = {
     kind: 'sweep',
     maxLevel: 1,
     knockback: 400,
+    passiveTags: ['contact', 'heavy'],
     levels: [{ damage: 58, cooldownMs: 480, count: 3, area: 190, pierce: 99 }]
   }
 }
