@@ -10,6 +10,7 @@ import {
   PickupCollectedEvent,
   BossSpawnedEvent,
   EvolvedEvent,
+  TrialWeaponOfferedEvent,
   ChestOpenedEvent,
   DestructibleBrokenEvent
 } from '@core/events'
@@ -42,11 +43,22 @@ import { loadHaptics, saveHaptics } from './hapticsSettings'
 import { loadGameTextLevel, saveGameTextLevel, nextGameTextLevel, gameTextLabelOf, type GameTextLevel } from '@ui/gameTextScale'
 import { evolutionStatuses } from '@core/systems/evolution'
 import { chestRevealTotalMs } from '@ui/overlay'
-import type { GameMode, GameState, PlayerInput, PlayerState } from '@core/types'
-import type { AchievementsView, AppViewState, RunReport, HiScoresView, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen, EvolutionEntryView, EvolutionsView, StageProgressView, FullscreenViewState } from './appState'
+import type { GameMode, GameState, PassiveDebugMetric, PlayerInput, PlayerState, UtilityPassiveDebugState } from '@core/types'
+import type { AchievementsView, AppViewState, RunReport, HiScoresView, InventoryEntry, InventoryView, MenuItemView, MenuView, NavDir, Screen, EvolutionEntryView, EvolutionsView, StageProgressView, FullscreenViewState, UnlockGoalView, UnlockProgressView } from './appState'
 import { selectDeathQuote } from '@content/deathQuotes'
 import { selectVictoryQuote } from '@content/victoryQuotes'
 import { EVOLUTIONS } from '@content/evolutions'
+import { UNLOCKS, UNLOCK_COMBO_WINDOW_MS, type UnlockConditionType, type UnlockDefinition } from '@content/unlocks'
+import {
+  applyUnlockSignal,
+  consumeTrialWeapon,
+  isContentUnlocked,
+  markContentTried,
+  markUnlocksSeen,
+  readUnlockProgress,
+  unlockProgressValue,
+  type UnlockProgressState
+} from '@ui/unlocks'
 import { computeStars } from '@content/stars'
 import {
   commitStageStars,
@@ -69,6 +81,23 @@ export interface AppOptions {
   intro?: boolean
   /** Exception de test explicite : ignore les verrous de stage, jamais activée par le jeu normal. */
   bypassStageLocks?: boolean
+  /** Active les métriques internes exposées uniquement au seam de test. */
+  debugMetrics?: boolean
+}
+
+export interface UnlockTelemetryEntry {
+  event:
+    | 'unlock_goal_shown'
+    | 'unlock_progressed'
+    | 'content_unlocked'
+    | 'unlocked_content_selected'
+    | 'unlocked_content_used'
+    | 'restart_clicked'
+    | 'next_stage_clicked'
+  unlockId: string | null
+  contentId: string | null
+  progressBefore: number | null
+  progressAfter: number | null
 }
 
 export type FullscreenIntent =
@@ -169,6 +198,7 @@ export class App {
   private stageProgress: StageProgress
   /** Bypass réservé aux tests URL `?test=1`, transmis explicitement par le bootstrap. */
   private readonly bypassStageLocks: boolean
+  private readonly debugMetrics: boolean
   /** Retour joueur du dernier lancement refusé. */
   private stageLockMessage: string | null = null
   /** Stage ouvert par le dernier rapport terminal, affiché une seule fois. */
@@ -299,6 +329,22 @@ export class App {
   private runChestsOpened = 0
   /** Évolutions d'arme de la run courante (`EvolvedEvent`, non plafonné) — même raison. */
   private runEvolutions = 0
+  /** Profil de déblocages chargé/migré une fois, puis maintenu en mémoire et persisté à chaque signal. */
+  private unlockState: UnlockProgressState = readUnlockProgress()
+  /** Valeur de chaque objectif au départ de la run, pour détecter une vraie progression. */
+  private unlockBeforeRun: Record<string, number> = {}
+  /** Déblocages obtenus pendant la run, sans doublon. */
+  private newlyUnlockedThisRun: string[] = []
+  /** Vue figée du bloc de fin, comme le rapport de chantier. */
+  private unlockReport: UnlockProgressView | null = null
+  /** Cadence de kills calculée sur le même temps logique et la même fenêtre que le HUD. */
+  private runCombo = 0
+  private runComboExpiresAtMs = -1
+  private runBestCombo = 0
+  /** Bases réellement évoluées pendant cette run (utile au détail de progression). */
+  private evolvedBasesThisRun = new Set<string>()
+  /** Télémétrie locale bornée, allouée uniquement avec `?test=1`. */
+  private readonly unlockTelemetry: UnlockTelemetryEntry[] = []
   /** Écran des succès ouvert (consultation depuis le titre) ; `null` hors de ce flux. */
   private achievementsView: AchievementsView | null = null
   /** Écran « Évolutions d'armes » ouvert (consultation depuis la pause) ; `null` hors de ce flux. */
@@ -310,6 +356,7 @@ export class App {
     this.selectedPhase = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
     this.stageProgress = readStageProgress()
     this.bypassStageLocks = opts.bypassStageLocks === true
+    this.debugMetrics = opts.debugMetrics === true
     this.selectedPlayers = MODE_PLAYER_COUNT[opts.mode] ?? 1
     this.introEnabled = opts.intro ?? false
     if (opts.autostart) {
@@ -350,6 +397,15 @@ export class App {
     this.stageLockMessage = null
     this.runChestsOpened = 0
     this.runEvolutions = 0
+    this.newlyUnlockedThisRun = []
+    this.unlockReport = null
+    this.runCombo = 0
+    this.runComboExpiresAtMs = -1
+    this.runBestCombo = 0
+    this.evolvedBasesThisRun.clear()
+    this.unlockBeforeRun = Object.fromEntries(
+      UNLOCKS.map((unlock) => [unlock.id, unlockProgressValue(this.unlockState, unlock)])
+    )
     // L'écran des succès est une surcouche du TITRE : lancer une partie le ferme
     // (sinon `screen` resterait bloqué dessus, comme pour `hiScoreView`).
     this.achievementsView = null
@@ -358,14 +414,46 @@ export class App {
     this.evolutionsView = null
     const wasStarted = this.started // RE-démarrage ? (partie déjà en cours)
     this.mode = mode
-    this.selectedCharacters = [...characters] // persiste pour restart/stage suivant/setSeed
-    this.sim = new Simulation({ seed: this.seed, mode, phaseId: this.selectedPhase, characters })
+    const playableCharacters = characters.map((id) =>
+      isContentUnlocked(this.unlockState, id) ? id : DEFAULT_CHARACTER_ID
+    )
+    this.selectedCharacters = [...playableCharacters] // persiste pour restart/stage suivant/setSeed
+    for (const id of playableCharacters) {
+      if (UNLOCKS.some((unlock) => unlock.rewardId === id)) {
+        this.trackUnlock({ event: 'unlocked_content_used', contentId: id })
+      }
+      this.unlockState = markContentTried(this.unlockState, id)
+    }
+    const availableWeaponIds = Object.values(WEAPONS)
+      .filter((weapon) => weapon.maxLevel > 1 && isContentUnlocked(this.unlockState, weapon.id))
+      .map((weapon) => weapon.id)
+    this.sim = new Simulation({
+      seed: this.seed,
+      mode,
+      phaseId: this.selectedPhase,
+      characters: playableCharacters,
+      debugMetrics: this.debugMetrics,
+      availableWeaponIds,
+      trialWeaponId: this.unlockState.trialWeaponId
+    })
     // Relaie les événements de sim (ex. onde d'aura, libération) vers l'App → rendu.
     // Relai COMPLET : dirX/dirY (orientation des cônes — leur omission faisait pointer
-    // tous les jets vers le haut) + weaponId (choix du VFX mousse vs flammes).
+    // tous les jets vers le haut) + weaponId (choix du VFX mousse vs flammes)
+    // + ownerId (source réelle des effets en coop).
     this.sim.events.addEventListener('auraPulse', (e) => {
       const p = e as AuraPulseEvent
-      this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius, p.kind, p.dirX, p.dirY, p.weaponId))
+      this.events.dispatchEvent(new AuraPulseEvent(
+        p.x,
+        p.y,
+        p.radius,
+        p.kind,
+        p.dirX,
+        p.dirY,
+        p.weaponId,
+        p.ownerId,
+        p.sourceX,
+        p.sourceY
+      ))
     })
     this.sim.events.addEventListener('prisonerFreed', (e) => {
       const p = e as PrisonerFreedEvent
@@ -374,6 +462,7 @@ export class App {
     // Relais des événements sémantiques audio (sim → App → AudioDirector).
     this.sim.events.addEventListener('enemyKilled', (e) => {
       const ev = e as EnemyKilledEvent
+      this.recordComboKills(ev.count)
       this.events.dispatchEvent(new EnemyKilledEvent(ev.count, ev.byPlayer))
     })
     this.sim.events.addEventListener('enemyDied', (e) => {
@@ -398,7 +487,16 @@ export class App {
     this.sim.events.addEventListener('evolved', (e) => {
       const ev = e as EvolvedEvent
       this.runEvolutions++ // cumul de run pour les succès (l'événement ne survit pas au pas)
+      const evolution = EVOLUTIONS.find((candidate) => candidate.evolved === ev.weaponId)
+      if (evolution !== undefined) {
+        this.evolvedBasesThisRun.add(evolution.base)
+        this.recordUnlockSignal('weapon_evolved', evolution.base)
+      }
       this.events.dispatchEvent(new EvolvedEvent(ev.weaponId, ev.playerId))
+    })
+    this.sim.events.addEventListener('trialWeaponOffered', (e) => {
+      const ev = e as TrialWeaponOfferedEvent
+      this.unlockState = consumeTrialWeapon(this.unlockState, ev.weaponId)
     })
     this.sim.events.addEventListener('chestOpened', (e) => {
       const ev = e as ChestOpenedEvent
@@ -417,6 +515,10 @@ export class App {
     // pendant tout ce laps : la durée est cosmétique, sans effet sur le déterminisme.
     this.totalIntroMs = this.introEnabled ? introDurationFor(this.selectedPhase) : 0
     this.introMsLeft = this.totalIntroMs
+    const initialUnlockBase = this.sim.getState()
+    this.unlockBeforeRun = Object.fromEntries(
+      UNLOCKS.map((unlock) => [unlock.id, this.unlockGoalView(unlock, initialUnlockBase).current])
+    )
     this.started = true
     // Bump SEULEMENT sur un RE-démarrage (game over→restart, stage suivant,
     // setSeed) : le rendu repart alors d'une scène propre (cf. `runId`, fuite
@@ -440,6 +542,7 @@ export class App {
   /** Relance une partie neuve (même seed). */
   restart(): void {
     this.bumpState()
+    this.trackUnlock({ event: 'restart_clicked' })
     this.start(this.mode)
   }
 
@@ -460,7 +563,12 @@ export class App {
       this.bumpState()
       return
     }
+    const rescuedBefore = this.sim?.getState().rescue.rescued ?? 0
     this.sim?.advanceTime(ms)
+    const rescuedAfter = this.sim?.getState().rescue.rescued ?? rescuedBefore
+    if (rescuedAfter > rescuedBefore) {
+      this.recordUnlockSignal('prisoners_rescued_total', rescuedAfter - rescuedBefore)
+    }
     this.refreshFocus()
     this.bumpState()
   }
@@ -751,7 +859,19 @@ export class App {
   /** Choisit une carte d'upgrade par index (API directe pour le seam). */
   chooseUpgrade(index: number): void {
     this.bumpState()
+    const selected = this.sim?.getState().pendingLevelUp?.choices[index]
     this.sim?.chooseUpgrade(index)
+    if (selected?.kind === 'weapon-new') {
+      this.trackUnlock({
+        event: 'unlocked_content_selected',
+        contentId: selected.id
+      })
+      this.unlockState = markContentTried(this.unlockState, selected.id)
+      this.trackUnlock({
+        event: 'unlocked_content_used',
+        contentId: selected.id
+      })
+    }
     this.refreshFocus()
   }
 
@@ -769,6 +889,19 @@ export class App {
     this.bumpState()
     this.sim?.debugGrant(opts, playerId)
     this.refreshFocus()
+  }
+
+  /** [Debug/seam] Derniers déclenchements des trois passifs signatures. */
+  debugPassiveInfo(): readonly PassiveDebugMetric[] {
+    return this.sim?.debugPassiveInfo() ?? []
+  }
+
+  debugUtilityPassiveInfo(): readonly UtilityPassiveDebugState[] {
+    return this.sim?.debugUtilityPassiveInfo() ?? []
+  }
+
+  debugUnlockTelemetry(): readonly UnlockTelemetryEntry[] {
+    return this.debugMetrics ? [...this.unlockTelemetry] : []
   }
 
   /** [Debug/seam] Ajoute de l'XP au joueur 1 (force un level-up déterministe). */
@@ -867,7 +1000,12 @@ export class App {
    */
   debugEnragePrisoner(playerId = 1): void {
     this.bumpState()
+    const rescuedBefore = this.sim?.getState().rescue.rescued ?? 0
     this.sim?.debugEnragePrisoner(playerId)
+    const rescuedAfter = this.sim?.getState().rescue.rescued ?? rescuedBefore
+    if (rescuedAfter > rescuedBefore) {
+      this.recordUnlockSignal('prisoners_rescued_total', rescuedAfter - rescuedBefore)
+    }
   }
 
   // --- état exposé ----------------------------------------------------------
@@ -1019,6 +1157,24 @@ export class App {
         this.events.dispatchEvent(new AchievementUnlockedEvent(id))
       }
     }
+    if ((screen === 'gameover' || screen === 'victory') && this.unlockReport === null) {
+      this.unlockReport = this.buildUnlockProgress(base)
+      if (this.unlockReport.primary !== null) {
+        this.trackUnlock({
+          event: 'unlock_goal_shown',
+          unlockId: this.unlockReport.primary.unlockId,
+          progressAfter: this.unlockReport.primary.current
+        })
+      }
+      const presented = [this.unlockReport.primary, ...this.unlockReport.secondary]
+        .filter((goal): goal is UnlockGoalView => goal !== null && goal.completed)
+        .map((goal) => goal.unlockId)
+      this.unlockState = markUnlocksSeen(this.unlockState, presented)
+    }
+    const unlockProgress =
+      screen === 'gameover' || screen === 'victory'
+        ? this.unlockReport ?? this.buildUnlockProgress(base)
+        : this.buildUnlockProgress(base)
     return {
       ...base,
       scene: base.scene,
@@ -1045,11 +1201,25 @@ export class App {
       characterSelect: this.charSelectOpen
         ? {
             total: this.selectedPlayers,
-            players: Array.from({ length: this.selectedPlayers }, (_, index) => ({
-              playerId: index + 1,
-              charId: this.rosterIds()[this.charCursors[index] ?? 0] ?? DEFAULT_CHARACTER_ID,
-              ready: this.charReady[index] ?? false
-            }))
+            players: Array.from({ length: this.selectedPlayers }, (_, index) => {
+              const charId = this.rosterIds()[this.charCursors[index] ?? 0] ?? DEFAULT_CHARACTER_ID
+              const unlock = UNLOCKS.find((candidate) => candidate.rewardId === charId)
+              const basic = {
+                playerId: index + 1,
+                charId,
+                ready: this.charReady[index] ?? false
+              }
+              if (unlock === undefined) {
+                return basic
+              }
+              const unlocked = isContentUnlocked(this.unlockState, charId)
+              return {
+                ...basic,
+                unlocked,
+                isNew: unlocked && !this.unlockState.triedContentIds.includes(charId),
+                lockHint: unlocked ? null : unlock.description
+              }
+            })
           }
         : null,
       // Saisie du prénom : les index d'alphabet sont résolus ICI en caractères —
@@ -1091,7 +1261,8 @@ export class App {
               }))
             }
           : null,
-      runReport: screen === 'gameover' || screen === 'victory' ? this._runReport : null
+      runReport: screen === 'gameover' || screen === 'victory' ? this._runReport : null,
+      unlockProgress
     }
   }
 
@@ -1394,6 +1565,155 @@ export class App {
     }
   }
 
+  private recordComboKills(count: number): void {
+    if (count <= 0) {
+      return
+    }
+    const now = this.sim?.getState().elapsedMs ?? 0
+    this.runCombo = now <= this.runComboExpiresAtMs ? this.runCombo + count : count
+    this.runComboExpiresAtMs = now + UNLOCK_COMBO_WINDOW_MS
+    if (this.runCombo > this.runBestCombo) {
+      this.runBestCombo = this.runCombo
+      this.recordUnlockSignal('combo_reached', this.runBestCombo)
+    }
+  }
+
+  private recordUnlockSignal(conditionType: UnlockConditionType, value: number | string): void {
+    const relevant = UNLOCKS.filter((unlock) => unlock.conditionType === conditionType)
+    const before = new Map(relevant.map((unlock) => [unlock.id, unlockProgressValue(this.unlockState, unlock)]))
+    const update = applyUnlockSignal(this.unlockState, conditionType, value)
+    this.unlockState = update.state
+    for (const unlock of relevant) {
+      const prior = before.get(unlock.id) ?? 0
+      const after = unlockProgressValue(this.unlockState, unlock)
+      if (after > prior) {
+        this.trackUnlock({
+          event: 'unlock_progressed',
+          unlockId: unlock.id,
+          progressBefore: prior,
+          progressAfter: after
+        })
+      }
+    }
+    for (const id of update.newlyUnlockedIds) {
+      if (!this.newlyUnlockedThisRun.includes(id)) {
+        this.newlyUnlockedThisRun.push(id)
+      }
+      const unlock = UNLOCKS.find((candidate) => candidate.id === id)
+      this.trackUnlock({
+        event: 'content_unlocked',
+        unlockId: id,
+        contentId: unlock?.rewardId ?? null
+      })
+    }
+  }
+
+  private trackUnlock(entry: {
+    event: UnlockTelemetryEntry['event']
+    unlockId?: string | null
+    contentId?: string | null
+    progressBefore?: number | null
+    progressAfter?: number | null
+  }): void {
+    if (!this.debugMetrics) {
+      return
+    }
+    this.unlockTelemetry.push({
+      event: entry.event,
+      unlockId: entry.unlockId ?? null,
+      contentId: entry.contentId ?? null,
+      progressBefore: entry.progressBefore ?? null,
+      progressAfter: entry.progressAfter ?? null
+    })
+    if (this.unlockTelemetry.length > 128) {
+      this.unlockTelemetry.splice(0, this.unlockTelemetry.length - 128)
+    }
+  }
+
+  private unlockGoalView(unlock: UnlockDefinition, base: GameState): UnlockGoalView {
+    const completed = this.unlockState.unlockedContentIds.includes(unlock.rewardId)
+    if (unlock.conditionType === 'weapon_evolved') {
+      const weaponId = String(unlock.conditionValue)
+      const maxLevel = WEAPONS[weaponId]?.maxLevel ?? 1
+      const currentLevel = completed || this.evolvedBasesThisRun.has(weaponId)
+        ? maxLevel
+        : base.players.reduce((highest, player) => {
+            const index = player.weapons.indexOf(weaponId)
+            return Math.max(highest, index < 0 ? 0 : player.weaponLevels[index] ?? 1)
+          }, 0)
+      const evolution = EVOLUTIONS.find((candidate) => candidate.base === weaponId)
+      const catalyst = evolution === undefined
+        ? false
+        : base.players.some((player) => player.passives.some((passive) => passive.id === evolution.passive))
+      return {
+        unlockId: unlock.id,
+        title: unlock.title,
+        description: unlock.description,
+        rewardType: unlock.rewardType,
+        rewardName: unlock.rewardName,
+        rewardDescription: unlock.rewardDescription,
+        current: currentLevel,
+        target: maxLevel,
+        progressLabel: completed
+          ? 'Objectif terminé'
+          : `${WEAPONS[weaponId]?.name ?? weaponId} : niveau ${currentLevel}/${maxLevel} · Catalyseur : ${catalyst ? 'obtenu' : 'manquant'}`,
+        completed
+      }
+    }
+    const target = Number(unlock.conditionValue)
+    const current = completed
+      ? target
+      : Math.min(target, unlockProgressValue(this.unlockState, unlock))
+    return {
+      unlockId: unlock.id,
+      title: unlock.title,
+      description: unlock.description,
+      rewardType: unlock.rewardType,
+      rewardName: unlock.rewardName,
+      rewardDescription: unlock.rewardDescription,
+      current,
+      target,
+      progressLabel:
+        unlock.conditionType === 'combo_reached'
+          ? `Meilleur résultat : ×${current}`
+          : `Progression : ${current}/${target}`,
+      completed
+    }
+  }
+
+  private buildUnlockProgress(base: GameState): UnlockProgressView {
+    const goals = UNLOCKS.map((unlock) => this.unlockGoalView(unlock, base))
+    const byId = new Map(UNLOCKS.map((unlock) => [unlock.id, unlock]))
+    const unseen = goals.filter(
+      (goal) => goal.completed && !this.unlockState.seenUnlockIds.includes(goal.unlockId)
+    )
+    const progressed = goals.filter((goal) =>
+      !goal.completed && goal.current > (this.unlockBeforeRun[goal.unlockId] ?? 0)
+    )
+    const incomplete = goals.filter((goal) => !goal.completed)
+    const priority = (goal: UnlockGoalView): number => byId.get(goal.unlockId)?.priority ?? 999
+    const ordered = [
+      ...unseen.sort((a, b) => priority(a) - priority(b)),
+      ...progressed.sort((a, b) => priority(a) - priority(b)),
+      ...incomplete
+        .filter((goal) => !progressed.includes(goal))
+        .sort((a, b) => {
+          const distance = (b.current / Math.max(1, b.target)) - (a.current / Math.max(1, a.target))
+          return distance === 0 ? priority(a) - priority(b) : distance
+        })
+    ]
+    const primary = ordered[0] ?? null
+    const secondary = ordered.slice(1, 3)
+    return {
+      primary,
+      secondary,
+      unlockedContentIds: [...this.unlockState.unlockedContentIds],
+      newContentIds: this.unlockState.unlockedContentIds.filter(
+        (id) => !this.unlockState.triedContentIds.includes(id)
+      )
+    }
+  }
+
   /**
    * Ouvre l'écran des succès (consultation depuis le titre) : croise le catalogue
    * avec le profil persisté. Figé à l'ouverture — le profil ne bouge pas pendant
@@ -1476,8 +1796,13 @@ export class App {
     const ids = this.rosterIds()
     const char = characterDef(ids[this.charCursors[0] ?? 0] ?? DEFAULT_CHARACTER_ID)
     const weaponName = WEAPONS[char.startingWeapon]?.name ?? char.startingWeapon
+    const unlocked = isContentUnlocked(this.unlockState, char.id)
     return [
-      { id: 'char', label: `◄ ${char.name} — ${weaponName} ►`, hint: 'Gauche/Droite • A: valider' }
+      {
+        id: 'char',
+        label: `◄ ${char.name} — ${unlocked ? weaponName : 'VERROUILLÉ'} ►`,
+        hint: unlocked ? 'Gauche/Droite • A: valider' : 'Gauche/Droite • objectif requis'
+      }
     ]
   }
 
@@ -1513,7 +1838,17 @@ export class App {
       if (this.charReady[index] ?? false) {
         continue
       }
-      this.selectedCharacters[index] = ids[this.charCursors[index] ?? 0] ?? DEFAULT_CHARACTER_ID
+      const selected = ids[this.charCursors[index] ?? 0] ?? DEFAULT_CHARACTER_ID
+      if (!isContentUnlocked(this.unlockState, selected)) {
+        continue
+      }
+      if (UNLOCKS.some((unlock) => unlock.rewardId === selected)) {
+        this.trackUnlock({
+          event: 'unlocked_content_selected',
+          contentId: selected
+        })
+      }
+      this.selectedCharacters[index] = selected
       this.charReady[index] = true
     }
     if (this.charReady.length === this.selectedPlayers && this.charReady.every(Boolean)) {
@@ -1613,7 +1948,8 @@ export class App {
         description: c.description,
         currentLevel: c.currentLevel,
         maxLevel: c.maxLevel,
-        kind: c.kind
+        kind: c.kind,
+        isNew: c.kind === 'weapon-new' && !this.unlockState.triedContentIds.includes(c.id)
       }
       if (c.kind === 'weapon-up') {
         const delta = describeWeaponLevelDelta(c.id, c.currentLevel, c.currentLevel + 1, playerStats)
@@ -1848,6 +2184,7 @@ export class App {
         return
       }
       if (id === 'stage_suivant') {
+        this.trackUnlock({ event: 'next_stage_clicked' })
         const stageId = this._runReport?.stageId ?? this.selectedPhase
         const next = nextUnlockedStage(this.stageProgress, stageId)
         if (next !== null) {

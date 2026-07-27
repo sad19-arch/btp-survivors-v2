@@ -16,8 +16,9 @@
  *   3. Tuiles de sol — via le chemin de rendu réel (`createGround` peint 1 base/stage) ;
  *   4. Cues audio / SFX d'armes — call-sites dans le code de prod (pas les tests).
  *
- * LECTEUR/AUDITEUR, JAMAIS CORRECTEUR : il ne modifie aucun fichier sous `src/`. Le cas
- * des tuiles de sol (50/60) est un incident CONNU et NON corrigé — l'outil le SIGNALE.
+ * LECTEUR/AUDITEUR, JAMAIS CORRECTEUR : il ne modifie aucun fichier sous `src/`.
+ * Les variantes de tuiles et tout l'audio sont protégés par décision produit :
+ * leurs orphelins restent signalés en warning, jamais proposés à la suppression.
  *
  * Sortie calquée sur `assets:qa`/`audio:qa` : rapport lisible + exit non-zéro si une
  * catégorie BLOQUANTE a des orphelins inattendus (c'est un gate, pas qu'un rapport).

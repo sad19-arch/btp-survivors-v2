@@ -175,6 +175,40 @@ export class GameScene extends Phaser.Scene {
    */
   private readonly onAuraPulse = (e: Event): void => {
     const p = e as AuraPulseEvent
+    if (p.kind === 'boomerang_turn') {
+      this.vfx.spawnWrenchTurn(p.x, p.y, p.weaponId ?? 'cle_molette')
+      return
+    }
+    if (p.kind === 'cone_hit') {
+      this.vfx.spawnConeContact(p.x, p.y, p.weaponId ?? 'extincteur')
+      return
+    }
+    if (p.kind === 'ricochet_hit') {
+      this.vfx.spawnRicochetImpact(p.x, p.y, p.weaponId ?? 'boulons')
+      return
+    }
+    if (p.kind === 'projectile_hit') {
+      this.vfx.spawnNailImpact(p.x, p.y, p.weaponId ?? 'cloueur')
+      return
+    }
+    if (p.kind === 'orbital_hit') {
+      this.vfx.spawnSawContact(p.x, p.y, p.weaponId ?? 'scie')
+      return
+    }
+    if (p.kind === 'passive_reimpact') {
+      this.vfx.spawnPassiveReimpact(p.x, p.y, p.radius, p.weaponId ?? 'scie')
+      return
+    }
+    if (p.kind === 'casque_repulse') {
+      this.vfx.spawnHelmetRepulse(p.x, p.y, p.radius)
+      return
+    }
+    if (p.kind === 'explosion') {
+      const evolved = p.weaponId === 'detonation_chaine'
+      this.vfx.spawnGasExplosion(p.x, p.y, p.radius, evolved)
+      this.cameras.main.shake(evolved ? 85 : 60, evolved ? 0.003 : 0.0018)
+      return
+    }
     if (p.kind === 'sweep') {
       // Niveau du pied-de-biche du frappeur (joueur le plus proche du balayage) →
       // le VFX scale avec le niveau (progression visible). Lecture d'état pure.
@@ -182,20 +216,18 @@ export class GameScene extends Phaser.Scene {
       // ne trouverait plus rien une fois l'arme évoluée (retombe à 1, VFX faible) —
       // même patron que chalumeau/lance_thermique juste en dessous.
       const level = p.weaponId === 'barre_a_mine' ? 8 : this.weaponLevelNear(p.x, p.y, 'pied_de_biche')
-      this.vfx.spawnSweepArc(p.x, p.y, p.radius, level)
+      this.vfx.spawnSweepArc(p.x, p.y, p.radius, level, p.dirX ?? 0, p.dirY ?? 1)
       // Léger kick « coup de barre à mine », renforcé au haut niveau.
       const lf = Math.max(0, Math.min(1, (level - 1) / 7))
       this.cameras.main.shake(70, 0.0025 + lf * 0.0022)
       return
     }
     if (p.kind === 'strike') {
-      // Récupère la position du joueur 1 (en vie de préférence) pour tracer
-      // l'arc électrique JOUEUR → CIBLE plutôt qu'un éclair localisé sur l'ennemi.
-      const st = this.app.getStateForFrame(this.app.frameId)
-      const shooter = st.players.find((pl) => pl.alive) ?? st.players[0]
-      const fromX = shooter?.x ?? p.x
-      const fromY = shooter?.y ?? p.y
-      this.vfx.spawnStrikeBolt(fromX, fromY, p.x, p.y)
+      // L'événement transporte le propriétaire ET sa position au moment exact de
+      // la frappe. Relire sa position ici décalait l'arc d'un pas quand il bougeait.
+      const fromX = p.sourceX ?? p.x
+      const fromY = p.sourceY ?? p.y
+      this.vfx.spawnStrikeBolt(fromX, fromY, p.x, p.y, p.ownerId)
       return
     }
     if (p.kind === 'cone') {
@@ -219,6 +251,9 @@ export class GameScene extends Phaser.Scene {
       return
     }
     // Marteau : onde de choc + scale-pop + léger screen-shake (coup lourd).
+    // L'anneau apparaît immédiatement au rayon exact des dégâts ; le sprite qui
+    // grandit ensuite pendant 320 ms n'est plus chargé de communiquer la hitbox.
+    this.vfx.spawnHammerImpactRing(p.x, p.y, p.radius)
     const toScale = Math.max(1.5, (p.radius * 2) / 90)
     this.vfx.spawnVfx('vfx_shockwave', p.x, p.y, 0.2, toScale, 320)
     // Flash central jaune bref (pixel-pop).
@@ -950,6 +985,50 @@ export class GameScene extends Phaser.Scene {
         spawnedTotal: this.damageNumbers.total,
         maxPerFrame: FEEDBACK_MAX_PER_FRAME
       })
+      this.seam.debugStrikeInfo = () => this.vfx.debugLastStrikeInfo()
+      this.seam.debugHammerInfo = () => this.vfx.debugLastHammerRingInfo()
+      this.seam.debugSawInfo = () => this.vfx.debugLastSawContactInfo()
+      this.seam.debugPassiveReimpactInfo = () => this.vfx.debugLastPassiveReimpactInfo()
+      this.seam.debugHelmetRepulseCount = () => this.vfx.debugHelmetRepulseCount()
+      this.seam.debugNailInfo = () => {
+        const impact = this.vfx.debugLastNailImpactInfo()
+        if (impact === null) {
+          return null
+        }
+        return {
+          impactWeaponId: impact.weaponId,
+          impactX: impact.x,
+          impactY: impact.y,
+          maxTrailCount: this.horde.debugNailTrailInfo().maxTrailCount
+        }
+      }
+      this.seam.debugBoltInfo = () => {
+        const impact = this.vfx.debugLastRicochetImpactInfo()
+        if (impact === null) {
+          return null
+        }
+        return {
+          impactWeaponId: impact.weaponId,
+          impactX: impact.x,
+          impactY: impact.y,
+          maxTrailCount: this.horde.debugBoltTrailInfo().maxTrailCount
+        }
+      }
+      this.seam.debugConeContactInfo = () => this.vfx.debugLastConeContactInfo()
+      this.seam.debugBrouetteInfo = () => this.horde.debugBrouetteInfo()
+      this.seam.debugTarBoundaryInfo = () => this.horde.debugTarBoundaryInfo()
+      this.seam.debugWrenchInfo = () => {
+        const turn = this.vfx.debugLastWrenchTurnInfo()
+        if (turn === null) {
+          return null
+        }
+        return {
+          turnWeaponId: turn.weaponId,
+          turnX: turn.x,
+          turnY: turn.y,
+          ...this.horde.debugWrenchTrailInfo()
+        }
+      }
       // Sonde du streaming de décor (test-only) : permet d'asserter que le nombre
       // d'objets de décor reste borné quelle que soit la distance parcourue.
       this.seam.debugDecorInfo = (): { loadedChunks: number; decorObjects: number } => ({

@@ -11,9 +11,9 @@ export interface AuraPulse {
   x: number
   y: number
   radius: number
-  /** Sorte d'arme à l'origine de l'impulsion (`aura` | `sweep` | `strike` | `cone`) — pour teinter le VFX. */
+  /** Sorte d'arme à l'origine de l'impulsion (`aura` | `sweep` | `strike` | `cone` | `cone_hit` | `explosion` | `orbital_hit` | `projectile_hit` | `ricochet_hit` | `boomerang_turn`) — pour teinter le VFX. */
   kind: string
-  /** Direction du cône (vecteur unitaire) — uniquement pour `kind === 'cone'`, undefined sinon. */
+  /** Direction de l'effet frontal — pour `kind === 'cone'` ou `'sweep'`. */
   dirX?: number
   dirY?: number
   /**
@@ -22,6 +22,11 @@ export interface AuraPulse {
    * partagent un même `kind` (mousse vs flammes). Jamais relu par la sim.
    */
   weaponId?: string
+  /** Joueur propriétaire de l'arme, pour rattacher le VFX à la bonne source en coop. */
+  ownerId?: number
+  /** Origine exacte au moment de la frappe, pour éviter un décalage avec un tireur mobile. */
+  sourceX?: number
+  sourceY?: number
 }
 
 /** Émis à chaque impulsion d'une arme d'aura/sweep/strike/cone (pour un VFX d'onde de choc). */
@@ -33,7 +38,10 @@ export class AuraPulseEvent extends Event {
     readonly kind: string = 'aura',
     readonly dirX?: number,
     readonly dirY?: number,
-    readonly weaponId?: string
+    readonly weaponId?: string,
+    readonly ownerId?: number,
+    readonly sourceX?: number,
+    readonly sourceY?: number
   ) {
     super('auraPulse')
   }
@@ -152,6 +160,13 @@ export class BossSpawnedEvent extends Event {
 export class EvolvedEvent extends Event {
   constructor(readonly weaponId: string, readonly playerId: number) {
     super('evolved')
+  }
+}
+
+/** L'offre d'essai d'une arme débloquée vient d'être injectée dans un tirage. */
+export class TrialWeaponOfferedEvent extends Event {
+  constructor(readonly weaponId: string) {
+    super('trialWeaponOffered')
   }
 }
 

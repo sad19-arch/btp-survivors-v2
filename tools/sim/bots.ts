@@ -1,4 +1,5 @@
 import type { GameState, Vec2 } from '@core/types'
+import { WORLD } from '@content/config'
 
 export type BotName = 'active' | 'kite' | 'greedy' | 'idle'
 
@@ -9,9 +10,10 @@ export function isBotName(s: string): s is BotName {
   return (BOT_NAMES as readonly string[]).includes(s)
 }
 
-const ARENA_CENTER: Vec2 = { x: 800, y: 600 }
+const ARENA_CENTER: Vec2 = { x: WORLD.width / 2, y: WORLD.height / 2 }
 const DANGER_RADIUS = 210
 const PICKUP_DANGER_RADIUS = 105
+const GREEDY_PANIC_RADIUS = 48
 
 function addNormalized(out: Vec2, x: number, y: number, weight: number): void {
   const length = Math.hypot(x, y)
@@ -65,6 +67,39 @@ export function activeMove(player: Vec2, enemies: readonly Vec2[], pickups: read
   return move
 }
 
+/**
+ * Ramasse la ressource la plus proche, mais évite le contact immédiat. Un joueur
+ * imprudent court vers l'XP ; il ne continue pas volontairement tout droit dans
+ * un ennemi déjà au corps-à-corps.
+ */
+export function greedyMove(player: Vec2, enemies: readonly Vec2[], pickups: readonly Vec2[]): Vec2 {
+  const targets = pickups.length > 0 ? pickups : enemies
+  let target: Vec2 | null = null
+  let targetDistanceSq = Infinity
+  for (const candidate of targets) {
+    const distanceSq = (candidate.x - player.x) ** 2 + (candidate.y - player.y) ** 2
+    if (distanceSq < targetDistanceSq) {
+      target = candidate
+      targetDistanceSq = distanceSq
+    }
+  }
+
+  const move: Vec2 = { x: 0, y: 0 }
+  if (target !== null) {
+    addNormalized(move, target.x - player.x, target.y - player.y, 1)
+  }
+  for (const enemy of enemies) {
+    const dx = player.x - enemy.x
+    const dy = player.y - enemy.y
+    const distance = Math.hypot(dx, dy)
+    if (distance < GREEDY_PANIC_RADIUS) {
+      const pressure = (GREEDY_PANIC_RADIUS - distance) / GREEDY_PANIC_RADIUS
+      addNormalized(move, dx, dy, 1.05 + pressure * 0.7)
+    }
+  }
+  return move
+}
+
 /** Vecteur de déplacement du bot pour la frame courante. */
 export function botMove(bot: BotName, s: GameState): Vec2 {
   const p = s.players[0]
@@ -75,19 +110,7 @@ export function botMove(bot: BotName, s: GameState): Vec2 {
     return activeMove(p, s.enemies, s.pickups)
   }
   if (bot === 'greedy') {
-    const targets = s.pickups.length > 0 ? s.pickups : s.enemies
-    let tx = p.x
-    let ty = p.y
-    let bd = Infinity
-    for (const t of targets) {
-      const d = (t.x - p.x) ** 2 + (t.y - p.y) ** 2
-      if (d < bd) {
-        bd = d
-        tx = t.x
-        ty = t.y
-      }
-    }
-    return { x: tx - p.x, y: ty - p.y }
+    return greedyMove(p, s.enemies, s.pickups)
   }
   // kite : fuit l'ennemi le plus proche, se recentre près des bords.
   let nx = 0
@@ -101,8 +124,8 @@ export function botMove(bot: BotName, s: GameState): Vec2 {
       ny = p.y - e.y
     }
   }
-  const cx = 800 - p.x
-  const cy = 600 - p.y
+  const cx = ARENA_CENTER.x - p.x
+  const cy = ARENA_CENTER.y - p.y
   const edge = Math.hypot(cx, cy) > 500 ? 2 : 0
   return { x: nx + cx * edge, y: ny + cy * edge }
 }

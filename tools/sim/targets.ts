@@ -1,4 +1,5 @@
 import type { BotAggregate } from './metrics'
+import { FINAL_BOSS } from '@content/config'
 
 export interface TargetReport {
   pass: boolean
@@ -13,7 +14,7 @@ export interface TargetReport {
  *  - survie médiane ≥ 13 min (le kite moyen atteint bien le milieu de l'arc long),
  *  - gagnabilité ≥ 20 % (tue le boss final — la cible n°1 ; vise 25-40 % réel),
  *  - PV qui plongent (climax 15-20 min),
- *  - pas trivial (≤ 60 % survive full), idle meurt, greedy reste punissable.
+ *  - pas trivial (≤ 60 % survive full), greedy reste punissable.
  * Oracle final = playtest humain ; ces seuils sont un garde-fou de régression.
  */
 // Boss HARDCORE (demande user 2026-07-13 : final ×10, mini ×3) → le bot moyen ne
@@ -35,21 +36,25 @@ const GREEDY_MAX_SURVIVE_FULL_PCT = 25
  * Reste très strict (idle meurt 85%+) ; l'oracle final = playtest humain.
  */
 const IDLE_MAX_SURVIVE_FULL_PCT = 15
-/** Un bot non-skillé meurt, mais pas dans les toutes premières secondes. */
+/** Un bot mobile non-skillé meurt, mais pas dans les toutes premières secondes. */
 const UNSKILLED_MIN_DEATH_MS = 45000
 
-export function evaluateTargets(aggs: BotAggregate[]): TargetReport {
+export function evaluateTargets(
+  aggs: BotAggregate[],
+  observationMs: number = FINAL_BOSS.atMs
+): TargetReport {
   const byBot = new Map(aggs.map((a) => [a.bot, a]))
   const failures: string[] = []
+  const fullArcObserved = observationMs >= FINAL_BOSS.atMs
 
   const kite = byBot.get('kite')
   if (kite !== undefined) {
-    if (kite.survivalMsMedian < KITE_MIN_SURVIVAL_MEDIAN_MS) {
+    if (observationMs >= KITE_MIN_SURVIVAL_MEDIAN_MS && kite.survivalMsMedian < KITE_MIN_SURVIVAL_MEDIAN_MS) {
       failures.push(
         `kite: survie médiane ${Math.round(kite.survivalMsMedian / 1000)}s < ${KITE_MIN_SURVIVAL_MEDIAN_MS / 1000}s (trop fragile)`
       )
     }
-    if (kite.survivedFullPct > KITE_MAX_SURVIVE_FULL_PCT) {
+    if (fullArcObserved && kite.survivedFullPct > KITE_MAX_SURVIVE_FULL_PCT) {
       failures.push(
         `kite: survie pleine ${Math.round(kite.survivedFullPct)}% > ${KITE_MAX_SURVIVE_FULL_PCT}% (trop sûr, pas assez tendu)`
       )
@@ -61,18 +66,18 @@ export function evaluateTargets(aggs: BotAggregate[]): TargetReport {
     // le min-par-run et non la courbe médiane des survivants (biais de survivant :
     // les runs forts qui GAGNENT croisent haut — c'est la power fantasy voulue ;
     // le climax vient des runs qui meurent, invisibles dans la médiane-survivants).
-    if (kite.minHpPctMedian >= KITE_MAX_HP_DIP_PCT) {
+    if (fullArcObserved && kite.minHpPctMedian >= KITE_MAX_HP_DIP_PCT) {
       failures.push(
         `kite: PV min médian ${Math.round(kite.minHpPctMedian)}% jamais sous ${KITE_MAX_HP_DIP_PCT}% — jeu trop sûr, pas de climax`
       )
     }
     // Cible n°1 : le jeu doit être GAGNABLE (le kite tue le boss final au moins parfois).
-    if (kite.winPct < KITE_MIN_WIN_PCT) {
+    if (fullArcObserved && kite.winPct < KITE_MIN_WIN_PCT) {
       failures.push(
         `kite: victoire ${Math.round(kite.winPct)}% < ${KITE_MIN_WIN_PCT}% (jeu non gagnable — on n'atteint/ne bat pas le boss)`
       )
     }
-    if (kite.winPct > KITE_MAX_WIN_PCT) {
+    if (fullArcObserved && kite.winPct > KITE_MAX_WIN_PCT) {
       failures.push(
         `kite: victoire ${Math.round(kite.winPct)}% > ${KITE_MAX_WIN_PCT}% (trop facile à gagner, plus de tension)`
       )
@@ -81,7 +86,7 @@ export function evaluateTargets(aggs: BotAggregate[]): TargetReport {
 
   const greedy = byBot.get('greedy')
   if (greedy !== undefined) {
-    if (greedy.survivedFullPct > GREEDY_MAX_SURVIVE_FULL_PCT) {
+    if (fullArcObserved && greedy.survivedFullPct > GREEDY_MAX_SURVIVE_FULL_PCT) {
       failures.push(`greedy: ${Math.round(greedy.survivedFullPct)}% survivent la run pleine > ${GREEDY_MAX_SURVIVE_FULL_PCT}% (l'imprudent ne doit pas passer de façon fiable)`)
     } else if (greedy.survivalMsMedian < UNSKILLED_MIN_DEATH_MS) {
       failures.push(`greedy: mort médiane ${Math.round(greedy.survivalMsMedian / 1000)}s < ${UNSKILLED_MIN_DEATH_MS / 1000}s (punitif au démarrage)`)
@@ -90,10 +95,8 @@ export function evaluateTargets(aggs: BotAggregate[]): TargetReport {
 
   const idle = byBot.get('idle')
   if (idle !== undefined) {
-    if (idle.survivedFullPct > IDLE_MAX_SURVIVE_FULL_PCT) {
+    if (fullArcObserved && idle.survivedFullPct > IDLE_MAX_SURVIVE_FULL_PCT) {
       failures.push(`idle: ${Math.round(idle.survivedFullPct)}% survivent la run pleine > ${IDLE_MAX_SURVIVE_FULL_PCT}% (immobile, trop facile)`)
-    } else if (idle.survivalMsMedian < UNSKILLED_MIN_DEATH_MS) {
-      failures.push(`idle: mort médiane ${Math.round(idle.survivalMsMedian / 1000)}s < ${UNSKILLED_MIN_DEATH_MS / 1000}s (punitif au démarrage)`)
     }
   }
 

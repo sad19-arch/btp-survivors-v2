@@ -29,11 +29,211 @@ export interface DestructibleBreakOpts {
  * état de simulation. Le jitter/particules utilisent `Math.random()` : rendu
  * uniquement, sans effet sur le déterminisme de la sim.
  *
- * Ne détient AUCUN état propre : simplement une référence à la scène pour
- * accéder aux fabriques (`add`/`tweens`/`time`/`textures`).
+ * Ne détient aucun état de gameplay : seulement une référence à la scène et une
+ * dernière mesure Court-circuit test-only, sans influence sur le rendu suivant.
  */
 export class VfxManager {
+  private lastStrike: {
+    sequence: number
+    ownerId: number | undefined
+    fromX: number
+    fromY: number
+    toX: number
+    toY: number
+  } | null = null
+  private strikeSequence = 0
+  private lastHammerRing: {
+    sequence: number
+    simulationRadius: number
+    renderedRadius: number
+  } | null = null
+  private hammerRingSequence = 0
+  private lastSawContact: {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+  } | null = null
+  private sawContactSequence = 0
+  private lastPassiveReimpact: {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+    radius: number
+  } | null = null
+  private passiveReimpactSequence = 0
+  private helmetRepulseSequence = 0
+  private lastNailImpact: { sequence: number; weaponId: string; x: number; y: number } | null = null
+  private nailImpactSequence = 0
+  private lastRicochetImpact: { sequence: number; weaponId: string; x: number; y: number } | null = null
+  private ricochetImpactSequence = 0
+  private lastConeContact: { sequence: number; weaponId: string; x: number; y: number; mark: 'foam' | 'thermal' } | null = null
+  private coneContactSequence = 0
+  private lastWrenchTurn: { sequence: number; weaponId: string; x: number; y: number } | null = null
+  private wrenchTurnSequence = 0
+
   constructor(private readonly scene: Phaser.Scene) {}
+
+  /** Sonde test-only du dernier arc réellement transmis au renderer. */
+  debugLastStrikeInfo(): {
+    sequence: number
+    ownerId: number | undefined
+    fromX: number
+    fromY: number
+    toX: number
+    toY: number
+  } | null {
+    return this.lastStrike === null ? null : { ...this.lastStrike }
+  }
+
+  /** Sonde test-only du dernier anneau d'impact immédiat du Marteau. */
+  debugLastHammerRingInfo(): {
+    sequence: number
+    simulationRadius: number
+    renderedRadius: number
+  } | null {
+    return this.lastHammerRing === null ? null : { ...this.lastHammerRing }
+  }
+
+  /** Sonde test-only du dernier contact de Scie effectivement dessiné. */
+  debugLastSawContactInfo(): {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+  } | null {
+    return this.lastSawContact === null ? null : { ...this.lastSawContact }
+  }
+
+  /** Sonde test-only du réimpact différé de Disque diamant. */
+  debugLastPassiveReimpactInfo(): {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+    radius: number
+  } | null {
+    return this.lastPassiveReimpact === null ? null : { ...this.lastPassiveReimpact }
+  }
+
+  debugHelmetRepulseCount(): number {
+    return this.helmetRepulseSequence
+  }
+
+  /** Sonde test-only du dernier impact de clou effectivement dessiné. */
+  debugLastNailImpactInfo(): {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+  } | null {
+    return this.lastNailImpact === null ? null : { ...this.lastNailImpact }
+  }
+
+  /** Sonde test-only du dernier rebond de Boulon effectivement dessiné. */
+  debugLastRicochetImpactInfo(): {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+  } | null {
+    return this.lastRicochetImpact === null ? null : { ...this.lastRicochetImpact }
+  }
+
+  /** Sonde test-only de la dernière marque de contact d'une arme cône. */
+  debugLastConeContactInfo(): {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+    mark: 'foam' | 'thermal'
+  } | null {
+    return this.lastConeContact === null ? null : { ...this.lastConeContact }
+  }
+
+  /** Sonde test-only de la dernière inversion de Clé effectivement dessinée. */
+  debugLastWrenchTurnInfo(): { sequence: number; weaponId: string; x: number; y: number } | null {
+    return this.lastWrenchTurn === null ? null : { ...this.lastWrenchTurn }
+  }
+
+  /** Flash d'inversion du boomerang : carré cyan et anneau sec au point exact du demi-tour. */
+  spawnWrenchTurn(x: number, y: number, weaponId: string): void {
+    this.lastWrenchTurn = {
+      sequence: ++this.wrenchTurnSequence,
+      weaponId,
+      x,
+      y
+    }
+    const evolved = weaponId === 'cle_choc'
+    const ring = this.scene.add.circle(x, y, evolved ? 8 : 6, 0x000000, 0)
+      .setStrokeStyle(evolved ? 4 : 3, PALETTE_HEX.cyanAccent, 1)
+      .setDepth(7)
+    this.scene.tweens.add({
+      targets: ring,
+      scale: evolved ? 3 : 2.4,
+      alpha: 0,
+      duration: evolved ? 190 : 150,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy()
+    })
+    this.spawnPixelPop(x, y, PALETTE_HEX.blanc, evolved ? 11 : 8, 110)
+  }
+
+  /**
+   * Marque un contact réellement appliqué par une arme cône.
+   * La mousse forme un dépôt blanc/vert plus durable ; la chaleur forme une
+   * croix orange brève. Le Chalumeau n'ayant aucun DoT, son effet ne persiste
+   * volontairement pas comme un faux état de brûlure.
+   */
+  spawnConeContact(x: number, y: number, weaponId: string): void {
+    const thermal = weaponId === 'chalumeau' || weaponId === 'lance_thermique'
+    const mark = thermal ? 'thermal' : 'foam'
+    this.lastConeContact = {
+      sequence: ++this.coneContactSequence,
+      weaponId,
+      x,
+      y,
+      mark
+    }
+
+    if (thermal) {
+      const hot = this.scene.add.graphics().setDepth(8).setPosition(x, y)
+      hot.lineStyle(3, PALETTE_HEX.orangeDanger, 0.95)
+      hot.lineBetween(-7, -7, 7, 7)
+      hot.lineBetween(7, -7, -7, 7)
+      hot.fillStyle(PALETTE_HEX.jauneSecurite, 0.9)
+      hot.fillRect(-2, -2, 4, 4)
+      this.scene.tweens.add({
+        targets: hot,
+        scaleX: 1.45,
+        scaleY: 1.45,
+        alpha: 0,
+        duration: 260,
+        ease: 'Quad.easeOut',
+        onComplete: () => hot.destroy()
+      })
+      return
+    }
+
+    const foam = this.scene.add.graphics().setDepth(8).setPosition(x, y)
+    foam.fillStyle(PALETTE_HEX.blanc, 0.9)
+    foam.fillCircle(-5, 1, 4)
+    foam.fillCircle(1, -4, 5)
+    foam.fillStyle(PALETTE_HEX.vertBonus, 0.65)
+    foam.fillCircle(6, 2, 4)
+    foam.lineStyle(2, PALETTE_HEX.contour, 0.8)
+    foam.strokeCircle(1, 0, 10)
+    this.scene.tweens.add({
+      targets: foam,
+      scaleX: 0.72,
+      scaleY: 0.72,
+      alpha: 0,
+      duration: weaponId === 'canon_mousse' ? 900 : 650,
+      ease: 'Quad.easeIn',
+      onComplete: () => foam.destroy()
+    })
+  }
 
   /**
    * Joue un effet transitoire (scale + fondu) à une position, puis se détruit. Rendu pur.
@@ -123,6 +323,184 @@ export class VfxManager {
       ease: 'Quad.easeOut',
       onComplete: () => sq.destroy()
     })
+  }
+
+  /**
+   * Détonation de bonbonne lisible à la taille exacte de la zone de dégâts :
+   * anneau carré/orangé, flash central et éclats radiaux déterministes. L'évolution
+   * utilise un cœur rouge pour distinguer immédiatement sa cascade.
+   */
+  spawnGasExplosion(x: number, y: number, radius: number, evolved: boolean): void {
+    const color = evolved ? PALETTE_HEX.rougeAlerte : PALETTE_HEX.orangeDanger
+    const ring = this.scene.add.circle(x, y, 8, 0x000000, 0)
+      .setStrokeStyle(4, color, 1)
+      .setDepth(7)
+    this.scene.tweens.add({
+      targets: ring,
+      scale: Math.max(1, radius / 8),
+      alpha: 0,
+      duration: evolved ? 280 : 230,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy()
+    })
+    this.spawnPixelPop(x, y, evolved ? PALETTE_HEX.jauneSecurite : 0xffffff, evolved ? 18 : 14, 170)
+
+    const shardCount = evolved ? 12 : 8
+    for (let i = 0; i < shardCount; i++) {
+      const angle = (i / shardCount) * Math.PI * 2
+      const shard = this.scene.add.rectangle(x, y, evolved ? 7 : 5, evolved ? 7 : 5, color)
+        .setDepth(7)
+      this.scene.tweens.add({
+        targets: shard,
+        x: x + Math.cos(angle) * radius * 0.82,
+        y: y + Math.sin(angle) * radius * 0.82,
+        alpha: 0,
+        scale: 0.4,
+        duration: evolved ? 300 : 250,
+        ease: 'Quad.easeOut',
+        onComplete: () => shard.destroy()
+      })
+    }
+  }
+
+  /**
+   * Frontière instantanée du coup de Marteau. Le cercle naît directement au
+   * rayon de simulation (`scale = 1`) ; seul son fondu déborde légèrement après
+   * l'impact. L'onde sprite plus lente reste une traîne, pas la vérité de hitbox.
+   */
+  spawnHammerImpactRing(x: number, y: number, radius: number): void {
+    this.hammerRingSequence += 1
+    this.lastHammerRing = {
+      sequence: this.hammerRingSequence,
+      simulationRadius: radius,
+      renderedRadius: radius
+    }
+    const ring = this.scene.add.circle(x, y, radius, 0x000000, 0)
+      .setStrokeStyle(4, PALETTE_HEX.jauneSecurite, 0.95)
+      .setDepth(6)
+      .setScale(1)
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 1.04,
+      alpha: 0,
+      duration: 140,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy()
+    })
+  }
+
+  /**
+   * Contact spécialisé de Scie : flash métallique compact et six étincelles
+   * radiales. Le point d'origine est celui de la victime réellement touchée ;
+   * aucun jitter ne peut décaler le feedback hors de la collision.
+   */
+  spawnSawContact(x: number, y: number, weaponId: string): void {
+    this.sawContactSequence += 1
+    this.lastSawContact = { sequence: this.sawContactSequence, weaponId, x, y }
+    const evolved = weaponId === 'tronconneuse_chantier'
+    const color = evolved ? PALETTE_HEX.orangeDanger : PALETTE_HEX.jauneSecurite
+    this.spawnPixelPop(x, y, PALETTE_HEX.blanc, evolved ? 10 : 8, 100)
+    const sparkCount = 6
+    for (let i = 0; i < sparkCount; i++) {
+      const angle = (i / sparkCount) * Math.PI * 2
+      const distance = evolved ? 24 : 18
+      const spark = this.scene.add.rectangle(x, y, evolved ? 5 : 4, 3, color)
+        .setDepth(7)
+        .setRotation(angle)
+      this.scene.tweens.add({
+        targets: spark,
+        x: x + Math.cos(angle) * distance,
+        y: y + Math.sin(angle) * distance,
+        alpha: 0,
+        scale: 0.35,
+        duration: evolved ? 180 : 140,
+        ease: 'Quad.easeOut',
+        onComplete: () => spark.destroy()
+      })
+    }
+  }
+
+  /** Double contact cyan/blanc, plus sec qu'une explosion et distinct du premier impact. */
+  spawnPassiveReimpact(x: number, y: number, radius: number, weaponId: string): void {
+    this.lastPassiveReimpact = {
+      sequence: ++this.passiveReimpactSequence,
+      weaponId,
+      x,
+      y,
+      radius
+    }
+    const ring = this.scene.add.circle(x, y, Math.max(5, Math.min(radius, 24)), 0x000000, 0)
+      .setStrokeStyle(3, PALETTE_HEX.cyanAccent, 1)
+      .setDepth(8)
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 1.6,
+      alpha: 0,
+      duration: 150,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy()
+    })
+    this.spawnPixelPop(x, y, PALETTE_HEX.blanc, 10, 120)
+  }
+
+  /** Onde courte du Casque homologué : frontière verte instantanée au contact. */
+  spawnHelmetRepulse(x: number, y: number, radius: number): void {
+    this.helmetRepulseSequence += 1
+    const ring = this.scene.add.circle(x, y, radius, 0x000000, 0)
+      .setStrokeStyle(3, PALETTE_HEX.vertBonus, 0.95)
+      .setDepth(7)
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 1.35,
+      alpha: 0,
+      duration: 180,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy()
+    })
+  }
+
+  /** Impact sec du Cloueur : petit spark directionnel, distinct des explosions et lames. */
+  spawnNailImpact(x: number, y: number, weaponId: string): void {
+    this.nailImpactSequence += 1
+    this.lastNailImpact = { sequence: this.nailImpactSequence, weaponId, x, y }
+    const evolved = weaponId === 'mitrailleuse_clous'
+    const color = evolved ? PALETTE_HEX.orangeDanger : PALETTE_HEX.jauneSecurite
+    this.spawnPixelPop(x, y, PALETTE_HEX.blanc, evolved ? 9 : 7, 90)
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2 + Math.PI / 4
+      const spark = this.scene.add.rectangle(x, y, evolved ? 5 : 4, 2, color)
+        .setDepth(7)
+        .setRotation(angle)
+      this.scene.tweens.add({
+        targets: spark,
+        x: x + Math.cos(angle) * (evolved ? 18 : 13),
+        y: y + Math.sin(angle) * (evolved ? 18 : 13),
+        alpha: 0,
+        duration: evolved ? 130 : 105,
+        ease: 'Quad.easeOut',
+        onComplete: () => spark.destroy()
+      })
+    }
+  }
+
+  /** Flash en croix au point précis où un Boulon trouve et prend sa cible suivante. */
+  spawnRicochetImpact(x: number, y: number, weaponId: string): void {
+    this.ricochetImpactSequence += 1
+    this.lastRicochetImpact = { sequence: this.ricochetImpactSequence, weaponId, x, y }
+    const evolved = weaponId === 'tempete_boulons'
+    const color = evolved ? PALETTE_HEX.orangeDanger : PALETTE_HEX.jauneSecurite
+    const ring = this.scene.add.circle(x, y, 5, 0x000000, 0)
+      .setStrokeStyle(evolved ? 3 : 2, color, 1)
+      .setDepth(7)
+    this.scene.tweens.add({
+      targets: ring,
+      scale: evolved ? 3.2 : 2.5,
+      alpha: 0,
+      duration: evolved ? 170 : 130,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy()
+    })
+    this.spawnPixelPop(x, y, PALETTE_HEX.blanc, evolved ? 9 : 7, 90)
   }
 
   /**
@@ -218,7 +596,7 @@ export class VfxManager {
    * coup d'œil. Quelques éclats de béton procéduraux COMPLÈTENT le sprite
    * (jamais en remplacement). Render-only ; Math.random cosmétique OK.
    */
-  spawnSweepArc(x: number, y: number, radius: number, level = 1): void {
+  spawnSweepArc(x: number, y: number, radius: number, level = 1, dirX = 0, dirY = -1): void {
     const lf = Math.max(0, Math.min(1, (level - 1) / 7)) // 0 au niv 1 → 1 au niv 8
     const swings = level >= 5 ? 2 : 1 // double coup croisé quand l'arme atteint 2 passes
     const scale = (radius / 100) * (0.72 + lf * 0.38) // le sprite couvre l'aire et grossit au niveau
@@ -227,8 +605,8 @@ export class VfxManager {
     if (this.scene.textures.exists('vfx_slash')) {
       for (let s = 0; s < swings; s++) {
         const dir = s === 0 ? 1 : -1
-        // Orienté vers le haut (devant) ; les 2 coups partent en biais opposé (X).
-        const base = -Math.PI / 2 + (swings === 2 ? dir * Phaser.Math.DegToRad(22) : 0)
+        // Orienté dans la direction réelle du coup ; les 2 passes partent en biais opposé (X).
+        const base = Math.atan2(dirY, dirX) + (swings === 2 ? dir * Phaser.Math.DegToRad(22) : 0)
         const img = this.scene.add.image(x, y, 'vfx_slash')
           .setDepth(5)
           .setScale(scale * 0.72)
@@ -472,7 +850,15 @@ export class VfxManager {
    * Remplace l'ancien éclair localisé sur l'ennemi : l'arc JOUEUR → ENNEMI rend
    * la décharge lisible d'un coup d'œil (on voit clairement qui est frappé et par quoi).
    */
-  spawnStrikeBolt(fromX: number, fromY: number, toX: number, toY: number): void {
+  spawnStrikeBolt(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    ownerId?: number
+  ): void {
+    this.strikeSequence += 1
+    this.lastStrike = { sequence: this.strikeSequence, ownerId, fromX, fromY, toX, toY }
     const segments = 7
     const dx = toX - fromX
     const dy = toY - fromY

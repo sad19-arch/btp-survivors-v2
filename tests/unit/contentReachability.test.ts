@@ -99,6 +99,7 @@ describe('tuiles de sol — atteignabilité (données de prod)', () => {
     expect(r.declared).toBe(60)
     expect(r.reachable).toBe(10) // une base peinte par stage
     expect(r.orphans).toHaveLength(50)
+    expect(r.gate).toBe(false) // palette protégée : visible dans l'audit, jamais bloquante
   })
 
   it('MUTATION : référencer une tuile orpheline (compo groundKey) la rend atteignable', () => {

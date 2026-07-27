@@ -128,7 +128,9 @@ function main(): void {
     }
   }
 
-  const report = evaluateTargets(aggregates)
+  // Une fenêtre courte (ex. validation rapide à 300 s) ne peut pas prouver la
+  // victoire, la tension finale ni la survie de l'arc complet à 22 minutes.
+  const report = evaluateTargets(aggregates, args.durationSec * 1000)
   console.log('\n--- cibles « skill récompensé » ---')
   if (report.pass) {
     console.log('[sim] cibles VERTES ✓')

@@ -13,6 +13,7 @@ import {
   PickupCollectedEvent,
   BossSpawnedEvent,
   EvolvedEvent,
+  TrialWeaponOfferedEvent,
   ChestOpenedEvent,
   DestructibleBrokenEvent,
   type AuraPulse
@@ -40,6 +41,7 @@ import { reviveSystem } from './systems/revive'
 import { projectileLifetimeSystem } from './systems/projectile'
 import { hazardSystem } from './systems/hazard'
 import { boomerangSystem } from './systems/boomerang'
+import { recordRendementKills, utilityPassiveSystem } from './systems/utilityPassives'
 import { consumeLevelUp, initialProgress } from './systems/leveling'
 import { allPlayersDead } from './systems/gameRules'
 import { recomputePlayerStats } from './systems/playerStats'
@@ -69,6 +71,7 @@ import type {
   HazardState,
   PendingFormation,
   PendingLevelUp,
+  PassiveDebugMetric,
   PickupState,
   PickupKind,
   PlayerInput,
@@ -76,6 +79,7 @@ import type {
   PrisonerState,
   AllyState,
   ProjectileState,
+  UtilityPassiveDebugState,
   Vec2
 } from './types'
 
@@ -90,6 +94,12 @@ export interface SimOptions {
    * (ouvrier + cloueur) — comportement solo/défaut inchangé.
    */
   characters?: readonly string[] | undefined
+  /** Active uniquement les mesures structurées consommées par le seam test/dev. */
+  debugMetrics?: boolean | undefined
+  /** Armes de base autorisées dans les cartes de découverte. Absent = catalogue complet. */
+  availableWeaponIds?: readonly string[] | undefined
+  /** Arme nouvellement débloquée à injecter dans un seul tirage. */
+  trialWeaponId?: string | null | undefined
 }
 
 const COORD_SYSTEM = 'origin top-left, +x right, +y down'
@@ -166,6 +176,10 @@ export class Simulation {
   private phase: ConstructionPhase
   /** Id de personnage par joueur (index = playerId-1), résolu au spawn. */
   private readonly characters: readonly string[]
+  private readonly debugMetrics: boolean
+  private readonly availableWeaponIds: ReadonlySet<string> | undefined
+  private readonly trialWeaponId: string | null
+  private trialWeaponOfferConsumed = false
   private currentSeed: number
   private scene: GameState['scene'] = 'game'
   private elapsedMs = 0
@@ -179,6 +193,8 @@ export class Simulation {
   private bossKills = 0
   /** Tally cumulatif de kills par joueur (attribution par dernier frappeur). */
   private killsByPlayer = new Map<number, number>()
+  /** Historique borné des déclenchements des passifs signatures, réservé au seam test/dev. */
+  private readonly passiveMetricHistory: PassiveDebugMetric[] = []
   /** Contexte des morts du pas courant (Mode Carnage) — tableau RÉUTILISÉ, vidé
    *  à chaque pas pour ne pas allouer dans la boucle chaude. */
   private readonly diedEnemies: DiedEnemy[] = []
@@ -228,12 +244,10 @@ export class Simulation {
   private obstacles: readonly Obstacle[] = []
   /** Beton frais et autres surfaces sans degats qui affectent uniquement les joueurs. */
   private slowZones: readonly SurfaceSlowZone[] = []
-  /** Champ de flux courant (null si aucun obstacle ou pas encore construit). */
-  private flowField: FlowField | null = null
-  /** Colonne de la cellule du joueur lors du dernier build du champ de flux. */
-  private lastFlowCol = -1
-  /** Ligne de la cellule du joueur lors du dernier build du champ de flux. */
-  private lastFlowRow = -1
+  /** Champ de flux courant par joueur vivant (vide sans obstacle). */
+  private readonly flowFields = new Map<number, FlowField>()
+  /** Cellule ayant servi au dernier build, par joueur. */
+  private readonly flowCells = new Map<number, { col: number; row: number }>()
 
   constructor(opts: SimOptions) {
     this.mode = opts.mode
@@ -249,6 +263,10 @@ export class Simulation {
     this.phaseId = opts.phaseId ?? ConstructionPhaseId.TERRAIN_VIERGE
     this.phase = resolvePhase(this.phaseId)
     this.characters = opts.characters ?? []
+    this.debugMetrics = opts.debugMetrics === true
+    this.availableWeaponIds =
+      opts.availableWeaponIds === undefined ? undefined : new Set(opts.availableWeaponIds)
+    this.trialWeaponId = opts.trialWeaponId ?? null
     this.reset(opts.seed)
   }
 
@@ -418,6 +436,60 @@ export class Simulation {
     }
   }
 
+  /** Copie sérialisable des derniers déclenchements de passifs spécialisés. */
+  debugPassiveInfo(): readonly PassiveDebugMetric[] {
+    return this.passiveMetricHistory.map((metric) => ({ ...metric }))
+  }
+
+  /** Snapshot test/dev des effets utilitaires actuellement présents dans le World. */
+  debugUtilityPassiveInfo(): readonly UtilityPassiveDebugState[] {
+    let maxProjectileLifeMs = 0
+    let maxProjectileSpeed = 0
+    let maxSlowRemainingMs = 0
+    let maxHazardLifeMs = 0
+    let maxEnemyKnockbackSpeed = 0
+    for (const entity of this.world.query('projectile')) {
+      const projectile = this.world.get(entity, 'projectile')
+      const velocity = this.world.get(entity, 'velocity')
+      maxProjectileLifeMs = Math.max(maxProjectileLifeMs, projectile?.lifeMs ?? 0)
+      maxProjectileSpeed = Math.max(maxProjectileSpeed, Math.hypot(velocity?.x ?? 0, velocity?.y ?? 0))
+    }
+    for (const entity of this.world.query('slow')) {
+      maxSlowRemainingMs = Math.max(maxSlowRemainingMs, this.world.get(entity, 'slow')?.remainingMs ?? 0)
+    }
+    for (const entity of this.world.query('hazard')) {
+      maxHazardLifeMs = Math.max(maxHazardLifeMs, this.world.get(entity, 'hazard')?.lifeMs ?? 0)
+    }
+    for (const entity of this.world.query('enemy', 'knockback')) {
+      const knockback = this.world.get(entity, 'knockback')
+      maxEnemyKnockbackSpeed = Math.max(
+        maxEnemyKnockbackSpeed,
+        Math.hypot(knockback?.vx ?? 0, knockback?.vy ?? 0)
+      )
+    }
+    const result: UtilityPassiveDebugState[] = []
+    for (const entity of this.world.query('player')) {
+      const player = this.world.get(entity, 'player')
+      if (player === undefined) {
+        continue
+      }
+      result.push({
+        player_id: player.playerId,
+        magnet_pull_scale: player.magnetPullScale ?? 1,
+        casque_repulse_cooldown_ms: player.casqueRepulseCooldownMs ?? 0,
+        rendement_combo_kills: player.rendementComboKills ?? 0,
+        rendement_combo_window_ms: player.rendementComboWindowMs ?? 0,
+        rendement_boost_ms: player.rendementBoostMs ?? 0,
+        max_projectile_life_ms: maxProjectileLifeMs,
+        max_projectile_speed: maxProjectileSpeed,
+        max_slow_remaining_ms: maxSlowRemainingMs,
+        max_hazard_life_ms: maxHazardLifeMs,
+        max_enemy_knockback_speed: maxEnemyKnockbackSpeed
+      })
+    }
+    return result.sort((a, b) => a.player_id - b.player_id)
+  }
+
   /** Expose les formations annoncées non encore spawnées (télégraphe, Task 10). */
   private collectPendingFormations(): readonly PendingFormation[] {
     const u = this.waveDir.upcoming
@@ -515,6 +587,23 @@ export class Simulation {
       this.midBossWaveIndex = MID_BOSS_WAVES.atMs.length
     } else {
       this.finalBossSpawned = true
+    }
+  }
+
+  /**
+   * [Debug/test] Met à zéro les PV des boss du rôle demandé. Le retrait, le
+   * coffre éventuel et la victoire restent traités par la vraie frame de
+   * simulation suivante : ce helper ne court-circuite donc aucune transition.
+   */
+  debugKillBoss(role: 'mid' | 'final'): void {
+    for (const entity of this.world.query('enemy', 'health')) {
+      if (this.world.get(entity, 'enemy')?.bossRole !== role) {
+        continue
+      }
+      const health = this.world.get(entity, 'health')
+      if (health !== undefined) {
+        health.hp = 0
+      }
     }
   }
 
@@ -655,9 +744,11 @@ export class Simulation {
     this.chestAccMs = 0
     this.score = 0
     this.killsByPlayer = new Map<number, number>()
+    this.passiveMetricHistory.length = 0
     this.midBossWaveIndex = 0
     this.finalBossSpawned = false
     this.choiceQueue = []
+    this.trialWeaponOfferConsumed = false
     this.inputs.clear()
     this.playerEntities.clear()
     this.rescuedTotal = 0
@@ -666,10 +757,9 @@ export class Simulation {
     const site = buildSiteLayout(seed, WORLD.width, WORLD.height, this.phaseId)
     this.obstacles = site.obstacles
     this.slowZones = site.slowZones ?? []
-    // Réinitialise le champ de flux (sera reconstruit au premier pas si obstacles > 0).
-    this.flowField = null
-    this.lastFlowCol = -1
-    this.lastFlowRow = -1
+    // Réinitialise les champs de flux (reconstruits au premier pas si obstacles > 0).
+    this.flowFields.clear()
+    this.flowCells.clear()
     this.spawnPlayers()
     spawnOpeningWave(
       this.world,
@@ -799,6 +889,7 @@ export class Simulation {
     // début d'`advanceTime` (avant les pas) pour durer exactement un appel
     // `advanceTime` complet, même si plusieurs pas sont exécutés en séquence.
     const pulses: AuraPulse[] = []
+    const passiveMetrics: PassiveDebugMetric[] | undefined = this.debugMetrics ? [] : undefined
     // Otages : `enraged` = libérés devenus alliés (feedback « enragé ») ; `thanked` =
     // otages qui remercient et s'en vont (expiration d'un allié OU libération au cap).
     const enraged: EnragedFreed[] = []
@@ -820,15 +911,16 @@ export class Simulation {
       difficultyScaleAt(this.elapsedMs)
     )
     this.applyPlayerInputs()
+    utilityPassiveSystem(this.world, dtMs)
     // Snapshot pré-mouvement : les armes voient les ennemis là où ils sont AVANT
     // `movementSystem` (le scan linéaire qu'elles remplaçaient itérait le monde à cet
     // instant précis). Reconstruit une seconde fois plus bas (post-mouvement) pour
     // `collisionSystem` — deux instantanés distincts, chacun exact pour son système.
     this.rebuildEnemyGrid()
-    weaponSystem(this.world, dtMs, pulses, fired, this.rng, this.enemyGrid)
+    weaponSystem(this.world, dtMs, pulses, fired, this.rng, this.enemyGrid, passiveMetrics)
     slowSystem(this.world, dtMs)
-    // Champ de flux : construit UNIQUEMENT si des obstacles existent (sinon il n'y a
-    // rien à contourner et `enemyAiSystem` reçoit null = ligne droite vers le joueur).
+    // Champs de flux : construits UNIQUEMENT si des obstacles existent (sinon il
+    // n'y a rien à contourner et `enemyAiSystem` reçoit null).
     //
     // ⚠️ N'ALLEZ PAS CHERCHER ICI UNE GARDE DE DÉTERMINISME. Le commentaire qui vivait
     // là l'affirmait — « terrain_vierge (obstacles=[]) → flowField reste null →
@@ -843,25 +935,14 @@ export class Simulation {
     // obstacles viennent de `buildSiteLayout`, lui-même à seed. Même seed ⇒ mêmes
     // obstacles ⇒ même champ ⇒ même partie. Le RNG des clusters est isolé (seed^0x51e0).
     if (this.obstacles.length > 0) {
-      const leaderPos = this.getLeaderPosition()
-      if (leaderPos !== null) {
-        // Cellule absolue du joueur dans la grille mondiale (throttle = rebuild uniquement
-        // quand le joueur franchit une frontière de cellule CELL_FLOW).
-        const col = Math.floor(leaderPos.x / CELL_FLOW)
-        const row = Math.floor(leaderPos.y / CELL_FLOW)
-        if (this.flowField === null || col !== this.lastFlowCol || row !== this.lastFlowRow) {
-          this.flowField = buildFlowField(leaderPos.x, leaderPos.y, this.obstacles, CELL_FLOW, HALF_FLOW)
-          this.lastFlowCol = col
-          this.lastFlowRow = row
-        }
-      }
+      this.refreshPlayerFlowFields()
     }
     // Mini-événement boss (enrage + invocation d'add) AVANT le steering : l'enrage
     // doit être à jour quand `steerBoss` calcule la vitesse. Add mis à l'échelle
     // comme une vague normale (difficulté temporelle × co-op).
     const bossScale = difficultyScaleAt(this.elapsedMs)
     bossSystem(this.world, this.rng, this.phase, { ...bossScale, hp: bossScale.hp * coopHpFactor(this.playerCount()) })
-    enemyAiSystem(this.world, this.elapsedMs, dtMs, this.flowField)
+    enemyAiSystem(this.world, this.elapsedMs, dtMs, this.obstacles.length > 0 ? this.flowFields : null)
     tetherSystem(this.world, MODE_PLAYER_COUNT[this.mode] ?? 1, TETHER.maxRadius)
     // Alliés enragés : suivi du joueur + salves (purge dirigée). AVANT `movementSystem`
     // pour que la vélocité de suivi soit intégrée ce pas. `thanked` : otages qui expirent.
@@ -871,12 +952,18 @@ export class Simulation {
     // Résolution des obstacles statiques : repousse joueurs+ennemis hors du décor.
     // No-op pour terrain_vierge (obstacles = []) → sim:check diff 0 garanti.
     resolveObstacleCollisions(this.world, this.obstacles)
-    boomerangSystem(this.world, dtMs)
+    boomerangSystem(this.world, dtMs, pulses)
     // Boules de feu des alliés : homing + impact. APRÈS `movementSystem` (la boule a
     // bougé), AVANT `reapDeadEnemies` : les kills létaux (hp=0) sont récoltés ce pas.
     allyBoltSystem(this.world)
     this.rebuildEnemyGrid()
-    collisionSystem(this.world, dtMs, this.enemyGrid)
+    collisionSystem(this.world, dtMs, this.enemyGrid, pulses, passiveMetrics)
+    if (passiveMetrics !== undefined && passiveMetrics.length > 0) {
+      this.passiveMetricHistory.push(...passiveMetrics)
+      if (this.passiveMetricHistory.length > 128) {
+        this.passiveMetricHistory.splice(0, this.passiveMetricHistory.length - 128)
+      }
+    }
     knockbackSystem(this.world, dtMs)
     // Le recul ne doit jamais pousser une cible à travers une structure.
     resolveObstacleCollisions(this.world, this.obstacles)
@@ -887,6 +974,7 @@ export class Simulation {
     // d'allocation par pas) et vidé à chaque tour — même patron que `brokenDestructibles`.
     this.diedEnemies.length = 0
     const reap: ReapResult = reapDeadEnemies(this.world, this.lootRng, this.diedEnemies)
+    recordRendementKills(this.world, reap.killsByPlayer)
     // Coffre GARANTI sur mort d'un porteur (convoyeur). Positions collectées AVANT
     // le reap (qui supprime les entités). Le coffre lui-même est garanti ; seule sa
     // RARETÉ (1/10 super doré) est tirée — RNG isolé `chestRng` (déterminisme préservé).
@@ -943,7 +1031,18 @@ export class Simulation {
       this.events.dispatchEvent(new PickupCollectedEvent(c))
     }
     for (const p of pulses) {
-      this.events.dispatchEvent(new AuraPulseEvent(p.x, p.y, p.radius, p.kind, p.dirX, p.dirY, p.weaponId))
+      this.events.dispatchEvent(new AuraPulseEvent(
+        p.x,
+        p.y,
+        p.radius,
+        p.kind,
+        p.dirX,
+        p.dirY,
+        p.weaponId,
+        p.ownerId,
+        p.sourceX,
+        p.sourceY
+      ))
     }
     for (const t of thanked) {
       this.events.dispatchEvent(new PrisonerFreedEvent(t.x, t.y))
@@ -1067,7 +1166,20 @@ export class Simulation {
           weapons: loadout?.slots.map((s) => ({ id: s.id, level: s.level })) ?? [],
           passives: passives?.list.map((p) => ({ id: p.id, level: p.level })) ?? []
         }
-        const choices = rollCards(this.rng, inv, PROGRESSION.choices)
+        const guaranteedWeaponId = this.trialWeaponOfferConsumed
+          ? undefined
+          : this.trialWeaponId ?? undefined
+        const choices = rollCards(this.rng, inv, PROGRESSION.choices, {
+          ...(this.availableWeaponIds === undefined ? {} : { availableWeaponIds: this.availableWeaponIds }),
+          ...(guaranteedWeaponId === undefined ? {} : { guaranteedWeaponId })
+        })
+        if (
+          guaranteedWeaponId !== undefined
+          && choices.some((choice) => choice.kind === 'weapon-new' && choice.id === guaranteedWeaponId)
+        ) {
+          this.trialWeaponOfferConsumed = true
+          this.events.dispatchEvent(new TrialWeaponOfferedEvent(guaranteedWeaponId))
+        }
         // Inventaire déjà maxé (0 carte éligible) : le niveau est déjà consommé
         // (`consumeLevelUp` ci-dessus), mais on ne gèle PAS le temps sur un écran
         // à 0 carte — ce serait un soft-lock (aucun moyen de le lever). On continue.
@@ -1284,6 +1396,7 @@ export class Simulation {
       enemies.push({
         id: e,
         type: enemy.type,
+        ...(enemy.targetPlayerId !== undefined ? { targetPlayerId: enemy.targetPlayerId } : {}),
         x: pos.x,
         y: pos.y,
         hp: health.hp,
@@ -1313,7 +1426,16 @@ export class Simulation {
       if (pos === undefined || vel === undefined || proj === undefined) {
         continue
       }
-      projectiles.push({ id: e, x: pos.x, y: pos.y, vx: vel.x, vy: vel.y, type: proj.type })
+      projectiles.push({
+        id: e,
+        x: pos.x,
+        y: pos.y,
+        vx: vel.x,
+        vy: vel.y,
+        type: proj.type,
+        radius: proj.radius,
+        ...(proj.returning !== undefined ? { returning: proj.returning } : {})
+      })
     }
     // Les lames de scie sont rendues comme des projectiles (type 'scie').
     for (const e of this.world.query('orbiter', 'position')) {
@@ -1322,7 +1444,7 @@ export class Simulation {
       if (pos === undefined || orb === undefined) {
         continue
       }
-      projectiles.push({ id: e, x: pos.x, y: pos.y, vx: 0, vy: 0, type: orb.weaponId })
+      projectiles.push({ id: e, x: pos.x, y: pos.y, vx: 0, vy: 0, type: orb.weaponId, radius: orb.hitRadius })
     }
     // Les boules de feu des alliés sont rendues comme des projectiles (type 'boule_feu').
     for (const e of this.world.query('allyBolt', 'position', 'velocity')) {
@@ -1460,29 +1582,35 @@ export class Simulation {
   }
 
   /**
-   * Retourne la position du joueur leader (playerId=1, ou premier vivant).
-   * Utilisé pour centrer la fenêtre du champ de flux.
-   * Retourne null si aucun joueur vivant.
+   * Maintient un champ de navigation par joueur vivant. Chaque champ est
+   * reconstruit seulement quand son joueur change de cellule de flux.
    */
-  private getLeaderPosition(): Vec2 | null {
-    // Tente d'abord le joueur 1
-    const e1 = this.playerEntities.get(1)
-    if (e1 !== undefined) {
-      const pos = this.world.get(e1, 'position')
-      const health = this.world.get(e1, 'health')
-      if (pos !== undefined && health !== undefined && health.hp > 0) {
-        return { x: pos.x, y: pos.y }
-      }
-    }
-    // Fallback : premier joueur vivant
-    for (const [, e] of this.playerEntities) {
+  private refreshPlayerFlowFields(): void {
+    const alivePlayerIds = new Set<number>()
+    for (const [playerId, e] of this.playerEntities) {
       const pos = this.world.get(e, 'position')
       const health = this.world.get(e, 'health')
-      if (pos !== undefined && health !== undefined && health.hp > 0) {
-        return { x: pos.x, y: pos.y }
+      if (pos === undefined || health === undefined || health.hp <= 0) {
+        continue
+      }
+      alivePlayerIds.add(playerId)
+      const col = Math.floor(pos.x / CELL_FLOW)
+      const row = Math.floor(pos.y / CELL_FLOW)
+      const previous = this.flowCells.get(playerId)
+      if (previous === undefined || previous.col !== col || previous.row !== row) {
+        this.flowFields.set(
+          playerId,
+          buildFlowField(pos.x, pos.y, this.obstacles, CELL_FLOW, HALF_FLOW)
+        )
+        this.flowCells.set(playerId, { col, row })
       }
     }
-    return null
+    for (const playerId of this.flowFields.keys()) {
+      if (!alivePlayerIds.has(playerId)) {
+        this.flowFields.delete(playerId)
+        this.flowCells.delete(playerId)
+      }
+    }
   }
 
   private playersCentroid(): Vec2 {

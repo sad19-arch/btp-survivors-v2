@@ -80,4 +80,39 @@ describe('pierce (perforation des projectiles)', () => {
     const totalDamaged = [enA, enB].filter((e) => (w.get(e, 'health')?.hp ?? 50) < 50).length
     expect(totalDamaged).toBe(2)
   })
+
+  it('ne consomme pas plusieurs perforations sur le même ennemi pendant un chevauchement', () => {
+    const w = new World()
+    const proj = spawnProjectile(w, 0, 4)
+    const en = spawnEnemy(w, 0, 100)
+
+    collisionSystem(w, 16, grid(w))
+    collisionSystem(w, 16, grid(w))
+    collisionSystem(w, 16, grid(w))
+
+    expect(w.get(en, 'health')?.hp).toBe(90)
+    expect(w.get(proj, 'projectile')?.pierce).toBe(3)
+    expect(w.get(proj, 'projectile')?.hitIds).toEqual([en])
+    expect(w.alive(proj)).toBe(true)
+  })
+
+  it('conserve ses perforations pour des ennemis distincts', () => {
+    const w = new World()
+    const proj = spawnProjectile(w, 0, 2)
+    const enA = spawnEnemy(w, 0, 50)
+    const enB = spawnEnemy(w, 40, 50)
+
+    collisionSystem(w, 16, grid(w))
+    const ppos = w.get(proj, 'position')
+    if (ppos !== undefined) {
+      ppos.x = 40
+    }
+    collisionSystem(w, 16, grid(w))
+
+    expect(w.get(enA, 'health')?.hp).toBe(40)
+    expect(w.get(enB, 'health')?.hp).toBe(40)
+    expect(w.get(proj, 'projectile')?.pierce).toBe(0)
+    expect(w.get(proj, 'projectile')?.hitIds).toEqual([enA, enB])
+    expect(w.alive(proj)).toBe(true)
+  })
 })

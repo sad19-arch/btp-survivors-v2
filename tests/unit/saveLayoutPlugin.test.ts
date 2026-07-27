@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import * as saveLayout from '../../tools/vite/saveLayoutPlugin'
 
 const CANONICAL_ZONES = [
@@ -12,6 +15,14 @@ const CANONICAL_ZONES = [
 type SaveLayoutModule = typeof saveLayout & {
   validateSaveLayoutRequest?: (stage: string, json: string) => string | null
 }
+
+const temporaryRepositories: string[] = []
+
+afterEach(() => {
+  for (const repository of temporaryRepositories.splice(0)) {
+    rmSync(repository, { recursive: true, force: true })
+  }
+})
 
 function layoutJson(stage: string, markerTypes = [...CANONICAL_ZONES]): string {
   return JSON.stringify({
@@ -46,5 +57,39 @@ describe('saveLayoutPlugin — garde avant écriture', () => {
 
   it('accepte exactement les cinq zones canoniques', () => {
     expect(validate('terrassement', layoutJson('terrassement'))).toBeNull()
+  })
+
+  it('refuse un identifiant hors du registre fermé des dix stages', () => {
+    expect(validate('../hors-depot', layoutJson('../hors-depot'))).toBe('stage invalide')
+  })
+})
+
+describe('saveLayoutPlugin — publication officielle', () => {
+  it('écrit le JSON et régénère le registre dans une racine temporaire', () => {
+    const repository = mkdtempSync(join(tmpdir(), 'btp-layout-publication-'))
+    temporaryRepositories.push(repository)
+    const json = layoutJson('terrassement')
+
+    const result = saveLayout.publishOfficialLayout('terrassement', json, repository)
+
+    expect(result).toEqual({
+      stage: 'terrassement',
+      layoutPath: 'src/content/layouts/terrassement.json',
+      registryPath: 'src/content/composedLayouts.ts'
+    })
+    expect(readFileSync(join(repository, result.layoutPath), 'utf8')).toBe(json)
+    const registry = readFileSync(join(repository, result.registryPath), 'utf8')
+    expect(registry).toContain("import l0 from './layouts/terrassement.json'")
+    expect(registry).toContain("'terrassement': l0 as unknown as StageLayout")
+  })
+
+  it('ne crée aucun fichier quand le stage tente de sortir du registre officiel', () => {
+    const repository = mkdtempSync(join(tmpdir(), 'btp-layout-publication-'))
+    temporaryRepositories.push(repository)
+
+    expect(() =>
+      saveLayout.publishOfficialLayout('../hors-depot', layoutJson('../hors-depot'), repository)
+    ).toThrow('stage invalide')
+    expect(existsSync(join(repository, 'src'))).toBe(false)
   })
 })

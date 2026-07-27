@@ -59,16 +59,12 @@ const SEED = 42
  * job n'a été ajouté pour ça — c'est la distribution des jobs existants qui a
  * changé, pas leur nombre (cf. le test « le nombre de jobs ne bouge pas »).
  *
- * Restent les 2 feuilles `kind:'trade'` du stage 01, et c'est un CHOIX D'AUTEUR,
- * pas une lacune de code : `terrain_vierge` a une compo committée, qui est la
- * vérité totale du stage (pas d'auto-placement par-dessus le niveau de
- * l'utilisateur). Ces 2 feuilles sont posables depuis la palette de l'éditeur
- * (section « PNJ métier (fixe) », cf. `editorNpcPalette.test.ts`) : elles
- * sortiront de cette liste le jour où il les posera. Ne PAS « corriger » ça en
- * rallumant un auto-placement sur un stage composé.
+ * Le stage 01 place désormais ses feuilles métier dans sa composition officielle :
+ * elles ne sont donc plus orphelines. Ne PAS réintroduire d'auto-placement sur un
+ * stage composé ; la composition reste la vérité totale.
  */
 const EXPECTED_ORPHANS: Record<string, readonly string[]> = {
-  terrain_vierge: ['npc_stage01_geometre_trade', 'npc_stage01_chef_trade'],
+  terrain_vierge: [],
   terrassement: [],
   fondations: [],
   reseaux_enterres: [],
@@ -134,7 +130,7 @@ describe('PNJ d’ambiance — atteignabilité réelle (mondes construits)', () 
    * Ce verrou empêche tout peuplement procédural de se superposer à l'éditeur.
    */
   const JOBS_BEFORE: Record<string, number> = {
-    terrain_vierge: 1, terrassement: 5, fondations: 5, reseaux_enterres: 5,
+    terrain_vierge: 15, terrassement: 5, fondations: 5, reseaux_enterres: 5,
     gros_oeuvre: 5, echafaudages: 5, charpente_toiture: 5, second_oeuvre: 6,
     finitions: 5, livraison_audit: 6
   }
@@ -146,11 +142,10 @@ describe('PNJ d’ambiance — atteignabilité réelle (mondes construits)', () 
     })
   }
 
-  it('le stage 01 (compo de l’éditeur) ne rend QUE les PNJ posés dans la compo', async () => {
-    // Garde de non-régression du contrat « une compo sauvée est la vérité
-    // totale » : pas d'auto-peuplement par-dessus le niveau de l'utilisateur.
+  it('le stage 01 conserve exactement la population explicitement validée dans sa compo', async () => {
+    // Une composition peut légitimement contenir plus de PNJ qu'un autre stage :
+    // le verrou pertinent est son compte explicite, pas une comparaison de taille.
     const { jobCount } = await reachableKeys('terrain_vierge')
-    const { jobCount: genCount } = await reachableKeys('terrassement')
-    expect(jobCount).toBeLessThan(genCount)
+    expect(jobCount).toBe(JOBS_BEFORE.terrain_vierge)
   })
 })

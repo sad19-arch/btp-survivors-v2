@@ -110,6 +110,12 @@ describe('ricochet (bounces)', () => {
       expect(vel.x).toBeGreaterThan(0)
     }
 
+    // Tant que le projectile chevauche encore e1, il ne doit ni le re-toucher
+    // ni être consommé après l'épuisement du dernier rebond.
+    collisionSystem(w, 16, buildGrid(w))
+    expect(w.get(e1, 'health')?.hp).toBe(40)
+    expect(w.alive(proj)).toBe(true)
+
     // Déplacer manuellement le projectile pour le mettre au contact de e2
     const ppos = w.get(proj, 'position')
     if (ppos !== undefined) {

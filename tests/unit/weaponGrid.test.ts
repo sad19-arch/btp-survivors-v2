@@ -10,7 +10,15 @@ function addPlayer(w: World, weaponId: string): EntityId {
   w.add(e, 'position', { x: 0, y: 0 })
   w.add(e, 'velocity', { x: 0, y: 0 })
   w.add(e, 'health', { hp: 100, maxHp: 100 })
-  w.add(e, 'player', { playerId: 1, speed: 200, vigilance: 100, damageMult: 1, cooldownMult: 1, pickupRadius: 90 })
+  w.add(e, 'player', {
+    playerId: 1,
+    speed: 200,
+    vigilance: 100,
+    damageMult: 1,
+    cooldownMult: 1,
+    pickupRadius: 90,
+    facing: { x: 1, y: 0 }
+  })
   w.add(e, 'weapons', { slots: [{ id: weaponId, level: 1, cooldownLeftMs: 0 }] })
   w.add(e, 'stats', { ...BASE_STATS })
   return e

@@ -51,7 +51,8 @@ function addPlayer(world: World, weaponId: string, x = 0, y = 0): EntityId {
     vigilance: 100,
     damageMult: 1,
     cooldownMult: 1,
-    pickupRadius: 90
+    pickupRadius: 90,
+    facing: { x: 1, y: 0 }
   })
   world.add(entity, 'weapons', { slots: [{ id: weaponId, level: 1, cooldownLeftMs: 0 }] })
   world.add(entity, 'stats', { ...BASE_STATS })

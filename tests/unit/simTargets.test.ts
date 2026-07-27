@@ -90,6 +90,15 @@ describe('evaluateTargets (arc 20 min — gagnable & profond)', () => {
     expect(rep.failures.join(' ')).toContain('greedy')
   })
 
+  it('une fenêtre de 300 s ne prétend pas mesurer la survie ou la victoire de l’arc complet', () => {
+    const rep = evaluateTargets([
+      agg({ bot: 'kite', survivedFullPct: 100, winPct: 0, survivalMsMedian: 300000, minHpPctMedian: 100 }),
+      agg({ bot: 'greedy', survivedFullPct: 100, survivalMsMedian: 300000 }),
+      agg({ bot: 'idle', survivedFullPct: 100, survivalMsMedian: 300000 })
+    ], 300000)
+    expect(rep.pass).toBe(true)
+  })
+
   it('PASS si idle meurt en milieu de run', () => {
     const rep = evaluateTargets([agg({ bot: 'idle', survivedFullPct: 0, survivalMsMedian: 90000 })])
     expect(rep.pass).toBe(true)

@@ -56,7 +56,10 @@ const BASE_WEAPON_IDS = Object.values(WEAPONS)
  * - Supprime les cartes `weapon-new` si l'inventaire est plein
  * - Ignore gracieusement les IDs inconnus
  */
-export function eligibleCards(inv: Inventory): Card[] {
+export function eligibleCards(
+  inv: Inventory,
+  availableWeaponIds?: ReadonlySet<string>
+): Card[] {
   const cards: Card[] = []
 
   // Cartes de level-up d'armes (weapon-up)
@@ -80,6 +83,9 @@ export function eligibleCards(inv: Inventory): Card[] {
   if (inv.weapons.length < INVENTORY.weapons) {
     const ownedIds = new Set(inv.weapons.map(w => w.id))
     for (const baseId of BASE_WEAPON_IDS) {
+      if (availableWeaponIds !== undefined && !availableWeaponIds.has(baseId)) {
+        continue
+      }
       if (!ownedIds.has(baseId)) {
         const def = WEAPONS[baseId]
         if (def) {
@@ -171,8 +177,19 @@ function fisherYates<T>(arr: T[], rng: Rng): void {
  *
  * Déterministe : même seed + même inventaire ⇒ mêmes cartes ET même ordre.
  */
-export function rollCards(rng: Rng, inv: Inventory, count: number): Card[] {
-  const all = eligibleCards(inv)
+export interface CardRollOptions {
+  availableWeaponIds?: ReadonlySet<string>
+  /** Offre unique à injecter sans supprimer la garantie de montée d'arme. */
+  guaranteedWeaponId?: string
+}
+
+export function rollCards(
+  rng: Rng,
+  inv: Inventory,
+  count: number,
+  options: CardRollOptions = {}
+): Card[] {
+  const all = eligibleCards(inv, options.availableWeaponIds)
 
   // Cas court : moins d'éligibles que demandés → tout renvoyer mélangé
   if (all.length <= count) {
@@ -204,6 +221,25 @@ export function rollCards(rng: Rng, inv: Inventory, count: number): Card[] {
     if (card !== undefined) {
       result.push(card)
       pool.splice(idx, 1)
+    }
+  }
+
+  const guaranteed = all.find(
+    (card) => card.kind === 'weapon-new' && card.id === options.guaranteedWeaponId
+  )
+  if (guaranteed !== undefined && !result.some((card) => card.id === guaranteed.id)) {
+    let replaceIndex = -1
+    for (let index = result.length - 1; index >= 0; index--) {
+      if (result[index]?.kind !== 'weapon-up') {
+        replaceIndex = index
+        break
+      }
+    }
+    const index = replaceIndex >= 0 ? replaceIndex : result.length - 1
+    if (index >= 0) {
+      result[index] = guaranteed
+    } else if (count > 0) {
+      result.push(guaranteed)
     }
   }
 

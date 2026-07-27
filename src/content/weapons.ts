@@ -31,6 +31,14 @@ export interface WeaponLevel {
   bounces?: number
   boomerangOutMs?: number
   projectileRadius?: number
+  /** Rayon de la détonation déclenchée à chaque impact de projectile. */
+  explosionRadius?: number
+  /** Fraction des dégâts directs appliquée une fois à chaque cible prise dans la détonation. */
+  explosionDamageMult?: number
+  /** Nombre de centres de détonation secondaires propagés après l'impact. */
+  chainExplosions?: number
+  /** Distance maximale entre deux centres successifs d'une chaîne de détonations. */
+  chainRange?: number
   slowMult?: number
   slowMs?: number
   tickMs?: number
@@ -250,8 +258,19 @@ export const WEAPONS: Record<string, WeaponDef> = {
     knockback: 300,
     aim: 'facing',
     levels: buildLevels(
-      { damage: 20, cooldownMs: 900, count: 1, area: 0, pierce: 2, projectileSpeed: 380, projectileRadius: 16, projectileLifeMs: 2200 },
-      { damage: 5 },
+      {
+        damage: 20,
+        cooldownMs: 900,
+        count: 1,
+        area: 0,
+        pierce: 2,
+        projectileSpeed: 380,
+        projectileRadius: 16,
+        projectileLifeMs: 2200,
+        explosionRadius: 48,
+        explosionDamageMult: 0.5
+      },
+      { damage: 5, explosionRadius: 4 },
       8,
       { 3: { pierce: 3 }, 5: { pierce: 4, count: 2 }, 7: { pierce: 5 } }
     )
@@ -264,7 +283,20 @@ export const WEAPONS: Record<string, WeaponDef> = {
     maxLevel: 1,
     knockback: 380,
     aim: 'facing',
-    levels: [{ damage: 62, cooldownMs: 480, count: 3, area: 0, pierce: 99, projectileSpeed: 340, projectileRadius: 22, projectileLifeMs: 2600 }]
+    levels: [{
+      damage: 62,
+      cooldownMs: 480,
+      count: 3,
+      area: 0,
+      pierce: 99,
+      projectileSpeed: 340,
+      projectileRadius: 22,
+      projectileLifeMs: 2600,
+      explosionRadius: 96,
+      explosionDamageMult: 0.5,
+      chainExplosions: 2,
+      chainRange: 160
+    }]
   },
   // Scie orbitale maxée + disque diamant (lame plus affûtée) → tronçonneuse de chantier.
   tronconneuse_chantier: {

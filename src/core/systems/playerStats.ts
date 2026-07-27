@@ -1,6 +1,6 @@
 import type { World } from '../world'
 import type { EntityId } from '../types'
-import { aggregatePassives } from '@content/passives'
+import { aggregatePassives, utilityPassiveEffects } from '@content/passives'
 import { PLAYER_BASE } from '@content/config'
 
 /**
@@ -19,6 +19,7 @@ export function recomputePlayerStats(world: World, entity: EntityId): void {
   world.add(entity, 'stats', s)
   player.speed = PLAYER_BASE.speed * s.moveSpeed
   player.pickupRadius = PLAYER_BASE.pickupRadius * s.magnet
+  player.magnetPullScale = utilityPassiveEffects(passives.list).magnetPullScale
   if (health !== undefined) {
     const ratio = health.maxHp > 0 ? health.hp / health.maxHp : 1
     health.maxHp = PLAYER_BASE.hp * s.maxHp

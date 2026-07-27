@@ -384,8 +384,10 @@ describe('layouts composés des stages 01 à 10', () => {
     expect(secondary.some((instance) => instance.prefab === 'cluster_plant_reseaux')).toBe(true)
   })
 
-  it('recopie les 86 immeubles, leurs transformations et leurs collisions au bit près', () => {
-    const reference = perimeterGeometry(buildings(layout('terrain_vierge')))
+  it('les stages 02 à 10 recopient les 86 immeubles, leurs transformations et leurs collisions au bit près', () => {
+    // Le terrain vierge est désormais une composition officielle autonome, éditée
+    // séparément. Le périmètre commun des phases de chantier commence au stage 02.
+    const reference = perimeterGeometry(buildings(layout('terrassement')))
     expect(reference).toHaveLength(86)
     for (const stage of COMPOSED_STAGES) {
       expect(perimeterGeometry(buildings(layout(stage))), stage).toEqual(reference)
