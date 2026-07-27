@@ -54,7 +54,8 @@ const app = new App({
   intro: opts.intro || !opts.test,
   // Les URLs d'automatisation ?test=1 peuvent parcourir les stages isolément ; le
   // jeu normal (même en dev/autostart) respecte toujours la progression persistée.
-  bypassStageLocks: opts.test
+  bypassStageLocks: opts.test,
+  debugMetrics: opts.test
 })
 const fullscreen = createBrowserFullscreenController()
 if (fullscreen !== null) {

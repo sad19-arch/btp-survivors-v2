@@ -1,8 +1,9 @@
 import type { World } from '../world'
 import type { SpatialGrid } from '../spatialGrid'
 import type { AuraPulse } from '../events'
-import type { ProjectileComp } from '../types'
+import type { PassiveDebugMetric, ProjectileComp } from '../types'
 import { HITBOX } from '@content/config'
+import { utilityPassiveEffects } from '@content/passives'
 import { applyEnemyHit } from './knockback'
 
 /** Rayon de recherche d'une cible de rebond, en px. */
@@ -43,7 +44,8 @@ export function collisionSystem(
   world: World,
   dtMs: number,
   grid: SpatialGrid,
-  pulses?: AuraPulse[]
+  pulses?: AuraPulse[],
+  passiveMetrics?: PassiveDebugMetric[]
 ): void {
   const deadProjectiles = new Set<number>()
   const cand: number[] = []
@@ -90,9 +92,23 @@ export function collisionSystem(
             ownerId: proj.ownerId
           })
         }
+        let secondaryExplosionsCreated = 0
         if ((proj.explosionRadius ?? 0) > 0 && (proj.explosionDamageMult ?? 0) > 0) {
-          detonateProjectile(world, grid, proj, en, ppos.x, ppos.y, pulses)
+          const detonation = detonateProjectile(world, grid, proj, en, ppos.x, ppos.y, pulses)
+          secondaryExplosionsCreated = detonation.secondaryExplosionsCreated
+          if (secondaryExplosionsCreated > 0) {
+            passiveMetrics?.push({
+              passive_triggered: true,
+              passive_id: 'surcharge_gaz',
+              passive_level: 5,
+              weapon_id: proj.type,
+              enemies_hit: detonation.enemiesHit,
+              modified_radius: proj.explosionRadius ?? 0,
+              secondary_explosions_created: secondaryExplosionsCreated
+            })
+          }
         }
+        applyProjectileHeavyHaste(world, proj, hitIds.length, passiveMetrics)
         // Un seul ennemi touché par ce projectile CE pas (break) : l'ennemi visé ici
         // ne peut pas être re-touché par le même projectile dans cette même itération.
         if ((proj.bounces ?? 0) > 0) {
@@ -155,9 +171,14 @@ export function collisionSystem(
   for (const pl of world.query('player', 'position', 'health')) {
     const ppos = world.get(pl, 'position')
     const ph = world.get(pl, 'health')
-    if (ppos === undefined || ph === undefined || ph.hp <= 0) {
+    const player = world.get(pl, 'player')
+    if (ppos === undefined || ph === undefined || player === undefined || ph.hp <= 0) {
       continue
     }
+    player.casqueRepulseCooldownMs = Math.max(0, (player.casqueRepulseCooldownMs ?? 0) - dtMs)
+    const helmet = utilityPassiveEffects(world.get(pl, 'passives')?.list ?? [])
+    const repulseReady = helmet.contactRepulseForce > 0 && player.casqueRepulseCooldownMs <= 0
+    let repulsed = false
     const reach = HITBOX.enemy + HITBOX.player
     grid.queryCircle(ppos.x, ppos.y, reach, cand)
     cand.sort((a, b) => a - b)
@@ -172,7 +193,24 @@ export function collisionSystem(
         if (ph.hp < 0) {
           ph.hp = 0
         }
+        if (repulseReady) {
+          applyEnemyHit(world, en, 0, {
+            knockback: helmet.contactRepulseForce,
+            direction: { x: epos.x - ppos.x, y: epos.y - ppos.y }
+          })
+          repulsed = true
+        }
       }
+    }
+    if (repulsed) {
+      player.casqueRepulseCooldownMs = helmet.contactRepulseCooldownMs
+      pulses?.push({
+        x: ppos.x,
+        y: ppos.y,
+        radius: reach,
+        kind: 'casque_repulse',
+        ownerId: player.playerId
+      })
     }
   }
 }
@@ -191,7 +229,7 @@ function detonateProjectile(
   impactX: number,
   impactY: number,
   pulses?: AuraPulse[]
-): void {
+): { enemiesHit: number; secondaryExplosionsCreated: number } {
   const radius = proj.explosionRadius ?? 0
   const splashDamage = proj.damage * (proj.explosionDamageMult ?? 0)
   const hitIds = proj.hitIds ?? (proj.hitIds = [])
@@ -200,6 +238,7 @@ function detonateProjectile(
   let centerY = impactY
   const blastCandidates: number[] = []
   const chainCandidates: number[] = []
+  const secondaryCenters: Array<{ x: number; y: number }> = []
 
   for (let index = 0; index <= (proj.chainExplosions ?? 0); index++) {
     if (
@@ -231,12 +270,21 @@ function detonateProjectile(
       if (dx * dx + dy * dy > radius * radius) {
         continue
       }
+      const wasAlive = health.hp > 0
       hitIds.push(enemy)
       applyEnemyHit(world, enemy, splashDamage, {
         ownerId: proj.ownerId,
         knockback: proj.knockback,
         direction: { x: dx, y: dy }
       })
+      if (
+        proj.secondaryExplosionOnCenterKill === true
+        && wasAlive
+        && health.hp <= 0
+        && dx * dx + dy * dy <= (radius * 0.5) ** 2
+      ) {
+        secondaryCenters.push({ x: pos.x, y: pos.y })
+      }
     }
 
     if (index >= (proj.chainExplosions ?? 0)) {
@@ -257,6 +305,125 @@ function detonateProjectile(
     centers.add(next.id)
     centerX = next.x
     centerY = next.y
+  }
+
+  const directHealth = world.get(directTarget, 'health')
+  const directPosition = world.get(directTarget, 'position')
+  if (
+    proj.secondaryExplosionOnCenterKill === true
+    && directHealth !== undefined
+    && directHealth.hp <= 0
+    && directPosition !== undefined
+  ) {
+    secondaryCenters.unshift({ x: directPosition.x, y: directPosition.y })
+  }
+
+  for (const center of secondaryCenters) {
+    applySecondaryExplosion(
+      world,
+      grid,
+      proj,
+      center,
+      radius * 0.5,
+      splashDamage * 0.5,
+      hitIds,
+      pulses
+    )
+  }
+  return { enemiesHit: hitIds.length, secondaryExplosionsCreated: secondaryCenters.length }
+}
+
+function applySecondaryExplosion(
+  world: World,
+  grid: SpatialGrid,
+  proj: ProjectileComp,
+  center: { x: number; y: number },
+  radius: number,
+  damage: number,
+  hitIds: number[],
+  pulses?: AuraPulse[]
+): void {
+  if (
+    pulses !== undefined
+    && pulses.reduce((count, pulse) => count + (pulse.kind === 'explosion' ? 1 : 0), 0)
+      < MAX_EXPLOSION_PULSES_PER_STEP
+  ) {
+    pulses.push({
+      x: center.x,
+      y: center.y,
+      radius,
+      kind: 'explosion',
+      weaponId: proj.type,
+      ownerId: proj.ownerId
+    })
+  }
+  const candidates: number[] = []
+  grid.queryCircle(center.x, center.y, radius, candidates)
+  candidates.sort((a, b) => a - b)
+  for (const enemy of candidates) {
+    const position = world.get(enemy, 'position')
+    const health = world.get(enemy, 'health')
+    if (position === undefined || health === undefined || health.hp <= 0) {
+      continue
+    }
+    const dx = position.x - center.x
+    const dy = position.y - center.y
+    if (dx * dx + dy * dy > radius * radius) {
+      continue
+    }
+    applyEnemyHit(world, enemy, damage, {
+      ownerId: proj.ownerId,
+      knockback: proj.knockback,
+      direction: { x: dx, y: dy }
+    })
+    if (!hitIds.includes(enemy)) {
+      hitIds.push(enemy)
+    }
+  }
+}
+
+function applyProjectileHeavyHaste(
+  world: World,
+  proj: ProjectileComp,
+  enemiesHit: number,
+  passiveMetrics?: PassiveDebugMetric[]
+): void {
+  const threshold = proj.heavyImpactThreshold ?? Number.POSITIVE_INFINITY
+  const haste = proj.heavyImpactHaste ?? 0
+  if (proj.heavyImpactApplied === true || enemiesHit < threshold || haste <= 0) {
+    return
+  }
+  for (const entity of world.query('player', 'weapons')) {
+    const player = world.get(entity, 'player')
+    const loadout = world.get(entity, 'weapons')
+    if (player?.playerId !== proj.ownerId || loadout === undefined) {
+      continue
+    }
+    const slot = loadout.slots.find((candidate) => candidate.id === proj.type)
+    if (slot === undefined) {
+      continue
+    }
+    const attackId = proj.heavyImpactAttackId
+    if (attackId !== undefined && slot.heavyImpactAppliedAttackId === attackId) {
+      proj.heavyImpactApplied = true
+      return
+    }
+    const baseCooldown = proj.heavyImpactBaseCooldownMs ?? 0
+    slot.cooldownLeftMs = Math.max(0, slot.cooldownLeftMs - baseCooldown * haste)
+    if (attackId !== undefined) {
+      slot.heavyImpactAppliedAttackId = attackId
+    }
+    proj.heavyImpactApplied = true
+    passiveMetrics?.push({
+      passive_triggered: true,
+      passive_id: 'compresseur_pneumatique',
+      passive_level: proj.heavyImpactPassiveLevel ?? 0,
+      weapon_id: proj.type,
+      enemies_hit: enemiesHit,
+      base_cooldown: baseCooldown,
+      modified_cooldown: slot.cooldownLeftMs
+    })
+    return
   }
 }
 

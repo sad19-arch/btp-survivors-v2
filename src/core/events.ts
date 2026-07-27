@@ -163,6 +163,13 @@ export class EvolvedEvent extends Event {
   }
 }
 
+/** L'offre d'essai d'une arme débloquée vient d'être injectée dans un tirage. */
+export class TrialWeaponOfferedEvent extends Event {
+  constructor(readonly weaponId: string) {
+    super('trialWeaponOffered')
+  }
+}
+
 /**
  * Un coffre vient d'être ouvert (les 3 issues : évolution / cartes / soin), pour
  * la fanfare d'ouverture (machine à sous). Observationnel : n'altère jamais la sim.

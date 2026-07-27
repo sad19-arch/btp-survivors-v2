@@ -281,6 +281,14 @@ const CSS = `
 #ui-root .menu__item--focus .stage-progress__count, #ui-root .menu__item--focus .stage-progress__requirement, #ui-root .menu__item--focus .stage-progress__notice { color: #3A1E06; text-shadow: none; }
 #ui-root .report__progress-note { margin: 8px 0 0; color: ${PALETTE.orangeDanger}; font-family: 'Pixelify Sans', monospace; font-size: 20px; font-weight: 700; text-align: center; }
 #ui-root .report__progress-note--unlocked { color: ${PALETTE.vertBonus}; }
+#ui-root .report-unlock { border: 4px solid ${PALETTE.orangeDanger}; background: #241C16; box-shadow: 4px 4px 0 ${PALETTE.contour}; padding: 8px 14px; text-align: center; }
+#ui-root .report-unlock--complete { border-color: ${PALETTE.vertBonus}; }
+#ui-root .report-unlock__title { margin: 0; color: ${PALETTE.jauneSecurite}; font-family: 'Press Start 2P'; font-size: 15px; }
+#ui-root .report-unlock__reward { margin: 5px 0 0; color: ${PALETTE.vertBonus}; font-family: 'Pixelify Sans'; font-size: 25px; font-weight: 700; }
+#ui-root .report-unlock__goal, #ui-root .report-unlock__progress, #ui-root .report-unlock__availability, #ui-root .report-unlock__secondary { margin: 2px 0 0; font-family: 'Pixelify Sans'; font-size: 18px; }
+#ui-root .report-unlock__progress { color: ${PALETTE.jauneSecurite}; }
+#ui-root .report-unlock__availability, #ui-root .report-unlock__secondary { color: ${PALETTE.solSable}; font-size: 16px; }
+#ui-root .content-new-badge { display: inline-block; padding: 3px 6px; border: 3px solid ${PALETTE.contour}; background: ${PALETTE.jauneSecurite}; color: #3A1E06; box-shadow: 2px 2px 0 ${PALETTE.contour}; font-family: 'Press Start 2P'; font-size: 9px; }
 
 /* ── Cartes d'amélioration (level-up) ─────────────────────────────────── */
 /* Co-op : plaque ENTIÈRE à la couleur sombre du joueur, bordure noire commune.
@@ -1032,6 +1040,11 @@ const CSS = `
 #ui-root .charsel-card { --charsel-player: var(--arc-jaune); position: relative; display: grid; grid-template-columns: clamp(92px, 13vw, 144px) minmax(0, 1fr); grid-template-rows: auto 1fr auto; gap: 8px 12px; align-items: center; min-width: 0; padding: 12px; background: var(--arc-brun3); border: 5px solid var(--charsel-player); box-shadow: 5px 5px 0 var(--arc-contour); }
 #ui-root .charsel-card--ready { background: var(--arc-brun2); box-shadow: inset 0 0 0 4px var(--charsel-player), 5px 5px 0 var(--arc-contour); }
 #ui-root .charsel-card--ready::after { content: ''; position: absolute; inset: 6px; border: 2px solid var(--charsel-player); pointer-events: none; }
+#ui-root .charsel-card--locked { filter: grayscale(.8) brightness(.62); border-color: #6A6258; }
+#ui-root .charsel-card .content-new-badge { position: absolute; right: 8px; top: 8px; }
+#ui-root .charsel__locked { grid-column: 1 / -1; margin: 0; color: ${PALETTE.orangeDanger}; font-family: 'Pixelify Sans'; font-size: 16px; text-align: center; }
+#ui-root .card { position: relative; }
+#ui-root .card__new { position: absolute; right: 8px; top: 8px; }
 #ui-root .charsel-card .charsel__who { grid-column: 1 / -1; color: var(--charsel-player); }
 #ui-root .charsel-card__portrait { grid-column: 1; grid-row: 2 / 4; }
 #ui-root .charsel-card__name { grid-column: 2; align-self: end; }

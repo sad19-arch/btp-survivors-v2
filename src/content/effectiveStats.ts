@@ -34,7 +34,7 @@ export interface EffectiveStats {
   slowMult: number | undefined
   /**
    * Durée du ralentissement infligé par une arme de kind `cone`, en ms.
-   * Non scalé.
+   * Scalée par Batterie 18V (`s.duration`).
    * `undefined` si l'arme ne ralentit pas.
    */
   slowMs: number | undefined
@@ -62,9 +62,9 @@ export function effectiveWeaponStats(lvl: WeaponLevel, s: PlayerStats): Effectiv
     chainExplosions: lvl.chainExplosions ?? 0,
     chainRange: (lvl.chainRange ?? 0) * s.area,
     tickMs: lvl.tickMs,
-    // Ralentissement : non scalé par les passifs (l'intensité / la durée du slow
-    // sont des propriétés intrinsèques de l'arme, pas des stats joueur).
+    // L'intensité reste intrinsèque à l'arme ; Batterie 18V prolonge seulement
+    // la durée, comme les projectiles, zones et boomerangs.
     slowMult: lvl.slowMult,
-    slowMs: lvl.slowMs
+    slowMs: lvl.slowMs === undefined ? undefined : lvl.slowMs * s.duration
   }
 }

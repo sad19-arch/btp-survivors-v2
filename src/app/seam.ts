@@ -1,6 +1,6 @@
-import type { App } from './app'
+import type { App, UnlockTelemetryEntry } from './app'
 import type { AppViewState, NavDir } from './appState'
-import type { GameMode, PlayerInput } from '@core/types'
+import type { GameMode, PassiveDebugMetric, PlayerInput, UtilityPassiveDebugState } from '@core/types'
 import type { PerfSnapshot } from '@render/perf/perfProbe'
 
 /**
@@ -37,6 +37,12 @@ export interface GameSeam {
     opts: { weapons?: { id: string; level: number }[]; passives?: { id: string; level: number }[] },
     playerId?: number
   ): void
+  /** [Debug] Mesures structurées des derniers déclenchements de passifs signatures. */
+  debugPassiveInfo(): readonly PassiveDebugMetric[]
+  /** [Debug] Snapshot des effets utilitaires actifs dans le vrai World. */
+  debugUtilityPassiveInfo(): readonly UtilityPassiveDebugState[]
+  /** [Debug] Journal local borné du parcours objectif → déblocage → essai. */
+  debugUnlockTelemetry(): readonly UnlockTelemetryEntry[]
   /** [Debug] Bascule le Mode Carnage (secret Konami) sans rejouer la séquence. */
   debugCarnage(on: boolean): void
   /** [Debug] Débloque le casque doré (son déclencheur de jeu est en attente). */
@@ -109,6 +115,16 @@ export interface GameSeam {
     x: number
     y: number
   } | null
+  /** Dernier réimpact de Disque diamant effectivement dessiné. */
+  debugPassiveReimpactInfo?(): {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+    radius: number
+  } | null
+  /** Nombre d'ondes de Casque effectivement dessinées. */
+  debugHelmetRepulseCount?(): number
   /** Impact et activité de traînée du Cloueur observés côté renderer. */
   debugNailInfo?(): {
     impactWeaponId: string
@@ -276,6 +292,9 @@ export function createSeam(app: App): GameSeam {
     debugGrant: (opts, playerId = 1) => {
       app.debugGrant(opts, playerId)
     },
+    debugPassiveInfo: () => app.debugPassiveInfo(),
+    debugUtilityPassiveInfo: () => app.debugUtilityPassiveInfo(),
+    debugUnlockTelemetry: () => app.debugUnlockTelemetry(),
     debugCarnage: (on: boolean) => {
       app.debugCarnage(on)
     },

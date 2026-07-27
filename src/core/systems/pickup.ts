@@ -1,6 +1,7 @@
 import type { World } from '../world'
 import type { EntityId, PickupComp, PickupKind, Vec2 } from '../types'
 import { HITBOX, PICKUP } from '@content/config'
+import { UTILITY_PASSIVE_TUNING } from '@content/passives'
 
 /** Un coffre ramassé ce pas : joueur ramasseur + rareté (super doré ou non). */
 export interface ChestCollector {
@@ -75,7 +76,7 @@ export function pickupSystem(
       // vite. Sinon : aimantation normale, seulement dans le rayon du joueur.
       const pulling = pickup.magnetized === true
       if (pulling || dist <= target.pickupRadius) {
-        const speed = pulling ? PICKUP.magnetPullSpeed : PICKUP.magnetSpeed
+        const speed = (pulling ? PICKUP.magnetPullSpeed : PICKUP.magnetSpeed) * target.magnetPullScale
         const step = Math.min(speed * dt, dist)
         gpos.x += (dx / dist) * step
         gpos.y += (dy / dist) * step
@@ -102,7 +103,10 @@ function applyPickup(world: World, player: EntityId, pickup: PickupComp): void {
         // Multiplicateur de gain d'XP (stat `growth`, base 1). Déterministe :
         // Math.round(int × 1.0) === int → run par défaut byte-identique.
         const growth = world.get(player, 'stats')?.growth ?? 1
-        progress.xp += Math.round(pickup.value * growth)
+        const rendementScale = (world.get(player, 'player')?.rendementBoostMs ?? 0) > 0
+          ? UTILITY_PASSIVE_TUNING.rendementBoostXpScale
+          : 1
+        progress.xp += Math.round(pickup.value * growth * rendementScale)
       }
       break
     }
@@ -150,6 +154,7 @@ interface NearestPlayer {
   entity: EntityId
   pos: Vec2
   pickupRadius: number
+  magnetPullScale: number
 }
 
 /** Joueur vivant le plus proche d'une position (ou null si aucun). */
@@ -166,7 +171,12 @@ function nearestPlayer(world: World, from: Vec2): NearestPlayer | null {
     const d = (pos.x - from.x) ** 2 + (pos.y - from.y) ** 2
     if (d < bestDist) {
       bestDist = d
-      best = { entity: e, pos, pickupRadius: player.pickupRadius }
+      best = {
+        entity: e,
+        pos,
+        pickupRadius: player.pickupRadius,
+        magnetPullScale: player.magnetPullScale ?? 1
+      }
     }
   }
   return best

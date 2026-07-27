@@ -15,6 +15,7 @@ import { readHiScore } from './hiscore'
 import { DEFAULT_CHARACTER_ID, characterDef } from '@content/characters'
 import { WEAPONS } from '@content/weapons'
 import { STAR_SLOTS } from '@content/stars'
+import { UNLOCK_COMBO_WINDOW_MS } from '@content/unlocks'
 import type { AchievementEntryView, AppViewState, AppPlayerState, InventoryEntry, MenuItemView, ChestOpenView, ChestResultView } from '@/app/appState'
 
 // ── Timings de la machine à sous (coffre) — PARTAGÉS avec le gel côté app ──────
@@ -63,7 +64,7 @@ const HURT_FLASH_PEAK = 0.4
 const HP_LOSS_EPS = 0.5
 
 /** Fenêtre glissante d'un enchaînement (juice #7) : sans kill pendant ce délai, la cadence retombe. */
-const COMBO_WINDOW_MS = 2000
+const COMBO_WINDOW_MS = UNLOCK_COMBO_WINDOW_MS
 /** En dessous de ce compteur, la CADENCE ne s'affiche pas (on ne montre pas les mini-streaks). */
 const CADENCE_MIN = 5
 /** Paliers de couleur de la cadence (montée en intensité) — bornes basses. */
@@ -958,7 +959,11 @@ export class Overlay {
       const card = h(
         'section',
         {
-          className: player.ready ? 'charsel-card charsel-card--ready' : 'charsel-card',
+          className: [
+            'charsel-card',
+            player.ready ? 'charsel-card--ready' : '',
+            player.unlocked !== false ? '' : 'charsel-card--locked'
+          ].filter(Boolean).join(' '),
           attrs: {
             'data-player': String(player.playerId),
             'data-ready': String(player.ready)
@@ -984,6 +989,15 @@ export class Overlay {
           })
         )
       )
+      if (player.isNew) {
+        card.append(h('span', { className: 'content-new-badge', text: 'NOUVEAU' }))
+      }
+      if (player.unlocked === false) {
+        card.append(h('p', {
+          className: 'charsel__locked',
+          text: player.lockHint ?? 'Personnage verrouillé.'
+        }))
+      }
       card.style.setProperty('--charsel-player', color.hex)
       board.append(card)
     }
@@ -1855,6 +1869,36 @@ export class Overlay {
       }
       panel.append(rows)
     }
+    const goal = state.unlockProgress.primary
+    if (goal !== null) {
+      const unlockBlock = h(
+        'section',
+        { className: goal.completed ? 'report-unlock report-unlock--complete' : 'report-unlock' },
+        h('h2', {
+          className: 'report-unlock__title',
+          text: goal.completed ? 'NOUVEAU DÉBLOCAGE' : 'PROCHAIN OBJECTIF'
+        }),
+        h('p', {
+          className: 'report-unlock__reward',
+          text: goal.completed ? `${goal.rewardName} disponible` : `Débloque : ${goal.rewardName}`
+        }),
+        h('p', { className: 'report-unlock__goal', text: goal.description }),
+        h('p', { className: 'report-unlock__progress', text: goal.progressLabel }),
+        h('p', {
+          className: 'report-unlock__availability',
+          text: goal.completed ? 'Disponible lors de la prochaine partie' : goal.rewardDescription
+        })
+      )
+      if (state.unlockProgress.secondary.length > 0) {
+        unlockBlock.append(h('p', {
+          className: 'report-unlock__secondary',
+          text: state.unlockProgress.secondary
+            .map((secondary) => `${secondary.rewardName} : ${secondary.progressLabel}`)
+            .join(' · ')
+        }))
+      }
+      panel.append(unlockBlock)
+    }
     panel.append(this.menuList(state))
     return h('div', { className: 'screen' }, panel)
   }
@@ -1940,6 +1984,9 @@ export class Overlay {
       this.cardIcon(item),
       h('div', { className: 'card__name', text: item.label })
     ]
+    if (item.isNew === true) {
+      children.push(h('span', { className: 'content-new-badge card__new', text: 'NOUVEAU' }))
+    }
     if (item.maxLevel !== undefined) {
       children.push(h('div', { className: 'card__hint', text: item.hint ?? '' }))
       children.push(this.levelPips(item.currentLevel ?? 0, item.maxLevel))
@@ -2006,7 +2053,7 @@ export class Overlay {
     const menu = state.menu
     // Inclut les LIBELLÉS (pas que les ids) → re-rend quand un % de volume ou le
     // nom de phase du sélecteur change (mêmes ids, libellé différent).
-    const menuPart = menu === null ? '' : `${menu.items.map((i) => `${i.id}:${i.label}`).join(',')}#${menu.index}`
+    const menuPart = menu === null ? '' : `${menu.items.map((i) => `${i.id}:${i.label}:${i.isNew === true ? 'new' : ''}`).join(',')}#${menu.index}`
     const statsPart =
       state.screen === 'gameover' || state.screen === 'victory' ? `${state.elapsedMs}|${state.score}` : ''
     // Le déblocage du casque doré change le panneau titre → l'inclure dans la signature.
@@ -2015,7 +2062,7 @@ export class Overlay {
     const charSelectPart =
       state.screen === 'characterSelect' && state.characterSelect !== null
         ? state.characterSelect.players
-            .map((player) => `${player.playerId}:${player.charId}:${player.ready ? '1' : '0'}`)
+            .map((player) => `${player.playerId}:${player.charId}:${player.ready ? '1' : '0'}:${player.unlocked === false ? 'l' : 'u'}:${player.isNew ? 'n' : ''}`)
             .join(',')
         : ''
     // Saisie du prénom : la grille est un état HORS menu (l'écran n'a qu'un item).

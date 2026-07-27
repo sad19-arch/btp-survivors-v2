@@ -195,6 +195,14 @@ export class GameScene extends Phaser.Scene {
       this.vfx.spawnSawContact(p.x, p.y, p.weaponId ?? 'scie')
       return
     }
+    if (p.kind === 'passive_reimpact') {
+      this.vfx.spawnPassiveReimpact(p.x, p.y, p.radius, p.weaponId ?? 'scie')
+      return
+    }
+    if (p.kind === 'casque_repulse') {
+      this.vfx.spawnHelmetRepulse(p.x, p.y, p.radius)
+      return
+    }
     if (p.kind === 'explosion') {
       const evolved = p.weaponId === 'detonation_chaine'
       this.vfx.spawnGasExplosion(p.x, p.y, p.radius, evolved)
@@ -980,6 +988,8 @@ export class GameScene extends Phaser.Scene {
       this.seam.debugStrikeInfo = () => this.vfx.debugLastStrikeInfo()
       this.seam.debugHammerInfo = () => this.vfx.debugLastHammerRingInfo()
       this.seam.debugSawInfo = () => this.vfx.debugLastSawContactInfo()
+      this.seam.debugPassiveReimpactInfo = () => this.vfx.debugLastPassiveReimpactInfo()
+      this.seam.debugHelmetRepulseCount = () => this.vfx.debugHelmetRepulseCount()
       this.seam.debugNailInfo = () => {
         const impact = this.vfx.debugLastNailImpactInfo()
         if (impact === null) {

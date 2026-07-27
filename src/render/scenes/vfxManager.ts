@@ -55,6 +55,15 @@ export class VfxManager {
     y: number
   } | null = null
   private sawContactSequence = 0
+  private lastPassiveReimpact: {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+    radius: number
+  } | null = null
+  private passiveReimpactSequence = 0
+  private helmetRepulseSequence = 0
   private lastNailImpact: { sequence: number; weaponId: string; x: number; y: number } | null = null
   private nailImpactSequence = 0
   private lastRicochetImpact: { sequence: number; weaponId: string; x: number; y: number } | null = null
@@ -95,6 +104,21 @@ export class VfxManager {
     y: number
   } | null {
     return this.lastSawContact === null ? null : { ...this.lastSawContact }
+  }
+
+  /** Sonde test-only du réimpact différé de Disque diamant. */
+  debugLastPassiveReimpactInfo(): {
+    sequence: number
+    weaponId: string
+    x: number
+    y: number
+    radius: number
+  } | null {
+    return this.lastPassiveReimpact === null ? null : { ...this.lastPassiveReimpact }
+  }
+
+  debugHelmetRepulseCount(): number {
+    return this.helmetRepulseSequence
   }
 
   /** Sonde test-only du dernier impact de clou effectivement dessiné. */
@@ -394,6 +418,45 @@ export class VfxManager {
         onComplete: () => spark.destroy()
       })
     }
+  }
+
+  /** Double contact cyan/blanc, plus sec qu'une explosion et distinct du premier impact. */
+  spawnPassiveReimpact(x: number, y: number, radius: number, weaponId: string): void {
+    this.lastPassiveReimpact = {
+      sequence: ++this.passiveReimpactSequence,
+      weaponId,
+      x,
+      y,
+      radius
+    }
+    const ring = this.scene.add.circle(x, y, Math.max(5, Math.min(radius, 24)), 0x000000, 0)
+      .setStrokeStyle(3, PALETTE_HEX.cyanAccent, 1)
+      .setDepth(8)
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 1.6,
+      alpha: 0,
+      duration: 150,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy()
+    })
+    this.spawnPixelPop(x, y, PALETTE_HEX.blanc, 10, 120)
+  }
+
+  /** Onde courte du Casque homologué : frontière verte instantanée au contact. */
+  spawnHelmetRepulse(x: number, y: number, radius: number): void {
+    this.helmetRepulseSequence += 1
+    const ring = this.scene.add.circle(x, y, radius, 0x000000, 0)
+      .setStrokeStyle(3, PALETTE_HEX.vertBonus, 0.95)
+      .setDepth(7)
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 1.35,
+      alpha: 0,
+      duration: 180,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy()
+    })
   }
 
   /** Impact sec du Cloueur : petit spark directionnel, distinct des explosions et lames. */

@@ -279,18 +279,18 @@ leur efficacité par son placement et son mouvement.
 
 | Passif | Effet par niveau | Niveau maximal |
 |---|---|---:|
-| Air comprimé | +10 % vitesse des projectiles | 5 |
+| Air comprimé | +10 % vitesse des projectiles par niveau ; au niveau 5, +10 % de durée de vol donc de portée réelle | 5 |
 | Groupe électrogène | +1 projectile | 2 |
 | Outillage renforcé | +10 % dégâts | 5 |
 | Cadence de chantier | −8 % temps de recharge | 5 |
-| Casque homologué | +10 % points de vie maximum | 5 |
-| Chaussures de sécurité | +10 % vitesse de déplacement | 5 |
-| Aimant de chantier | +7 % rayon d'attraction | 5 |
-| Batterie 18V | +12 % durée des effets | 5 |
-| Prime de rendement | +5 % expérience gagnée | 5 |
-| Surcharge de gaz | +8 % dégâts | 5 |
-| Disque diamant | +9 % dégâts | 5 |
-| Compresseur pneumatique | −8 % temps de recharge | 5 |
+| Casque homologué | +10 % points de vie maximum par niveau ; au niveau 5, repousse les ennemis au contact, au plus une fois toutes les 600 ms | 5 |
+| Chaussures de sécurité | +10 % vitesse de déplacement par niveau ; au niveau 5, un balayage effectué en mouvement gagne +20 % de recul | 5 |
+| Aimant de chantier | +8 % rayon et +5 % vitesse d'attraction des gemmes par niveau | 5 |
+| Batterie 18V | +12 % de durée des projectiles, zones persistantes, boomerangs et ralentissements par niveau | 5 |
+| Prime de rendement | +5 % expérience gagnée par niveau ; au niveau 5, 10 éliminations espacées de moins de 3 s activent +25 % de valeur de gemmes pendant 5 s | 5 |
+| Surcharge de gaz | +10 / +20 / +30 / +40 % au rayon réel des explosions ; au niveau 5, conserve +40 % et une victime tuée au centre produit un petit souffle secondaire non récursif | 5 |
+| Disque diamant | +8 / +16 / +24 / +32 % à la taille réelle des scies et balayages ; recul renforcé dès le niveau 3 ; au niveau 5, un contact réimpacte la même cible après 120 ms | 5 |
+| Compresseur pneumatique | après 5 / 5 / 4 / 4 / 3 cibles uniques touchées par une frappe lourde, réduit uniquement sa prochaine attente de 10 / 15 / 20 / 25 / 30 % | 5 |
 
 Plusieurs passifs ont un effet similaire parce qu'ils servent aussi de
 catalyseurs thématiques pour des évolutions différentes.

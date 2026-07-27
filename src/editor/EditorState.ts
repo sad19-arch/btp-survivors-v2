@@ -872,6 +872,15 @@ export class EditorState {
     if (composed !== null) {
       const cloned = JSON.parse(JSON.stringify(composed)) as StageLayout
       cloned.stage = this.stage
+      // Une ancienne sauvegarde peut contenir une instance devenue inconnue et
+      // dépourvue de tout élément embarqué (par exemple un collage accidentel
+      // dans le champ prefab). Elle ne peut ni être rendue ni être éditée utilement :
+      // ne pas la réinjecter dans la base de travail de l'éditeur.
+      cloned.instances = cloned.instances.filter((instance) =>
+        (instance.elements?.length ?? 0) > 0 ||
+        CLUSTERS[instance.prefab] !== undefined ||
+        paletteEntry(instance.prefab) !== undefined
+      )
       this.layout = cloned
       this.selectOnly(null)
       this.emit()

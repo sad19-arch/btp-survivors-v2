@@ -1,19 +1,26 @@
 import type { World } from '../world'
-import type { EntityId, PlayerComp, Vec2 } from '../types'
+import type { EntityId, PassiveDebugMetric, PlayerComp, Vec2, WeaponSlot } from '../types'
 import type { AuraPulse } from '../events'
 import type { WeaponDef } from '@content/weapons'
 import type { EffectiveStats } from '@content/effectiveStats'
 import { WEAPONS, weaponStatsAtLevel } from '@content/weapons'
 import { effectiveWeaponStats } from '@content/effectiveStats'
-import { BASE_STATS, signaturePassiveEffects } from '@content/passives'
+import { BASE_STATS, signaturePassiveEffects, utilityPassiveEffects } from '@content/passives'
 import { CONE_HALF_ANGLE, HITBOX } from '@content/config'
 import { Rng } from '../rng'
 import type { SpatialGrid } from '../spatialGrid'
 import { applyEnemyHit } from './knockback'
 
 const EXPLOSIVE_WEAPONS = new Set(['bonbonne_chantier', 'detonation_chaine'])
-const CONTACT_WEAPON_KINDS = new Set(['orbital', 'aura', 'sweep'])
+const DISQUE_WEAPONS = new Set(['scie', 'tronconneuse_chantier', 'pied_de_biche', 'barre_a_mine'])
+const HEAVY_WEAPONS = new Set([
+  'marteau', 'brise_roche',
+  'brouette', 'transpalette',
+  'bonbonne_chantier', 'detonation_chaine',
+  'pied_de_biche', 'barre_a_mine'
+])
 const MAX_ORBITAL_IMPACT_PULSES_PER_STEP = 12
+const DIAMOND_REIMPACT_DELAY_MS = 120
 
 /**
  * Système d'armes : chaque arme du joueur agit automatiquement selon son `kind`.
@@ -34,7 +41,8 @@ export function weaponSystem(
   pulses?: AuraPulse[],
   fired?: string[],
   rng?: Rng,
-  grid?: SpatialGrid
+  grid?: SpatialGrid,
+  passiveMetrics?: PassiveDebugMetric[]
 ): void {
   despawnOrphanOrbiters(world)
 
@@ -50,31 +58,56 @@ export function weaponSystem(
       continue
     }
     const stats = world.get(e, 'stats') ?? BASE_STATS
-    const signatureEffects = signaturePassiveEffects(world.get(e, 'passives')?.list ?? [])
+    const ownedPassives = world.get(e, 'passives')?.list ?? []
+    const signatureEffects = signaturePassiveEffects(ownedPassives)
+    const utilityEffects = utilityPassiveEffects(ownedPassives)
+    const velocity = world.get(e, 'velocity')
+    const moving = velocity !== undefined && Math.hypot(velocity.x, velocity.y) > 1e-6
 
     for (const slot of loadout.slots) {
+      processDelayedImpacts(world, slot, dtMs, pulses, passiveMetrics)
       const def = WEAPONS[slot.id]
       if (def === undefined) {
         continue
       }
       const lvl = weaponStatsAtLevel(def, slot.level)
       const baseEffective = effectiveWeaponStats(lvl, stats)
+      const disqueCompatible = DISQUE_WEAPONS.has(def.id)
+      const explosive = EXPLOSIVE_WEAPONS.has(def.id)
+      const heavy = HEAVY_WEAPONS.has(def.id)
       const eff: EffectiveStats = {
         ...baseEffective,
-        damage: CONTACT_WEAPON_KINDS.has(def.kind)
-          ? baseEffective.damage * (1 + signatureEffects.contactPenetration)
-          : baseEffective.damage,
-        projectileRadius: EXPLOSIVE_WEAPONS.has(def.id)
-          ? baseEffective.projectileRadius * signatureEffects.explosionScale
-          : baseEffective.projectileRadius,
-        explosionRadius: EXPLOSIVE_WEAPONS.has(def.id)
+        area: disqueCompatible && def.kind === 'sweep'
+          ? baseEffective.area * signatureEffects.contactSizeScale
+          : baseEffective.area,
+        orbitHitRadius: disqueCompatible && def.kind === 'orbital'
+          ? baseEffective.orbitHitRadius * signatureEffects.contactSizeScale
+          : baseEffective.orbitHitRadius,
+        explosionRadius: explosive
           ? baseEffective.explosionRadius * signatureEffects.explosionScale
-          : baseEffective.explosionRadius
+          : baseEffective.explosionRadius,
+        projectileLifeMs: def.kind === 'projectile'
+          ? baseEffective.projectileLifeMs * utilityEffects.projectileRangeScale
+          : baseEffective.projectileLifeMs
       }
       const cdBefore = slot.cooldownLeftMs
       switch (def.kind) {
         case 'projectile':
-          tickProjectile(world, slot, def, eff, pos, player, dtMs)
+          tickProjectile(
+            world,
+            slot,
+            def,
+            eff,
+            pos,
+            player,
+            dtMs,
+            explosive && signatureEffects.secondaryExplosions,
+            heavy ? signatureEffects.heavyImpactThreshold : Number.POSITIVE_INFINITY,
+            heavy ? signatureEffects.heavyImpactHaste : 0,
+            passiveMetrics,
+            signatureEffects.surchargeLevel,
+            signatureEffects.compresseurLevel
+          )
           break
         case 'aura':
           tickAura(
@@ -85,17 +118,56 @@ export function weaponSystem(
             world,
             def.kind,
             def.knockback,
-            signatureEffects.heavyImpactHaste,
+            heavy ? signatureEffects.heavyImpactThreshold : Number.POSITIVE_INFINITY,
+            heavy ? signatureEffects.heavyImpactHaste : 0,
+            passiveMetrics,
+            signatureEffects.compresseurLevel,
+            def.id,
             pulses,
             grid,
             player.playerId
           )
           break
         case 'orbital':
-          tickOrbital(world, slot, def, eff, e, pos, player, dtMs, pulses, grid)
+          tickOrbital(
+            world,
+            slot,
+            def,
+            eff,
+            e,
+            pos,
+            player,
+            dtMs,
+            disqueCompatible ? signatureEffects.contactKnockbackScale : 1,
+            disqueCompatible && signatureEffects.contactReimpact,
+            signatureEffects.disqueLevel,
+            pulses,
+            grid,
+            passiveMetrics
+          )
           break
         case 'sweep':
-          tickSweep(slot, eff, pos, player, dtMs, world, def.kind, def.id, def.knockback, pulses, grid)
+          tickSweep(
+            slot,
+            eff,
+            pos,
+            player,
+            dtMs,
+            world,
+            def.kind,
+            def.id,
+            def.knockback
+              * (disqueCompatible ? signatureEffects.contactKnockbackScale : 1)
+              * (disqueCompatible && moving ? utilityEffects.movingSweepKnockbackScale : 1),
+            disqueCompatible && signatureEffects.contactReimpact,
+            signatureEffects.disqueLevel,
+            heavy ? signatureEffects.heavyImpactThreshold : Number.POSITIVE_INFINITY,
+            heavy ? signatureEffects.heavyImpactHaste : 0,
+            signatureEffects.compresseurLevel,
+            pulses,
+            grid,
+            passiveMetrics
+          )
           break
         case 'strike':
           tickStrike(slot, eff, pos, dtMs, world, def.kind, def.knockback, rng, pulses, grid, player.playerId)
@@ -123,16 +195,158 @@ interface CooldownSlot {
   cooldownLeftMs: number
 }
 
+function scheduleDelayedImpact(
+  slot: WeaponSlot,
+  targetId: EntityId,
+  damage: number,
+  knockback: number,
+  ownerId: number,
+  weaponId: string,
+  radius: number,
+  passiveLevel: number
+): void {
+  const pending = slot.pendingImpacts ?? (slot.pendingImpacts = [])
+  if (pending.some((impact) => impact.targetId === targetId)) {
+    return
+  }
+  pending.push({
+    targetId,
+    remainingMs: DIAMOND_REIMPACT_DELAY_MS,
+    damage,
+    knockback,
+    ownerId,
+    weaponId,
+    radius,
+    passiveLevel
+  })
+}
+
+function processDelayedImpacts(
+  world: World,
+  slot: WeaponSlot,
+  dtMs: number,
+  pulses?: AuraPulse[],
+  passiveMetrics?: PassiveDebugMetric[]
+): void {
+  const pending = slot.pendingImpacts
+  if (pending === undefined || pending.length === 0) {
+    return
+  }
+  const remaining: NonNullable<WeaponSlot['pendingImpacts']> = []
+  for (const impact of pending) {
+    impact.remainingMs -= dtMs
+    if (impact.remainingMs > 0) {
+      remaining.push(impact)
+      continue
+    }
+    const position = world.get(impact.targetId, 'position')
+    const health = world.get(impact.targetId, 'health')
+    if (position === undefined || health === undefined || health.hp <= 0) {
+      continue
+    }
+    let direction = { x: 0, y: 0 }
+    for (const playerEntity of world.query('player', 'position')) {
+      const player = world.get(playerEntity, 'player')
+      const playerPosition = world.get(playerEntity, 'position')
+      if (player?.playerId === impact.ownerId && playerPosition !== undefined) {
+        direction = { x: position.x - playerPosition.x, y: position.y - playerPosition.y }
+        break
+      }
+    }
+    applyEnemyHit(world, impact.targetId, impact.damage, {
+      ownerId: impact.ownerId,
+      knockback: impact.knockback,
+      direction
+    })
+    pulses?.push({
+      x: position.x,
+      y: position.y,
+      radius: impact.radius,
+      kind: 'passive_reimpact',
+      weaponId: impact.weaponId,
+      ownerId: impact.ownerId
+    })
+    passiveMetrics?.push({
+      passive_triggered: true,
+      passive_id: 'disque_diamant',
+      passive_level: impact.passiveLevel,
+      weapon_id: impact.weaponId,
+      enemies_hit: 1,
+      modified_radius: impact.radius,
+      knockback_applied: impact.knockback
+    })
+  }
+  slot.pendingImpacts = remaining
+}
+
+function applyImmediateHeavyHaste(
+  slot: WeaponSlot,
+  hits: number,
+  threshold: number,
+  haste: number,
+  passiveMetrics: PassiveDebugMetric[] | undefined,
+  passiveLevel: number,
+  weaponId: string,
+  baseCooldownMs: number
+): void {
+  if (hits < threshold || haste <= 0) {
+    return
+  }
+  const before = slot.cooldownLeftMs
+  slot.cooldownLeftMs *= 1 - haste
+  passiveMetrics?.push({
+    passive_triggered: true,
+    passive_id: 'compresseur_pneumatique',
+    passive_level: passiveLevel,
+    weapon_id: weaponId,
+    enemies_hit: hits,
+    base_cooldown: baseCooldownMs,
+    modified_cooldown: slot.cooldownLeftMs
+  })
+  // Garde défensive : aucune réduction ne doit augmenter un cooldown corrompu.
+  if (slot.cooldownLeftMs > before) {
+    slot.cooldownLeftMs = before
+  }
+}
+
+function recordExplosionScale(
+  passiveMetrics: PassiveDebugMetric[] | undefined,
+  weaponId: string,
+  passiveLevel: number,
+  baseRadius: number,
+  modifiedRadius: number
+): void {
+  if (passiveLevel <= 0 || modifiedRadius <= 0) {
+    return
+  }
+  passiveMetrics?.push({
+    passive_triggered: true,
+    passive_id: 'surcharge_gaz',
+    passive_level: passiveLevel,
+    weapon_id: weaponId,
+    enemies_hit: 0,
+    base_radius: baseRadius,
+    modified_radius: modifiedRadius,
+    secondary_explosions_created: 0
+  })
+}
+
 // --- projectile ------------------------------------------------------------
 
 function tickProjectile(
   world: World,
-  slot: CooldownSlot,
+  slot: WeaponSlot,
   def: WeaponDef,
   eff: EffectiveStats,
   pos: Vec2,
   player: PlayerComp,
-  dtMs: number
+  dtMs: number,
+  secondaryExplosionOnCenterKill: boolean,
+  heavyImpactThreshold: number,
+  heavyImpactHaste: number,
+  passiveMetrics: PassiveDebugMetric[] | undefined,
+  surchargeLevel: number,
+  compresseurLevel: number
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -146,8 +360,22 @@ function tickProjectile(
     // réutilise `fireProjectiles` tel quel (le fan-spread ne connaît qu'un angle).
     const dir = player.facing ?? { x: 0, y: 1 }
     const virtualTarget: Vec2 = { x: pos.x + dir.x * 1000, y: pos.y + dir.y * 1000 }
-    fireProjectiles(world, pos, virtualTarget, def, eff, player.playerId)
+    const heavyImpactAttackId = beginHeavyProjectileAttack(slot, heavyImpactThreshold, heavyImpactHaste)
+    fireProjectiles(
+      world,
+      pos,
+      virtualTarget,
+      def,
+      eff,
+      player.playerId,
+      secondaryExplosionOnCenterKill,
+      heavyImpactThreshold,
+      heavyImpactHaste,
+      compresseurLevel,
+      heavyImpactAttackId
+    )
     slot.cooldownLeftMs = eff.cooldownMs
+    recordExplosionScale(passiveMetrics, def.id, surchargeLevel, weaponStatsAtLevel(def, slot.level).explosionRadius ?? 0, eff.explosionRadius)
     return
   }
   const target = findNearestEnemy(world, pos, Infinity)
@@ -155,8 +383,34 @@ function tickProjectile(
     slot.cooldownLeftMs = 0 // prêt à tirer dès qu'une cible entre en portée
     return
   }
-  fireProjectiles(world, pos, target, def, eff, player.playerId)
+  const heavyImpactAttackId = beginHeavyProjectileAttack(slot, heavyImpactThreshold, heavyImpactHaste)
+  fireProjectiles(
+    world,
+    pos,
+    target,
+    def,
+    eff,
+    player.playerId,
+    secondaryExplosionOnCenterKill,
+    heavyImpactThreshold,
+    heavyImpactHaste,
+    compresseurLevel,
+    heavyImpactAttackId
+  )
   slot.cooldownLeftMs = eff.cooldownMs
+  recordExplosionScale(passiveMetrics, def.id, surchargeLevel, weaponStatsAtLevel(def, slot.level).explosionRadius ?? 0, eff.explosionRadius)
+}
+
+function beginHeavyProjectileAttack(
+  slot: WeaponSlot,
+  threshold: number,
+  haste: number
+): number | undefined {
+  if (!Number.isFinite(threshold) || haste <= 0) {
+    return undefined
+  }
+  slot.heavyImpactAttackSequence = (slot.heavyImpactAttackSequence ?? 0) + 1
+  return slot.heavyImpactAttackSequence
 }
 
 // Reste linéaire volontairement : s'exécute à la cadence de l'arme (cooldown),
@@ -186,7 +440,12 @@ function fireProjectiles(
   target: Vec2,
   def: WeaponDef,
   eff: EffectiveStats,
-  ownerId: number
+  ownerId: number,
+  secondaryExplosionOnCenterKill: boolean,
+  heavyImpactThreshold: number,
+  heavyImpactHaste: number,
+  compresseurLevel: number,
+  heavyImpactAttackId: number | undefined
 ): void {
   const dx = target.x - from.x
   const dy = target.y - from.y
@@ -219,7 +478,16 @@ function fireProjectiles(
         explosionRadius: eff.explosionRadius,
         explosionDamageMult: eff.explosionDamageMult,
         chainExplosions: eff.chainExplosions,
-        chainRange: eff.chainRange
+        chainRange: eff.chainRange,
+        ...(secondaryExplosionOnCenterKill ? { secondaryExplosionOnCenterKill: true } : {})
+      } : {}),
+      ...(Number.isFinite(heavyImpactThreshold) && heavyImpactHaste > 0 ? {
+        heavyImpactThreshold,
+        heavyImpactHaste,
+        heavyImpactPassiveLevel: compresseurLevel,
+        heavyImpactBaseCooldownMs: eff.cooldownMs,
+        ...(heavyImpactAttackId === undefined ? {} : { heavyImpactAttackId }),
+        heavyImpactApplied: false
       } : {}),
       pierce: eff.pierce,
       knockback: def.knockback,
@@ -233,14 +501,18 @@ function fireProjectiles(
 // --- aura (marteau) --------------------------------------------------------
 
 function tickAura(
-  slot: CooldownSlot,
+  slot: WeaponSlot,
   eff: EffectiveStats,
   pos: Vec2,
   dtMs: number,
   world: World,
   kind: string,
   knockback: number,
+  heavyImpactThreshold: number,
   heavyImpactHaste: number,
+  passiveMetrics: PassiveDebugMetric[] | undefined,
+  compresseurLevel: number,
+  weaponId: string,
   pulses?: AuraPulse[],
   grid?: SpatialGrid,
   ownerId?: number
@@ -257,10 +529,17 @@ function tickAura(
     knockback,
     knockbackOrigin: pos
   })
-  if (hits > 0 && heavyImpactHaste > 0) {
-    slot.cooldownLeftMs *= 1 - heavyImpactHaste
-  }
-  pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind })
+  applyImmediateHeavyHaste(
+    slot,
+    hits,
+    heavyImpactThreshold,
+    heavyImpactHaste,
+    passiveMetrics,
+    compresseurLevel,
+    weaponId,
+    eff.cooldownMs
+  )
+  pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind, weaponId })
 }
 
 // --- sweep (pied-de-biche) --------------------------------------------------
@@ -275,7 +554,7 @@ const sweepScratch: number[] = []
  * le même secteur, conformément au double coup visuel.
  */
 function tickSweep(
-  slot: CooldownSlot,
+  slot: WeaponSlot,
   eff: EffectiveStats,
   pos: Vec2,
   player: PlayerComp,
@@ -284,8 +563,14 @@ function tickSweep(
   kind: string,
   weaponId: string,
   knockback: number,
+  contactReimpact: boolean,
+  disqueLevel: number,
+  heavyImpactThreshold: number,
+  heavyImpactHaste: number,
+  compresseurLevel: number,
   pulses?: AuraPulse[],
-  grid?: SpatialGrid
+  grid?: SpatialGrid,
+  passiveMetrics?: PassiveDebugMetric[]
 ): void {
   slot.cooldownLeftMs -= dtMs
   if (slot.cooldownLeftMs > 0) {
@@ -301,19 +586,50 @@ function tickSweep(
   const directionLength = Math.hypot(direction.x, direction.y)
   const dirX = directionLength > 0 ? direction.x / directionLength : 0
   const dirY = directionLength > 0 ? direction.y / directionLength : 1
+  const uniqueHits = new Set<EntityId>()
   for (let i = 0; i < passes; i++) {
     if (grid !== undefined) {
       sweepScratch.length = 0
       grid.queryCircle(pos.x, pos.y, reach, sweepScratch)
       for (const enemy of sweepScratch) {
-        applySweepDamage(world, enemy, pos, reach, dirX, dirY, eff.damage, knockback, player.playerId)
+        if (applySweepDamage(world, enemy, pos, reach, dirX, dirY, eff.damage, knockback, player.playerId)) {
+          uniqueHits.add(enemy)
+        }
       }
     } else {
       for (const enemy of world.query('enemy', 'position', 'health')) {
-        applySweepDamage(world, enemy, pos, reach, dirX, dirY, eff.damage, knockback, player.playerId)
+        if (applySweepDamage(world, enemy, pos, reach, dirX, dirY, eff.damage, knockback, player.playerId)) {
+          uniqueHits.add(enemy)
+        }
       }
     }
   }
+  if (contactReimpact) {
+    for (const enemy of uniqueHits) {
+      scheduleDelayedImpact(slot, enemy, eff.damage, knockback, player.playerId, weaponId, reach, disqueLevel)
+    }
+  }
+  if (disqueLevel > 0 && uniqueHits.size > 0) {
+    passiveMetrics?.push({
+      passive_triggered: true,
+      passive_id: 'disque_diamant',
+      passive_level: disqueLevel,
+      weapon_id: weaponId,
+      enemies_hit: uniqueHits.size,
+      modified_radius: reach,
+      knockback_applied: knockback
+    })
+  }
+  applyImmediateHeavyHaste(
+    slot,
+    uniqueHits.size,
+    heavyImpactThreshold,
+    heavyImpactHaste,
+    passiveMetrics,
+    compresseurLevel,
+    weaponId,
+    eff.cooldownMs
+  )
   pulses?.push({ x: pos.x, y: pos.y, radius: reach, kind, dirX, dirY, weaponId })
 }
 
@@ -327,30 +643,31 @@ function applySweepDamage(
   damage: number,
   knockback: number,
   ownerId: number
-): void {
+): boolean {
   const position = world.get(enemy, 'position')
   const health = world.get(enemy, 'health')
   if (position === undefined || health === undefined || health.hp <= 0) {
-    return
+    return false
   }
   const dx = position.x - origin.x
   const dy = position.y - origin.y
   const distanceSquared = dx * dx + dy * dy
   if (distanceSquared > reach * reach) {
-    return
+    return false
   }
   const distance = Math.sqrt(distanceSquared)
   const inSector =
     distance === 0 ||
     dirX * (dx / distance) + dirY * (dy / distance) >= Math.cos(SWEEP_HALF_ANGLE)
   if (!inSector) {
-    return
+    return false
   }
   applyEnemyHit(world, enemy, damage, {
     ownerId,
     knockback,
     direction: distance > 0 ? { x: dx / distance, y: dy / distance } : { x: dirX, y: dirY }
   })
+  return true
 }
 
 // --- strike (court-circuit) -------------------------------------------------
@@ -436,15 +753,19 @@ function tickStrike(
 
 function tickOrbital(
   world: World,
-  slot: CooldownSlot,
+  slot: WeaponSlot,
   def: WeaponDef,
   eff: EffectiveStats,
   owner: EntityId,
   pos: Vec2,
   player: PlayerComp,
   dtMs: number,
+  knockbackScale: number,
+  contactReimpact: boolean,
+  disqueLevel: number,
   pulses?: AuraPulse[],
-  grid?: SpatialGrid
+  grid?: SpatialGrid,
+  passiveMetrics?: PassiveDebugMetric[]
 ): void {
   const count = Math.max(1, Math.round(eff.count))
   const radius = eff.orbitRadius > 0 ? eff.orbitRadius : 60
@@ -474,13 +795,27 @@ function tickOrbital(
     return
   }
   slot.cooldownLeftMs = eff.cooldownMs
+  const uniqueHits = new Set<EntityId>()
   for (const b of blades) {
     damageEnemiesInRadius(world, b, hitRadius + HITBOX.enemy, eff.damage, {
       grid,
       ownerId: player.playerId,
-      knockback: def.knockback,
+      knockback: def.knockback * knockbackScale,
       knockbackOrigin: b,
-      onHit: (_enemyId, enemyPos) => {
+      onHit: (enemyId, enemyPos) => {
+        uniqueHits.add(enemyId)
+        if (contactReimpact) {
+          scheduleDelayedImpact(
+            slot,
+            enemyId,
+            eff.damage,
+            def.knockback * knockbackScale,
+            player.playerId,
+            def.id,
+            hitRadius,
+            disqueLevel
+          )
+        }
         if (
           pulses !== undefined
           && pulses.reduce((count, pulse) => count + (pulse.kind === 'orbital_hit' ? 1 : 0), 0)
@@ -496,6 +831,17 @@ function tickOrbital(
           })
         }
       }
+    })
+  }
+  if (disqueLevel > 0 && uniqueHits.size > 0) {
+    passiveMetrics?.push({
+      passive_triggered: true,
+      passive_id: 'disque_diamant',
+      passive_level: disqueLevel,
+      weapon_id: def.id,
+      enemies_hit: uniqueHits.size,
+      modified_radius: hitRadius,
+      knockback_applied: def.knockback * knockbackScale
     })
   }
 }
@@ -514,6 +860,10 @@ function ensureOrbiters(
   for (const o of world.query('orbiter')) {
     const orb = world.get(o, 'orbiter')
     if (orb !== undefined && orb.ownerId === ownerId && orb.weaponId === weaponId) {
+      // Les passifs peuvent changer pendant la run : les lames existantes suivent
+      // immédiatement la hitbox réelle, pas seulement celles créées ensuite.
+      orb.radius = radius
+      orb.hitRadius = hitRadius
       existing += 1
     }
   }

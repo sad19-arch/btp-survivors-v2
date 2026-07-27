@@ -122,6 +122,9 @@ export interface CharacterSelectPlayerView {
   playerId: number
   charId: string
   ready: boolean
+  unlocked?: boolean
+  isNew?: boolean
+  lockHint?: string | null
 }
 
 export interface CharacterSelectView {
@@ -290,6 +293,30 @@ export interface MenuItemView {
   kind?: CardKind
   /** Fragment FR décrivant le gain du niveau (ex. « +2 dégâts · +1 projectile »). */
   delta?: string
+  /** Badge persistant jusqu'à la première utilisation réelle du contenu. */
+  isNew?: boolean
+}
+
+export interface UnlockGoalView {
+  unlockId: string
+  title: string
+  description: string
+  rewardType: 'character' | 'weapon' | 'passive'
+  rewardName: string
+  rewardDescription: string
+  current: number
+  target: number
+  progressLabel: string
+  completed: boolean
+}
+
+export interface UnlockProgressView {
+  primary: UnlockGoalView | null
+  secondary: UnlockGoalView[]
+  /** Tous les contenus spéciaux actuellement ouverts, utile au seam. */
+  unlockedContentIds: string[]
+  /** Contenus ouverts mais pas encore utilisés réellement. */
+  newContentIds: string[]
 }
 
 /** Le menu actif (null en jeu). */
@@ -410,4 +437,6 @@ export interface AppViewState extends Omit<GameState, 'players'> {
    * tant que la run n'est pas finie ; redevient `null` après `restart()` / `start()`.
    */
   runReport: RunReport | null
+  /** Promesse de prochaine partie, calculée par l'App et seulement affichée par l'UI. */
+  unlockProgress: UnlockProgressView
 }

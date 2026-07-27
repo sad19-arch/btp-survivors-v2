@@ -64,72 +64,22 @@ describe('simulation — split de boss', () => {
   it('debugSpawnBoss("mid") : tuer le boss mid ne gagne PAS, et laisse un coffre', () => {
     const sim = new Simulation({ seed: 7, mode: 'solo' })
     sim.debugSpawnBoss('mid')
-    // Grant 3 armes max pour tuer le boss 1800 HP rapidement (kite + DPS élevé).
-    sim.debugGrant({
-      weapons: [
-        { id: 'cloueur', level: 8 },
-        { id: 'scie', level: 8 },
-        { id: 'marteau', level: 8 }
-      ]
-    })
-    let steps = 0
-    while (steps < 4000) {
-      const st = sim.getState()
-      if (!st.enemies.some((e) => e.isBoss)) {
-        break
-      }
-      // Kite : le joueur fuit vers le haut pour éviter le contact et survivre.
-      sim.setInput(1, { move: { x: 0, y: -1 }, attack: true })
-      if (st.pendingLevelUp !== null) {
-        sim.chooseUpgrade(0)
-        continue
-      }
-      sim.advanceTime(100)
-      steps += 1
-    }
+    // Cette spécification vérifie la transition de mort, pas le DPS du build :
+    // elle ne doit pas devenir rouge quand les PV du boss sont rééquilibrés.
+    sim.debugKillBoss('mid')
+    sim.advanceTime(100)
     const finalState = sim.getState()
-    expect(finalState.enemies.some((e) => e.isBoss)).toBe(false)
+    expect(finalState.enemies.some((e) => e.bossRole === 'mid')).toBe(false)
+    expect(finalState.pickups.some((pickup) => pickup.type === 'coffre')).toBe(true)
     expect(finalState.scene).toBe('game')
   })
 
   it('debugSpawnBoss("final") : tuer le boss final déclenche la victoire', () => {
     const sim = new Simulation({ seed: 7, mode: 'solo' })
     sim.debugSpawnBoss('final')
-    // Grant 3 armes max pour tuer le boss 1800 HP rapidement (kite + DPS élevé).
-    sim.debugGrant({
-      weapons: [
-        { id: 'cloueur', level: 8 },
-        { id: 'scie', level: 8 },
-        { id: 'marteau', level: 8 }
-      ],
-      // Ce test vérifie la transition de victoire, pas l'équilibrage d'un build.
-      // Le recul rend le kite mono-directionnel plus exposé aux vagues dispersées :
-      // un arsenal de debug complet évite que le joueur meure avant le boss final.
-      passives: [
-        { id: 'outillage_renforce', level: 5 },
-        { id: 'cadence_chantier', level: 5 },
-        { id: 'casque_homologue', level: 5 },
-        { id: 'chaussures_securite', level: 5 }
-      ]
-    })
-    let steps = 0
-    let won = false
-    while (steps < 4000) {
-      const st = sim.getState()
-      if (st.scene === 'won') {
-        won = true
-        break
-      }
-      // Kite : le joueur fuit vers le haut pour éviter le contact et survivre.
-      sim.setInput(1, { move: { x: 0, y: -1 }, attack: true })
-      if (st.pendingLevelUp !== null) {
-        sim.chooseUpgrade(0)
-        continue
-      }
-      sim.advanceTime(100)
-      steps += 1
-    }
-    expect(won).toBe(true)
+    sim.debugKillBoss('final')
+    sim.advanceTime(100)
+    expect(sim.getState().scene).toBe('won')
   })
 })
 

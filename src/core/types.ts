@@ -54,6 +54,15 @@ export interface PlayerComp {
    * existantes) ; absent ⇒ traité comme sud `{x:0,y:1}` par les lecteurs.
    */
   facing?: Vec2
+  /** Recharge du recul de contact du Casque homologué niveau 5. */
+  casqueRepulseCooldownMs?: number
+  /** Multiplicateur dérivé une fois pour l'aspiration des gemmes (hors boucle pickup chaude). */
+  magnetPullScale?: number
+  /** Chaîne courante de Prime de rendement niveau 5. */
+  rendementComboKills?: number
+  rendementComboWindowMs?: number
+  /** Durée restante du bonus temporaire de valeur des gemmes. */
+  rendementBoostMs?: number
 }
 
 /** Progression d'un joueur (XP / niveau). Par joueur → prêt-N-joueurs. */
@@ -189,6 +198,16 @@ export interface ProjectileComp {
   /** Détonation de zone déclenchée à l'impact ; absente pour les projectiles ordinaires. */
   explosionRadius?: number
   explosionDamageMult?: number
+  /** Niveau 5 de Surcharge de gaz : une victime au centre produit un souffle secondaire borné. */
+  secondaryExplosionOnCenterKill?: boolean
+  /** Paramètres du Compresseur, transportés jusqu'aux impacts différés du projectile. */
+  heavyImpactThreshold?: number
+  heavyImpactHaste?: number
+  heavyImpactPassiveLevel?: number
+  heavyImpactBaseCooldownMs?: number
+  /** Identifiant partagé par tous les projectiles issus d'une même attaque lourde. */
+  heavyImpactAttackId?: number
+  heavyImpactApplied?: boolean
   /** Propagation déterministe propre aux évolutions explosives. */
   chainExplosions?: number
   chainRange?: number
@@ -318,6 +337,52 @@ export interface WeaponSlot {
   id: string
   level: number
   cooldownLeftMs: number
+  /** Ré-impacts différés de Disque diamant, uniques par cible tant qu'ils sont en attente. */
+  pendingImpacts?: DelayedWeaponImpact[]
+  /** Séquence locale des attaques lourdes à projectiles, déterministe par slot. */
+  heavyImpactAttackSequence?: number
+  /** Dernière attaque ayant déjà consommé le bonus du Compresseur. */
+  heavyImpactAppliedAttackId?: number
+}
+
+export interface DelayedWeaponImpact {
+  targetId: EntityId
+  remainingMs: number
+  damage: number
+  knockback: number
+  ownerId: number
+  weaponId: string
+  radius: number
+  passiveLevel: number
+}
+
+/** Mesure test/dev des passifs spécialisés, jamais consommée par les règles de jeu. */
+export interface PassiveDebugMetric {
+  passive_triggered: true
+  passive_id: 'surcharge_gaz' | 'disque_diamant' | 'compresseur_pneumatique'
+  passive_level: number
+  weapon_id: string
+  enemies_hit: number
+  base_radius?: number
+  modified_radius?: number
+  base_cooldown?: number
+  modified_cooldown?: number
+  secondary_explosions_created?: number
+  knockback_applied?: number
+}
+
+export interface UtilityPassiveDebugState {
+  player_id: number
+  magnet_pull_scale: number
+  casque_repulse_cooldown_ms: number
+  rendement_combo_kills: number
+  rendement_combo_window_ms: number
+  rendement_boost_ms: number
+  max_projectile_life_ms: number
+  max_projectile_speed: number
+  max_slow_remaining_ms: number
+  max_hazard_life_ms: number
+  max_enemy_knockback_speed: number
 }
 
 /** L'arsenal d'une entité (joueur). */

@@ -12,7 +12,7 @@ import type { PlayerStats } from '@content/passives'
 
 describe('Passifs phase A', () => {
   it('aimant/batterie/prime existent avec les bonnes stats', () => {
-    expect(PASSIVES['aimant_chantier']?.perLevel.magnet).toBeCloseTo(0.07)
+    expect(PASSIVES['aimant_chantier']?.perLevel.magnet).toBeCloseTo(0.08)
     expect(PASSIVES['batterie_18v']?.perLevel.duration).toBeCloseTo(0.12)
     expect(PASSIVES['prime_rendement']?.perLevel.growth).toBeCloseTo(0.05)
   })
@@ -23,8 +23,8 @@ describe('Passifs phase A', () => {
     expect(PASSIVES['prime_rendement']?.maxLevel).toBe(5)
   })
 
-  it('aggregatePassives applique magnet (aimant niv.2 → 1 + 2×0.07 = 1.14)', () => {
-    expect(aggregatePassives([{ id: 'aimant_chantier', level: 2 }]).magnet).toBeCloseTo(1.14)
+  it('aggregatePassives applique magnet (aimant niv.2 → 1 + 2×0.08 = 1.16)', () => {
+    expect(aggregatePassives([{ id: 'aimant_chantier', level: 2 }]).magnet).toBeCloseTo(1.16)
   })
 
   it('aggregatePassives sans passif → growth = 1 (défaut inchangé)', () => {
